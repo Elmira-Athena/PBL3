@@ -121,3 +121,21 @@ Khi viết logic Build PC, phải check các bảng luật (`CompatibilityRules`
 * **Form:** Sử dụng `<MudForm>` kết hợp `FluentValidationValidator`.
 * **Feedback:** Dùng `ISnackbar` để hiển thị thông báo (Success/Error) góc màn hình.
 * **Dialog:** Dùng `IDialogService` cho các form Thêm mới/Sửa (Popup form) thay vì chuyển trang.
+
+### Tiêu chuẩn Kỹ thuật & Review Code: Sync vs Async
+**1. Xử lý Đồng bộ (Synchronous):**
+* **Định nghĩa:** Tuần tự, Blocking (Chờ đợi).
+* **Phạm vi:** Các nghiệp vụ cần tính nhất quán dữ liệu ngay lập tức (Immediate Consistency).
+* **Ví dụ:** Thanh toán tiền (Payment), Trừ tồn kho (Inventory), Login.
+
+**2. Xử lý Bất đồng bộ (Asynchronous):**
+* **Định nghĩa:** Non-blocking, Fire-and-forget hoặc Promise.
+* **Phạm vi:** Các nghiệp vụ tốn thời gian, không cần phản hồi ngay, ưu tiên trải nghiệm người dùng (UX).
+* **Ví dụ:** Gửi Email/SMS, Tạo báo cáo PDF, Resize ảnh, Ghi log phức tạp.
+
+**3. Realtime:**
+* Sử dụng WebSocket/SignalR để push thông báo/dữ liệu, không đánh đồng với xử lý Đồng bộ.
+
+**4. Quy tắc phán xét "Code bị đần" vs "Ổn":**
+* **Code bị đần:** Bắt người dùng chờ đợi (Loading) cho các tác vụ phụ trợ (như gửi mail, xuất file) trong luồng chính.
+* **Code ổn/Chuẩn:** Tách các tác vụ nặng sang Background Job/Message Queue, trả phản hồi (Response) ngay lập tức cho Client.
