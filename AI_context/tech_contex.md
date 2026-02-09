@@ -113,7 +113,57 @@ Khi viết logic Build PC, phải check các bảng luật (`CompatibilityRules`
     * Lúc quét mã: Đếm `ActualQuantity`.
     * Kết quả: `Diff` = `Actual` - `System`.
 * Không khóa chức năng bán hàng trong lúc kiểm kê.
+### 5.4. PRODUCT & CATEGORY ARCHITECTURE (CORE DOMAIN)
+*Mô tả chi tiết cấu trúc dữ liệu cốt lõi của hệ thống.*
 
+#### A. Category Hierarchy (Cấu trúc Danh mục Đa cấp - Composite Pattern)
+* **Mô hình Database:** Sử dụng chiến lược **Adjacency List** (Danh sách kề).
+  * Bảng `Categories`:
+    * `Id` (PK)
+    * `Name`
+    * `ParentId` (FK, Nullable): Self-reference về chính bảng `Categories`.
+    * `Level` (int): Độ sâu của danh mục (0: Root, 1: Sub, 2: Sub-sub).
+* **Business Rules (AI phải code logic này):**
+  1.  **Độ sâu:** Hỗ trợ N cấp độ (Tuy nhiên UI thường hiển thị tối đa 3-4 cấp để đỡ rối).
+  2.  **Circular Dependency Check (Quan trọng):** Khi cập nhật `ParentId`, hệ thống bắt buộc kiểm tra để đảm bảo không tạo vòng lặp (VD: A là cha B, thì B không được phép sửa thành cha của A).
+  3.  **Deletion Rule (Ràng buộc xóa):** KHÔNG ĐƯỢC xóa danh mục nếu nó đang chứa:
+    * Danh mục con (Has Children).
+    * Sản phẩm (Has Products).
+  4.  **Display:** API phải hỗ trợ trả về dữ liệu dạng cây (Recursive JSON) để Frontend dễ render component `TreeView` hoặc `MegaMenu`.
+
+* **Ví dụ Cấu trúc (IT Hardware):**
+  * Linh kiện máy tính (Root, Level 0)
+    ├── RAM (Level 1)
+    │   ├── RAM DDR4 (Level 2)
+    │   └── RAM DDR5 (Level 2)
+    └── VGA (Level 1)
+    ├── NVIDIA (Level 2)
+    └── AMD (Level 2)
+
+#### B. Product Identity vs. Physical Item (Quan trọng)
+Hệ thống phân tách rõ ràng giữa "Thông tin sản phẩm" và "Sản phẩm vật lý".
+
+**1. Product (Master Data):**
+* Đại diện cho mẫu sản phẩm (Model).
+* Định danh bằng: `ProductCode` (SKU) - Duy nhất.
+* Chứa thông tin chung: Tên, Mô tả, Giá bán, Thông số kỹ thuật, Ảnh, Thời gian bảo hành.
+* **Cờ quản lý:** `IsSerialManaged` (bool).
+  * `true`: Quản lý từng cái (Main, CPU, VGA...).
+  * `false`: Chỉ quản lý số lượng (Dây cáp, Chuột giá rẻ...).
+
+**2. ProductSerial (Physical Item):**
+* Đại diện cho một vật thể cầm nắm được trong kho.
+* Quan hệ: **1 Product - N ProductSerials** (Một mẫu sản phẩm có nhiều cái trong kho).
+* Định danh bằng: `SerialNumber` (SN) - Quét từ mã vạch trên hộp.
+* **Thuộc tính:**
+  * `SerialNumber` (Unique): Mã định danh duy nhất.
+  * `Status` (Enum): `Available` (Trong kho), `Reserved` (Đã có người đặt), `Sold` (Đã bán), `Defective` (Hàng lỗi).
+  * `ImportReceiptId`: Nhập từ phiếu nào.
+  * `OrderId`: Bán trong đơn hàng nào (Nullable).
+
+**3. Logic Đồng bộ Tồn kho (Inventory Sync):**
+* Với sản phẩm có Serial: Số lượng tồn (`StockQuantity`) trong bảng Product là con số **Computed** (Được tính toán) = Số lượng các dòng trong bảng `ProductSerial` có status là `Available`.
+* AI phải viết code trigger hoặc service logic để đảm bảo con số này luôn đúng.
 
 
 ## 6. UI GUIDELINES (Frontend - MudBlazor)
@@ -139,3 +189,54 @@ Khi viết logic Build PC, phải check các bảng luật (`CompatibilityRules`
 **4. Quy tắc phán xét "Code bị đần" vs "Ổn":**
 * **Code bị đần:** Bắt người dùng chờ đợi (Loading) cho các tác vụ phụ trợ (như gửi mail, xuất file) trong luồng chính.
 * **Code ổn/Chuẩn:** Tách các tác vụ nặng sang Background Job/Message Queue, trả phản hồi (Response) ngay lập tức cho Client.
+
+---
+
+## 8. NON-FUNCTIONAL CONSTRAINTS & QUALITY ATTRIBUTES
+*AI phải tuân thủ nghiêm ngặt các chỉ số dưới đây để đảm bảo chất lượng hệ thống.*
+
+### 8.1. Performance Goals (Hiệu năng)
+* [cite_start]**Page Load & Listing:** API lấy danh sách sản phẩm/trang chủ phải phản hồi dưới **2 giây**.
+  * *Yêu cầu kỹ thuật:* Sử dụng `MemoryCache` hoặc `DistributedCache` (Redis) cho các dữ liệu ít thay đổi (Danh mục, Menu). Dùng `.AsNoTracking()` cho mọi truy vấn GET.
+* [cite_start]**Interactive Actions:** Các thao tác Giỏ hàng, Thanh toán phải phản hồi **tức thì (< 1 giây)**[cite: 358].
+  * *Yêu cầu kỹ thuật:* Frontend (Blazor) phải áp dụng **Optimistic UI** (Cập nhật giao diện ngay lập tức trước khi chờ Server phản hồi). Backend phải tối ưu query SQL.
+* [cite_start]**Concurrency:** Hệ thống chịu tải tối thiểu **50 concurrent users**[cite: 359]. Connection Pool của Database phải được cấu hình hợp lý trong `appsettings.json`.
+
+### 8.2. Security & Compliance (Bảo mật)
+* [cite_start]**Authentication:** Password bắt buộc Hash (BCrypt/PBKDF2)[cite: 363].
+* **Authorization:**
+  * [cite_start]Phân quyền 3 vai trò cứng: `Admin`, `Employee`, `Customer`[cite: 364].
+  * [cite_start]**Chặn truy cập URL:** Ngăn chặn việc Customer đổi ID trên URL để xem đơn hàng của người khác (Lỗi IDOR/BOLA). *AI phải check logic: `if (order.UserId != currentUserId) return Forbid();`*.
+* **Web Security:**
+  * [cite_start]Chống **SQL Injection**: 100% dùng EF Core LINQ/Parameter[cite: 367].
+  * [cite_start]Chống **XSS/CSRF**: Tự động sanitize input và dùng Antiforgery Token[cite: 368].
+* [cite_start]**Data Protection:** Không log thông tin nhạy cảm (Password, Thẻ tín dụng) ra file log[cite: 369].
+
+### 8.3. Data Management (Quản lý dữ liệu)
+* **Image Optimization:** Không lưu file ảnh vào SQL Server.
+  * [cite_start]*Yêu cầu:* Tích hợp API lưu trữ bên thứ 3 (Cloudinary/AWS S3/Firebase) theo yêu cầu SRS[cite: 360]. Database chỉ lưu URL.
+* [cite_start]**Data Integrity (ACID):** [cite: 372]
+  * Sử dụng `IDbContextTransaction` cho các luồng nghiệp vụ phức tạp:
+    1. Đặt hàng (Trừ kho -> Tạo đơn -> Xóa giỏ).
+    2. Nhập/Xuất kho (Cập nhật tồn -> Lưu lịch sử -> Đổi trạng thái Serial).
+  * Nếu 1 bước lỗi -> Rollback toàn bộ.
+
+### 8.4. User Experience (UX Standards)
+* **Error Handling:** API không được trả về "Yellow Screen of Death" (Lỗi server thô). [cite_start]Phải trả về JSON lỗi chuẩn (Mã 404, 500) để Frontend hiện trang lỗi thân thiện[cite: 371].
+* **Loading States:** Trong khi chờ API > 2s, giao diện phải hiển thị **Skeleton Loading** hoặc **Spinner**, không được để màn hình trắng.
+
+### 8.5. Code Quality & Maintainability
+* [cite_start]**Design Patterns:** Bắt buộc áp dụng **Repository Pattern** và **Dependency Injection (DI)**[cite: 82].
+* [cite_start]**Clean Code:** Tách biệt rõ ràng UI Layer (Blazor), Business Layer (Service) và Data Access (Repo)[cite: 374].
+* [cite_start]**Environment:** Backend phải chạy tốt trên cả Windows và Linux (Docker Containerization ready)[cite: 81].
+### 8.6. Localization & Error Messages (Quan trọng)
+* **Language:** Tất cả thông báo lỗi trả về cho Frontend (User-facing messages) bắt buộc phải là **Tiếng Việt có dấu**.
+  * *Sai:* `return BadRequest("Product not found");`
+  * *Đúng:* `return BadRequest("Không tìm thấy sản phẩm yêu cầu.");`
+* **Validation Messages:** Cấu hình FluentValidation để báo lỗi tiếng Việt (VD: "Tên sản phẩm không được để trống").
+
+### 8.7. Logging & Monitoring
+* **Framework:** Sử dụng `Serilog` hoặc `Built-in ILogger`.
+* **Requirement:** * Ghi log `Information` khi thực hiện các hành động quan trọng (Tạo đơn hàng, Nhập kho).
+  * Ghi log `Error` kèm StackTrace khi gặp Exception trong `try-catch`.
+  * *Lưu ý:* Không log mật khẩu hoặc thông tin thẻ tín dụng.
