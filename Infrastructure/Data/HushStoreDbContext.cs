@@ -1,19 +1,17 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using PBL3.Core.Entities;
 
 namespace PBL3.Infrastructure.Data
 {
-    public class HushStoreDbContext : DbContext
+    public class HushStoreDbContext : IdentityDbContext<AppUser, AppRole, Guid,
+        IdentityUserClaim<Guid>, IdentityUserRole<Guid>, IdentityUserLogin<Guid>,
+        IdentityRoleClaim<Guid>, IdentityUserToken<Guid>>
     {
         public HushStoreDbContext(DbContextOptions<HushStoreDbContext> options) : base(options)
         {
         }
-
-        // Auth
-        public DbSet<AppUser> AppUsers { get; set; }
-        public DbSet<AppRole> AppRoles { get; set; }
-        public DbSet<AppUserRole> AppUserRoles { get; set; }
-        public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         // Product
         public DbSet<Manufacturer> Manufacturers { get; set; }
@@ -38,68 +36,60 @@ namespace PBL3.Infrastructure.Data
         public DbSet<OrderSerial> OrderSerials { get; set; }
         public DbSet<Cart> Carts { get; set; }
 
+        // RefreshToken
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder);
+            base.OnModelCreating(modelBuilder); // Identity mappings
 
-            // --- AUTH API ---
-            modelBuilder.Entity<AppUserRole>(entity =>
+            // --- AUTH: Rename Identity tables theo convention ---
+            modelBuilder.Entity<AppUser>().ToTable("AppUsers");
+            modelBuilder.Entity<AppRole>(entity =>
             {
-                entity.HasKey(e => new { e.UserId, e.RoleId });
-
-                entity.HasOne(e => e.User)
-                    .WithMany(u => u.UserRoles)
-                    .HasForeignKey(u => u.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(e => e.Role)
-                    .WithMany(r => r.UserRoles)
-                    .HasForeignKey(r => r.RoleId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                entity.ToTable("AppRoles");
+                entity.HasIndex(r => r.RoleCode).IsUnique();
             });
+            modelBuilder.Entity<IdentityUserRole<Guid>>().ToTable("AppUserRoles");
+            modelBuilder.Entity<IdentityUserClaim<Guid>>().ToTable("AppUserClaims");
+            modelBuilder.Entity<IdentityUserLogin<Guid>>().ToTable("AppUserLogins");
+            modelBuilder.Entity<IdentityRoleClaim<Guid>>().ToTable("AppRoleClaims");
+            modelBuilder.Entity<IdentityUserToken<Guid>>().ToTable("AppUserTokens");
 
-            modelBuilder.Entity<AppRole>()
-                .HasIndex(r => r.RoleCode)
-                .IsUnique();
-            
-            modelBuilder.Entity<AppUser>()
-                .HasIndex(u => u.NormalizedUserName).HasFilter("[NormalizedUserName] IS NOT NULL");
-            modelBuilder.Entity<AppUser>()
-                .HasIndex(u => u.NormalizedEmail).HasFilter("[NormalizedEmail] IS NOT NULL");
-
-            // --- PRODUCT API ---
+            // --- PRODUCT ---
             modelBuilder.Entity<Category>(entity =>
             {
                 entity.HasIndex(c => c.Slug).IsUnique();
-                // Recursive Relationship
+                // Recursive Relationship (Adjacency List)
                 entity.HasOne(c => c.Parent)
                     .WithMany(p => p.Children)
                     .HasForeignKey(c => c.ParentId)
-                    .OnDelete(DeleteBehavior.NoAction); // Avoid cycles on delete
+                    .OnDelete(DeleteBehavior.NoAction);
             });
 
             modelBuilder.Entity<ProductVariant>(entity =>
             {
                 entity.HasIndex(v => v.SKU).IsUnique();
-                // StockQuantity is computed from ProductSerials where Status = Available
-                // But in this SQL schema, there is a DEFAULT 0. 
-                // The tech doc says it's Computed in Logic or DB? 
-                // "StockQuantity ... trong bảng Product là con số Computed". 
-                // But ProductVariant has a column StockQuantity in the SQL script "DEFAULT 0".
-                // I will leave it as a regular column for now, managed by Service Logic as instructed 
-                // in "AI phải viết code trigger hoặc service logic".
+                entity.Property(e => e.Price).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.OriginalPrice).HasColumnType("decimal(18,2)");
             });
 
-            // --- INVENTORY API ---
+            // --- INVENTORY ---
             modelBuilder.Entity<ProductSerial>(entity =>
             {
                 entity.HasIndex(s => s.SerialNumber).IsUnique();
-                entity.HasIndex(s => new { s.VariantId, s.Status }); // Inventory count index
+                entity.HasIndex(s => new { s.VariantId, s.Status });
             });
 
             modelBuilder.Entity<ImportReceipt>(entity =>
             {
                 entity.HasIndex(r => r.ReceiptCode).IsUnique();
+                entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
+            });
+
+            modelBuilder.Entity<ImportReceiptDetail>(entity =>
+            {
+                entity.Property(e => e.ImportPrice).HasColumnType("decimal(18,2)");
             });
 
             modelBuilder.Entity<InventoryCheckDetail>(entity =>
@@ -108,32 +98,41 @@ namespace PBL3.Infrastructure.Data
                       .HasComputedColumnSql("([ActualQuantity] - [SystemQuantity])");
             });
 
-            // --- SALE API ---
+            // --- SALE ---
             modelBuilder.Entity<Voucher>(entity =>
             {
+                entity.ToTable(t => t.HasCheckConstraint("CK_Vouchers_Date", "[EndDate] >= [StartDate]"));
                 entity.HasIndex(v => v.Code).IsUnique();
+                entity.Property(e => e.DiscountValue).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.MinOrderValue).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.MaxDiscountAmount).HasColumnType("decimal(18,2)");
             });
 
             modelBuilder.Entity<Order>(entity =>
             {
                 entity.HasIndex(o => o.OrderCode).IsUnique();
-                
-                // EmployeeId is nullable foreign key to AppUser, but not explicitly defined Navigation 
-                // in Entity class if not needed, but good to have constraint
+                entity.HasIndex(o => o.UserId);
+                entity.HasIndex(o => o.OrderDate);
+
+                entity.Property(e => e.SubTotal).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.ShippingFee).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.DiscountAmount).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
+
                 entity.HasOne(o => o.User)
                     .WithMany()
                     .HasForeignKey(o => o.UserId)
                     .OnDelete(DeleteBehavior.NoAction);
 
-                // We can model Emloyee relation if we want
-                 entity.HasOne<AppUser>()
-                     .WithMany()
-                     .HasForeignKey(o => o.EmployeeId)
-                     .OnDelete(DeleteBehavior.NoAction);
+                entity.HasOne<AppUser>()
+                    .WithMany()
+                    .HasForeignKey(o => o.EmployeeId)
+                    .OnDelete(DeleteBehavior.NoAction);
             });
 
             modelBuilder.Entity<OrderDetail>(entity =>
             {
+                entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.TotalLine)
                     .HasColumnType("decimal(18,2)")
                     .HasComputedColumnSql("([Quantity] * [UnitPrice])");
@@ -141,58 +140,27 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<OrderSerial>(entity =>
             {
-                entity.HasIndex(os => os.SerialId).IsUnique(); // 1 Serial only in 1 order line context
+                entity.HasIndex(os => os.SerialId).IsUnique();
+
+                // FIX: SQL Server Error 1785 — Multiple cascade paths detected.
+                // Cascade path 1: ProductVariant → ImportReceiptDetail → ImportReceipt → ProductSerial → OrderSerial (CASCADE)
+                // Cascade path 2: ProductVariant → OrderDetail → OrderSerial (CASCADE)
+                // Cả 2 đường đều cascade đến OrderSerial → SQL Server từ chối.
+                // Giải pháp: Đặt NoAction cho cả 2 FK, xử lý xoá bằng Service logic.
+                entity.HasOne(os => os.OrderDetail)
+                    .WithMany(od => od.OrderSerials)
+                    .HasForeignKey(os => os.OrderDetailId)
+                    .OnDelete(DeleteBehavior.NoAction); // FIX: Tránh multiple cascade paths
+
+                entity.HasOne(os => os.Serial)
+                    .WithMany()
+                    .HasForeignKey(os => os.SerialId)
+                    .OnDelete(DeleteBehavior.NoAction); // FIX: Tránh multiple cascade paths
             });
 
             modelBuilder.Entity<Cart>(entity =>
             {
                 entity.HasIndex(c => new { c.UserId, c.VariantId }).IsUnique();
-            });
-
-            // --- DECIMAL PRECISION (decimal(18,2) theo SQL schema) ---
-            // ProductVariant
-            modelBuilder.Entity<ProductVariant>(entity =>
-            {
-                entity.Property(e => e.Price).HasColumnType("decimal(18,2)");
-                entity.Property(e => e.OriginalPrice).HasColumnType("decimal(18,2)");
-            });
-
-            // ImportReceiptDetail
-            modelBuilder.Entity<ImportReceiptDetail>(entity =>
-            {
-                entity.Property(e => e.ImportPrice).HasColumnType("decimal(18,2)");
-            });
-
-            // ImportReceipt
-            modelBuilder.Entity<ImportReceipt>(entity =>
-            {
-                entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
-            });
-
-            // Voucher
-            modelBuilder.Entity<Voucher>(entity =>
-            {
-                entity.Property(e => e.DiscountValue).HasColumnType("decimal(18,2)");
-                entity.Property(e => e.MinOrderValue).HasColumnType("decimal(18,2)");
-                entity.Property(e => e.MaxDiscountAmount).HasColumnType("decimal(18,2)");
-                entity.HasCheckConstraint("CK_Vouchers_Date", "[EndDate] >= [StartDate]");
-            });
-
-            // Order
-            modelBuilder.Entity<Order>(entity =>
-            {
-                entity.Property(e => e.SubTotal).HasColumnType("decimal(18,2)");
-                entity.Property(e => e.ShippingFee).HasColumnType("decimal(18,2)");
-                entity.Property(e => e.DiscountAmount).HasColumnType("decimal(18,2)");
-                entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
-                entity.HasIndex(o => o.UserId);
-                entity.HasIndex(o => o.OrderDate);
-            });
-
-            // OrderDetail
-            modelBuilder.Entity<OrderDetail>(entity =>
-            {
-                entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
             });
         }
     }
