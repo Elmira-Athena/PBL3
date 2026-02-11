@@ -70,3 +70,10 @@ nunit-*.xml
 /httpRequests/
 
 .idea*
+
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+.vscode/

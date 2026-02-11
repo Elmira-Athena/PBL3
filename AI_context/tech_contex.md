@@ -4,9 +4,9 @@
 ---
 
 ## 1. TECHNOLOGY STACK (CORE)
-* **Backend Framework:** ASP.NET Core 8 Web API.
+* **Backend Framework:** ASP.NET Core 10 Web API.
 * **Frontend Framework:** Blazor WebAssembly (Standalone) - *Ưu tiên dùng C# full-stack để đẩy nhanh tiến độ.*
-* **Database:** SQL Server 2019+ (Triển khai bằng Entity Framework Core 8 - Code First).
+* **Database:** SQL Server 2025+ (Triển khai bằng Entity Framework Core 10 - Code First).
 * **UI Component Library:** MudBlazor (Material Design).
 * **Authentication:** JWT Bearer Token (IdentityServer hoặc Custom Implementation).
 
@@ -17,46 +17,71 @@
 * **File Processing:** `EPPlus` (Để nhập/xuất file Excel kiểm kê kho).
 * **API Documentation:** `Swagger / OpenAPI` (Bắt buộc để Frontend team tích hợp).
 
----
-
 ## 3. SOLUTION ARCHITECTURE (N-LAYER CLEAN ARCHITECTURE)
-AI phải tuân thủ nghiêm ngặt cấu trúc phân tầng này, không được code tắt (ví dụ: không gọi DBContext trực tiếp từ Controller).
 
-### 3.1. `MyProject.Core` (The Heart)
-* *Mô tả:* Chứa các thành phần cốt lõi, không phụ thuộc vào bất kỳ project nào khác.
+AI phải tuân thủ nghiêm ngặt cấu trúc phân tầng này. Đặc biệt lưu ý Project **Shared** để tận dụng sức mạnh của C# Full-stack.
+
+### 3.1. `MyProject.Core` (The Domain Heart)
+
+* *Mô tả:* Chứa các thành phần cốt lõi của nghiệp vụ, không phụ thuộc vào Database hay UI.
 * *Thành phần:*
-    * **Entities:** Các class POCO ánh xạ Database (e.g., `Product`, `Order`).
-    * **Interfaces:** Các bản thiết kế cho Repo và Service (e.g., `IGenericRepository`, `IProductService`).
-    * **Enums:** Các định nghĩa trạng thái cứng (e.g., `SerialStatus`, `OrderStatus`).
-    * **Domain Exceptions:** Các lỗi nghiệp vụ (e.g., `OutOfStockException`).
+* **Entities:** Các class POCO ánh xạ Database (e.g., `Product`, `Order`).
+* **Interfaces:** Các bản thiết kế cho Repo (e.g., `IGenericRepository`, `IProductRepository`).
+* **Domain Exceptions:** Các lỗi nghiệp vụ (e.g., `OutOfStockException`).
+* *Lưu ý:* Project này **không được** tham chiếu đến `Shared` hay `Infrastructure`.
 
-### 3.2. `MyProject.Infrastructure` (The Bones)
+
+
+### 3.2. `MyProject.Shared` (The Contract / The Bridge) 
+
+* *Mô tả:* Class Library chứa các thành phần dùng chung cho cả **Backend (API)** và **Frontend (Blazor)**. Giúp chia sẻ code, tránh lặp lại (DRY).
+* *Thành phần:*
+* **DTOs:** Tất cả Request/Response Models (e.g., `ProductDto`, `LoginRequest`).
+* **Enums:** Các định nghĩa trạng thái dùng chung (e.g., `SerialStatus`, `OrderStatus`).
+* **Constants:** Các hằng số, thông báo lỗi (e.g., `SystemConstants`, `ErrorMessages`).
+* **Custom Results:** Class bọc kết quả API (e.g., `ApiResult<T>`).
+* **Validators:** FluentValidation Rules (để Client có thể validate form ngay lập tức mà chưa cần gọi API).
+
+
+### 3.3. `MyProject.Infrastructure` (The Bones)
+
 * *Mô tả:* Nơi giao tiếp với Database và các dịch vụ hạ tầng.
 * *Thành phần:*
-    * **Data Context:** Class kế thừa `DbContext`.
-    * **Repositories:** Implement `IGenericRepository<T>` và các Repo riêng biệt.
-    * **Configurations:** Cấu hình Fluent API (Max length, Relationship, Index).
-    * **Migrations:** Folder chứa các version migration của DB.
+* **Data Context:** Class kế thừa `DbContext` (EF Core).
+* **Repositories Impl:** Implement các Interface từ Core.
+* **Configurations:** Cấu hình Fluent API (Max length, Relationship, Index).
+* **Migrations:** Folder chứa các version migration của DB.
 
-### 3.3. `MyProject.Service` (The Brain)
-* *Mô tả:* Chứa toàn bộ logic nghiệp vụ (Business Logic).
+
+
+### 3.4. `MyProject.Service` (The Brain)
+
+* *Mô tả:* Chứa toàn bộ logic xử lý nghiệp vụ.
 * *Thành phần:*
-    * **DTOs:** Data Transfer Objects (Request/Response). Tuyệt đối không để lộ Entity ra ngoài.
-    * **Services Impl:** Logic xử lý (e.g., `ProductService` xử lý logic thêm/sửa/xóa và validate).
-    * **Business Rules:** Các logic kiểm tra tồn kho, tính giá, check tương thích PC.
+* **Services Impl:** Logic xử lý chính (e.g., `ProductService` xử lý logic thêm/sửa/xóa).
+* **Mapping Logic:** Cấu hình AutoMapper (Map từ Entity trong `Core` sang DTO trong `Shared`).
+* **Business Rules:** Các logic kiểm tra tồn kho, tính giá, check tương thích PC.
 
-### 3.4. `MyProject.API` (The Face)
+
+
+### 3.5. `MyProject.API` (The Face)
+
 * *Mô tả:* Cổng giao tiếp RESTful API.
 * *Thành phần:*
-    * **Controllers:** Chỉ nhận Request -> Gọi Service -> Trả về Response chuẩn.
-    * **Middlewares:** Xử lý lỗi tập trung (Global Exception Handling), Logging.
+* **Controllers:** Chỉ nhận Request -> Gọi Service -> Trả về `ApiResult<T>` (từ `Shared`).
+* **Middlewares:** Xử lý lỗi tập trung, Logging, JWT Auth.
+* **Program.cs:** Cấu hình Dependency Injection (DI).
 
-### 3.5. `MyProject.Client` (Frontend)
-* *Mô tả:* Ứng dụng Blazor WASM.
+
+
+### 3.6. `MyProject.Client` (The Frontend)
+
+* *Mô tả:* Ứng dụng Blazor WebAssembly.
 * *Thành phần:*
-    * **Pages:** Các màn hình chính (ProductList, BuildPC, Checkout).
-    * **Components:** Các UI tái sử dụng (ProductCard, ConfirmDialog).
-    * **Services:** Gọi API Backend thông qua `HttpClient`.
+* **Pages:** Các màn hình chính (ProductList, BuildPC, Checkout).
+* **Components:** Các UI tái sử dụng (ProductCard, ConfirmDialog) dùng thư viện MudBlazor.
+* **Client Services:** Sử dụng `HttpClient` để gọi API.
+* *Lưu ý:* Project này sẽ Reference trực tiếp `MyProject.Shared` để dùng lại DTO và Enums.
 
 ---
 
