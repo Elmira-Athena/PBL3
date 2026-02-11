@@ -8,6 +8,14 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Core\Core.csproj" />
+      <ProjectReference Include="..\Shared\Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="AutoMapper" Version="16.0.0" />
+      <PackageReference Include="EPPlus" Version="8.4.2" />
+      <PackageReference Include="FluentValidation" Version="12.1.1" />
+      <PackageReference Include="MediatR" Version="14.0.0" />
     </ItemGroup>
 
 </Project>

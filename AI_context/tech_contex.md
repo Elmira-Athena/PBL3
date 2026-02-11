@@ -30,8 +30,6 @@ AI phải tuân thủ nghiêm ngặt cấu trúc phân tầng này. Đặc biệ
 * **Domain Exceptions:** Các lỗi nghiệp vụ (e.g., `OutOfStockException`).
 * *Lưu ý:* Project này **không được** tham chiếu đến `Shared` hay `Infrastructure`.
 
-
-
 ### 3.2. `MyProject.Shared` (The Contract / The Bridge) 
 
 * *Mô tả:* Class Library chứa các thành phần dùng chung cho cả **Backend (API)** và **Frontend (Blazor)**. Giúp chia sẻ code, tránh lặp lại (DRY).
