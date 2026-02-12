@@ -1,7 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
-using PBL3.Infrastructure.Data;
+using PBL3.Core.Interfaces;
 using PBL3.Shared.DTOs.Categories;
 using PBL3.Shared.DTOs.Common;
 
@@ -9,12 +8,12 @@ namespace PBL3.Service.Categories
 {
     public class CategoryService : ICategoryService
     {
-        private readonly HushStoreDbContext _context;
+        private readonly ICategoryRepository _categoryRepo;
         private readonly ILogger<CategoryService> _logger;
 
-        public CategoryService(HushStoreDbContext context, ILogger<CategoryService> logger)
+        public CategoryService(ICategoryRepository categoryRepo, ILogger<CategoryService> logger)
         {
-            _context = context;
+            _categoryRepo = categoryRepo;
             _logger = logger;
         }
 
@@ -23,17 +22,8 @@ namespace PBL3.Service.Categories
         // ========================================================
         public async Task<ApiResult<List<CategoryTreeDto>>> GetTreeAsync()
         {
-            // Lấy tất cả categories active (AsNoTracking cho read-only)
-            var allCategories = await _context.Categories
-                .AsNoTracking()
-                .Where(c => !c.IsDeleted)
-                .OrderBy(c => c.SortOrder)
-                .ThenBy(c => c.Name)
-                .ToListAsync();
-
-            // Build tree in-memory từ flat list
+            var allCategories = await _categoryRepo.GetAllActiveAsync();
             var treeDtos = BuildTree(allCategories, parentId: null);
-
             return ApiResult<List<CategoryTreeDto>>.Ok(treeDtos);
         }
 
@@ -42,10 +32,7 @@ namespace PBL3.Service.Categories
         // ========================================================
         public async Task<ApiResult<CategoryDto>> GetByIdAsync(int id)
         {
-            var category = await _context.Categories
-                .AsNoTracking()
-                .Include(c => c.Parent)
-                .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
+            var category = await _categoryRepo.GetByIdAsync(id, includeParent: true);
 
             if (category == null)
                 return ApiResult<CategoryDto>.Fail("Không tìm thấy danh mục yêu cầu.");
@@ -60,28 +47,18 @@ namespace PBL3.Service.Categories
         public async Task<ApiResult<CategoryDto>> CreateAsync(CreateCategoryRequest request)
         {
             // Rule: Unique Name Per Level (cùng ParentId)
-            var isDuplicate = await _context.Categories
-                .AnyAsync(c => c.ParentId == request.ParentId
-                            && c.Name == request.Name
-                            && !c.IsDeleted);
-
-            if (isDuplicate)
+            if (await _categoryRepo.IsDuplicateNameAsync(request.ParentId, request.Name))
                 return ApiResult<CategoryDto>.Fail("Tên danh mục đã tồn tại trong cấp này.");
 
             // Kiểm tra Slug unique
-            var isSlugDuplicate = await _context.Categories
-                .AnyAsync(c => c.Slug == request.Slug && !c.IsDeleted);
-
-            if (isSlugDuplicate)
+            if (await _categoryRepo.IsDuplicateSlugAsync(request.Slug))
                 return ApiResult<CategoryDto>.Fail("Slug đã tồn tại. Vui lòng chọn slug khác.");
 
             // Tính Level tự động
             int level = 0;
             if (request.ParentId.HasValue)
             {
-                var parent = await _context.Categories
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(c => c.Id == request.ParentId.Value && !c.IsDeleted);
+                var parent = await _categoryRepo.GetByIdAsync(request.ParentId.Value);
 
                 if (parent == null)
                     return ApiResult<CategoryDto>.Fail("Danh mục cha không tồn tại.");
@@ -101,14 +78,14 @@ namespace PBL3.Service.Categories
                 CreatedDate = DateTime.UtcNow
             };
 
-            _context.Categories.Add(category);
-            await _context.SaveChangesAsync();
+            await _categoryRepo.AddAsync(category);
+            await _categoryRepo.SaveChangesAsync();
 
             _logger.LogInformation("Tạo danh mục mới: {CategoryName} (Id: {CategoryId})", category.Name, category.Id);
 
             // Load lại kèm Parent để map DTO
-            await _context.Entry(category).Reference(c => c.Parent).LoadAsync();
-            var dto = MapToDto(category);
+            var created = await _categoryRepo.GetByIdAsync(category.Id, includeParent: true);
+            var dto = MapToDto(created!);
 
             return ApiResult<CategoryDto>.Ok(dto, "Tạo danh mục thành công.");
         }
@@ -118,39 +95,21 @@ namespace PBL3.Service.Categories
         // ========================================================
         public async Task<ApiResult<CategoryDto>> UpdateAsync(int id, UpdateCategoryRequest request)
         {
-            var category = await _context.Categories
-                .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
+            var category = await _categoryRepo.GetByIdAsync(id);
 
             if (category == null)
                 return ApiResult<CategoryDto>.Fail("Không tìm thấy danh mục yêu cầu.");
 
             // Rule: Unique Name Per Level (cùng ParentId, trừ chính nó)
-            var isDuplicate = await _context.Categories
-                .AnyAsync(c => c.ParentId == request.ParentId
-                            && c.Name == request.Name
-                            && c.Id != id
-                            && !c.IsDeleted);
-
-            if (isDuplicate)
+            if (await _categoryRepo.IsDuplicateNameAsync(request.ParentId, request.Name, excludeId: id))
                 return ApiResult<CategoryDto>.Fail("Tên danh mục đã tồn tại trong cấp này.");
 
             // Kiểm tra Slug unique (trừ chính nó)
-            var isSlugDuplicate = await _context.Categories
-                .AnyAsync(c => c.Slug == request.Slug && c.Id != id && !c.IsDeleted);
-
-            if (isSlugDuplicate)
+            if (await _categoryRepo.IsDuplicateSlugAsync(request.Slug, excludeId: id))
                 return ApiResult<CategoryDto>.Fail("Slug đã tồn tại. Vui lòng chọn slug khác.");
 
             // =====================================================
-            // CIRCULAR REFERENCE CHECK (Thuật toán quan trọng)
-            // =====================================================
-            // Khi thay đổi ParentId, phải đảm bảo:
-            //   1. Không đặt chính mình làm cha (self-reference)
-            //   2. Không đặt con cháu của mình làm cha (circular)
-            //
-            // Thuật toán: Load tất cả categories vào Dictionary.
-            //   Đi từ ParentId mới → duyệt ngược lên tổ tiên.
-            //   Nếu gặp Id == category đang sửa → phát hiện vòng lặp.
+            // CIRCULAR REFERENCE CHECK
             // =====================================================
             if (request.ParentId.HasValue)
             {
@@ -166,9 +125,7 @@ namespace PBL3.Service.Categories
             int newLevel = 0;
             if (request.ParentId.HasValue)
             {
-                var parent = await _context.Categories
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(c => c.Id == request.ParentId.Value && !c.IsDeleted);
+                var parent = await _categoryRepo.GetByIdAsync(request.ParentId.Value);
 
                 if (parent == null)
                     return ApiResult<CategoryDto>.Fail("Danh mục cha không tồn tại.");
@@ -176,7 +133,6 @@ namespace PBL3.Service.Categories
                 newLevel = parent.Level + 1;
             }
 
-            // Nếu ParentId thay đổi → cần cập nhật Level cho cả subtree
             bool parentChanged = category.ParentId != request.ParentId;
 
             // Cập nhật entity
@@ -195,13 +151,12 @@ namespace PBL3.Service.Categories
                 await UpdateSubtreeLevelsAsync(category.Id, newLevel);
             }
 
-            await _context.SaveChangesAsync();
+            await _categoryRepo.SaveChangesAsync();
 
             _logger.LogInformation("Cập nhật danh mục: {CategoryName} (Id: {CategoryId})", category.Name, category.Id);
 
-            // Load lại Parent để map DTO
-            await _context.Entry(category).Reference(c => c.Parent).LoadAsync();
-            var dto = MapToDto(category);
+            var updated = await _categoryRepo.GetByIdAsync(category.Id, includeParent: true);
+            var dto = MapToDto(updated!);
 
             return ApiResult<CategoryDto>.Ok(dto, "Cập nhật danh mục thành công.");
         }
@@ -211,31 +166,21 @@ namespace PBL3.Service.Categories
         // ========================================================
         public async Task<ApiResult<bool>> DeleteAsync(int id)
         {
-            var category = await _context.Categories
-                .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
+            var category = await _categoryRepo.GetByIdAsync(id);
 
             if (category == null)
                 return ApiResult<bool>.Fail("Không tìm thấy danh mục yêu cầu.");
 
-            // Rule: Không cho xóa nếu có danh mục con đang hoạt động
-            var hasActiveChildren = await _context.Categories
-                .AnyAsync(c => c.ParentId == id && !c.IsDeleted);
-
-            if (hasActiveChildren)
+            if (await _categoryRepo.HasActiveChildrenAsync(id))
                 return ApiResult<bool>.Fail("Không thể xóa danh mục đang có danh mục con hoặc sản phẩm.");
 
-            // Rule: Không cho xóa nếu đang chứa sản phẩm
-            var hasProducts = await _context.Products
-                .AnyAsync(p => p.CategoryId == id && !p.IsDeleted);
-
-            if (hasProducts)
+            if (await _categoryRepo.HasProductsAsync(id))
                 return ApiResult<bool>.Fail("Không thể xóa danh mục đang có danh mục con hoặc sản phẩm.");
 
-            // Soft Delete
             category.IsDeleted = true;
             category.DeletedDate = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _categoryRepo.SaveChangesAsync();
 
             _logger.LogInformation("Xóa mềm danh mục: {CategoryName} (Id: {CategoryId})", category.Name, category.Id);
 
@@ -246,37 +191,23 @@ namespace PBL3.Service.Categories
         // PRIVATE HELPERS
         // ========================================================
 
-        /// <summary>
-        /// Thuật toán phát hiện tham chiếu vòng (Circular Reference).
-        /// Duyệt từ newParentId → đi ngược lên tổ tiên.
-        /// Nếu gặp categoryId → phát hiện vòng lặp → return true.
-        /// </summary>
         private async Task<bool> DetectCircularReferenceAsync(int categoryId, int newParentId)
         {
-            // Load tất cả categories vào Dictionary để duyệt nhanh (tránh N+1)
-            var allCategories = await _context.Categories
-                .AsNoTracking()
-                .Where(c => !c.IsDeleted)
-                .Select(c => new { c.Id, c.ParentId })
-                .ToDictionaryAsync(c => c.Id, c => c.ParentId);
+            var allCategories = await _categoryRepo.GetAllCategoryParentMapAsync();
 
-            // Duyệt ngược từ newParentId → Root
             var currentId = newParentId;
-            var visited = new HashSet<int>(); // Đề phòng data lỗi gây infinite loop
+            var visited = new HashSet<int>();
 
             while (allCategories.ContainsKey(currentId))
             {
-                // Nếu gặp categoryId → circular!
                 if (currentId == categoryId)
                     return true;
 
-                // Đánh dấu đã visit (phòng data bẩn)
                 if (!visited.Add(currentId))
-                    return true; // Dữ liệu lỗi: đã có vòng lặp trong DB
+                    return true;
 
                 var parentId = allCategories[currentId];
 
-                // Đã đến Root (ParentId == null) → không có circular
                 if (!parentId.HasValue)
                     return false;
 
@@ -286,26 +217,17 @@ namespace PBL3.Service.Categories
             return false;
         }
 
-        /// <summary>
-        /// Cập nhật Level cho toàn bộ subtree khi ParentId thay đổi.
-        /// </summary>
         private async Task UpdateSubtreeLevelsAsync(int parentId, int parentLevel)
         {
-            var children = await _context.Categories
-                .Where(c => c.ParentId == parentId && !c.IsDeleted)
-                .ToListAsync();
+            var children = await _categoryRepo.GetChildrenAsync(parentId);
 
             foreach (var child in children)
             {
                 child.Level = parentLevel + 1;
-                // Đệ quy xuống các cấp con
                 await UpdateSubtreeLevelsAsync(child.Id, child.Level);
             }
         }
 
-        /// <summary>
-        /// Build cây danh mục từ flat list (in-memory).
-        /// </summary>
         private List<CategoryTreeDto> BuildTree(List<Category> allCategories, int? parentId)
         {
             return allCategories
@@ -327,9 +249,6 @@ namespace PBL3.Service.Categories
                 .ToList();
         }
 
-        /// <summary>
-        /// Manual mapping: Entity → CategoryDto.
-        /// </summary>
         private static CategoryDto MapToDto(Category entity)
         {
             return new CategoryDto

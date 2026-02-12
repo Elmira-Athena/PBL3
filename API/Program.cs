@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PBL3.Core.Entities;
+using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
+using PBL3.Infrastructure.Repositories;
 using PBL3.Service.Categories;
+using PBL3.Service.Products;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,8 +42,13 @@ builder.Services.AddIdentity<AppUser, AppRole>(options =>
 .AddEntityFrameworkStores<HushStoreDbContext>()
 .AddDefaultTokenProviders();
 
+// DI: Repositories
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
+
 // DI: Services
 builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<IProductService, ProductService>();
 
 var app = builder.Build();
 
