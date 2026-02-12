@@ -1,0 +1,344 @@
+@using System.Text.RegularExpressions
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(IsEditMode ? Icons.Material.Filled.Edit : Icons.Material.Filled.CreateNewFolder)"
+                     Color="Color.Primary" />
+            <MudText Typo="Typo.h6">
+                @(IsEditMode ? "Chỉnh sửa danh mục" : "Thêm danh mục mới")
+            </MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_isLoadingDetail)
+        {
+            <MudStack Spacing="3" Class="pa-4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+            </MudStack>
+        }
+        else
+        {
+            <MudForm @ref="_form" Model="_model">
+                <MudStack Spacing="3" Class="pt-2">
+                    @* Tên danh mục *@
+                    <MudTextField @bind-Value="_model.Name"
+                                  Label="Tên danh mục"
+                                  Placeholder="VD: Linh kiện máy tính"
+                                  Required="true"
+                                  RequiredError="Tên danh mục không được để trống."
+                                  MaxLength="100"
+                                  Counter="100"
+                                  Variant="Variant.Outlined"
+                                  Immediate="true"
+                                  OnBlur="AutoGenerateSlug" />
+
+                    @* Slug *@
+                    <MudTextField @bind-Value="_model.Slug"
+                                  Label="Slug (URL)"
+                                  Placeholder="VD: linh-kien-may-tinh"
+                                  Required="true"
+                                  RequiredError="Slug không được để trống."
+                                  MaxLength="150"
+                                  Counter="150"
+                                  Variant="Variant.Outlined"
+                                  HelperText="Chữ thường, chỉ chứa a-z, 0-9 và dấu gạch ngang."
+                                  Validation="@(new Func<string, string?>(ValidateSlug))" />
+
+                    @* Danh mục cha *@
+                    <MudSelect T="int?" @bind-Value="_model.ParentId"
+                               Label="Danh mục cha"
+                               Placeholder="-- Không có (Danh mục gốc) --"
+                               Variant="Variant.Outlined"
+                               Clearable="true"
+                               AnchorOrigin="Origin.BottomCenter">
+                        @if (AllCategories != null)
+                        {
+                            @foreach (var item in GetFlatCategoryList())
+                            {
+                                <MudSelectItem T="int?" Value="@item.Id">
+                                    @(new string('—', item.Level) + " " + item.Name)
+                                </MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+
+                    @* Thứ tự hiển thị *@
+                    <MudNumericField @bind-Value="_model.SortOrder"
+                                     Label="Thứ tự hiển thị"
+                                     Min="0"
+                                     Variant="Variant.Outlined" />
+
+                    @* URL Ảnh *@
+                    <MudTextField @bind-Value="_model.ImageUrl"
+                                  Label="URL Ảnh (tùy chọn)"
+                                  Placeholder="https://example.com/image.png"
+                                  Variant="Variant.Outlined" />
+
+                    @* Hiển thị *@
+                    <MudSwitch @bind-Value="_model.IsVisible"
+                               Color="Color.Primary"
+                               Label="@(_model.IsVisible ? "Hiển thị" : "Ẩn")" />
+                </MudStack>
+            </MudForm>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3 rounded-lg" Variant="Variant.Filled">
+                    @_errorMessage
+                </MudAlert>
+            }
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default"
+                   Style="text-transform: none;">
+            Hủy
+        </MudButton>
+        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="_isSaving"
+                   Style="text-transform: none; border-radius: 8px;">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(IsEditMode ? "Cập nhật" : "Tạo mới")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private ICategoryClientService CategoryService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    /// <summary>ParentId khi tạo mới danh mục con</summary>
+    [Parameter] public int? ParentId { get; set; }
+
+    /// <summary>Id danh mục khi chỉnh sửa (null = tạo mới)</summary>
+    [Parameter] public int? EditCategoryId { get; set; }
+
+    /// <summary>Toàn bộ cây danh mục (để render dropdown danh mục cha)</summary>
+    [Parameter] public List<CategoryTreeDto>? AllCategories { get; set; }
+
+    private bool IsEditMode => EditCategoryId.HasValue;
+
+    private MudForm _form = null!;
+    private CategoryFormModel _model = new();
+    private bool _isSaving = false;
+    private bool _isLoadingDetail = false;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEditMode)
+        {
+            _isLoadingDetail = true;
+            StateHasChanged();
+
+            var result = await CategoryService.GetByIdAsync(EditCategoryId!.Value);
+            if (result.Success && result.Data != null)
+            {
+                _model = new CategoryFormModel
+                {
+                    Name = result.Data.Name,
+                    Slug = result.Data.Slug,
+                    ParentId = result.Data.ParentId,
+                    SortOrder = result.Data.SortOrder,
+                    ImageUrl = result.Data.ImageUrl,
+                    IsVisible = result.Data.IsVisible,
+                };
+            }
+            else
+            {
+                _errorMessage = result.Message;
+            }
+
+            _isLoadingDetail = false;
+        }
+        else if (ParentId.HasValue)
+        {
+            _model.ParentId = ParentId;
+        }
+    }
+
+    /// <summary>Flatten cây danh mục thành danh sách phẳng cho dropdown.
+    /// Khi edit, loại bỏ chính nó và các con để tránh circular reference.</summary>
+    private List<CategoryTreeDto> GetFlatCategoryList()
+    {
+        var flat = new List<CategoryTreeDto>();
+        if (AllCategories == null) return flat;
+
+        FlattenTree(AllCategories, flat);
+        return flat;
+    }
+
+    private void FlattenTree(List<CategoryTreeDto> cats, List<CategoryTreeDto> flat)
+    {
+        foreach (var cat in cats)
+        {
+            // Khi edit: bỏ qua chính nó và tất cả con cháu
+            if (IsEditMode && IsDescendantOrSelf(cat, EditCategoryId!.Value))
+                continue;
+
+            flat.Add(cat);
+            if (cat.Children.Count > 0)
+                FlattenTree(cat.Children, flat);
+        }
+    }
+
+    /// <summary>Kiểm tra node có phải là node đang edit hoặc con cháu của nó không</summary>
+    private bool IsDescendantOrSelf(CategoryTreeDto cat, int editId)
+    {
+        if (cat.Id == editId) return true;
+        return cat.Children.Any(c => IsDescendantOrSelf(c, editId));
+    }
+
+    // ===== SLUG AUTO-GENERATE =====
+
+    private void AutoGenerateSlug()
+    {
+        if (string.IsNullOrWhiteSpace(_model.Name) || !string.IsNullOrEmpty(_model.Slug))
+            return;
+
+        _model.Slug = GenerateSlug(_model.Name);
+    }
+
+    private static string GenerateSlug(string name)
+    {
+        // Đơn giản hóa: chuyển sang lowercase, thay khoảng trắng bằng dấu gạch ngang
+        var slug = name.ToLowerInvariant().Trim();
+
+        // Bỏ dấu tiếng Việt cơ bản
+        slug = RemoveVietnameseDiacritics(slug);
+
+        // Thay khoảng trắng và ký tự đặc biệt bằng dấu gạch ngang
+        slug = Regex.Replace(slug, @"[^a-z0-9\s-]", "");
+        slug = Regex.Replace(slug, @"[\s]+", "-");
+        slug = Regex.Replace(slug, @"-+", "-");
+        slug = slug.Trim('-');
+
+        return slug;
+    }
+
+    private static string RemoveVietnameseDiacritics(string text)
+    {
+        string[] vietnameseSigns =
+        [
+            "aàảãáạăằẳẵắặâầẩẫấậ",
+            "dđ",
+            "eèẻẽéẹêềểễếệ",
+            "iìỉĩíị",
+            "oòỏõóọôồổỗốộơờởỡớợ",
+            "uùủũúụưừửữứự",
+            "yỳỷỹýỵ"
+        ];
+
+        foreach (var sign in vietnameseSigns)
+        {
+            for (int i = 1; i < sign.Length; i++)
+            {
+                text = text.Replace(sign[i], sign[0]);
+            }
+        }
+
+        return text;
+    }
+
+    private static string? ValidateSlug(string slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+            return "Slug không được để trống.";
+
+        if (!Regex.IsMatch(slug, "^[a-z0-9]+(?:-[a-z0-9]+)*$"))
+            return "Slug chỉ chấp nhận chữ thường, số và dấu gạch ngang.";
+
+        return null;
+    }
+
+    // ===== SUBMIT =====
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _isSaving = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            if (IsEditMode)
+            {
+                var request = new UpdateCategoryRequest
+                {
+                    Name = _model.Name,
+                    Slug = _model.Slug,
+                    ParentId = _model.ParentId,
+                    SortOrder = _model.SortOrder,
+                    ImageUrl = _model.ImageUrl,
+                    IsVisible = _model.IsVisible,
+                };
+
+                var result = await CategoryService.UpdateAsync(EditCategoryId!.Value, request);
+
+                if (result.Success)
+                {
+                    Snackbar.Add("Cập nhật danh mục thành công!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                }
+            }
+            else
+            {
+                var request = new CreateCategoryRequest
+                {
+                    Name = _model.Name,
+                    Slug = _model.Slug,
+                    ParentId = _model.ParentId,
+                    SortOrder = _model.SortOrder,
+                    ImageUrl = _model.ImageUrl,
+                    IsVisible = _model.IsVisible,
+                };
+
+                var result = await CategoryService.CreateAsync(request);
+
+                if (result.Success)
+                {
+                    Snackbar.Add("Tạo danh mục thành công!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                }
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    // ===== FORM MODEL =====
+    private class CategoryFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public int? ParentId { get; set; }
+        public int SortOrder { get; set; }
+        public string? ImageUrl { get; set; }
+        public bool IsVisible { get; set; } = true;
+    }
+}

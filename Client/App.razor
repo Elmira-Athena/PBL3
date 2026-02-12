@@ -1,6 +1,63 @@
-﻿<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+﻿<MudThemeProvider @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
-        <FocusOnNavigate RouteData="@routeData" Selector="h1"/>
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
     </Found>
 </Router>
+
+@code {
+    private bool _isDarkMode = false;
+
+    private MudTheme _theme = new MudTheme
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#D32F2F",
+            PrimaryDarken = "#B71C1C",
+            PrimaryLighten = "#EF5350",
+            Secondary = "#424242",
+            AppbarBackground = "#FFFFFF",
+            AppbarText = "#333333",
+            Background = "#F5F5F5",
+            Surface = "#FFFFFF",
+            DrawerBackground = "#FFFFFF",
+            DrawerText = "#333333",
+            TextPrimary = "#333333",
+            TextSecondary = "#666666",
+            ActionDefault = "#757575",
+            ActionDisabled = "#BDBDBD",
+            Divider = "#E0E0E0",
+            Success = "#43A047",
+            Warning = "#FB8C00",
+            Error = "#E53935",
+            Info = "#1E88E5",
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = ["Roboto", "Helvetica", "Arial", "sans-serif"],
+                FontSize = "0.875rem",
+            },
+            H5 = new H5Typography
+            {
+                FontWeight = "700",
+                FontSize = "1.4rem",
+            },
+            H6 = new H6Typography
+            {
+                FontWeight = "600",
+                FontSize = "1.1rem",
+            },
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DrawerWidthLeft = "260px",
+        }
+    };
+}

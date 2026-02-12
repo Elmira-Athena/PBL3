@@ -1,0 +1,64 @@
+<MudNavMenu Bordered="true" Color="Color.Primary" Class="px-2">
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mud-text-secondary"
+             Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
+        Quản lý
+    </MudText>
+
+    <MudNavLink Href="/" Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Outlined.Dashboard"
+                IconColor="Color.Default">
+        Tổng quan
+    </MudNavLink>
+
+    <MudNavLink Href="/admin/categories" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.Category"
+                IconColor="Color.Default">
+        Danh mục
+    </MudNavLink>
+
+    <MudNavLink Href="/admin/products" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.Inventory2"
+                IconColor="Color.Default">
+        Sản phẩm
+    </MudNavLink>
+
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mt-3 mud-text-secondary"
+             Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
+        Bán hàng
+    </MudText>
+
+    <MudNavLink Href="/admin/orders" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.ShoppingCart"
+                IconColor="Color.Default">
+        Đơn hàng
+    </MudNavLink>
+
+    <MudNavLink Href="/admin/customers" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.People"
+                IconColor="Color.Default">
+        Khách hàng
+    </MudNavLink>
+
+    <MudNavLink Href="/admin/promotions" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.LocalOffer"
+                IconColor="Color.Default">
+        Mã giảm giá
+    </MudNavLink>
+
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mt-3 mud-text-secondary"
+             Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
+        Hệ thống
+    </MudText>
+
+    <MudNavLink Href="/admin/employees" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.Badge"
+                IconColor="Color.Default">
+        Nhân viên
+    </MudNavLink>
+
+    <MudNavLink Href="/admin/reports" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.BarChart"
+                IconColor="Color.Default">
+        Thống kê
+    </MudNavLink>
+</MudNavMenu>

@@ -1,0 +1,465 @@
+@page "/admin/categories"
+
+<PageTitle>Quản lý Danh mục - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-2">
+    @* ===== HEADER ===== *@
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Danh mục sản phẩm
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Quản lý cây danh mục đa cấp
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="() => OpenDialog(null)"
+                   Style="text-transform: none; border-radius: 8px; font-weight: 500;">
+            Thêm danh mục
+        </MudButton>
+    </MudPaper>
+
+    @* ===== SEARCH & FILTER BAR ===== *@
+    <MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="_searchString"
+                              Placeholder="Tìm kiếm danh mục..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              DebounceInterval="300"
+                              OnDebounceIntervalElapsed="OnSearchChanged"
+                              Style="border-radius: 8px;" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="8" Class="d-flex align-center justify-end gap-2">
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.UnfoldMore"
+                           OnClick="ExpandAll"
+                           Size="Size.Small"
+                           Style="text-transform: none;">
+                    Mở rộng tất cả
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.UnfoldLess"
+                           OnClick="CollapseAll"
+                           Size="Size.Small"
+                           Style="text-transform: none;">
+                    Thu gọn
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="LoadCategories"
+                           Size="Size.Small"
+                           Style="text-transform: none;">
+                    Làm mới
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ===== TREE VIEW ===== *@
+    <MudPaper Elevation="1" Class="pa-4 rounded-lg">
+        @if (_isLoading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+            <MudStack Spacing="3">
+                @for (int i = 0; i < 5; i++)
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="42px"
+                                 Style="border-radius: 8px;" />
+                }
+            </MudStack>
+        }
+        else if (_categories == null || _categories.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="rounded-lg">
+                <MudText>Chưa có danh mục nào. Hãy tạo danh mục đầu tiên!</MudText>
+            </MudAlert>
+        }
+        else
+        {
+            <MudTreeView T="CategoryTreeDto"
+                         Items="@_treeItems"
+                         Hover="true"
+                         ExpandOnClick="true"
+                         Dense="false">
+                <ItemTemplate Context="item">
+                    <MudTreeViewItem T="CategoryTreeDto"
+                                     Items="@GetChildItems(item.Value!)"
+                                     Value="@item.Value"
+                                     @bind-Expanded="@GetExpandedState(item.Value!).Value"
+                                     Icon="@GetCategoryIcon(item.Value!)"
+                                     IconColor="@GetIconColor(item.Value!)">
+                        <BodyContent>
+                            <div class="d-flex align-center justify-space-between flex-grow-1 px-1">
+                                <div class="d-flex align-center gap-2">
+                                    <MudText Style="@GetHighlightStyle(item.Value!)">
+                                        @item.Value!.Name
+                                    </MudText>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Variant="Variant.Outlined"
+                                             Color="Color.Default"
+                                             Style="font-size: 0.7rem;">
+                                        Cấp @item.Value!.Level
+                                    </MudChip>
+                                    @if (!item.Value!.IsVisible)
+                                    {
+                                        <MudChip T="string" Size="Size.Small"
+                                                 Color="Color.Warning"
+                                                 Variant="Variant.Filled"
+                                                 Style="font-size: 0.7rem;">
+                                            Ẩn
+                                        </MudChip>
+                                    }
+                                    @if (item.Value!.Children.Count > 0)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            (@item.Value!.Children.Count danh mục con)
+                                        </MudText>
+                                    }
+                                </div>
+
+                                <div @onclick:stopPropagation="true">
+                                <MudStack Row="true" Spacing="0">
+                                    <MudTooltip Text="Thêm danh mục con" Placement="Placement.Top">
+                                        <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline"
+                                                       Size="Size.Small"
+                                                       Color="Color.Success"
+                                                       OnClick="@(() => OpenDialog(item.Value!.Id))" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Chỉnh sửa" Placement="Placement.Top">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                       Size="Size.Small"
+                                                       Color="Color.Primary"
+                                                       OnClick="@(() => OpenEditDialog(item.Value!))" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Xóa" Placement="Placement.Top">
+                                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                                       Size="Size.Small"
+                                                       Color="Color.Error"
+                                                       OnClick="@(() => ConfirmDelete(item.Value!))" />
+                                    </MudTooltip>
+                                </MudStack>
+                                </div>
+                            </div>
+                        </BodyContent>
+                    </MudTreeViewItem>
+                </ItemTemplate>
+            </MudTreeView>
+
+            @* -- Summary -- *@
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Tổng cộng: @CountAllCategories(_categories) danh mục
+            </MudText>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Inject] private ICategoryClientService CategoryService { get; set; } = null!;
+    [Inject] private IDialogService DialogService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    private List<CategoryTreeDto>? _categories;
+    private IReadOnlyCollection<TreeItemData<CategoryTreeDto>>? _treeItems;
+    private bool _isLoading = true;
+    private string _searchString = string.Empty;
+
+    // Trạng thái expand cho từng node
+    private Dictionary<int, BoolReference> _expandedState = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+    }
+
+    private async Task LoadCategories()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        var result = await CategoryService.GetTreeAsync();
+
+        if (result.Success && result.Data != null)
+        {
+            _categories = result.Data;
+            _expandedState.Clear();
+            BuildTreeItems();
+        }
+        else
+        {
+            Snackbar.Add(result.Message, Severity.Error);
+            _categories = new();
+        }
+
+        _isLoading = false;
+        StateHasChanged();
+    }
+
+    private void BuildTreeItems()
+    {
+        if (_categories == null) return;
+        _treeItems = _categories
+            .Select(c => BuildTreeItemData(c))
+            .ToList()
+            .AsReadOnly();
+    }
+
+    private TreeItemData<CategoryTreeDto> BuildTreeItemData(CategoryTreeDto cat)
+    {
+        EnsureExpandedState(cat.Id);
+        return new TreeItemData<CategoryTreeDto>
+        {
+            Value = cat,
+            Children = cat.Children.Count > 0
+                ? cat.Children.Select(c => BuildTreeItemData(c)).ToList()
+                : null,
+            Expanded = _expandedState[cat.Id].Value
+        };
+    }
+
+    private IReadOnlyCollection<TreeItemData<CategoryTreeDto>>? GetChildItems(CategoryTreeDto cat)
+    {
+        if (cat.Children.Count == 0) return null;
+        return cat.Children.Select(c => BuildTreeItemData(c)).ToList().AsReadOnly();
+    }
+
+    // ===== EXPAND / COLLAPSE =====
+
+    private void EnsureExpandedState(int id)
+    {
+        if (!_expandedState.ContainsKey(id))
+            _expandedState[id] = new BoolReference { Value = false };
+    }
+
+    private BoolReference GetExpandedState(CategoryTreeDto cat)
+    {
+        EnsureExpandedState(cat.Id);
+        return _expandedState[cat.Id];
+    }
+
+    private void ExpandAll()
+    {
+        if (_categories == null) return;
+        SetExpandedRecursive(_categories, true);
+        BuildTreeItems();
+        StateHasChanged();
+    }
+
+    private void CollapseAll()
+    {
+        if (_categories == null) return;
+        SetExpandedRecursive(_categories, false);
+        BuildTreeItems();
+        StateHasChanged();
+    }
+
+    private void SetExpandedRecursive(List<CategoryTreeDto> cats, bool expanded)
+    {
+        foreach (var cat in cats)
+        {
+            EnsureExpandedState(cat.Id);
+            _expandedState[cat.Id].Value = expanded;
+            if (cat.Children.Count > 0)
+                SetExpandedRecursive(cat.Children, expanded);
+        }
+    }
+
+    // ===== SEARCH =====
+
+    private void OnSearchChanged(string value)
+    {
+        _searchString = value;
+
+        if (_categories == null) return;
+
+        if (string.IsNullOrWhiteSpace(_searchString))
+        {
+            // Reset - thu gọn tất cả
+            SetExpandedRecursive(_categories, false);
+        }
+        else
+        {
+            // Tìm kiếm: đánh dấu expand cho các node cha có chứa kết quả
+            SetExpandedRecursive(_categories, false);
+            ExpandMatchingNodes(_categories);
+        }
+
+        BuildTreeItems();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Thuật toán duyệt cây đệ quy: Nếu node con khớp từ khóa → expand tất cả node cha.
+    /// </summary>
+    private bool ExpandMatchingNodes(List<CategoryTreeDto> cats)
+    {
+        bool anyMatch = false;
+        foreach (var cat in cats)
+        {
+            bool selfMatch = cat.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+            bool childMatch = cat.Children.Count > 0 && ExpandMatchingNodes(cat.Children);
+
+            if (selfMatch || childMatch)
+            {
+                EnsureExpandedState(cat.Id);
+                _expandedState[cat.Id].Value = true;
+                anyMatch = true;
+            }
+        }
+        return anyMatch;
+    }
+
+    // ===== STYLE HELPERS =====
+
+    private string GetCategoryIcon(CategoryTreeDto cat)
+    {
+        return cat.Children.Count > 0
+            ? Icons.Material.Filled.FolderOpen
+            : Icons.Material.Filled.Label;
+    }
+
+    private Color GetIconColor(CategoryTreeDto cat)
+    {
+        return cat.Level switch
+        {
+            0 => Color.Primary,
+            1 => Color.Secondary,
+            _ => Color.Default
+        };
+    }
+
+    private string GetHighlightStyle(CategoryTreeDto cat)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return string.Empty;
+        if (cat.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return "font-weight: 700; color: var(--mud-palette-primary);";
+        return string.Empty;
+    }
+
+    private int CountAllCategories(List<CategoryTreeDto> cats)
+    {
+        int count = cats.Count;
+        foreach (var cat in cats)
+            count += CountAllCategories(cat.Children);
+        return count;
+    }
+
+    // ===== CRUD DIALOG =====
+
+    /// <summary>Mở dialog tạo mới (parentId = null → root, có parentId → sub-category)</summary>
+    private async Task OpenDialog(int? parentId)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(CategoryDialog.ParentId), parentId },
+            { nameof(CategoryDialog.AllCategories), _categories }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true,
+        };
+
+        var dialog = await DialogService.ShowAsync<CategoryDialog>("Thêm danh mục mới", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadCategories();
+        }
+    }
+
+    /// <summary>Mở dialog chỉnh sửa</summary>
+    private async Task OpenEditDialog(CategoryTreeDto category)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(CategoryDialog.EditCategoryId), category.Id },
+            { nameof(CategoryDialog.AllCategories), _categories }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true,
+        };
+
+        var dialog = await DialogService.ShowAsync<CategoryDialog>("Chỉnh sửa danh mục", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadCategories();
+        }
+    }
+
+    /// <summary>Dialog xác nhận xóa</summary>
+    private async Task ConfirmDelete(CategoryTreeDto category)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Xác nhận xóa",
+            $"Bạn có chắc chắn muốn xóa danh mục \"{category.Name}\"?",
+            yesText: "Xóa",
+            cancelText: "Hủy"
+        );
+
+        if (confirm == true)
+        {
+            var result = await CategoryService.DeleteAsync(category.Id);
+
+            if (result.Success)
+            {
+                // Optimistic UI: xóa node khỏi tree trước
+                RemoveFromTree(_categories!, category.Id);
+                BuildTreeItems();
+                StateHasChanged();
+
+                Snackbar.Add("Đã xóa danh mục thành công!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+    }
+
+    /// <summary>Xóa node khỏi cây (Optimistic UI)</summary>
+    private bool RemoveFromTree(List<CategoryTreeDto> cats, int id)
+    {
+        var toRemove = cats.FirstOrDefault(c => c.Id == id);
+        if (toRemove != null)
+        {
+            cats.Remove(toRemove);
+            return true;
+        }
+
+        foreach (var cat in cats)
+        {
+            if (RemoveFromTree(cat.Children, id))
+                return true;
+        }
+        return false;
+    }
+
+    // ===== HELPER CLASS =====
+    private class BoolReference
+    {
+        public bool Value { get; set; }
+    }
+}
