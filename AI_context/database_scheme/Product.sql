@@ -1,167 +1,146 @@
 -- =============================================
--- PHẦN 2: PRODUCT MASTER DATA (MERGE & ALL SERIAL)
+-- PHẦN 2: PRODUCT MASTER DATA (FIXED & OPTIMIZED)
 -- =============================================
 
--- 1. Bảng Manufacturers (Hãng sản xuất)
+-- 1. Bảng Manufacturers
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Manufacturers]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [Manufacturers] (
     [Id] int IDENTITY(1,1) NOT NULL,
     [Name] nvarchar(100) NOT NULL,
     [LogoUrl] nvarchar(500) NULL,
     [Website] nvarchar(255) NULL,
     [SupportEmail] varchar(100) NULL,
-
-    -- Audit
     [CreatedDate] datetime2 NOT NULL DEFAULT GETUTCDATE(),
     [CreatedBy] nvarchar(100) NULL,
     [ModifiedDate] datetime2 NULL,
     [ModifiedBy] nvarchar(100) NULL,
     [IsDeleted] bit NOT NULL DEFAULT 0,
     [DeletedDate] datetime2 NULL,
-
     CONSTRAINT [PK_Manufacturers] PRIMARY KEY ([Id])
-    );
+);
+END
 GO
 
--- 2. Bảng Categories (Danh mục đa cấp)
+-- 2. Bảng Categories
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Categories]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [Categories] (
     [Id] int IDENTITY(1,1) NOT NULL,
     [Name] nvarchar(100) NOT NULL,
     [Slug] varchar(150) NOT NULL,
-    [ParentId] int NULL, -- Self-Reference (Đệ quy)
-    [Level] int NOT NULL DEFAULT 0, -- 0: Root, 1: Sub
+    [ParentId] int NULL,
+    [Level] int NOT NULL DEFAULT 0,
     [ImageUrl] nvarchar(500) NULL,
     [SortOrder] int NOT NULL DEFAULT 0,
     [IsVisible] bit NOT NULL DEFAULT 1,
-
-    -- Audit
     [CreatedDate] datetime2 NOT NULL DEFAULT GETUTCDATE(),
     [CreatedBy] nvarchar(100) NULL,
     [ModifiedDate] datetime2 NULL,
     [ModifiedBy] nvarchar(100) NULL,
     [IsDeleted] bit NOT NULL DEFAULT 0,
     [DeletedDate] datetime2 NULL,
-
     CONSTRAINT [PK_Categories] PRIMARY KEY ([Id]),
     CONSTRAINT [FK_Categories_Parent] FOREIGN KEY ([ParentId]) REFERENCES [Categories] ([Id]),
     CONSTRAINT [UQ_Categories_Slug] UNIQUE ([Slug])
-    );
-GO
-
+);
 CREATE INDEX [IX_Categories_ParentId] ON [Categories] ([ParentId]);
+END
 GO
 
--- 3. Bảng Products (Sản phẩm chung / Dòng máy)
--- VD: Laptop ASUS ROG Strix G15 (Chưa phải là cấu hình cụ thể)
+-- 3. Bảng Products (Đã thêm cột ManufacturerId & CategoryId)
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Products]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [Products] (
     [Id] int IDENTITY(1,1) NOT NULL,
     [Name] nvarchar(255) NOT NULL,
     [ShortDescription] nvarchar(500) NULL,
-    [Description] nvarchar(max) NULL, -- HTML mô tả chi tiết
-
-    [ManufacturerId] int NOT NULL,
-    [CategoryId] int NOT NULL,
-
-    [Status] int NOT NULL DEFAULT 1, -- 1: Kinh doanh, 0: Ngừng kinh doanh
-
--- Audit
+    [Description] nvarchar(max) NULL,
+    [ManufacturerId] int NOT NULL, -- Đã thêm
+    [CategoryId] int NOT NULL,     -- Đã thêm
+    [Status] int NOT NULL DEFAULT 1,
     [CreatedDate] datetime2 NOT NULL DEFAULT GETUTCDATE(),
     [CreatedBy] nvarchar(100) NULL,
     [ModifiedDate] datetime2 NULL,
     [ModifiedBy] nvarchar(100) NULL,
     [IsDeleted] bit NOT NULL DEFAULT 0,
     [DeletedDate] datetime2 NULL,
-
     CONSTRAINT [PK_Products] PRIMARY KEY ([Id]),
     CONSTRAINT [FK_Products_Manufacturers] FOREIGN KEY ([ManufacturerId]) REFERENCES [Manufacturers] ([Id]) ON DELETE CASCADE,
     CONSTRAINT [FK_Products_Categories] FOREIGN KEY ([CategoryId]) REFERENCES [Categories] ([Id]) ON DELETE CASCADE
-    );
+);
+END
 GO
 
--- 4. Bảng ProductVariants (SKU - Đơn vị bán hàng thực tế)
--- VD: G15-513RC (Cấu hình RAM 16GB)
--- LƯU Ý: Đã xóa cột IsSerialManaged vì mặc định là TRUE.
+-- 4. Bảng ProductVariants
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ProductVariants]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [ProductVariants] (
     [Id] int IDENTITY(1,1) NOT NULL,
     [ProductId] int NOT NULL,
-
-    [SKU] varchar(50) NOT NULL, -- Mã định danh duy nhất (Barcode)
-    [VariantName] nvarchar(200) NOT NULL, -- Tên hiển thị đầy đủ (VD: Màu Đen - 16GB)
-    [Slug] varchar(250) NOT NULL, -- URL riêng cho biến thể
-
-    [Price] decimal(18,2) NOT NULL, -- Giá bán
-    [OriginalPrice] decimal(18,2) NULL, -- Giá gốc (để gạch ngang)
-
--- CACHED STOCK: Cột này chỉ dùng để hiển thị nhanh. 
--- Dữ liệu gốc nằm ở bảng ProductSerials (Module 3).
+    [SKU] varchar(50) NOT NULL,
+    [VariantName] nvarchar(200) NOT NULL,
+    [Slug] varchar(250) NOT NULL,
+    [Price] decimal(18,2) NOT NULL,
+    [OriginalPrice] decimal(18,2) NULL,
     [StockQuantity] int NOT NULL DEFAULT 0,
-
-    [WarrantyMonth] int NOT NULL DEFAULT 12, -- Số tháng bảo hành
-
-    [Specifications] nvarchar(max) NULL, -- JSON cấu hình chi tiết
-
--- Audit
+    [WarrantyMonth] int NOT NULL DEFAULT 12,
+    [Specifications] nvarchar(max) NULL,
     [CreatedDate] datetime2 NOT NULL DEFAULT GETUTCDATE(),
     [CreatedBy] nvarchar(100) NULL,
     [ModifiedDate] datetime2 NULL,
     [ModifiedBy] nvarchar(100) NULL,
     [IsDeleted] bit NOT NULL DEFAULT 0,
     [DeletedDate] datetime2 NULL,
-
     CONSTRAINT [PK_ProductVariants] PRIMARY KEY ([Id]),
     CONSTRAINT [FK_ProductVariants_Products] FOREIGN KEY ([ProductId]) REFERENCES [Products] ([Id]) ON DELETE CASCADE,
     CONSTRAINT [UQ_ProductVariants_SKU] UNIQUE ([SKU])
-    );
+);
+END
 GO
 
--- 5. Bảng ProductAttributes (Thông số kỹ thuật dùng cho Lọc & Build PC)
--- VD: VariantId = 10, Name = "Socket", Value = "LGA1700"
+-- 5. Bảng ProductAttributes
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ProductAttributes]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [ProductAttributes] (
     [Id] int IDENTITY(1,1) NOT NULL,
     [VariantId] int NOT NULL,
-
-    [AttributeName] varchar(50) NOT NULL, -- Key: Socket, RamType, TDP
-    [AttributeValue] nvarchar(100) NOT NULL, -- Value: LGA1700, DDR4
-
+    [AttributeName] varchar(50) NOT NULL,
+    [AttributeValue] nvarchar(100) NOT NULL,
     [IsFilterable] bit NOT NULL DEFAULT 1,
-
     CONSTRAINT [PK_ProductAttributes] PRIMARY KEY ([Id]),
     CONSTRAINT [FK_ProductAttributes_Variants] FOREIGN KEY ([VariantId]) REFERENCES [ProductVariants] ([Id]) ON DELETE CASCADE
-    );
-GO
-
+);
 CREATE INDEX [IX_ProductAttributes_Search] ON [ProductAttributes] ([AttributeName], [AttributeValue]);
+END
 GO
 
--- 6. Bảng ProductImages (Thư viện ảnh)
+-- 6. Bảng ProductImages
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ProductImages]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [ProductImages] (
     [Id] int IDENTITY(1,1) NOT NULL,
     [VariantId] int NOT NULL,
-
     [ImageUrl] nvarchar(500) NOT NULL,
     [IsMain] bit NOT NULL DEFAULT 0,
     [SortOrder] int NOT NULL DEFAULT 0,
-
     CONSTRAINT [PK_ProductImages] PRIMARY KEY ([Id]),
     CONSTRAINT [FK_ProductImages_Variants] FOREIGN KEY ([VariantId]) REFERENCES [ProductVariants] ([Id]) ON DELETE CASCADE
-    );
+);
+END
 GO
 
--- =============================================
--- SEED DATA (Dữ liệu mẫu)
--- =============================================
-
--- Hãng
+-- SEED DATA (Sửa lại logic biến)
+-- Chạy riêng block này
 INSERT INTO [Manufacturers] ([Name], [LogoUrl]) VALUES 
 (N'Intel', 'intel.png'), (N'AMD', 'amd.png'), (N'NVIDIA', 'nvidia.png'), (N'ASUS', 'asus.png');
 
--- Danh mục
 INSERT INTO [Categories] ([Name], [Slug], [ParentId], [Level]) VALUES
-    (N'Linh Kiện PC', 'linh-kien-pc', NULL, 0);
+(N'Linh Kiện PC', 'linh-kien-pc', NULL, 0);
 
-DECLARE @LinhKienId int = (SELECT Id FROM Categories WHERE Slug = 'linh-kien-pc');
-
+-- Lấy ID cha vừa tạo để insert con (Dùng subquery trực tiếp thay vì biến để tránh lỗi GO)
 INSERT INTO [Categories] ([Name], [Slug], [ParentId], [Level]) VALUES
-    (N'CPU', 'cpu', @LinhKienId, 1),
-    (N'VGA', 'vga', @LinhKienId, 1),
-    (N'Mainboard', 'mainboard', @LinhKienId, 1);
+(N'CPU', 'cpu', (SELECT Id FROM Categories WHERE Slug = 'linh-kien-pc'), 1),
+(N'VGA', 'vga', (SELECT Id FROM Categories WHERE Slug = 'linh-kien-pc'), 1),
+(N'Mainboard', 'mainboard', (SELECT Id FROM Categories WHERE Slug = 'linh-kien-pc'), 1);
 GO

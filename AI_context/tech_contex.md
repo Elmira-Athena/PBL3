@@ -163,30 +163,37 @@ Khi viết logic Build PC, phải check các bảng luật (`CompatibilityRules`
     ├── NVIDIA (Level 2)
     └── AMD (Level 2)
 
-#### B. Product Identity vs. Physical Item (Quan trọng)
-Hệ thống phân tách rõ ràng giữa "Thông tin sản phẩm" và "Sản phẩm vật lý".
+#### B. Product Variant Architecture (Master Data)
+Hệ thống sử dụng mô hình **Parent-Child** để quản lý các biến thể sản phẩm (Ví dụ: Cùng là "iPhone 15" nhưng có bản "128GB" và "256GB" giá khác nhau).
 
-**1. Product (Master Data):**
-* Đại diện cho mẫu sản phẩm (Model).
-* Định danh bằng: `ProductCode` (SKU) - Duy nhất.
-* Chứa thông tin chung: Tên, Mô tả, Giá bán, Thông số kỹ thuật, Ảnh, Thời gian bảo hành.
-* **Cờ quản lý:** `IsSerialManaged` (bool).
-  * `true`: Quản lý từng cái (Main, CPU, VGA...).
-  * `false`: Chỉ quản lý số lượng (Dây cáp, Chuột giá rẻ...).
+**1. Product (Parent Entity):**
+* Đại diện cho dòng sản phẩm chung.
+* Chứa thông tin chia sẻ: Tên (Name), Mô tả (Description), Hãng (Brand), Danh mục (CategoryId), Ảnh đại diện chung.
+* **Lưu ý:** Bảng này KHÔNG chứa Giá bán và Số lượng tồn kho.
 
-**2. ProductSerial (Physical Item):**
-* Đại diện cho một vật thể cầm nắm được trong kho.
-* Quan hệ: **1 Product - N ProductSerials** (Một mẫu sản phẩm có nhiều cái trong kho).
-* Định danh bằng: `SerialNumber` (SN) - Quét từ mã vạch trên hộp.
+**2. ProductVariant (Sellable SKU):**
+* Đại diện cho phiên bản cụ thể được bán ra.
+* Quan hệ: **1 Product - N ProductVariants**.
+* **Thuộc tính bắt buộc:**
+    * `SKU/Code` (Unique): Mã định danh phiên bản (VD: `DELL-XPS-16GB`).
+    * `Price`: Giá bán riêng cho phiên bản này.
+    * `OriginalPrice`: Giá gốc (để hiển thị giảm giá).
+    * `Specifications`: JSON lưu cấu hình riêng (VD: `{"RAM": "16GB", "Color": "Silver"}`).
+    * `ImageUrls`: Ảnh riêng của phiên bản (nếu có).
+
+**3. ProductSerial (Physical Item - Inventory):**
+* Đại diện cho vật thể cầm nắm được (cái hộp cụ thể trong kho).
+* Quan hệ: **1 ProductVariant - N ProductSerials** (Serial gắn với biến thể, không gắn với Product cha).
+* Định danh bằng: `SerialNumber` (SN) - Quét từ mã vạch.
 * **Thuộc tính:**
-  * `SerialNumber` (Unique): Mã định danh duy nhất.
-  * `Status` (Enum): `Available` (Trong kho), `Reserved` (Đã có người đặt), `Sold` (Đã bán), `Defective` (Hàng lỗi).
-  * `ImportReceiptId`: Nhập từ phiếu nào.
-  * `OrderId`: Bán trong đơn hàng nào (Nullable).
+    * `SerialNumber` (Unique): Khóa chính.
+    * `Status` (Enum): `Available`, `Reserved` (Đã có đơn, chờ ship), `Sold`, `Defective`.
+    * `ImportReceiptId`: Nhập từ phiếu nào.
 
-**3. Logic Đồng bộ Tồn kho (Inventory Sync):**
-* Với sản phẩm có Serial: Số lượng tồn (`StockQuantity`) trong bảng Product là con số **Computed** (Được tính toán) = Số lượng các dòng trong bảng `ProductSerial` có status là `Available`.
-* AI phải viết code trigger hoặc service logic để đảm bảo con số này luôn đúng.
+**4. Logic Đồng bộ Tồn kho (Inventory Sync):**
+* **Variant Stock:** Số lượng tồn của một Variant = `COUNT(ProductSerials)` có status `Available`.
+* **Product Stock:** Số lượng tồn của Product cha = Tổng tồn kho của tất cả Variant con.
+* *Yêu cầu:* AI phải viết Service để tính toán con số này khi hiển thị (hoặc dùng Database View), không lưu cứng (Hardcode) để tránh sai lệch dữ liệu.
 
 
 ## 6. UI GUIDELINES (Frontend - MudBlazor)
