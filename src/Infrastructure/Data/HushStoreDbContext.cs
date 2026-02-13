@@ -75,6 +75,12 @@ namespace PBL3.Infrastructure.Data
             });
 
             // --- INVENTORY ---
+            // Global Query Filter: Tự động bỏ qua Supplier đã bị xoá mềm
+            modelBuilder.Entity<Supplier>(entity =>
+            {
+                entity.HasQueryFilter(s => !s.IsDeleted);
+            });
+
             modelBuilder.Entity<ProductSerial>(entity =>
             {
                 entity.HasIndex(s => s.SerialNumber).IsUnique();

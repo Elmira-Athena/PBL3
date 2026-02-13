@@ -6,6 +6,7 @@ using PBL3.Infrastructure.Data;
 using PBL3.Infrastructure.Repositories;
 using PBL3.Service.Categories;
 using PBL3.Service.Products;
+using PBL3.Service.Suppliers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,10 +57,12 @@ builder.Services.AddIdentity<AppUser, AppRole>(options =>
 // DI: Repositories
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 
 // DI: Services
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 
 var app = builder.Build();
 
