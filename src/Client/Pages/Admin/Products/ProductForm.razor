@@ -1,0 +1,612 @@
+@page "/admin/products/create"
+@page "/admin/products/edit/{Id:int}"
+
+<PageTitle>@(_isEditMode ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới") - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-2 mb-6">
+    @* ===== HEADER ===== *@
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                @(_isEditMode ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới")
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                @(_isEditMode ? "Cập nhật thông tin sản phẩm và biến thể" : "Nhập đầy đủ thông tin sản phẩm")
+            </MudText>
+        </div>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.ArrowBack"
+                       Href="/admin/products"
+                       Style="text-transform: none; border-radius: 8px;">
+                Hủy
+            </MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Save"
+                       OnClick="HandleSubmit"
+                       Disabled="_isSaving"
+                       Style="text-transform: none; border-radius: 8px; font-weight: 500;">
+                @if (_isSaving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                }
+                @(_isEditMode ? "Cập nhật" : "Tạo sản phẩm")
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @if (_isLoadingDetail)
+    {
+        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="400px" Class="rounded-lg" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" Class="rounded-lg" />
+            </MudItem>
+        </MudGrid>
+    }
+    else
+    {
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+            <MudGrid>
+                @* ===== CỘT TRÁI (8/12) – Thông tin chung ===== *@
+                <MudItem xs="12" md="8">
+                    @* -- Thông tin chung -- *@
+                    <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
+                        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                            <MudIcon Icon="@Icons.Material.Filled.Info" Class="me-1" Size="Size.Small" />
+                            Thông tin chung
+                        </MudText>
+
+                        <MudTextField @bind-Value="_model.Name"
+                                      Label="Tên sản phẩm *"
+                                      Placeholder="VD: Laptop Asus ExpertBook"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="mb-3"
+                                      Required="true"
+                                      RequiredError="Tên sản phẩm không được để trống." />
+
+                        <MudTextField @bind-Value="_model.ShortDescription"
+                                      Label="Mô tả ngắn"
+                                      Placeholder="Tóm tắt nổi bật của sản phẩm"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="2"
+                                      Class="mb-3" />
+
+                        <MudTextField @bind-Value="_model.Description"
+                                      Label="Mô tả chi tiết"
+                                      Placeholder="Nhập mô tả sản phẩm"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="5" />
+                    </MudPaper>
+
+                    @* -- Hình ảnh (Placeholder) -- *@
+                    <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
+                        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                            <MudIcon Icon="@Icons.Material.Filled.Image" Class="me-1" Size="Size.Small" />
+                            Hình ảnh
+                        </MudText>
+
+                        <MudPaper Outlined="true"
+                                  Class="d-flex flex-column align-center justify-center pa-6 rounded-lg"
+                                  Style="border-style: dashed; border-width: 2px; min-height: 150px; cursor: pointer; background: var(--mud-palette-background-grey);"
+                                  @onclick="() => { }">
+                            <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" Color="Color.Default" />
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
+                                Kéo thả hình ảnh vào đây hoặc click để chọn
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                (Chức năng upload sẽ được tích hợp sau)
+                            </MudText>
+                        </MudPaper>
+                    </MudPaper>
+
+                    @* -- Thông số kỹ thuật (Dynamic Key-Value) -- *@
+                    <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
+                        <div class="d-flex align-center justify-space-between mb-3">
+                            <MudText Typo="Typo.h6" Style="font-weight: 600;">
+                                <MudIcon Icon="@Icons.Material.Filled.Settings" Class="me-1" Size="Size.Small" />
+                                Thông số kỹ thuật
+                            </MudText>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       Size="Size.Small"
+                                       OnClick="AddSpecification"
+                                       Style="text-transform: none;">
+                                Thêm thông số
+                            </MudButton>
+                        </div>
+
+                        @if (_specifications.Count == 0)
+                        {
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="rounded-lg">
+                                Chưa có thông số nào. Nhấn "Thêm thông số" để bắt đầu.
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            @for (int i = 0; i < _specifications.Count; i++)
+                            {
+                                var index = i;
+                                <MudGrid Class="mb-2">
+                                    <MudItem xs="5">
+                                        <MudTextField @bind-Value="_specifications[index].Key"
+                                                      Placeholder="VD: Hãng CPU"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense" />
+                                    </MudItem>
+                                    <MudItem xs="5">
+                                        <MudTextField @bind-Value="_specifications[index].Value"
+                                                      Placeholder="VD: Intel"
+                                                      Variant="Variant.Outlined"
+                                                      Margin="Margin.Dense" />
+                                    </MudItem>
+                                    <MudItem xs="2" Class="d-flex align-center">
+                                        <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline"
+                                                       Color="Color.Error"
+                                                       Size="Size.Small"
+                                                       OnClick="() => RemoveSpecification(index)" />
+                                    </MudItem>
+                                </MudGrid>
+                            }
+                        }
+                    </MudPaper>
+                </MudItem>
+
+                @* ===== CỘT PHẢI (4/12) – Phân loại ===== *@
+                <MudItem xs="12" md="4">
+                    @* -- Phân loại -- *@
+                    <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
+                        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                            <MudIcon Icon="@Icons.Material.Filled.Category" Class="me-1" Size="Size.Small" />
+                            Phân loại
+                        </MudText>
+
+                        <MudSelect @bind-Value="_model.CategoryId"
+                                   Label="Danh mục *"
+                                   Placeholder="-- Chọn danh mục --"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-3"
+                                   AnchorOrigin="Origin.BottomCenter"
+                                   Required="true"
+                                   RequiredError="Vui lòng chọn danh mục.">
+                            @if (_categories != null)
+                            {
+                                @foreach (var cat in FlattenCategories(_categories))
+                                {
+                                    <MudSelectItem Value="@cat.Id">
+                                        @(new string('—', cat.Level) + " " + cat.Name)
+                                    </MudSelectItem>
+                                }
+                            }
+                        </MudSelect>
+
+                        <MudTextField @bind-Value="_manufacturerIdInput"
+                                      Label="ID Hãng sản xuất *"
+                                      Placeholder="VD: 1"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      InputType="InputType.Number"
+                                      Class="mb-3"
+                                      Required="true"
+                                      RequiredError="Vui lòng nhập ID hãng sản xuất." />
+                    </MudPaper>
+
+                    @* -- Trạng thái (chỉ hiện khi Edit) -- *@
+                    @if (_isEditMode)
+                    {
+                        <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
+                            <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                                <MudIcon Icon="@Icons.Material.Filled.ToggleOn" Class="me-1" Size="Size.Small" />
+                                Trạng thái
+                            </MudText>
+
+                            <MudSelect @bind-Value="_statusForUpdate"
+                                       Label="Trạng thái"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       AnchorOrigin="Origin.BottomCenter">
+                                <MudSelectItem Value="ProductStatus.Draft">Nháp</MudSelectItem>
+                                <MudSelectItem Value="ProductStatus.Active">Đang bán</MudSelectItem>
+                                <MudSelectItem Value="ProductStatus.StopBusiness">Ngừng kinh doanh</MudSelectItem>
+                            </MudSelect>
+                        </MudPaper>
+                    }
+
+                    @* -- Thông tin nhanh (chỉ hiện khi Edit) -- *@
+                    @if (_isEditMode && _editDetail != null)
+                    {
+                        <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
+                            <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                                <MudIcon Icon="@Icons.Material.Filled.Receipt" Class="me-1" Size="Size.Small" />
+                                Thông tin
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mb-1">
+                                <strong>ID:</strong> @_editDetail.Id
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mb-1">
+                                <strong>Ngày tạo:</strong> @_editDetail.CreatedDate.ToString("dd/MM/yyyy HH:mm")
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                <strong>Số biến thể:</strong> @_editDetail.Variants.Count
+                            </MudText>
+                        </MudPaper>
+                    }
+                </MudItem>
+
+                @* ===== PHẦN DƯỚI – Danh sách biến thể ===== *@
+                <MudItem xs="12">
+                    <MudPaper Elevation="1" Class="pa-5 rounded-lg">
+                        <div class="d-flex align-center justify-space-between mb-3">
+                            <MudText Typo="Typo.h6" Style="font-weight: 600;">
+                                <MudIcon Icon="@Icons.Material.Filled.ViewModule" Class="me-1" Size="Size.Small" />
+                                Danh sách biến thể
+                            </MudText>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       Size="Size.Small"
+                                       OnClick="AddVariant"
+                                       Style="text-transform: none; border-radius: 8px;">
+                                Thêm biến thể
+                            </MudButton>
+                        </div>
+
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">
+                            Sản phẩm bắt buộc phải có ít nhất 1 biến thể. Mỗi biến thể có SKU, tên, giá riêng.
+                        </MudText>
+
+                        @if (_model.Variants.Count == 0)
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="rounded-lg">
+                                Chưa có biến thể nào. Vui lòng thêm ít nhất 1 biến thể.
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            @for (int i = 0; i < _model.Variants.Count; i++)
+                            {
+                                var index = i;
+                                <MudPaper Outlined="true" Class="pa-4 rounded-lg mb-3" Style="border-color: var(--mud-palette-lines-default);">
+                                    <div class="d-flex align-center justify-space-between mb-3">
+                                        <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">
+                                            <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="me-1" />
+                                            Biến thể @(index + 1)
+                                        </MudText>
+                                        @if (_model.Variants.Count > 1)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                           Color="Color.Error"
+                                                           Size="Size.Small"
+                                                           OnClick="() => RemoveVariant(index)" />
+                                        }
+                                    </div>
+
+                                    <MudGrid>
+                                        <MudItem xs="12" sm="6" md="3">
+                                            <MudTextField @bind-Value="_model.Variants[index].SKU"
+                                                          Label="Mã SKU *"
+                                                          Placeholder="VD: LAP1010-01"
+                                                          Variant="Variant.Outlined"
+                                                          Margin="Margin.Dense"
+                                                          Required="true"
+                                                          RequiredError="SKU không được để trống." />
+                                        </MudItem>
+                                        <MudItem xs="12" sm="6" md="3">
+                                            <MudTextField @bind-Value="_model.Variants[index].VariantName"
+                                                          Label="Tên phiên bản *"
+                                                          Placeholder="VD: Core i5 / 8GB RAM"
+                                                          Variant="Variant.Outlined"
+                                                          Margin="Margin.Dense"
+                                                          Required="true"
+                                                          RequiredError="Tên phiên bản không được để trống." />
+                                        </MudItem>
+                                        <MudItem xs="12" sm="4" md="2">
+                                            <MudNumericField @bind-Value="_model.Variants[index].Price"
+                                                             Label="Giá bán *"
+                                                             Variant="Variant.Outlined"
+                                                             Margin="Margin.Dense"
+                                                             Min="0m"
+                                                             Format="N0"
+                                                             Adornment="Adornment.End"
+                                                             AdornmentText="đ" />
+                                        </MudItem>
+                                        <MudItem xs="12" sm="4" md="2">
+                                            <MudNumericField @bind-Value="_model.Variants[index].OriginalPrice"
+                                                             Label="Giá gốc"
+                                                             Variant="Variant.Outlined"
+                                                             Margin="Margin.Dense"
+                                                             Min="0m"
+                                                             Format="N0"
+                                                             Adornment="Adornment.End"
+                                                             AdornmentText="đ" />
+                                        </MudItem>
+                                        <MudItem xs="12" sm="4" md="2">
+                                            <MudNumericField @bind-Value="_model.Variants[index].WarrantyMonth"
+                                                             Label="Bảo hành (tháng)"
+                                                             Variant="Variant.Outlined"
+                                                             Margin="Margin.Dense"
+                                                             Min="0" />
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudPaper>
+                            }
+                        }
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    [Inject] private IProductClientService ProductService { get; set; } = null!;
+    [Inject] private ICategoryClientService CategoryService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
+    // ===== STATE =====
+    private bool _isEditMode => Id.HasValue;
+    private bool _isLoadingDetail;
+    private bool _isSaving;
+
+    // Model chung cho Create
+    private CreateProductRequest _model = new()
+    {
+        Variants = new List<CreateVariantRequest>
+        {
+            new CreateVariantRequest { WarrantyMonth = 12 }
+        }
+    };
+
+    // Dữ liệu gốc khi Edit
+    private ProductDetailDto? _editDetail;
+    private ProductStatus _statusForUpdate = ProductStatus.Draft;
+
+    // Danh sách Category để chọn
+    private List<CategoryTreeDto>? _categories;
+
+    // ManufacturerId input (string → int parse)
+    private int _manufacturerIdInput;
+
+    // Thông số kỹ thuật (Dynamic Key-Value)
+    private List<SpecEntry> _specifications = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load categories
+        var catResult = await CategoryService.GetTreeAsync();
+        if (catResult.Success && catResult.Data != null)
+            _categories = catResult.Data;
+
+        // Nếu Edit mode → load product detail
+        if (_isEditMode)
+        {
+            await LoadProductForEdit();
+        }
+    }
+
+    private async Task LoadProductForEdit()
+    {
+        _isLoadingDetail = true;
+        StateHasChanged();
+
+        var result = await ProductService.GetByIdAsync(Id!.Value);
+
+        if (result.Success && result.Data != null)
+        {
+            _editDetail = result.Data;
+
+            // Map sang CreateProductRequest để reuse form
+            _model = new CreateProductRequest
+            {
+                Name = _editDetail.Name,
+                ShortDescription = _editDetail.ShortDescription,
+                Description = _editDetail.Description,
+                ManufacturerId = _editDetail.ManufacturerId,
+                CategoryId = _editDetail.CategoryId,
+                Variants = _editDetail.Variants.Select(v => new CreateVariantRequest
+                {
+                    SKU = v.SKU,
+                    VariantName = v.VariantName,
+                    Price = v.Price,
+                    OriginalPrice = v.OriginalPrice,
+                    WarrantyMonth = v.WarrantyMonth,
+                    Specifications = v.Specifications
+                }).ToList()
+            };
+
+            _manufacturerIdInput = _editDetail.ManufacturerId;
+            _statusForUpdate = _editDetail.Status;
+
+            // Load specs từ variant đầu tiên (nếu có) hoặc để trống
+            var firstVariantSpecs = _editDetail.Variants.Count > 0
+                ? _editDetail.Variants[0].Specifications
+                : null;
+
+            if (firstVariantSpecs != null)
+            {
+                _specifications = firstVariantSpecs
+                    .Select(kvp => new SpecEntry { Key = kvp.Key, Value = kvp.Value })
+                    .ToList();
+            }
+        }
+        else
+        {
+            Snackbar.Add(result.Message, Severity.Error);
+            Navigation.NavigateTo("/admin/products");
+        }
+
+        _isLoadingDetail = false;
+        StateHasChanged();
+    }
+
+    // ===== VARIANTS =====
+
+    private void AddVariant()
+    {
+        _model.Variants.Add(new CreateVariantRequest { WarrantyMonth = 12 });
+    }
+
+    private void RemoveVariant(int index)
+    {
+        if (_model.Variants.Count > 1)
+        {
+            _model.Variants.RemoveAt(index);
+        }
+        else
+        {
+            Snackbar.Add("Sản phẩm phải có ít nhất 1 biến thể.", Severity.Warning);
+        }
+    }
+
+    // ===== SPECIFICATIONS =====
+
+    private void AddSpecification()
+    {
+        _specifications.Add(new SpecEntry());
+    }
+
+    private void RemoveSpecification(int index)
+    {
+        _specifications.RemoveAt(index);
+    }
+
+    // ===== SUBMIT =====
+
+    private async Task HandleSubmit()
+    {
+        // Validation cơ bản
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            Snackbar.Add("Tên sản phẩm không được để trống.", Severity.Warning);
+            return;
+        }
+
+        if (_model.Variants.Count == 0)
+        {
+            Snackbar.Add("Sản phẩm phải có ít nhất 1 biến thể.", Severity.Warning);
+            return;
+        }
+
+        foreach (var v in _model.Variants)
+        {
+            if (string.IsNullOrWhiteSpace(v.SKU))
+            {
+                Snackbar.Add("Mã SKU của biến thể không được để trống.", Severity.Warning);
+                return;
+            }
+        }
+
+        // Gán ManufacturerId
+        _model.ManufacturerId = _manufacturerIdInput;
+
+        // Gán Specifications vào mỗi Variant
+        var specsDict = _specifications
+            .Where(s => !string.IsNullOrWhiteSpace(s.Key))
+            .ToDictionary(s => s.Key, s => s.Value ?? string.Empty);
+
+        foreach (var variant in _model.Variants)
+        {
+            variant.Specifications = specsDict.Count > 0
+                ? new Dictionary<string, string>(specsDict)
+                : null;
+
+            // Hardcode ảnh dummy (chờ tích hợp upload)
+            if (variant.Images.Count == 0)
+            {
+                variant.Images.Add(new SaveImageRequest
+                {
+                    ImageUrl = "https://placehold.co/400x400?text=Product",
+                    IsMain = true,
+                    SortOrder = 0
+                });
+            }
+        }
+
+        _isSaving = true;
+        StateHasChanged();
+
+        if (_isEditMode)
+        {
+            // Update thông tin chung
+            var updateRequest = new UpdateProductRequest
+            {
+                Name = _model.Name,
+                ShortDescription = _model.ShortDescription,
+                Description = _model.Description,
+                ManufacturerId = _model.ManufacturerId,
+                CategoryId = _model.CategoryId,
+                Status = _statusForUpdate
+            };
+
+            var result = await ProductService.UpdateAsync(Id!.Value, updateRequest);
+            _isSaving = false;
+
+            if (result.Success)
+            {
+                Snackbar.Add("Cập nhật sản phẩm thành công!", Severity.Success);
+                Navigation.NavigateTo("/admin/products");
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+        else
+        {
+            // Create
+            var result = await ProductService.CreateAsync(_model);
+            _isSaving = false;
+
+            if (result.Success)
+            {
+                Snackbar.Add("Tạo sản phẩm thành công!", Severity.Success);
+                Navigation.NavigateTo("/admin/products");
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    // ===== HELPERS =====
+
+    /// <summary>
+    /// Flatten cây danh mục thành list phẳng (dùng cho MudSelect).
+    /// </summary>
+    private List<CategoryTreeDto> FlattenCategories(List<CategoryTreeDto> cats)
+    {
+        var result = new List<CategoryTreeDto>();
+        foreach (var cat in cats)
+        {
+            result.Add(cat);
+            if (cat.Children.Count > 0)
+                result.AddRange(FlattenCategories(cat.Children));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Helper class cho Dynamic Specification.
+    /// </summary>
+    private class SpecEntry
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,273 @@
+@page "/admin/products"
+
+<PageTitle>Quản lý Sản phẩm - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+    @* ===== HEADER ===== *@
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Sản phẩm
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Quản lý danh sách sản phẩm và biến thể
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Href="/admin/products/create"
+                   Style="text-transform: none; border-radius: 8px; font-weight: 500;">
+            Thêm sản phẩm
+        </MudButton>
+    </MudPaper>
+
+    @* ===== FILTER BAR ===== *@
+    <MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="_keyword"
+                              Placeholder="Tìm kiếm sản phẩm..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              DebounceInterval="400"
+                              OnDebounceIntervalElapsed="OnSearchChanged"
+                              Style="border-radius: 8px;" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="8" Class="d-flex align-center justify-end gap-2">
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="@(() => { if (_table != null) _table.ReloadServerData(); })"
+                           Size="Size.Small"
+                           Style="text-transform: none;">
+                    Làm mới
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ===== DATA TABLE ===== *@
+    <MudPaper Elevation="1" Class="rounded-lg">
+        <MudTable @ref="_table"
+                  T="ProductListDto"
+                  ServerData="LoadServerData"
+                  Dense="false"
+                  Hover="true"
+                  Striped="false"
+                  Bordered="false"
+                  Loading="_isLoading"
+                  LoadingProgressColor="Color.Primary"
+                  RowsPerPage="10"
+                  Class="rounded-lg">
+
+            <HeaderContent>
+                <MudTh Style="width: 60px;"></MudTh>
+                <MudTh><MudTableSortLabel SortLabel="Name" T="ProductListDto">Tên sản phẩm</MudTableSortLabel></MudTh>
+                <MudTh>Danh mục</MudTh>
+                <MudTh>Hãng</MudTh>
+                <MudTh><MudTableSortLabel SortLabel="Price" T="ProductListDto">Giá</MudTableSortLabel></MudTh>
+                <MudTh Style="text-align: center;">Tồn kho</MudTh>
+                <MudTh Style="text-align: center;">Biến thể</MudTh>
+                <MudTh>Trạng thái</MudTh>
+                <MudTh Style="width: 120px; text-align: center;">Thao tác</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="Ảnh">
+                    @if (!string.IsNullOrEmpty(context.ThumbnailUrl))
+                    {
+                        <MudAvatar Rounded="true" Size="Size.Medium" Style="border: 1px solid #e0e0e0;">
+                            <MudImage Src="@context.ThumbnailUrl" Alt="@context.Name"
+                                      ObjectFit="ObjectFit.Cover" Width="40" Height="40" />
+                        </MudAvatar>
+                    }
+                    else
+                    {
+                        <MudAvatar Rounded="true" Size="Size.Medium"
+                                   Color="Color.Default" Variant="Variant.Outlined">
+                            <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Small" />
+                        </MudAvatar>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Tên">
+                    <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.Name</MudText>
+                    @if (!string.IsNullOrEmpty(context.ShortDescription))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;">
+                            @context.ShortDescription
+                        </MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Danh mục">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">
+                        @context.CategoryName
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Hãng">
+                    <MudText Typo="Typo.body2">@context.ManufacturerName</MudText>
+                </MudTd>
+                <MudTd DataLabel="Giá">
+                    <MudText Typo="Typo.body2" Style="font-weight: 500; color: var(--mud-palette-primary);">
+                        @FormatPriceRange(context)
+                    </MudText>
+                </MudTd>
+                <MudTd DataLabel="Tồn kho" Style="text-align: center;">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.TotalStock > 0 ? Color.Success : Color.Error)"
+                             Variant="Variant.Filled">
+                        @context.TotalStock
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Biến thể" Style="text-align: center;">
+                    <MudText Typo="Typo.body2">@context.VariantCount</MudText>
+                </MudTd>
+                <MudTd DataLabel="Trạng thái">
+                    @switch (context.Status)
+                    {
+                        case ProductStatus.Active:
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled">Đang bán</MudChip>
+                            break;
+                        case ProductStatus.Draft:
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">Nháp</MudChip>
+                            break;
+                        case ProductStatus.StopBusiness:
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">Ngừng kinh doanh</MudChip>
+                            break;
+                    }
+                </MudTd>
+                <MudTd DataLabel="Thao tác" Style="text-align: center;">
+                    <MudStack Row="true" Spacing="0" Justify="Justify.Center">
+                        <MudTooltip Text="Chỉnh sửa" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           Href="@($"/admin/products/edit/{context.Id}")" />
+                        </MudTooltip>
+                        <MudTooltip Text="Xóa" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="@(() => ConfirmDelete(context))" />
+                        </MudTooltip>
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
+
+            <NoRecordsContent>
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="my-4 rounded-lg">
+                    Không tìm thấy sản phẩm nào.
+                </MudAlert>
+            </NoRecordsContent>
+
+            <LoadingContent>
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="pa-4">
+                    Đang tải dữ liệu...
+                </MudText>
+            </LoadingContent>
+
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 5, 10, 25, 50 }"
+                               InfoFormat="{first_item}-{last_item} / {all_items} sản phẩm"
+                               RowsPerPageString="Hiển thị:" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Inject] private IProductClientService ProductService { get; set; } = null!;
+    [Inject] private IDialogService DialogService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
+    private MudTable<ProductListDto>? _table;
+    private bool _isLoading;
+    private string _keyword = string.Empty;
+
+    /// <summary>
+    /// ServerData callback for MudTable – gọi API phân trang.
+    /// </summary>
+    private async Task<TableData<ProductListDto>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        var request = new ProductFilterRequest
+        {
+            Keyword = _keyword,
+            PageNumber = state.Page + 1, // MudTable page is 0-based, API is 1-based
+            PageSize = state.PageSize,
+            SortBy = state.SortLabel,
+            SortDescending = state.SortDirection == SortDirection.Descending
+        };
+
+        var result = await ProductService.GetListAsync(request);
+
+        _isLoading = false;
+
+        if (result.Success && result.Data != null)
+        {
+            return new TableData<ProductListDto>
+            {
+                Items = result.Data.Items,
+                TotalItems = result.Data.TotalCount
+            };
+        }
+
+        Snackbar.Add(result.Message, Severity.Error);
+        return new TableData<ProductListDto>
+        {
+            Items = Enumerable.Empty<ProductListDto>(),
+            TotalItems = 0
+        };
+    }
+
+    private void OnSearchChanged(string value)
+    {
+        _keyword = value;
+        _table?.ReloadServerData();
+    }
+
+    /// <summary>
+    /// Hiển thị khoảng giá từ MinPrice – MaxPrice.
+    /// </summary>
+    private string FormatPriceRange(ProductListDto item)
+    {
+        if (item.MinPrice == item.MaxPrice)
+            return $"{item.MinPrice:N0}đ";
+
+        return $"{item.MinPrice:N0}đ - {item.MaxPrice:N0}đ";
+    }
+
+    /// <summary>
+    /// Dialog xác nhận xóa sản phẩm.
+    /// </summary>
+    private async Task ConfirmDelete(ProductListDto product)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Xác nhận xóa",
+            $"Bạn có chắc chắn muốn xóa sản phẩm \"{product.Name}\"?",
+            yesText: "Xóa",
+            cancelText: "Hủy"
+        );
+
+        if (confirm == true)
+        {
+            var result = await ProductService.DeleteAsync(product.Id);
+
+            if (result.Success)
+            {
+                Snackbar.Add("Đã xóa sản phẩm thành công!", Severity.Success);
+                await _table!.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+    }
+}
