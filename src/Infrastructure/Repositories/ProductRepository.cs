@@ -195,6 +195,21 @@ namespace PBL3.Infrastructure.Repositories
             return Task.CompletedTask;
         }
 
+        public async Task<List<int>> GetExistingVariantIdsAsync(List<int> variantIds)
+        {
+            return await _context.ProductVariants
+                .AsNoTracking()
+                .Where(v => variantIds.Contains(v.Id) && !v.IsDeleted)
+                .Select(v => v.Id)
+                .ToListAsync();
+        }
+
+        public async Task<ProductVariant?> GetVariantByIdAsync(int variantId)
+        {
+            return await _context.ProductVariants
+                .FirstOrDefaultAsync(v => v.Id == variantId && !v.IsDeleted);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

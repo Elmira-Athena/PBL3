@@ -1,0 +1,256 @@
+@using PBL3.Shared.DTOs.Suppliers
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(IsEditMode ? Icons.Material.Filled.Edit : Icons.Material.Filled.PersonAdd)"
+                     Color="Color.Primary" />
+            <MudText Typo="Typo.h6">
+                @(IsEditMode ? "Chỉnh sửa nhà cung cấp" : "Thêm nhà cung cấp mới")
+            </MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_isLoadingDetail)
+        {
+            <MudStack Spacing="3" Class="pa-4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+            </MudStack>
+        }
+        else
+        {
+            <MudForm @ref="_form" Model="_model">
+                <MudStack Spacing="3" Class="pt-2">
+                    @* Tên nhà cung cấp *@
+                    <MudTextField @bind-Value="_model.Name"
+                                  Label="Tên nhà cung cấp"
+                                  Placeholder="VD: Công ty TNHH ABC"
+                                  Required="true"
+                                  RequiredError="Tên nhà cung cấp không được để trống."
+                                  MaxLength="200"
+                                  Counter="200"
+                                  Variant="Variant.Outlined" />
+
+                    @* Số điện thoại *@
+                    <MudTextField @bind-Value="_model.PhoneNumber"
+                                  Label="Số điện thoại"
+                                  Placeholder="VD: 0901234567"
+                                  Required="true"
+                                  RequiredError="Số điện thoại không được để trống."
+                                  MaxLength="20"
+                                  Variant="Variant.Outlined"
+                                  Validation="@(new Func<string, string?>(ValidatePhone))" />
+
+                    @* Người liên hệ *@
+                    <MudTextField @bind-Value="_model.ContactPerson"
+                                  Label="Người liên hệ"
+                                  Placeholder="VD: Nguyễn Văn A"
+                                  MaxLength="100"
+                                  Variant="Variant.Outlined" />
+
+                    @* Email *@
+                    <MudTextField @bind-Value="_model.Email"
+                                  Label="Email"
+                                  Placeholder="VD: contact@abc.com"
+                                  InputType="InputType.Email"
+                                  Variant="Variant.Outlined"
+                                  Validation="@(new Func<string?, string?>(ValidateEmail))" />
+
+                    @* Mã số thuế *@
+                    <MudTextField @bind-Value="_model.TaxCode"
+                                  Label="Mã số thuế"
+                                  Placeholder="VD: 0123456789"
+                                  MaxLength="20"
+                                  Variant="Variant.Outlined" />
+
+                    @* Địa chỉ *@
+                    <MudTextField @bind-Value="_model.Address"
+                                  Label="Địa chỉ"
+                                  Placeholder="VD: 123 Đường ABC, Quận 1, TP.HCM"
+                                  MaxLength="255"
+                                  Variant="Variant.Outlined"
+                                  Lines="2" />
+                </MudStack>
+            </MudForm>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3 rounded-lg" Variant="Variant.Filled">
+                    @_errorMessage
+                </MudAlert>
+            }
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default"
+                   Style="text-transform: none;">
+            Hủy
+        </MudButton>
+        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="_isSaving"
+                   Style="text-transform: none; border-radius: 8px;">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(IsEditMode ? "Cập nhật" : "Tạo mới")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private ISupplierClientService SupplierService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    /// <summary>Id nhà cung cấp khi chỉnh sửa (null hoặc 0 = tạo mới)</summary>
+    [Parameter] public int? SupplierId { get; set; }
+
+    private bool IsEditMode => SupplierId.HasValue && SupplierId.Value > 0;
+
+    private MudForm _form = null!;
+    private SupplierFormModel _model = new();
+    private bool _isSaving;
+    private bool _isLoadingDetail;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEditMode)
+        {
+            _isLoadingDetail = true;
+            StateHasChanged();
+
+            var result = await SupplierService.GetByIdAsync(SupplierId!.Value);
+            if (result.Success && result.Data != null)
+            {
+                _model = new SupplierFormModel
+                {
+                    Name = result.Data.Name,
+                    ContactPerson = result.Data.ContactPerson,
+                    PhoneNumber = result.Data.PhoneNumber,
+                    Email = result.Data.Email,
+                    Address = result.Data.Address,
+                    TaxCode = result.Data.TaxCode,
+                };
+            }
+            else
+            {
+                _errorMessage = result.Message;
+            }
+
+            _isLoadingDetail = false;
+        }
+    }
+
+    // ===== VALIDATION =====
+
+    private static string? ValidatePhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+            return "Số điện thoại không được để trống.";
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(phone, @"^[0-9]+$"))
+            return "Số điện thoại chỉ được chứa chữ số.";
+
+        return null;
+    }
+
+    private static string? ValidateEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return null; // Email không bắt buộc
+
+        if (!email.Contains('@') || !email.Contains('.'))
+            return "Email không đúng định dạng.";
+
+        return null;
+    }
+
+    // ===== SUBMIT =====
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _isSaving = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            if (IsEditMode)
+            {
+                var request = new UpdateSupplierRequest
+                {
+                    Name = _model.Name,
+                    ContactPerson = _model.ContactPerson,
+                    PhoneNumber = _model.PhoneNumber,
+                    Email = _model.Email,
+                    Address = _model.Address,
+                    TaxCode = _model.TaxCode,
+                };
+
+                var result = await SupplierService.UpdateAsync(SupplierId!.Value, request);
+
+                if (result.Success)
+                {
+                    Snackbar.Add("Cập nhật nhà cung cấp thành công!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                }
+            }
+            else
+            {
+                var request = new CreateSupplierRequest
+                {
+                    Name = _model.Name,
+                    ContactPerson = _model.ContactPerson,
+                    PhoneNumber = _model.PhoneNumber,
+                    Email = _model.Email,
+                    Address = _model.Address,
+                    TaxCode = _model.TaxCode,
+                };
+
+                var result = await SupplierService.CreateAsync(request);
+
+                if (result.Success)
+                {
+                    Snackbar.Add("Tạo nhà cung cấp thành công!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                }
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    // ===== FORM MODEL =====
+    private class SupplierFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? ContactPerson { get; set; }
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? Address { get; set; }
+        public string? TaxCode { get; set; }
+    }
+}

@@ -1,0 +1,259 @@
+@page "/admin/suppliers"
+@using PBL3.Shared.DTOs.Suppliers
+
+<PageTitle>Quản lý Nhà cung cấp - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+    @* ===== HEADER ===== *@
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Nhà cung cấp
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Quản lý danh sách nhà cung cấp
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateDialog"
+                   Style="text-transform: none; border-radius: 8px; font-weight: 500;">
+            Thêm mới
+        </MudButton>
+    </MudPaper>
+
+    @* ===== FILTER BAR ===== *@
+    <MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="_keyword"
+                              Placeholder="Tìm theo tên hoặc số điện thoại..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              DebounceInterval="400"
+                              OnDebounceIntervalElapsed="OnSearchChanged"
+                              Style="border-radius: 8px;" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="8" Class="d-flex align-center justify-end gap-2">
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="@(() => { if (_table != null) _table.ReloadServerData(); })"
+                           Size="Size.Small"
+                           Style="text-transform: none;">
+                    Làm mới
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ===== DATA TABLE ===== *@
+    <MudPaper Elevation="1" Class="rounded-lg">
+        <MudTable @ref="_table"
+                  T="SupplierDto"
+                  ServerData="LoadServerData"
+                  Dense="false"
+                  Hover="true"
+                  Striped="false"
+                  Bordered="false"
+                  Loading="_isLoading"
+                  LoadingProgressColor="Color.Primary"
+                  RowsPerPage="10"
+                  Class="rounded-lg">
+
+            <HeaderContent>
+                <MudTh><MudTableSortLabel SortLabel="Name" T="SupplierDto">Tên nhà cung cấp</MudTableSortLabel></MudTh>
+                <MudTh>Người liên hệ</MudTh>
+                <MudTh>Số điện thoại</MudTh>
+                <MudTh>Email</MudTh>
+                <MudTh>Mã số thuế</MudTh>
+                <MudTh Style="width: 120px; text-align: center;">Thao tác</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                <MudTd DataLabel="Tên">
+                    <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.Name</MudText>
+                </MudTd>
+                <MudTd DataLabel="Người liên hệ">
+                    <MudText Typo="Typo.body2">@(context.ContactPerson ?? "—")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Số điện thoại">
+                    <MudText Typo="Typo.body2">@context.PhoneNumber</MudText>
+                </MudTd>
+                <MudTd DataLabel="Email">
+                    <MudText Typo="Typo.body2">@(context.Email ?? "—")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Mã số thuế">
+                    <MudText Typo="Typo.body2">@(context.TaxCode ?? "—")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Thao tác" Style="text-align: center;">
+                    <MudStack Row="true" Spacing="0" Justify="Justify.Center">
+                        <MudTooltip Text="Chỉnh sửa" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           OnClick="@(() => OpenEditDialog(context))" />
+                        </MudTooltip>
+                        <MudTooltip Text="Xóa" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="@(() => ConfirmDelete(context))" />
+                        </MudTooltip>
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
+
+            <NoRecordsContent>
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="my-4 rounded-lg">
+                    Không tìm thấy nhà cung cấp nào.
+                </MudAlert>
+            </NoRecordsContent>
+
+            <LoadingContent>
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="pa-4">
+                    Đang tải dữ liệu...
+                </MudText>
+            </LoadingContent>
+
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 5, 10, 25, 50 }"
+                               InfoFormat="{first_item}-{last_item} / {all_items} nhà cung cấp"
+                               RowsPerPageString="Hiển thị:" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Inject] private ISupplierClientService SupplierService { get; set; } = null!;
+    [Inject] private IDialogService DialogService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    private MudTable<SupplierDto>? _table;
+    private bool _isLoading;
+    private string _keyword = string.Empty;
+
+    /// <summary>
+    /// ServerData callback for MudTable – gọi API phân trang.
+    /// </summary>
+    private async Task<TableData<SupplierDto>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        var request = new SupplierFilterRequest
+        {
+            Keyword = _keyword,
+            PageNumber = state.Page + 1, // MudTable page is 0-based, API is 1-based
+            PageSize = state.PageSize,
+            SortBy = state.SortLabel,
+            SortDescending = state.SortDirection == SortDirection.Descending
+        };
+
+        var result = await SupplierService.GetListAsync(request);
+
+        _isLoading = false;
+
+        if (result.Success && result.Data != null)
+        {
+            return new TableData<SupplierDto>
+            {
+                Items = result.Data.Items,
+                TotalItems = result.Data.TotalCount
+            };
+        }
+
+        Snackbar.Add(result.Message, Severity.Error);
+        return new TableData<SupplierDto>
+        {
+            Items = Enumerable.Empty<SupplierDto>(),
+            TotalItems = 0
+        };
+    }
+
+    private void OnSearchChanged(string value)
+    {
+        _keyword = value;
+        _table?.ReloadServerData();
+    }
+
+    /// <summary>
+    /// Mở dialog Thêm mới nhà cung cấp.
+    /// </summary>
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+
+        var dialog = await DialogService.ShowAsync<SupplierDialog>("Thêm nhà cung cấp", options);
+        var dialogResult = await dialog.Result;
+
+        if (dialogResult != null && !dialogResult.Canceled)
+        {
+            await _table!.ReloadServerData();
+        }
+    }
+
+    /// <summary>
+    /// Mở dialog Chỉnh sửa nhà cung cấp.
+    /// </summary>
+    private async Task OpenEditDialog(SupplierDto supplier)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(SupplierDialog.SupplierId), supplier.Id }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+
+        var dialog = await DialogService.ShowAsync<SupplierDialog>("Chỉnh sửa nhà cung cấp", parameters, options);
+        var dialogResult = await dialog.Result;
+
+        if (dialogResult != null && !dialogResult.Canceled)
+        {
+            await _table!.ReloadServerData();
+        }
+    }
+
+    /// <summary>
+    /// Dialog xác nhận xóa nhà cung cấp (Soft Delete).
+    /// </summary>
+    private async Task ConfirmDelete(SupplierDto supplier)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Xác nhận",
+            $"Bạn có chắc chắn muốn ngừng hợp tác với nhà cung cấp \"{supplier.Name}\" không?",
+            yesText: "Xóa",
+            cancelText: "Hủy"
+        );
+
+        if (confirm == true)
+        {
+            var result = await SupplierService.DeleteAsync(supplier.Id);
+
+            if (result.Success)
+            {
+                Snackbar.Add("Đã xóa nhà cung cấp thành công!", Severity.Success);
+                await _table!.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+    }
+}

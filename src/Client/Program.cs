@@ -20,5 +20,6 @@ builder.Services.AddMudServices();
 // Client Services (DI)
 builder.Services.AddScoped<ICategoryClientService, CategoryClientService>();
 builder.Services.AddScoped<IProductClientService, ProductClientService>();
+builder.Services.AddScoped<ISupplierClientService, SupplierClientService>();
 
 await builder.Build().RunAsync();

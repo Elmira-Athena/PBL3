@@ -51,6 +51,16 @@ namespace PBL3.Core.Interfaces
             string? sortBy,
             bool sortDescending);
 
+        /// <summary>
+        /// Lấy danh sách VariantId tồn tại (chưa bị xoá) từ danh sách Id.
+        /// </summary>
+        Task<List<int>> GetExistingVariantIdsAsync(List<int> variantIds);
+
+        /// <summary>
+        /// Lấy Variant theo Id (có tracking để update).
+        /// </summary>
+        Task<ProductVariant?> GetVariantByIdAsync(int variantId);
+
         Task AddAsync(Product product);
         Task AddVariantAsync(ProductVariant variant);
         Task RemoveVariant(ProductVariant variant);
@@ -83,6 +93,56 @@ namespace PBL3.Core.Interfaces
         Task<bool> HasImportReceiptsAsync(int supplierId);
 
         Task AddAsync(Supplier supplier);
+        Task SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Repository interface cho ImportReceipt.
+    /// </summary>
+    public interface IImportReceiptRepository
+    {
+        /// <summary>
+        /// Lấy danh sách phiếu nhập có phân trang, tìm kiếm và Include Supplier.
+        /// </summary>
+        Task<(List<ImportReceipt> Items, int TotalCount)> GetPagedListAsync(
+            string? keyword,
+            int pageNumber,
+            int pageSize,
+            string? sortBy,
+            bool sortDescending);
+
+        /// <summary>
+        /// Lấy chi tiết phiếu nhập theo Id, bao gồm Details, Variant, và ProductSerials.
+        /// </summary>
+        Task<ImportReceipt?> GetByIdWithDetailsAsync(int id);
+
+        /// <summary>
+        /// Lấy mã phiếu nhập cuối cùng theo ngày (để sinh mã tự động).
+        /// </summary>
+        Task<string?> GetLastReceiptCodeByDateAsync(string datePrefix);
+
+        Task AddAsync(ImportReceipt receipt);
+        Task AddDetailAsync(ImportReceiptDetail detail);
+        Task SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Repository interface cho ProductSerial.
+    /// </summary>
+    public interface IProductSerialRepository
+    {
+        /// <summary>
+        /// Kiểm tra danh sách Serial đã tồn tại trong DB chưa.
+        /// Trả về danh sách Serial bị trùng.
+        /// </summary>
+        Task<List<string>> GetExistingSerialsAsync(List<string> serialNumbers);
+
+        /// <summary>
+        /// Lấy danh sách SerialNumber theo ReceiptId và VariantId.
+        /// </summary>
+        Task<List<string>> GetSerialsByReceiptAndVariantAsync(int receiptId, int variantId);
+
+        Task AddRangeAsync(IEnumerable<ProductSerial> serials);
         Task SaveChangesAsync();
     }
 }

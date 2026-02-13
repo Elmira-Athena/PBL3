@@ -5,6 +5,7 @@ using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Infrastructure.Repositories;
 using PBL3.Service.Categories;
+using PBL3.Service.ImportReceipts;
 using PBL3.Service.Products;
 using PBL3.Service.Suppliers;
 
@@ -58,11 +59,17 @@ builder.Services.AddIdentity<AppUser, AppRole>(options =>
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+builder.Services.AddScoped<IImportReceiptRepository, ImportReceiptRepository>();
+builder.Services.AddScoped<IProductSerialRepository, ProductSerialRepository>();
+
+// DI: Unit of Work
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // DI: Services
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<IImportReceiptService, ImportReceiptService>();
 
 var app = builder.Build();
 
