@@ -7,6 +7,7 @@ using PBL3.Infrastructure.Repositories;
 using PBL3.Service.Categories;
 using PBL3.Service.ImportReceipts;
 using PBL3.Service.Products;
+using PBL3.Service.ProductSerials;
 using PBL3.Service.Suppliers;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -70,6 +71,7 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IImportReceiptService, ImportReceiptService>();
+builder.Services.AddScoped<IProductSerialService, ProductSerialService>();
 
 var app = builder.Build();
 

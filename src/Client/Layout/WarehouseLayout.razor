@@ -1,0 +1,73 @@
+@inherits LayoutComponentBase
+
+<MudLayout>
+    @* ===== TOP APP BAR ===== *@
+    <MudAppBar Elevation="1" Dense="true" Fixed="true"
+               Style="background-color: var(--mud-palette-surface); border-bottom: 1px solid var(--mud-palette-divider);">
+        
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       OnClick="ToggleDrawer"
+                       Style="color: var(--mud-palette-text-primary);" />
+
+        @* -- Logo (trên AppBar) -- *@
+        <MudImage Src="images/logo.png" Alt="HushStore"
+                  Width="120" Height="40"
+                  ObjectFit="ObjectFit.Contain"
+                  Class="mr-2" Style="cursor: pointer;" />
+
+        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                 Style="font-weight: 600; pointer-events: none;">
+            Quản lý kho
+        </MudChip>
+
+        @* -- Search Bar -- *@
+        <MudSpacer />
+        <MudPaper Elevation="0" Class="d-flex align-center rounded-lg px-3"
+                  Style="background-color: #F5F5F5; max-width: 480px; width: 100%;">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small"
+                     Style="color:#999;" Class="mr-2" />
+            <MudTextField T="string" Placeholder="Nhập từ khóa tìm kiếm..."
+                      Variant="Variant.Text"
+                      Class="flex-grow-1"
+                      Style="font-size: 0.85rem;"
+                      Margin="Margin.Dense" />
+        </MudPaper>
+        <MudSpacer />
+
+        @* -- User Profile -- *@
+        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+            <ActivatorContent>
+                <MudBadge Color="Color.Error" Dot="true" Overlap="true" Bordered="true">
+                    <MudAvatar Size="Size.Small" Color="Color.Primary">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" />
+                    </MudAvatar>
+                </MudBadge>
+            </ActivatorContent>
+            <ChildContent>
+                <MudMenuItem Icon="@Icons.Material.Filled.Person">Hồ sơ</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Settings">Cài đặt</MudMenuItem>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout">Đăng xuất</MudMenuItem>
+            </ChildContent>
+        </MudMenu>
+    </MudAppBar>
+
+    @* ===== LEFT DRAWER (SIDEBAR) ===== *@
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="1"
+               ClipMode="DrawerClipMode.Always"
+               Variant="DrawerVariant.Mini" OpenMiniOnHover="true">
+        <WarehouseNavMenu />
+    </MudDrawer>
+
+    @* ===== MAIN CONTENT ===== *@
+    <MudMainContent Class="pa-4" Style="min-height: 100vh; padding-top: 80px !important; background-color: var(--mud-palette-background);">
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+}

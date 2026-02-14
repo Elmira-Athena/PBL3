@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor.Services;
 using Client;
 using Client.Services;
+using Client.Services.Inventory;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -21,5 +22,7 @@ builder.Services.AddMudServices();
 builder.Services.AddScoped<ICategoryClientService, CategoryClientService>();
 builder.Services.AddScoped<IProductClientService, ProductClientService>();
 builder.Services.AddScoped<ISupplierClientService, SupplierClientService>();
+builder.Services.AddScoped<IImportReceiptClientService, ImportReceiptClientService>();
+builder.Services.AddScoped<IProductSerialClientService, ProductSerialClientService>();
 
 await builder.Build().RunAsync();

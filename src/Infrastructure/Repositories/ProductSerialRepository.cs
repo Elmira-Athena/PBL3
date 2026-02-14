@@ -14,6 +14,13 @@ namespace PBL3.Infrastructure.Repositories
             _context = context;
         }
 
+        public async Task<bool> ExistsAsync(string serialNumber, int variantId)
+        {
+            return await _context.ProductSerials
+                .AsNoTracking()
+                .AnyAsync(x => x.SerialNumber == serialNumber && x.VariantId == variantId);
+        }
+
         public async Task<List<string>> GetExistingSerialsAsync(List<string> serialNumbers)
         {
             // Tìm các Serial đã tồn tại trong DB (so sánh case-insensitive)

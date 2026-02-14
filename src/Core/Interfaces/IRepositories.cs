@@ -138,6 +138,12 @@ namespace PBL3.Core.Interfaces
         Task<List<string>> GetExistingSerialsAsync(List<string> serialNumbers);
 
         /// <summary>
+        /// Kiểm tra một Serial Number đã tồn tại trong DB chưa (theo VariantId).
+        /// Dùng cho check real-time khi quét mã vạch.
+        /// </summary>
+        Task<bool> ExistsAsync(string serialNumber, int variantId);
+
+        /// <summary>
         /// Lấy danh sách SerialNumber theo ReceiptId và VariantId.
         /// </summary>
         Task<List<string>> GetSerialsByReceiptAndVariantAsync(int receiptId, int variantId);

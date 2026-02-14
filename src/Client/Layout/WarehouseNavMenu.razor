@@ -1,0 +1,47 @@
+<MudNavMenu Bordered="true" Color="Color.Primary" Class="px-2">
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mud-text-secondary"
+             Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
+        Quản lý kho
+    </MudText>
+
+    <MudNavLink Href="/warehouse" Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Outlined.Dashboard"
+                IconColor="Color.Default">
+        Tổng quan
+    </MudNavLink>
+
+    <MudNavLink Href="/warehouse/import-receipt" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.MoveToInbox"
+                IconColor="Color.Default">
+        Nhập kho
+    </MudNavLink>
+
+    <MudNavLink Href="/warehouse/export" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.Outbox"
+                IconColor="Color.Default">
+        Xuất kho
+    </MudNavLink>
+
+    <MudNavLink Href="/warehouse/inventory" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.Inventory"
+                IconColor="Color.Default">
+        Kho hàng
+    </MudNavLink>
+
+    <MudNavLink Href="/warehouse/inventory-check" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.FactCheck"
+                IconColor="Color.Default">
+        Kiểm kê
+    </MudNavLink>
+
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mt-3 mud-text-secondary"
+             Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
+        Hệ thống
+    </MudText>
+
+    <MudNavLink Href="/warehouse/reports" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.BarChart"
+                IconColor="Color.Default">
+        Thống kê kho
+    </MudNavLink>
+</MudNavMenu>
