@@ -1,0 +1,56 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    container_name: hushstore_sqlserver
+    ports:
+      - "1433:1433"
+    env_file:
+      - ./Infrastructure/db/.env
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${SA_PASSWORD}
+      - MSSQL_PID=Developer
+      - TZ=Asia/Ho_Chi_Minh
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    restart: unless-stopped
+    networks:
+      - hushstore_network
+
+  api:
+    build:
+      context: .
+      dockerfile: src/API/Dockerfile
+    container_name: hushstore_api
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    env_file:
+      - ./Infrastructure/db/.env
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=HushStoreDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - sqlserver
+    networks:
+      - hushstore_network
+
+  client:
+    build:
+      context: .
+      dockerfile: src/Client/Dockerfile
+    container_name: hushstore_client
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - hushstore_network
+
+volumes:
+  sqlserver_data:
+    name: hushstore_sqlserver_data
+
+networks:
+  hushstore_network:
+    driver: bridge
