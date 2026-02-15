@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.Categories;
 using PBL3.Shared.DTOs.Categories;
@@ -8,6 +9,7 @@ namespace PBL3.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
+    [Authorize(Roles = "Admin, WarehouseManager")]
     public class CategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;
@@ -20,6 +22,7 @@ namespace PBL3.API.Controllers
         /// <summary>
         /// Lấy toàn bộ cây danh mục (Recursive Tree).
         /// </summary>
+        [AllowAnonymous]
         [HttpGet("tree")]
         [ProducesResponseType(typeof(ApiResult<List<CategoryTreeDto>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetTree()
@@ -31,6 +34,7 @@ namespace PBL3.API.Controllers
         /// <summary>
         /// Lấy chi tiết 1 danh mục theo Id.
         /// </summary>
+        [AllowAnonymous]
         [HttpGet("{id:int}")]
         [ProducesResponseType(typeof(ApiResult<CategoryDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResult<CategoryDto>), StatusCodes.Status404NotFound)]

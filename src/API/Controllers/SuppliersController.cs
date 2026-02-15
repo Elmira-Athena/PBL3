@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.Suppliers;
 using PBL3.Shared.DTOs.Common;
@@ -9,6 +10,7 @@ namespace PBL3.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
+    [Authorize(Roles = "Admin, WarehouseManager")]
     public class SuppliersController : ControllerBase
     {
         private readonly ISupplierService _supplierService;

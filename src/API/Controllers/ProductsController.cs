@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.Products;
 using PBL3.Shared.DTOs.Common;
@@ -8,6 +9,7 @@ namespace PBL3.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
+    [Authorize(Roles = "Admin, WarehouseManager")]
     public class ProductsController : ControllerBase
     {
         private readonly IProductService _productService;
@@ -20,6 +22,7 @@ namespace PBL3.API.Controllers
         /// <summary>
         /// Lấy danh sách sản phẩm (phân trang, lọc theo Category/Price/Keyword).
         /// </summary>
+        [AllowAnonymous]
         [HttpGet]
         [ProducesResponseType(typeof(ApiResult<PagedResult<ProductListDto>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetList([FromQuery] ProductFilterRequest request)
@@ -31,6 +34,7 @@ namespace PBL3.API.Controllers
         /// <summary>
         /// Lấy chi tiết sản phẩm theo Id (bao gồm Variants, Images, Attributes).
         /// </summary>
+        [AllowAnonymous]
         [HttpGet("{id:int}")]
         [ProducesResponseType(typeof(ApiResult<ProductDetailDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResult<ProductDetailDto>), StatusCodes.Status404NotFound)]

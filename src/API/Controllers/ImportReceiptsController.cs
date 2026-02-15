@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.ImportReceipts;
 using PBL3.Shared.DTOs.Common;
@@ -9,6 +10,7 @@ namespace PBL3.API.Controllers
     [ApiController]
     [Route("api/import-receipts")]
     [Produces("application/json")]
+    [Authorize(Roles = "WarehouseManager")]
     public class ImportReceiptsController : ControllerBase
     {
         private readonly IImportReceiptService _importReceiptService;

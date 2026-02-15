@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.ProductSerials;
 using PBL3.Shared.DTOs.Common;
@@ -7,6 +8,7 @@ namespace PBL3.API.Controllers
     [ApiController]
     [Route("api/product-serials")]
     [Produces("application/json")]
+    [Authorize(Roles = "Admin, WarehouseManager")]
     public class ProductSerialsController : ControllerBase
     {
         private readonly IProductSerialService _productSerialService;
