@@ -39,15 +39,15 @@ builder.Services.AddDbContext<HushStoreDbContext>(options =>
 // Add Identity
 builder.Services.AddIdentity<AppUser, AppRole>(options =>
 {
-    // Password settings
+    // Password settings (Tùy chỉnh độ khó theo thực tế)
     options.Password.RequireDigit = true;
     options.Password.RequireLowercase = true;
     options.Password.RequireUppercase = true;
     options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequiredLength = 6;
+    options.Password.RequiredLength = 8;
 
-    // Lockout settings
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+    // Lockout settings (Chống Brute-force)
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
 
     // User settings
