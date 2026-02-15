@@ -1,0 +1,61 @@
+@page "/register"
+@layout LoginLayout
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Đăng ký - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center pa-4" Style="min-height: 100vh;">
+    <MudCard Elevation="4" Class="pa-6" Style="width: 100%; border-radius: 12px;">
+         <MudCardHeader className="d-flex justify-center flex-column align-center">
+             <MudText Typo="Typo.h5" Align="Align.Center" Style="font-weight: 700; color: var(--mud-palette-primary); text-transform: uppercase;">
+                HUSH STORE
+            </MudText>
+             <MudText Typo="Typo.h6" Align="Align.Center" Class="mt-2">Thông tin khách hàng đăng ký tài khoản</MudText>
+        </MudCardHeader>
+
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" sm="8">
+                    @* Form Đăng Ký *@
+                     <MudTextField T="string" Label="Email đăng nhập" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                     <MudTextField T="string" Label="Họ tên" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                     <MudTextField T="string" Label="Mật khẩu" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                     <MudTextField T="string" Label="Nhập lại mật khẩu" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                     <MudTextField T="string" Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                     <MudTextField T="string" Label="Địa chỉ" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                    
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="HandleRegister" Class="mt-2">
+                        Đăng ký
+                    </MudButton>
+                </MudItem>
+
+                <MudItem xs="12" sm="4" Class="d-flex flex-column align-center justify-center">
+                    @* Phần chuyển sang đăng nhập *@
+                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">Bạn đã có tài khoản ?</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" Href="/login" Class="mt-2">
+                        Đăng nhập
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+        
+        <MudCardActions Class="d-flex flex-column align-start px-6 pb-6">
+             <MudText Typo="Typo.subtitle2" Style="font-weight: 700;">Hỗ trợ khách hàng</MudText>
+             <MudList T="string" Dense="true" DisablePadding="true">
+                 <MudListItem><MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách bảo mật</MudLink></MudListItem>
+                 <MudListItem><MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách bảo hành</MudLink></MudListItem>
+                 <MudListItem><MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách thanh toán</MudLink></MudListItem>
+                 <MudListItem><MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách vận chuyển</MudLink></MudListItem>
+            </MudList>
+        </MudCardActions>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private void HandleRegister()
+    {
+        // Placeholder implementation
+        Snackbar.Add("Chức năng đăng ký đang được phát triển!", Severity.Info);
+    }
+}

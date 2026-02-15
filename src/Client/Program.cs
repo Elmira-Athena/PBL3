@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.AspNetCore.Components.Authorization;
 using MudBlazor.Services;
 using Blazored.LocalStorage;
+using Blazored.FluentValidation;
+using FluentValidation;
 using Client;
 using Client.Auth;
 using Client.Services;
@@ -14,6 +16,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 // ===== Authentication & Authorization =====
 builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddValidatorsFromAssemblyContaining<PBL3.Shared.DTOs.Auth.LoginRequestValidator>();
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<AuthenticationStateProvider, JwtAuthenticationStateProvider>();
 builder.Services.AddTransient<AuthHeaderHandler>();
@@ -37,5 +40,6 @@ builder.Services.AddScoped<IProductClientService, ProductClientService>();
 builder.Services.AddScoped<ISupplierClientService, SupplierClientService>();
 builder.Services.AddScoped<IImportReceiptClientService, ImportReceiptClientService>();
 builder.Services.AddScoped<IProductSerialClientService, ProductSerialClientService>();
+builder.Services.AddScoped<IAuthClientService, AuthClientService>();
 
 await builder.Build().RunAsync();

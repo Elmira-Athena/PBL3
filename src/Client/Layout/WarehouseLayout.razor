@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@inject IAuthClientService AuthService
+@inject NavigationManager Navigation
 
 <MudLayout>
     @* ===== TOP APP BAR ===== *@
@@ -45,10 +47,17 @@
                 </MudBadge>
             </ActivatorContent>
             <ChildContent>
-                <MudMenuItem Icon="@Icons.Material.Filled.Person">Hồ sơ</MudMenuItem>
-                <MudMenuItem Icon="@Icons.Material.Filled.Settings">Cài đặt</MudMenuItem>
-                <MudDivider />
-                <MudMenuItem Icon="@Icons.Material.Filled.Logout">Đăng xuất</MudMenuItem>
+                <AuthorizeView>
+                    <Authorized>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Person">@context.User.Identity?.Name</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Settings">Cài đặt</MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout">Đăng xuất</MudMenuItem>
+                    </Authorized>
+                    <NotAuthorized>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Login" Href="/login">Đăng nhập</MudMenuItem>
+                    </NotAuthorized>
+                </AuthorizeView>
             </ChildContent>
         </MudMenu>
     </MudAppBar>
@@ -70,4 +79,9 @@
     private bool _drawerOpen = true;
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+    }
 }

@@ -1,4 +1,5 @@
 <MudNavMenu Bordered="true" Color="Color.Primary" Class="px-2">
+<AuthorizeView Roles="Admin">
     <MudText Typo="Typo.caption" Class="px-4 py-2 mud-text-secondary"
              Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
         Quản lý
@@ -67,4 +68,5 @@
                 IconColor="Color.Default">
         Thống kê
     </MudNavLink>
+</AuthorizeView>
 </MudNavMenu>
