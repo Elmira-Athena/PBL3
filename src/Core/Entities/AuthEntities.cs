@@ -28,6 +28,10 @@ namespace PBL3.Core.Entities
         public bool IsActive { get; set; } = true;
         public int Type { get; set; } // 0: Admin, 1: Employee, 2: Customer
 
+        // F. REFRESH TOKEN (Lưu trực tiếp trên User, 1-1)
+        public string? RefreshToken { get; set; }
+        public DateTime? RefreshTokenExpiryTime { get; set; }
+
         // E. AUDIT
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
         public bool IsDeleted { get; set; }

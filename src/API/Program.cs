@@ -1,9 +1,13 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Infrastructure.Repositories;
+using PBL3.Service.Auth;
 using PBL3.Service.Categories;
 using PBL3.Service.ImportReceipts;
 using PBL3.Service.Products;
@@ -56,6 +60,30 @@ builder.Services.AddIdentity<AppUser, AppRole>(options =>
 .AddEntityFrameworkStores<HushStoreDbContext>()
 .AddDefaultTokenProviders();
 
+// JWT Authentication
+var jwtSecretKey = builder.Configuration["JwtSettings:SecretKey"]
+    ?? throw new InvalidOperationException("JwtSettings:SecretKey chưa được cấu hình trong appsettings.json.");
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
+        ValidateAudience = true,
+        ValidAudience = builder.Configuration["JwtSettings:Audience"],
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero // Không cho phép sai lệch thời gian
+    };
+});
+
 // DI: Repositories
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
@@ -72,6 +100,9 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IImportReceiptService, ImportReceiptService>();
 builder.Services.AddScoped<IProductSerialService, ProductSerialService>();
+
+// DI: Auth
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 var app = builder.Build();
 
