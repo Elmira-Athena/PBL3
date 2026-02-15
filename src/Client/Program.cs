@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.AspNetCore.Components.Authorization;
 using MudBlazor.Services;
+using Blazored.LocalStorage;
 using Client;
+using Client.Auth;
 using Client.Services;
 using Client.Services.Inventory;
 
@@ -9,11 +12,21 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// HttpClient trỏ về API Backend
-builder.Services.AddScoped(sp => new HttpClient
+// ===== Authentication & Authorization =====
+builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddAuthorizationCore();
+builder.Services.AddScoped<AuthenticationStateProvider, JwtAuthenticationStateProvider>();
+builder.Services.AddTransient<AuthHeaderHandler>();
+
+// ===== HttpClient trỏ về API Backend (có gắn AuthHeaderHandler) =====
+builder.Services.AddHttpClient("HushStoreAPI", client =>
 {
-    BaseAddress = new Uri("https://localhost:7010")
-});
+    client.BaseAddress = new Uri("https://localhost:7010");
+}).AddHttpMessageHandler<AuthHeaderHandler>();
+
+// Đăng ký HttpClient mặc định (inject HttpClient trực tiếp) dùng Named client ở trên
+builder.Services.AddScoped(sp =>
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("HushStoreAPI"));
 
 // MudBlazor
 builder.Services.AddMudServices();
