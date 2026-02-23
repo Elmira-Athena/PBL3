@@ -34,28 +34,30 @@
         <MudSpacer />
 
         @* -- User Profile -- *@
-        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-            <ActivatorContent>
-                <MudBadge Color="Color.Error" Dot="true" Overlap="true" Bordered="true">
-                    <MudAvatar Size="Size.Small" Color="Color.Primary">
-                        <MudIcon Icon="@Icons.Material.Filled.Person" />
-                    </MudAvatar>
-                </MudBadge>
-            </ActivatorContent>
-            <ChildContent>
-                <AuthorizeView>
-                    <Authorized>
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <ActivatorContent>
+                        <MudBadge Color="Color.Error" Dot="true" Overlap="true" Bordered="true" Class="cursor-pointer"> @* FIX: Chuyển cấu trúc AuthorizeView ra ngoài MudMenu để tránh lỗi Lifecycle/DOM khi Render *@
+                            <MudAvatar Size="Size.Small" Color="Color.Primary">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" /> @* FIX: Giữ nguyên size Small đồng bộ *@
+                            </MudAvatar>
+                        </MudBadge>
+                    </ActivatorContent>
+                    <ChildContent>
                         <MudMenuItem Icon="@Icons.Material.Filled.Person">@context.User.Identity?.Name</MudMenuItem>
                         <MudMenuItem Icon="@Icons.Material.Filled.Settings">Cài đặt</MudMenuItem>
                         <MudDivider />
                         <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout">Đăng xuất</MudMenuItem>
-                    </Authorized>
-                    <NotAuthorized>
-                        <MudMenuItem Icon="@Icons.Material.Filled.Login" Href="/login">Đăng nhập</MudMenuItem>
-                    </NotAuthorized>
-                </AuthorizeView>
-            </ChildContent>
-        </MudMenu>
+                    </ChildContent>
+                </MudMenu>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/login" StartIcon="@Icons.Material.Filled.Login">
+                    Đăng nhập
+                </MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
     </MudAppBar>
 
     @* ===== LEFT DRAWER (SIDEBAR) ===== *@
