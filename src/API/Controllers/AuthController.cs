@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PBL3.Service.Auth;
 using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
@@ -20,6 +21,7 @@ namespace PBL3.API.Controllers
         /// Đăng nhập: Nhận Email + Password, trả về cặp Access Token + Refresh Token.
         /// </summary>
         [HttpPost("login")]
+        [EnableRateLimiting("LoginRateLimit")]
         [ProducesResponseType(typeof(ApiResult<TokenResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResult<TokenResponse>), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)

@@ -67,7 +67,7 @@ namespace PBL3.Service.Auth
 
             // 8. Lưu Refresh Token vào DB
             var refreshTokenExpirationDays = _configuration.GetValue<int>("JwtSettings:RefreshTokenExpirationDays");
-            user.RefreshToken = refreshToken;
+            user.RefreshToken = HashToken(refreshToken);
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(refreshTokenExpirationDays);
             await _userManager.UpdateAsync(user);
 
@@ -105,7 +105,8 @@ namespace PBL3.Service.Auth
             }
 
             // 3. Kiểm tra Refresh Token có khớp và còn hạn không
-            if (user.RefreshToken != request.RefreshToken)
+            var hashedToken = HashToken(request.RefreshToken);
+            if (user.RefreshToken != hashedToken)
             {
                 return ApiResult<TokenResponse>.Fail("Refresh Token không hợp lệ.");
             }
@@ -131,7 +132,7 @@ namespace PBL3.Service.Auth
 
             // 6. Lưu Refresh Token mới vào DB (Invalidate cái cũ)
             var refreshTokenExpirationDays = _configuration.GetValue<int>("JwtSettings:RefreshTokenExpirationDays");
-            user.RefreshToken = newRefreshToken;
+            user.RefreshToken = HashToken(newRefreshToken);
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(refreshTokenExpirationDays);
             await _userManager.UpdateAsync(user);
 
@@ -195,6 +196,15 @@ namespace PBL3.Service.Auth
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(randomBytes);
             return Convert.ToBase64String(randomBytes);
+        }
+
+        // =====================================================================
+        // PRIVATE: Hash Token bằng SHA256
+        // =====================================================================
+        private static string HashToken(string token)
+        {
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+            return Convert.ToBase64String(bytes);
         }
 
         // =====================================================================

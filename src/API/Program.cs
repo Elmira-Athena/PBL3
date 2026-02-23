@@ -1,5 +1,7 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -104,6 +106,19 @@ builder.Services.AddScoped<IProductSerialService, ProductSerialService>();
 // DI: Auth
 builder.Services.AddScoped<IAuthService, AuthService>();
 
+// Rate Limiting: Chống DoS & Brute-force cho Login
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddFixedWindowLimiter("LoginRateLimit", limiter =>
+    {
+        limiter.PermitLimit = 5;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;  // Reject ngay, không queue
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -121,6 +136,7 @@ app.UseHttpsRedirection();
 
 app.UseCors("AllowClient");
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
