@@ -27,8 +27,6 @@ namespace PBL3.Infrastructure.Repositories
                 .Include(p => p.Category)
                 .Include(p => p.Variants.Where(v => !v.IsDeleted))
                     .ThenInclude(v => v.Images)
-                .Include(p => p.Variants.Where(v => !v.IsDeleted))
-                    .ThenInclude(v => v.Attributes)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
         }

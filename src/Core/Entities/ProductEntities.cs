@@ -87,7 +87,7 @@ namespace PBL3.Core.Entities
         public int ManufacturerId { get; set; }
         public int CategoryId { get; set; }
 
-        public int Status { get; set; } = 1;
+        public byte Status { get; set; } = 1;
 
         // Audit
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
@@ -126,7 +126,6 @@ namespace PBL3.Core.Entities
 
         public decimal Price { get; set; }
         public decimal? OriginalPrice { get; set; }
-        public int StockQuantity { get; set; }
         public int WarrantyMonth { get; set; }
         public string? Specifications { get; set; }
 
@@ -143,32 +142,19 @@ namespace PBL3.Core.Entities
         [ForeignKey("ProductId")]
         public virtual Product Product { get; set; } = null!;
         
-        public virtual ICollection<ProductAttribute> Attributes { get; set; } = new List<ProductAttribute>();
         public virtual ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
         
         // Navigation properties to other modules can be added if needed (e.g., Inventory)
+        public virtual ICollection<ProductSerial> Serials { get; set; } = new List<ProductSerial>();
+
+        /// <summary>
+        /// Số lượng tồn kho = đếm Serials có Status = 0 (Available).
+        /// [NotMapped] — không tạo cột trong DB, chỉ dùng khi đã eager-load Serials.
+        /// </summary>
+        [NotMapped]
+        public int StockQuantity => Serials?.Count(s => s.Status == 0) ?? 0;
     }
 
-    // 5. ProductAttributes
-    [Table("ProductAttributes")]
-    public class ProductAttribute
-    {
-        [Key]
-        public int Id { get; set; }
-        public int VariantId { get; set; }
-
-        [Required]
-        [MaxLength(50)]
-        public string AttributeName { get; set; } = string.Empty;
-        [Required]
-        [MaxLength(100)]
-        public string AttributeValue { get; set; } = string.Empty;
-
-        public bool IsFilterable { get; set; } = true;
-
-        [ForeignKey("VariantId")]
-        public virtual ProductVariant Variant { get; set; } = null!;
-    }
 
     // 6. ProductImages
     [Table("ProductImages")]

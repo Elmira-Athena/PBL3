@@ -13,7 +13,7 @@ namespace PBL3.Core.Entities
         [Required]
         [MaxLength(100)]
         public string FullName { get; set; } = string.Empty;
-        public int Gender { get; set; } // 0: Male, 1: Female, 2: Other
+        public byte Gender { get; set; } // 0: Male, 1: Female, 2: Other
         public DateTime? DateOfBirth { get; set; }
         [MaxLength(500)]
         public string? AvatarUrl { get; set; }
@@ -26,7 +26,7 @@ namespace PBL3.Core.Entities
 
         // D. QUẢN TRỊ & TRẠNG THÁI
         public bool IsActive { get; set; } = true;
-        public int Type { get; set; } // 0: Admin, 1: Employee, 2: Customer
+        public byte Type { get; set; } // 0: Admin, 1: Employee, 2: Customer
 
         // F. REFRESH TOKEN (Lưu trực tiếp trên User, 1-1)
         public string? RefreshToken { get; set; }

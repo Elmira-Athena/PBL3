@@ -3,7 +3,7 @@ namespace PBL3.Shared.Enums
     /// <summary>
     /// Trạng thái của Serial sản phẩm trong kho.
     /// </summary>
-    public enum SerialStatus
+    public enum SerialStatus : byte
     {
         /// <summary>Trong kho, sẵn sàng bán.</summary>
         Available = 0,

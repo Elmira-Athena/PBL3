@@ -18,7 +18,6 @@ namespace PBL3.Infrastructure.Data
         public DbSet<Category> Categories { get; set; }
         public DbSet<Product> Products { get; set; }
         public DbSet<ProductVariant> ProductVariants { get; set; }
-        public DbSet<ProductAttribute> ProductAttributes { get; set; }
         public DbSet<ProductImage> ProductImages { get; set; }
 
         // Inventory
@@ -44,10 +43,16 @@ namespace PBL3.Infrastructure.Data
             base.OnModelCreating(modelBuilder); // Identity mappings
 
             // --- AUTH: Rename Identity tables theo convention ---
-            modelBuilder.Entity<AppUser>().ToTable("AppUsers");
+            modelBuilder.Entity<AppUser>(entity =>
+            {
+                entity.ToTable("AppUsers");
+                entity.Property(u => u.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+                entity.Property(u => u.PhoneNumber).HasMaxLength(20).IsUnicode(false);
+            });
             modelBuilder.Entity<AppRole>(entity =>
             {
                 entity.ToTable("AppRoles");
+                entity.Property(r => r.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
                 entity.HasIndex(r => r.RoleCode).IsUnique();
             });
             modelBuilder.Entity<IdentityUserRole<Guid>>().ToTable("AppUserRoles");
@@ -70,6 +75,7 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<ProductVariant>(entity =>
             {
                 entity.HasIndex(v => v.SKU).IsUnique();
+                entity.HasIndex(v => v.ProductId);
                 entity.Property(e => e.Price).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.OriginalPrice).HasColumnType("decimal(18,2)");
             });
@@ -95,6 +101,8 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<ImportReceiptDetail>(entity =>
             {
+                entity.HasIndex(d => d.ReceiptId);
+                entity.HasIndex(d => d.VariantId);
                 entity.Property(e => e.ImportPrice).HasColumnType("decimal(18,2)");
             });
 
@@ -107,7 +115,11 @@ namespace PBL3.Infrastructure.Data
             // --- SALE ---
             modelBuilder.Entity<Voucher>(entity =>
             {
-                entity.ToTable(t => t.HasCheckConstraint("CK_Vouchers_Date", "[EndDate] >= [StartDate]"));
+                entity.ToTable(t =>
+                {
+                    t.HasCheckConstraint("CK_Vouchers_Date", "[EndDate] >= [StartDate]");
+                    t.HasCheckConstraint("CK_Vouchers_Quantity", "[UsedCount] <= [Quantity]");
+                });
                 entity.HasIndex(v => v.Code).IsUnique();
                 entity.Property(e => e.DiscountValue).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.MinOrderValue).HasColumnType("decimal(18,2)");
@@ -138,6 +150,8 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<OrderDetail>(entity =>
             {
+                entity.HasIndex(od => od.OrderId);
+                entity.HasIndex(od => od.VariantId);
                 entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.TotalLine)
                     .HasColumnType("decimal(18,2)")
@@ -167,6 +181,7 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<Cart>(entity =>
             {
                 entity.HasIndex(c => new { c.UserId, c.VariantId }).IsUnique();
+                entity.HasIndex(c => c.VariantId);
             });
         }
     }

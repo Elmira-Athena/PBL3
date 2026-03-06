@@ -18,7 +18,7 @@ namespace PBL3.Core.Entities
         [MaxLength(200)]
         public string Name { get; set; } = string.Empty;
 
-        public int DiscountType { get; set; } // 0: Amount, 1: Percentage
+        public byte DiscountType { get; set; } // 0: Amount, 1: Percentage
         public decimal DiscountValue { get; set; }
 
         public decimal MinOrderValue { get; set; }
@@ -50,7 +50,7 @@ namespace PBL3.Core.Entities
 
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
 
-        public int Status { get; set; } // 0: Pending, 1: Confirmed, 2: Shipping, 3: Success, 4: Cancelled, 5: Returned
+        public byte Status { get; set; } // 0: Pending, 1: Confirmed, 2: Shipping, 3: Success, 4: Cancelled, 5: Returned
 
         [Required]
         [MaxLength(100)]
@@ -73,8 +73,8 @@ namespace PBL3.Core.Entities
 
         public decimal TotalAmount { get; set; }
 
-        public int PaymentMethod { get; set; } // 0: COD, 1: Banking, 2: VNPay
-        public int PaymentStatus { get; set; } // 0: Unpaid, 1: Paid, 2: Refunded
+        public byte PaymentMethod { get; set; } // 0: COD, 1: Banking, 2: VNPay
+        public byte PaymentStatus { get; set; } // 0: Unpaid, 1: Paid, 2: Refunded
 
         [MaxLength(500)]
         public string? Note { get; set; }

@@ -141,19 +141,7 @@ namespace PBL3.Service.ImportReceipts
                 // Bulk insert Serials
                 await _serialRepo.AddRangeAsync(allNewSerials);
 
-                // ---------------------------------------------------
-                // Bước 5: Đồng bộ tồn kho (Stock Sync) — qua IProductRepository
-                // ---------------------------------------------------
-                foreach (var detailReq in request.Details)
-                {
-                    var variant = await _productRepo.GetVariantByIdAsync(detailReq.VariantId);
-                    if (variant != null)
-                    {
-                        variant.StockQuantity += detailReq.Quantity;
-                    }
-                }
-
-                // Lưu tất cả (Details + Serials + StockQuantity)
+                // Lưu tất cả (Details + Serials)
                 await _unitOfWork.SaveChangesAsync();
 
                 // ---------------------------------------------------

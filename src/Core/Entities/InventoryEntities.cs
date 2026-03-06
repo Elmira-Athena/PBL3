@@ -89,7 +89,7 @@ namespace PBL3.Core.Entities
         public int VariantId { get; set; }
         public int ImportReceiptId { get; set; }
 
-        public int Status { get; set; } // 0: Available, 1: Reserved, 2: Sold, 3: Defective, 4: Returned
+        public byte Status { get; set; } // 0: Available, 1: Reserved, 2: Sold, 3: Defective, 4: Returned
 
         public int? OrderId { get; set; }
 
@@ -117,7 +117,7 @@ namespace PBL3.Core.Entities
 
         [MaxLength(500)]
         public string? Note { get; set; }
-        public int Status { get; set; } // 0: Pending, 1: Completed
+        public byte Status { get; set; } // 0: Pending, 1: Completed
 
         public virtual ICollection<InventoryCheckDetail> Details { get; set; } = new List<InventoryCheckDetail>();
     }

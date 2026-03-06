@@ -119,7 +119,6 @@ namespace PBL3.Service.Products
                     Slug = GenerateSlug(request.Name, variantReq.SKU),
                     Price = variantReq.Price,
                     OriginalPrice = variantReq.OriginalPrice,
-                    StockQuantity = 0, // Tạm = 0, chờ module Inventory
                     WarrantyMonth = variantReq.WarrantyMonth,
                     Specifications = variantReq.Specifications != null
                         ? JsonSerializer.Serialize(variantReq.Specifications)
@@ -135,17 +134,6 @@ namespace PBL3.Service.Products
                         ImageUrl = imgReq.ImageUrl,
                         IsMain = imgReq.IsMain,
                         SortOrder = imgReq.SortOrder
-                    });
-                }
-
-                // Attributes
-                foreach (var attrReq in variantReq.Attributes)
-                {
-                    variant.Attributes.Add(new ProductAttribute
-                    {
-                        AttributeName = attrReq.AttributeName,
-                        AttributeValue = attrReq.AttributeValue,
-                        IsFilterable = attrReq.IsFilterable
                     });
                 }
 
@@ -189,7 +177,7 @@ namespace PBL3.Service.Products
             product.Description = request.Description;
             product.ManufacturerId = request.ManufacturerId;
             product.CategoryId = request.CategoryId;
-            product.Status = (int)request.Status;
+            product.Status = (byte)request.Status;
             product.ModifiedDate = DateTime.UtcNow;
 
             await _productRepo.SaveChangesAsync();
@@ -225,7 +213,6 @@ namespace PBL3.Service.Products
                 Slug = GenerateSlug(product.Name, request.SKU),
                 Price = request.Price,
                 OriginalPrice = request.OriginalPrice,
-                StockQuantity = 0,
                 WarrantyMonth = request.WarrantyMonth,
                 Specifications = request.Specifications != null
                     ? JsonSerializer.Serialize(request.Specifications)
@@ -244,16 +231,6 @@ namespace PBL3.Service.Products
                 });
             }
 
-            // Attributes
-            foreach (var attrReq in request.Attributes)
-            {
-                variant.Attributes.Add(new ProductAttribute
-                {
-                    AttributeName = attrReq.AttributeName,
-                    AttributeValue = attrReq.AttributeValue,
-                    IsFilterable = attrReq.IsFilterable
-                });
-            }
 
             await _productRepo.AddVariantAsync(variant);
             await _productRepo.SaveChangesAsync();
@@ -278,7 +255,7 @@ namespace PBL3.Service.Products
             // Soft Delete
             product.IsDeleted = true;
             product.DeletedDate = DateTime.UtcNow;
-            product.Status = (int)ProductStatus.StopBusiness;
+            product.Status = (byte)ProductStatus.StopBusiness;
 
             await _productRepo.SaveChangesAsync();
 
@@ -334,13 +311,6 @@ namespace PBL3.Service.Products
                     ImageUrl = i.ImageUrl,
                     IsMain = i.IsMain,
                     SortOrder = i.SortOrder
-                }).ToList() ?? new(),
-                Attributes = v.Attributes?.Select(a => new ProductAttributeDto
-                {
-                    Id = a.Id,
-                    AttributeName = a.AttributeName,
-                    AttributeValue = a.AttributeValue,
-                    IsFilterable = a.IsFilterable
                 }).ToList() ?? new()
             };
         }

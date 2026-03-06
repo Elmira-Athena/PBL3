@@ -29,16 +29,6 @@ namespace PBL3.Shared.DTOs.Products
         public int SortOrder { get; set; }
     }
 
-    /// <summary>
-    /// DTO chi tiết một Attribute.
-    /// </summary>
-    public class ProductAttributeDto
-    {
-        public int Id { get; set; }
-        public string AttributeName { get; set; } = string.Empty;
-        public string AttributeValue { get; set; } = string.Empty;
-        public bool IsFilterable { get; set; }
-    }
 
     /// <summary>
     /// DTO chi tiết một Variant (dùng trong ProductDetailDto).
@@ -55,7 +45,6 @@ namespace PBL3.Shared.DTOs.Products
         public int WarrantyMonth { get; set; }
         public Dictionary<string, string>? Specifications { get; set; }
         public List<ProductImageDto> Images { get; set; } = new();
-        public List<ProductAttributeDto> Attributes { get; set; } = new();
     }
 
     /// <summary>
@@ -135,15 +124,6 @@ namespace PBL3.Shared.DTOs.Products
         public int SortOrder { get; set; }
     }
 
-    /// <summary>
-    /// Request tạo Attribute cho Variant.
-    /// </summary>
-    public class SaveAttributeRequest
-    {
-        public string AttributeName { get; set; } = string.Empty;
-        public string AttributeValue { get; set; } = string.Empty;
-        public bool IsFilterable { get; set; } = true;
-    }
 
     /// <summary>
     /// Request tạo Variant khi tạo Product mới.
@@ -157,7 +137,6 @@ namespace PBL3.Shared.DTOs.Products
         public int WarrantyMonth { get; set; } = 12;
         public Dictionary<string, string>? Specifications { get; set; }
         public List<SaveImageRequest> Images { get; set; } = new();
-        public List<SaveAttributeRequest> Attributes { get; set; } = new();
     }
 
     /// <summary>
@@ -200,7 +179,6 @@ namespace PBL3.Shared.DTOs.Products
         public int WarrantyMonth { get; set; } = 12;
         public Dictionary<string, string>? Specifications { get; set; }
         public List<SaveImageRequest> Images { get; set; } = new();
-        public List<SaveAttributeRequest> Attributes { get; set; } = new();
     }
 
     // ========================================================
