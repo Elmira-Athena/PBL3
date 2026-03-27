@@ -4,8 +4,10 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PBL3.Core.Entities;
+using PBL3.Infrastructure.Data;
 using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
 
@@ -15,11 +17,13 @@ namespace PBL3.Service.Auth
     {
         private readonly UserManager<AppUser> _userManager;
         private readonly IConfiguration _configuration;
+        private readonly HushStoreDbContext _context;
 
-        public AuthService(UserManager<AppUser> userManager, IConfiguration configuration)
+        public AuthService(UserManager<AppUser> userManager, IConfiguration configuration, HushStoreDbContext context)
         {
             _userManager = userManager;
             _configuration = configuration;
+            _context = context;
         }
 
         // =====================================================================
@@ -159,11 +163,15 @@ namespace PBL3.Service.Auth
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             // Claims chuẩn: NameIdentifier (UserId), Email
+            // Load FullName từ UserProfile
+            var profile = await _context.UserProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == user.Id);
+            var fullName = profile?.FullName ?? string.Empty;
+
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Email, user.Email ?? string.Empty),
-                new(ClaimTypes.Name, user.FullName),
+                new(ClaimTypes.Name, fullName),
                 new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 

@@ -35,7 +35,8 @@ namespace PBL3.Infrastructure.Data
         public DbSet<OrderSerial> OrderSerials { get; set; }
         public DbSet<Cart> Carts { get; set; }
 
-        // RefreshToken
+        // Auth
+        public DbSet<UserProfile> UserProfiles { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -48,6 +49,14 @@ namespace PBL3.Infrastructure.Data
                 entity.ToTable("AppUsers");
                 entity.Property(u => u.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
                 entity.Property(u => u.PhoneNumber).HasMaxLength(20).IsUnicode(false);
+            });
+            modelBuilder.Entity<UserProfile>(entity =>
+            {
+                entity.ToTable("UserProfiles");
+                entity.HasOne(p => p.User)
+                      .WithOne(u => u.Profile)
+                      .HasForeignKey<UserProfile>(p => p.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
             modelBuilder.Entity<AppRole>(entity =>
             {

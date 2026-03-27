@@ -9,7 +9,30 @@ namespace PBL3.Core.Entities
     // 1. AppUser kế thừa IdentityUser<Guid>
     public class AppUser : IdentityUser<Guid>
     {
-        // B. THÔNG TIN CÁ NHÂN
+        // B. QUẢN TRỊ & TRẠNG THÁI
+        public bool IsActive { get; set; } = true;
+        public byte Type { get; set; } // 0: Admin, 1: Employee, 2: Customer
+
+        // C. REFRESH TOKEN (Lưu trực tiếp trên User, 1-1)
+        public string? RefreshToken { get; set; }
+        public DateTime? RefreshTokenExpiryTime { get; set; }
+
+        // D. AUDIT
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+        public bool IsDeleted { get; set; }
+
+        // Navigation Properties
+        public virtual UserProfile? Profile { get; set; }
+        public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+    }
+
+    // 2. UserProfile — Thông tin cá nhân (1:1 với AppUser, shared primary key)
+    [Table("UserProfiles")]
+    public class UserProfile
+    {
+        [Key]
+        public Guid UserId { get; set; }
+
         [Required]
         [MaxLength(100)]
         public string FullName { get; set; } = string.Empty;
@@ -18,26 +41,14 @@ namespace PBL3.Core.Entities
         [MaxLength(500)]
         public string? AvatarUrl { get; set; }
 
-        // C. ĐỊA CHỈ MẶC ĐỊNH
+        // Địa chỉ mặc định
         [MaxLength(255)]
         public string? Address { get; set; }
         [MaxLength(100)]
         public string? City { get; set; }
 
-        // D. QUẢN TRỊ & TRẠNG THÁI
-        public bool IsActive { get; set; } = true;
-        public byte Type { get; set; } // 0: Admin, 1: Employee, 2: Customer
-
-        // F. REFRESH TOKEN (Lưu trực tiếp trên User, 1-1)
-        public string? RefreshToken { get; set; }
-        public DateTime? RefreshTokenExpiryTime { get; set; }
-
-        // E. AUDIT
-        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
-        public bool IsDeleted { get; set; }
-
-        // Navigation Properties
-        public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+        [ForeignKey("UserId")]
+        public virtual AppUser User { get; set; } = null!;
     }
 
     // 2. AppRole kế thừa IdentityRole<Guid>
