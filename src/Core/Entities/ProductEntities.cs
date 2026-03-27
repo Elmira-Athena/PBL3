@@ -127,7 +127,7 @@ namespace PBL3.Core.Entities
         public decimal Price { get; set; }
         public decimal? OriginalPrice { get; set; }
         public int WarrantyMonth { get; set; }
-        public string? Specifications { get; set; }
+        public Dictionary<string, string> Specifications { get; set; } = new();
 
         // Audit
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
@@ -148,11 +148,10 @@ namespace PBL3.Core.Entities
         public virtual ICollection<ProductSerial> Serials { get; set; } = new List<ProductSerial>();
 
         /// <summary>
-        /// Số lượng tồn kho = đếm Serials có Status = 0 (Available).
-        /// [NotMapped] — không tạo cột trong DB, chỉ dùng khi đã eager-load Serials.
+        /// Số lượng tồn kho — cột vật lý, được đồng bộ bởi InventorySyncService.
+        /// KHÔNG tự đếm on-the-fly. Luồng Read chỉ đọc giá trị này.
         /// </summary>
-        [NotMapped]
-        public int StockQuantity => Serials?.Count(s => s.Status == 0) ?? 0;
+        public int StockQuantity { get; set; }
     }
 
 

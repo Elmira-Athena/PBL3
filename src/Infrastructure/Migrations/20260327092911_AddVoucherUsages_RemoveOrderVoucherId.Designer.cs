@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PBL3.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using PBL3.Infrastructure.Data;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(HushStoreDbContext))]
-    partial class HushStoreDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260327092911_AddVoucherUsages_RemoveOrderVoucherId")]
+    partial class AddVoucherUsages_RemoveOrderVoucherId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -858,13 +861,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("nvarchar(250)");
 
                     b.Property<string>("Specifications")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("StockQuantity")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
 
                     b.Property<string>("VariantName")
                         .IsRequired()

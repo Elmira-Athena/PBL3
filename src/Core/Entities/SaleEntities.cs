@@ -32,7 +32,10 @@ namespace PBL3.Core.Entities
 
         public bool IsActive { get; set; } = true;
 
-        public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
+        /// <summary>
+        /// Lịch sử sử dụng voucher (gồm thông tin user, order, số tiền giảm).
+        /// </summary>
+        public virtual ICollection<VoucherUsage> VoucherUsages { get; set; } = new List<VoucherUsage>();
     }
 
     // 2. Orders
@@ -68,7 +71,6 @@ namespace PBL3.Core.Entities
         public decimal SubTotal { get; set; }
         public decimal ShippingFee { get; set; }
 
-        public int? VoucherId { get; set; }
         public decimal DiscountAmount { get; set; }
 
         public decimal TotalAmount { get; set; }
@@ -85,8 +87,11 @@ namespace PBL3.Core.Entities
         [ForeignKey("UserId")]
         public virtual AppUser? User { get; set; }
         // EmployeeId fk to AppUser
-        [ForeignKey("VoucherId")]
-        public virtual Voucher? Voucher { get; set; }
+
+        /// <summary>
+        /// Danh sách voucher đã áp dụng cho đơn hàng này.
+        /// </summary>
+        public virtual ICollection<VoucherUsage> VoucherUsages { get; set; } = new List<VoucherUsage>();
 
         public virtual ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
     }
@@ -144,5 +149,32 @@ namespace PBL3.Core.Entities
         public virtual AppUser User { get; set; } = null!;
         [ForeignKey("VariantId")]
         public virtual ProductVariant Variant { get; set; } = null!;
+    }
+
+    // 6. VoucherUsages (Bảng trung gian: User đã dùng Voucher nào, trong Order nào)
+    [Table("VoucherUsages")]
+    public class VoucherUsage
+    {
+        [Key]
+        public int Id { get; set; }
+
+        public int VoucherId { get; set; }
+        public Guid UserId { get; set; }
+        public int OrderId { get; set; }
+
+        /// <summary>
+        /// Số tiền thực tế được giảm bởi voucher này trong đơn hàng.
+        /// VD: Voucher giảm 20%, MaxDiscount = 50k, đơn 300k -> DiscountApplied = 50k.
+        /// </summary>
+        public decimal DiscountApplied { get; set; }
+
+        public DateTime UsedDate { get; set; } = DateTime.UtcNow;
+
+        [ForeignKey("VoucherId")]
+        public virtual Voucher Voucher { get; set; } = null!;
+        [ForeignKey("UserId")]
+        public virtual AppUser User { get; set; } = null!;
+        [ForeignKey("OrderId")]
+        public virtual Order Order { get; set; } = null!;
     }
 }

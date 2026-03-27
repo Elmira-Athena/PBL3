@@ -120,9 +120,7 @@ namespace PBL3.Service.Products
                     Price = variantReq.Price,
                     OriginalPrice = variantReq.OriginalPrice,
                     WarrantyMonth = variantReq.WarrantyMonth,
-                    Specifications = variantReq.Specifications != null
-                        ? JsonSerializer.Serialize(variantReq.Specifications)
-                        : null,
+                    Specifications = variantReq.Specifications ?? new(),
                     CreatedDate = DateTime.UtcNow
                 };
 
@@ -214,9 +212,7 @@ namespace PBL3.Service.Products
                 Price = request.Price,
                 OriginalPrice = request.OriginalPrice,
                 WarrantyMonth = request.WarrantyMonth,
-                Specifications = request.Specifications != null
-                    ? JsonSerializer.Serialize(request.Specifications)
-                    : null,
+                Specifications = request.Specifications ?? new(),
                 CreatedDate = DateTime.UtcNow
             };
 
@@ -302,9 +298,7 @@ namespace PBL3.Service.Products
                 OriginalPrice = v.OriginalPrice,
                 StockQuantity = v.StockQuantity,
                 WarrantyMonth = v.WarrantyMonth,
-                Specifications = !string.IsNullOrEmpty(v.Specifications)
-                    ? JsonSerializer.Deserialize<Dictionary<string, string>>(v.Specifications)
-                    : null,
+                Specifications = v.Specifications,
                 Images = v.Images?.OrderBy(i => i.SortOrder).Select(i => new ProductImageDto
                 {
                     Id = i.Id,

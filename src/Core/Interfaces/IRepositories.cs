@@ -57,6 +57,11 @@ namespace PBL3.Core.Interfaces
         Task<List<int>> GetExistingVariantIdsAsync(List<int> variantIds);
 
         /// <summary>
+        /// Lọc ProductVariant theo thông số kỹ thuật JSON.
+        /// </summary>
+        Task<List<ProductVariant>> FilterBySpecificationAsync(string specKey, string specValue);
+
+        /// <summary>
         /// Lấy Variant theo Id (có tracking để update).
         /// </summary>
         Task<ProductVariant?> GetVariantByIdAsync(int variantId);
@@ -149,6 +154,43 @@ namespace PBL3.Core.Interfaces
         Task<List<string>> GetSerialsByReceiptAndVariantAsync(int receiptId, int variantId);
 
         Task AddRangeAsync(IEnumerable<ProductSerial> serials);
+        Task SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Repository interface cho Voucher & VoucherUsage.
+    /// </summary>
+    public interface IVoucherRepository
+    {
+        /// <summary>
+        /// Lấy danh sách Voucher theo danh sách mã Code.
+        /// Dùng 1 query duy nhất bằng WHERE IN để tránh N+1.
+        /// </summary>
+        Task<List<Voucher>> GetByCodesAsync(List<string> codes);
+
+        /// <summary>
+        /// Kiểm tra danh sách cặp (UserId, VoucherId) đã tồn tại trong VoucherUsages chưa.
+        /// Trả về danh sách VoucherId mà User này đã dùng.
+        /// Batch query — 1 lần duy nhất, không loop.
+        /// </summary>
+        Task<List<int>> GetUsedVoucherIdsByUserAsync(Guid userId, List<int> voucherIds);
+
+        /// <summary>
+        /// Thêm danh sách VoucherUsage vào context.
+        /// </summary>
+        Task AddUsagesAsync(IEnumerable<VoucherUsage> usages);
+
+        Task SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Repository interface cho Order.
+    /// </summary>
+    public interface IOrderRepository
+    {
+        Task<Order?> GetByIdWithDetailsAsync(int id);
+        Task<string?> GetLastOrderCodeByDateAsync(string datePrefix);
+        Task AddAsync(Order order);
         Task SaveChangesAsync();
     }
 }

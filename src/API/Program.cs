@@ -15,6 +15,7 @@ using PBL3.Service.ImportReceipts;
 using PBL3.Service.Products;
 using PBL3.Service.ProductSerials;
 using PBL3.Service.Suppliers;
+using PBL3.Service.Inventory;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -102,6 +103,7 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IImportReceiptService, ImportReceiptService>();
 builder.Services.AddScoped<IProductSerialService, ProductSerialService>();
+builder.Services.AddScoped<IInventorySyncService, InventorySyncService>();
 
 // DI: Auth
 builder.Services.AddScoped<IAuthService, AuthService>();
