@@ -70,6 +70,7 @@ nunit-*.xml
 /httpRequests/
 
 .idea*
+.kiro*
 
 .DS_Store
 .AppleDouble
