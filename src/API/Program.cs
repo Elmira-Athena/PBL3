@@ -16,6 +16,7 @@ using PBL3.Service.Products;
 using PBL3.Service.ProductSerials;
 using PBL3.Service.Suppliers;
 using PBL3.Service.Inventory;
+using PBL3.Service.Pos;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -93,6 +94,7 @@ builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IImportReceiptRepository, ImportReceiptRepository>();
 builder.Services.AddScoped<IProductSerialRepository, ProductSerialRepository>();
+builder.Services.AddScoped<IWarrantyRepository, WarrantyRepository>();
 
 // DI: Unit of Work
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -104,6 +106,7 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IImportReceiptService, ImportReceiptService>();
 builder.Services.AddScoped<IProductSerialService, ProductSerialService>();
 builder.Services.AddScoped<IInventorySyncService, InventorySyncService>();
+builder.Services.AddScoped<IPosService, PosService>();
 
 // DI: Auth
 builder.Services.AddScoped<IAuthService, AuthService>();

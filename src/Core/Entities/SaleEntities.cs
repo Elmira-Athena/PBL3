@@ -78,6 +78,8 @@ namespace PBL3.Core.Entities
         public byte PaymentMethod { get; set; } // 0: COD, 1: Banking, 2: VNPay
         public byte PaymentStatus { get; set; } // 0: Unpaid, 1: Paid, 2: Refunded
 
+        public byte OrderType { get; set; } // 0: Online, 1: POS
+
         [MaxLength(500)]
         public string? Note { get; set; }
         [MaxLength(255)]
@@ -174,6 +176,28 @@ namespace PBL3.Core.Entities
         public virtual Voucher Voucher { get; set; } = null!;
         [ForeignKey("UserId")]
         public virtual AppUser User { get; set; } = null!;
+        [ForeignKey("OrderId")]
+        public virtual Order Order { get; set; } = null!;
+    }
+
+    // 7. Warranties
+    [Table("Warranties")]
+    public class Warranty
+    {
+        [Key]
+        public int Id { get; set; }
+        public int SerialId { get; set; }
+        public Guid? CustomerId { get; set; }
+        public int OrderId { get; set; }
+
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public byte Status { get; set; } // 0: Active, 1: Expired, 2: Claimed
+
+        [ForeignKey("SerialId")]
+        public virtual ProductSerial Serial { get; set; } = null!;
+        [ForeignKey("CustomerId")]
+        public virtual AppUser? Customer { get; set; }
         [ForeignKey("OrderId")]
         public virtual Order Order { get; set; } = null!;
     }

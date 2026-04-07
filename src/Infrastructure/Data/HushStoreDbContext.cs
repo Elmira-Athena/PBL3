@@ -35,6 +35,7 @@ namespace PBL3.Infrastructure.Data
         public DbSet<OrderSerial> OrderSerials { get; set; }
         public DbSet<Cart> Carts { get; set; }
         public DbSet<VoucherUsage> VoucherUsages { get; set; }
+        public DbSet<Warranty> Warranties { get; set; }
 
         // Auth
         public DbSet<UserProfile> UserProfiles { get; set; }
@@ -236,6 +237,13 @@ namespace PBL3.Infrastructure.Data
             {
                 entity.HasIndex(c => new { c.UserId, c.VariantId }).IsUnique();
                 entity.HasIndex(c => c.VariantId);
+            });
+
+            modelBuilder.Entity<Warranty>(entity =>
+            {
+                entity.HasIndex(w => w.SerialId);
+                entity.HasIndex(w => w.CustomerId);
+                entity.HasIndex(w => w.OrderId);
             });
         }
     }

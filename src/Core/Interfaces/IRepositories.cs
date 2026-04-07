@@ -154,6 +154,17 @@ namespace PBL3.Core.Interfaces
         Task<List<string>> GetSerialsByReceiptAndVariantAsync(int receiptId, int variantId);
 
         Task AddRangeAsync(IEnumerable<ProductSerial> serials);
+
+        /// <summary>
+        /// Lấy chi tiết Serial kèm Variant và Product.
+        /// </summary>
+        Task<ProductSerial?> GetBySerialNumberAsync(string serialNumber);
+
+        /// <summary>
+        /// Lấy N Serials đang Available của một Variant (dùng cho hàng generic khi checkout).
+        /// </summary>
+        Task<List<ProductSerial>> GetAvailableSerialsByVariantAsync(int variantId, int count);
+        
         Task SaveChangesAsync();
     }
 
@@ -190,7 +201,22 @@ namespace PBL3.Core.Interfaces
     {
         Task<Order?> GetByIdWithDetailsAsync(int id);
         Task<string?> GetLastOrderCodeByDateAsync(string datePrefix);
+        
+        /// <summary>
+        /// Lấy danh sách các đơn POS đang lưu nháp bởi một nhân viên.
+        /// </summary>
+        Task<List<Order>> GetDraftsByEmployeeAsync(Guid employeeId);
+        
         Task AddAsync(Order order);
+        Task SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Repository interface cho Warranty.
+    /// </summary>
+    public interface IWarrantyRepository
+    {
+        Task AddRangeAsync(IEnumerable<Warranty> warranties);
         Task SaveChangesAsync();
     }
 }

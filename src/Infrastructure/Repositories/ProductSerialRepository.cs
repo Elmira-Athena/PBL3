@@ -46,6 +46,22 @@ namespace PBL3.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<ProductSerial?> GetBySerialNumberAsync(string serialNumber)
+        {
+            return await _context.ProductSerials
+                .Include(s => s.Variant)
+                    .ThenInclude(v => v.Product)
+                .FirstOrDefaultAsync(s => s.SerialNumber == serialNumber);
+        }
+
+        public async Task<List<ProductSerial>> GetAvailableSerialsByVariantAsync(int variantId, int count)
+        {
+            return await _context.ProductSerials
+                .Where(s => s.VariantId == variantId && s.Status == 0) // 0: Available
+                .Take(count)
+                .ToListAsync();
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

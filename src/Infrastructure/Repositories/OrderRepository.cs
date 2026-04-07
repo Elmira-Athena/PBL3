@@ -42,6 +42,14 @@ namespace PBL3.Infrastructure.Repositories
             await _dbContext.Orders.AddAsync(order);
         }
 
+        public async Task<List<Order>> GetDraftsByEmployeeAsync(Guid employeeId)
+        {
+            return await _dbContext.Orders
+                .Where(o => o.Status == 6 && o.EmployeeId == employeeId) // 6: PosDraft
+                .OrderByDescending(o => o.OrderDate)
+                .ToListAsync();
+        }
+
         public async Task SaveChangesAsync()
         {
             await _dbContext.SaveChangesAsync();
