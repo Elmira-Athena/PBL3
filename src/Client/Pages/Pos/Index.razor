@@ -1,0 +1,284 @@
+@page "/pos"
+@using PBL3.Shared.DTOs.Pos
+@using Client.Services
+@inject IPosClientService PosService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-6">
+    <div class="d-flex justify-space-between align-center mb-6">
+        <MudText Typo="Typo.h4" Style="font-weight: 800; color: var(--mud-palette-primary);">
+            <MudIcon Icon="@Icons.Material.Filled.PointOfSale" Size="Size.Large" Class="mr-2" />
+            Bán hàng tại quầy
+        </MudText>
+        <div class="d-flex gap-4">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ListAlt" OnClick="ShowDrafts" Style="border-radius: 8px; text-transform: none;">
+                Đơn chờ
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveDraft" StartIcon="@Icons.Material.Filled.Save" Style="border-radius: 8px; text-transform: none;">
+                Lưu tạm
+            </MudButton>
+        </div>
+    </div>
+
+    <MudGrid Spacing="6">
+        <!-- Cột trái: Giỏ hàng -->
+        <MudItem xs="12" md="8">
+            <MudPaper Class="pa-6" Elevation="0" 
+                      Style="border-radius: 20px; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3); height: 100%; min-height: 600px;">
+                
+                <div class="d-flex align-center mb-6 pa-2 rounded-xl" style="background: white; border: 1px solid #eee;">
+                    <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Color="Color.Primary" Class="ml-3 mr-2" />
+                    <MudTextField @bind-Value="_barcodeInput" Placeholder="Quét hoặc nhập mã Serial sản phẩm..." 
+                                  Variant="Variant.Text" Margin="Margin.None" Underline="false" 
+                                  AutoFocus="true" OnKeyDown="HandleKeyPress" Class="mt-1" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" Class="rounded-pill px-6 ml-4" 
+                               Style="height: 44px; text-transform: none; font-weight: 600;" OnClick="AddItemByBarcode">Thêm SP</MudButton>
+                </div>
+
+                <MudTable Items="@_cartItems" Hover="true" Elevation="0" Class="mb-6 rounded-lg" Dense="true" Style="background: transparent;">
+                    <HeaderContent>
+                        <MudTh Style="font-weight: 700; color: #666;">SẢN PHẨM</MudTh>
+                        <MudTh Style="font-weight: 700; color: #666;">BIẾN THỂ</MudTh>
+                        <MudTh Style="font-weight: 700; color: #666;">SERIAL</MudTh>
+                        <MudTh Style="font-weight: 700; color: #666;">ĐƠN GIÁ</MudTh>
+                        <MudTh Style="width: 50px;"></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <div class="d-flex align-center">
+                                <div class="rounded-lg mr-4 pa-1" style="background: white; border: 1px solid #eee;">
+                                    <MudImage Src="https://via.placeholder.com/60" Width="64" Height="64" Alt="@context.ProductName" Class="rounded-lg" />
+                                </div>
+                                <MudText Style="font-weight: 600;">@context.ProductName</MudText>
+                            </div>
+                        </MudTd>
+                        <MudTd>@context.VariantName</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Text" Class="px-0">@context.SerialNumber</MudChip>
+                        </MudTd>
+                        <MudTd Style="font-weight: 700; color: var(--mud-palette-primary);">@context.Price.ToString("N0") đ</MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" Color="Color.Error" OnClick="() => RemoveItem(context)" Size="Size.Small" />
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <div class="d-flex flex-column align-center pa-12">
+                            <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Size="Size.Large" Style="color: #ddd;" />
+                            <MudText Class="mt-4" Style="color: #999;">Giỏ hàng trống. Vui lòng quét mã sản phẩm!</MudText>
+                        </div>
+                    </NoRecordsContent>
+                </MudTable>
+
+                <div class="d-flex justify-space-between align-center mt-auto pa-4 rounded-xl" style="background: #fdfdfd; border: 1px solid #f0f0f0;">
+                    <div class="d-flex align-center">
+                        <MudTextField @bind-Value="_voucherCode" Placeholder="Nhập mã ưu đãi..." 
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="rounded-lg" 
+                                      Style="background: white; width: 220px;" Adornment="Adornment.End" 
+                                      AdornmentIcon="@Icons.Material.Filled.LocalOffer" AdornmentColor="Color.Primary" />
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2 rounded-lg" 
+                                   Style="height: 40px; text-transform: none; box-shadow: none;" OnClick="ApplyVoucher">Áp dụng</MudButton>
+                    </div>
+                    <div class="text-right">
+                        <MudText Typo="Typo.h5" Style="font-weight: 900; color: var(--mud-palette-primary);">@_subTotal.ToString("N0") đ</MudText>
+                        <MudText Style="color: #27ae60; font-size: 0.8rem; font-weight: 600;">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" Class="mr-1" />
+                            Miễn phí vận chuyển nội thành
+                        </MudText>
+                    </div>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Cột phải: Thanh toán -->
+        <MudItem xs="12" md="4">
+            <MudStack Spacing="6">
+                <!-- Thông tin khách hàng -->
+                <MudPaper Class="pa-6" Elevation="0" Style="border-radius: 20px; background: white;">
+                    <div class="d-flex justify-space-between align-center mb-4">
+                        <MudText Typo="Typo.h6" Style="font-weight: 700;">Khách hàng</MudText>
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Style="text-transform: none;" OnClick="AddNewCustomer">Khách mới</MudButton>
+                    </div>
+                    
+                    <MudTextField @bind-Value="_customer.PhoneNumber" Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4"
+                                  Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" OnAdornmentClick="SearchCustomer" 
+                                  placeholder="Nhập SĐT khách..." />
+                    
+                    @if (!string.IsNullOrWhiteSpace(_customer.FullName))
+                    {
+                        <div class="pa-4 rounded-lg mb-4" style="background: #eef2ff; border-left: 4px solid var(--mud-palette-primary);">
+                             <MudText Style="font-weight: 700; color: #1e1b4b;">@_customer.FullName</MudText>
+                             <MudText Typo="Typo.caption" Style="color: #4338ca;">@_customer.Email</MudText>
+                        </div>
+                    }
+
+                    <MudTextField @bind-Value="_customerAddress" Label="Địa chỉ xuất kho/giao hàng" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                </MudPaper>
+
+                <!-- Tóm tắt dòng tiền -->
+                <MudPaper Class="pa-6" Elevation="0" Style="border-radius: 20px; background: white;">
+                    <MudText Typo="Typo.h6" Style="font-weight: 700;" Class="mb-4">Tóm tắt thanh toán</MudText>
+                    
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Style="color: #666;">Tổng tiền hàng</MudText>
+                        <MudText Style="font-weight: 600;">@_subTotal.ToString("N0") đ</MudText>
+                    </div>
+                    <div class="d-flex justify-space-between mb-4">
+                        <MudText Style="color: #666;">Chiết khấu Voucher</MudText>
+                        <MudText Style="font-weight: 600;" Color="Color.Error">- @_discountAmount.ToString("N0") đ</MudText>
+                    </div>
+
+                    <div class="pa-4 rounded-xl mb-6 d-flex justify-space-between align-center" style="background: #fff5f5; border: 1px dashed var(--mud-palette-error);">
+                        <MudText Typo="Typo.h6" Style="font-weight: 800; color: var(--mud-palette-error);">Cần thanh toán</MudText>
+                        <MudText Typo="Typo.h5" Style="font-weight: 900; color: var(--mud-palette-error);">@_totalAmount.ToString("N0") đ</MudText>
+                    </div>
+
+                    <MudText Typo="Typo.subtitle2" Class="mb-3" Style="font-weight: 700;">Hình thức thanh toán</MudText>
+                    <MudRadioGroup @bind-Value="_paymentMethod" Class="d-flex flex-column mb-6">
+                        <MudRadio Value="@((byte)0)" Color="Color.Primary">Tiền mặt</MudRadio>
+                        <MudRadio Value="@((byte)1)" Color="Color.Primary">Chuyển khoản / QR Pay</MudRadio>
+                        <MudRadio Value="@((byte)2)" Color="Color.Primary">Quẹt thẻ ngân hàng</MudRadio>
+                    </MudRadioGroup>
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="py-4 rounded-pill" 
+                               Style="text-transform: none; font-weight: 800; font-size: 1.1rem; box-shadow: 0 8px 16px rgba(var(--mud-palette-primary-rgb), 0.3);" 
+                               OnClick="ProcessPayment">
+                        HOÀN TẤT ĐƠN HÀNG
+                    </MudButton>
+                </MudPaper>
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private string _barcodeInput = "";
+    private string _voucherCode = "";
+    private string _customerAddress = "";
+    private byte _paymentMethod = 0;
+    private List<PosScanResponse> _cartItems = new();
+    private PosCustomerDto _customer = new();
+    
+    private decimal _subTotal => _cartItems.Sum(x => x.Price);
+    private decimal _discountAmount = 0;
+    private decimal _totalAmount => _subTotal - _discountAmount;
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddItemByBarcode();
+    }
+
+    private async Task AddItemByBarcode()
+    {
+        if (string.IsNullOrWhiteSpace(_barcodeInput)) return;
+        var result = await PosService.ScanBarcodeAsync(_barcodeInput);
+        if (result.Success && result.Data != null)
+        {
+            if (_cartItems.Any(x => x.SerialNumber == result.Data.SerialNumber))
+                Snackbar.Add("Sản phẩm này đã có trong giỏ hàng", Severity.Warning);
+            else
+            {
+                _cartItems.Add(result.Data);
+                _barcodeInput = "";
+                Snackbar.Add("Đã thêm: " + result.Data.ProductName, Severity.Success);
+            }
+        }
+        else Snackbar.Add(result.Message, Severity.Error);
+    }
+
+    private void RemoveItem(PosScanResponse item)
+    {
+        _cartItems.Remove(item);
+        Snackbar.Add("Gỡ sản phẩm thành công", Severity.Info);
+    }
+
+    private async Task SearchCustomer()
+    {
+        if (string.IsNullOrWhiteSpace(_customer.PhoneNumber)) return;
+        var result = await PosService.SearchCustomerByPhoneAsync(_customer.PhoneNumber);
+        if (result.Success && result.Data != null)
+        {
+            _customer = result.Data;
+            Snackbar.Add("Thông tin khách: " + _customer.FullName, Severity.Success);
+        }
+        else Snackbar.Add(result.Message, Severity.Warning);
+    }
+
+    private async Task ApplyVoucher()
+    {
+        if (string.IsNullOrWhiteSpace(_voucherCode)) return;
+        var result = await PosService.ValidateVoucherAsync(_voucherCode, _subTotal);
+        if (result.Success && result.Data != null)
+        {
+            _discountAmount = result.Data.DiscountAmount;
+            Snackbar.Add("Áp dụng mã giảm giá thành công", Severity.Success);
+        }
+        else Snackbar.Add(result.Message, Severity.Error);
+    }
+
+    private async Task SaveDraft()
+    {
+        if (!_cartItems.Any())
+        {
+            Snackbar.Add("Không có gì để lưu tạm", Severity.Warning);
+            return;
+        }
+        var request = GetCheckoutRequest();
+        var result = await PosService.SaveDraftAsync(request);
+        if (result.Success)
+        {
+            Snackbar.Add("Đã lưu đơn vào danh sách chờ", Severity.Success);
+            ClearScreen();
+        }
+    }
+
+    private async Task ShowDrafts()
+    {
+        var result = await PosService.GetDraftsAsync();
+        if (result.Success && result.Data != null)
+        {
+            // Tạm thời log ra, thực tế sẽ hiện Popup list để chọn
+            Snackbar.Add($"Tìm thấy {result.Data.Count} đơn chờ.", Severity.Info);
+        }
+    }
+
+    private void ClearScreen()
+    {
+        _cartItems.Clear();
+        _customer = new();
+        _voucherCode = "";
+        _discountAmount = 0;
+        _customerAddress = "";
+        StateHasChanged();
+    }
+
+    private PosCheckoutRequest GetCheckoutRequest()
+    {
+        return new PosCheckoutRequest
+        {
+            CustomerPhone = _customer.PhoneNumber,
+            VoucherCode = _voucherCode,
+            PaymentMethod = _paymentMethod,
+            Items = _cartItems.Select(x => new PosCheckoutItemRequest { SerialId = x.SerialId }).ToList()
+        };
+    }
+
+    private async Task ProcessPayment()
+    {
+        if (!_cartItems.Any())
+        {
+            Snackbar.Add("Giỏ hàng đang trống!", Severity.Error);
+            return;
+        }
+        var request = GetCheckoutRequest();
+        var result = await PosService.CheckoutAsync(request);
+        if (result.Success)
+        {
+            Snackbar.Add("Giao dịch thành công. Đang in hóa đơn...", Severity.Success);
+            ClearScreen();
+        }
+        else Snackbar.Add(result.Message, Severity.Error);
+    }
+
+    private void AddNewCustomer() => Snackbar.Add("Chức năng thêm khách mới đang được tích hợp", Severity.Info);
+}

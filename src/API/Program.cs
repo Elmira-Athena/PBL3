@@ -95,6 +95,8 @@ builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IImportReceiptRepository, ImportReceiptRepository>();
 builder.Services.AddScoped<IProductSerialRepository, ProductSerialRepository>();
 builder.Services.AddScoped<IWarrantyRepository, WarrantyRepository>();
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<IVoucherRepository, VoucherRepository>();
 
 // DI: Unit of Work
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();

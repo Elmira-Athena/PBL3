@@ -41,5 +41,6 @@ builder.Services.AddScoped<ISupplierClientService, SupplierClientService>();
 builder.Services.AddScoped<IImportReceiptClientService, ImportReceiptClientService>();
 builder.Services.AddScoped<IProductSerialClientService, ProductSerialClientService>();
 builder.Services.AddScoped<IAuthClientService, AuthClientService>();
+builder.Services.AddScoped<IPosClientService, PosClientService>();
 
 await builder.Build().RunAsync();
