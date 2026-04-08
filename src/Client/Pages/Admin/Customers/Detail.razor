@@ -1,0 +1,176 @@
+@page "/admin/customers/{Id:guid}"
+@using PBL3.Shared.DTOs.Customers
+@using PBL3.Shared.DTOs.Common
+@using MudBlazor
+@inject ICustomerClientService CustomerService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Color="Color.Default" Class="mb-4" OnClick="GoBack">
+    Quay lại
+</MudButton>
+
+@if (_isLoading)
+{
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Class="mt-5" />
+}
+else if (_customer != null)
+{
+    <MudText Typo="Typo.h5" Class="mb-4" Style="font-weight: 700;">Khách hàng</MudText>
+
+    <MudGrid>
+        @* Profile Header *@
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="2" Class="pa-6" Style="height: 100%;">
+                <div class="d-flex align-center">
+                    <MudAvatar Image="@_customer.AvatarUrl" Style="width: 100px; height: 100px;" Color="Color.Primary" Class="mr-6">
+                        <MudText Typo="Typo.h4">@(string.IsNullOrEmpty(_customer.FullName) ? "?" : _customer.FullName[0].ToString().ToUpper())</MudText>
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.h5" Style="font-weight: 600;">@_customer.FullName</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                            Tham gia @_customer.CreatedDate.ToString("dd/MM/yyyy")
+                        </MudText>
+                        @if (!_customer.IsActive)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Class="mt-2 text-white">Tài khoản đã khóa</MudChip>
+                        }
+                    </div>
+                </div>
+            </MudCard>
+        </MudItem>
+
+        @* Contact Info *@
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="pa-6" Style="height: 100%;">
+                <MudText Typo="Typo.h6" Style="font-weight: 700;" Class="mb-4">Thông tin liên lạc</MudText>
+
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600;" Class="mt-3">Địa chỉ</MudText>
+                <MudText Typo="Typo.body2">
+                    @(string.IsNullOrWhiteSpace(_customer.Address) && string.IsNullOrWhiteSpace(_customer.City) ? "Chưa cập nhật" : $"{_customer.Address}, {_customer.City}")
+                </MudText>
+
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600;" Class="mt-3">Email</MudText>
+                <MudText Typo="Typo.body2">@_customer.Email</MudText>
+
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600;" Class="mt-3">Điện thoại</MudText>
+                <MudText Typo="Typo.body2">@_customer.PhoneNumber</MudText>
+            </MudCard>
+        </MudItem>
+
+        @* Tabs for Orders and Cart *@
+        <MudItem xs="12">
+            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-2">
+                <MudTabPanel Text="@($"Đơn hàng ({_customer.RecentOrders.Count})")">
+                    <MudTable Items="@_customer.RecentOrders" Hover="true" Dense="true" Elevation="0" Class="mt-2">
+                        <HeaderContent>
+                            <MudTh>Đơn hàng</MudTh>
+                            <MudTh>Ngày mua hàng</MudTh>
+                            <MudTh>Tổng tiền</MudTh>
+                            <MudTh>Trạng thái đơn hàng</MudTh>
+                        </HeaderContent>
+                        <RowTemplate Context="order">
+                            <MudTd DataLabel="Đơn hàng">#@order.OrderCode</MudTd>
+                            <MudTd DataLabel="Ngày mua hàng">@order.OrderDate.ToString("dd/MM/yyyy")</MudTd>
+                            <MudTd DataLabel="Tổng tiền">@order.TotalAmount.ToString("N0") đ</MudTd>
+                            <MudTd DataLabel="Trạng thái">
+                                @GetOrderStatusMarkup(order.Status)
+                            </MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText>Không có đơn hàng nào.</MudText>
+                        </NoRecordsContent>
+                    </MudTable>
+                </MudTabPanel>
+                <MudTabPanel Text="@($"Giỏ hàng ({_customer.CartItems.Count})")">
+                    <MudTable Items="@_customer.CartItems" Hover="true" Dense="true" Elevation="0" Class="mt-2">
+                        <HeaderContent>
+                            <MudTh>Sản phẩm</MudTh>
+                            <MudTh>Số lượng</MudTh>
+                            <MudTh>Giá</MudTh>
+                            <MudTh>Thành tiền</MudTh>
+                        </HeaderContent>
+                        <RowTemplate Context="cart">
+                            <MudTd DataLabel="Sản phẩm">
+                                <div class="d-flex align-center">
+                                    <MudImage Src="@cart.ThumbnailUrl" Width="40" Height="40" Class="mr-3" ObjectFit="ObjectFit.Cover" />
+                                    <div>
+                                        <MudText Typo="Typo.body2" Style="font-weight:600">@cart.ProductName</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Phân loại: @cart.VariantName</MudText>
+                                    </div>
+                                </div>
+                            </MudTd>
+                            <MudTd DataLabel="Số lượng">@cart.Quantity</MudTd>
+                            <MudTd DataLabel="Giá">@cart.Price.ToString("N0") đ</MudTd>
+                            <MudTd DataLabel="Thành tiền">@((cart.Price * cart.Quantity).ToString("N0")) đ</MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText>Giỏ hàng rỗng.</MudText>
+                        </NoRecordsContent>
+                    </MudTable>
+                </MudTabPanel>
+            </MudTabs>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private CustomerDetailDto? _customer;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomer();
+    }
+
+    private async Task LoadCustomer()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await CustomerService.GetByIdAsync(Id);
+            if (result.Success && result.Data != null)
+            {
+                _customer = result.Data;
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Không thể tải chi tiết khách hàng.", Severity.Error);
+                GoBack();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi thao tác: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/admin/customers");
+    }
+
+    private RenderFragment GetOrderStatusMarkup(byte status)
+    {
+        // 0: Pending, 1: Confirmed, 2: Shipping, 3: Success, 4: Cancelled, 5: Returned
+        var (color, text) = status switch
+        {
+            0 => (Color.Warning, "Chờ xác nhận"),
+            1 => (Color.Info, "Đã xác nhận"),
+            2 => (Color.Primary, "Đang giao"),
+            3 => (Color.Success, "Thành công"),
+            4 => (Color.Error, "Đã hủy"),
+            5 => (Color.Dark, "Hoàn trả"),
+            _ => (Color.Default, "Không rõ")
+        };
+
+        return @<MudChip T="string" Size="Size.Small" Color="color">@text</MudChip>;
+    }
+}

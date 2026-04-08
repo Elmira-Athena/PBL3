@@ -1,0 +1,179 @@
+@page "/admin/customers"
+@using PBL3.Shared.DTOs.Customers
+@using PBL3.Shared.DTOs.Common
+@using MudBlazor
+@inject ICustomerClientService CustomerService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Quản lý khách hàng</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4" Style="font-weight: 700;">Khách hàng</MudText>
+
+<MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<CustomerDto>>>(ServerReload))"
+          Dense="true" Hover="true" @ref="_table" Elevation="2" Class="mb-4">
+    <ToolBarContent>
+        <MudTextField T="string" ValueChanged="@(s => OnSearch(s))" Placeholder="Nhập từ khóa tìm kiếm" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Variant="Variant.Outlined" Margin="Margin.Dense"></MudTextField>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+            Thêm tài khoản
+        </MudButton>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Khách hàng</MudTh>
+        <MudTh>Số điện thoại</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>Tham gia</MudTh>
+        <MudTh>Trạng thái</MudTh>
+        <MudTh Style="width: 150px; text-align: center;">Thao tác</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Khách hàng">
+            <div class="d-flex align-center">
+                <MudAvatar Image="@context.AvatarUrl" Color="Color.Primary" Class="mr-3">
+                    @(string.IsNullOrEmpty(context.FullName) ? "?" : context.FullName[0].ToString().ToUpper())
+                </MudAvatar>
+                <MudText Typo="Typo.body2">@context.FullName</MudText>
+            </div>
+        </MudTd>
+        <MudTd DataLabel="Số điện thoại">@context.PhoneNumber</MudTd>
+        <MudTd DataLabel="Email">@context.Email</MudTd>
+        <MudTd DataLabel="Tham gia">@context.CreatedDate.ToString("dd/MM/yyyy")</MudTd>
+        <MudTd DataLabel="Trạng thái">
+            @if (context.IsActive)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success">Hoạt động</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Error">Đã khóa</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Thao tác" Style="text-align: center;">
+            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small" OnClick="@(() => NavigateToDetail(context.Id))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Warning" Size="Size.Small" OnClick="@(() => OpenUpdateDialog(context))" />
+            @if (context.IsActive)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Lock" Color="Color.Error" Size="Size.Small" OnClick="@(() => ConfirmDeactivate(context))" />
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>Không tìm thấy khách hàng nào.</MudText>
+    </NoRecordsContent>
+    <LoadingContent>
+        <MudText>Đang tải dữ liệu...</MudText>
+    </LoadingContent>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" RowsPerPageString="Số dòng mỗi trang:" InfoFormat="{first_item}-{last_item} của {all_items}" />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private MudTable<CustomerDto> _table = null!;
+    private CustomerFilterRequest _filter = new();
+    private string _searchString = string.Empty;
+
+    private async Task<TableData<CustomerDto>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        _filter.Keyword = _searchString;
+        _filter.PageNumber = state.Page + 1;
+        _filter.PageSize = state.PageSize;
+
+        // Xử lý sort (dù ở đây chỉ demo sort cơ bản)
+        _filter.SortBy = state.SortLabel;
+        _filter.SortDescending = state.SortDirection == SortDirection.Descending;
+
+        var result = await CustomerService.GetListAsync(_filter);
+
+        if (result != null && result.Success && result.Data != null)
+        {
+            return new TableData<CustomerDto>
+            {
+                TotalItems = result.Data.TotalCount,
+                Items = result.Data.Items
+            };
+        }
+        else
+        {
+            Snackbar.Add(result?.Message ?? "Lỗi tải danh sách", Severity.Error);
+            return new TableData<CustomerDto> { TotalItems = 0, Items = new List<CustomerDto>() };
+        }
+    }
+
+    private void OnSearch(string text)
+    {
+        _searchString = text;
+        _table.ReloadServerData();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = DialogService.Show<CustomerDialog>("Thêm mới khách hàng", options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task OpenUpdateDialog(CustomerDto customer)
+    {
+        var parameters = new DialogParameters { ["InitialId"] = customer.Id };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = DialogService.Show<CustomerDialog>("Cập nhật khách hàng", parameters, options);
+        
+        // Truyền dữ liệu ban đầu
+        if (dialog.Dialog != null && dialog.Dialog is CustomerDialog dlg)
+        {
+            dlg.LoadData(customer);
+        }
+
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task ConfirmDeactivate(CustomerDto customer)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Bạn có chắc chắn muốn khóa tài khoản của khách hàng '{customer.FullName}'?" },
+            { "ButtonText", "Tiến hành khóa" },
+            { "Color", Color.Error }
+        };
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        bool? result = await DialogService.ShowMessageBox(
+            "Cảnh báo khóa tài khoản", 
+            (MarkupString)"", 
+            yesText:"Khóa", cancelText:"Hủy", options: options);
+
+        if (result == true)
+        {
+            var res = await CustomerService.DeactivateAsync(customer.Id);
+            if (res.Success)
+            {
+                Snackbar.Add("Khóa tài khoản thành công.", Severity.Success);
+                await _table.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add(res.Message ?? "Khóa thất bại.", Severity.Error);
+            }
+        }
+    }
+
+    private void NavigateToDetail(Guid customerId)
+    {
+        Navigation.NavigateTo($"/admin/customers/{customerId}");
+    }
+}

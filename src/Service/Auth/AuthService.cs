@@ -10,6 +10,7 @@ using PBL3.Core.Entities;
 using PBL3.Infrastructure.Data;
 using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
+using PBL3.Shared.DTOs.Customers;
 
 namespace PBL3.Service.Auth
 {
@@ -253,6 +254,59 @@ namespace PBL3.Service.Auth
             {
                 return null; // Token không hợp lệ hoặc bị tamper
             }
+        }
+
+        // =====================================================================
+        // REGISTER (UC001: Khách hàng tự đăng ký)
+        // =====================================================================
+        public async Task<ApiResult<bool>> RegisterAsync(RegisterCustomerRequest request)
+        {
+            // 1. Kiểm tra Email đã tồn tại chưa
+            var existingUser = await _userManager.FindByEmailAsync(request.Email);
+            if (existingUser != null)
+            {
+                return ApiResult<bool>.Fail("Email này đã được sử dụng.");
+            }
+
+            // 2. Kiểm tra SĐT đã tồn tại chưa
+            var existingPhone = _context.Users.Any(u => u.PhoneNumber == request.PhoneNumber);
+            if (existingPhone)
+            {
+                return ApiResult<bool>.Fail("Số điện thoại này đã được sử dụng.");
+            }
+
+            // 3. Tạo AppUser
+            var user = new AppUser
+            {
+                Id = Guid.NewGuid(),
+                UserName = request.Email,
+                Email = request.Email,
+                PhoneNumber = request.PhoneNumber,
+                IsActive = true,
+                Type = 2, // Customer
+                CreatedDate = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            var createResult = await _userManager.CreateAsync(user, request.Password);
+            if (!createResult.Succeeded)
+            {
+                var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
+                return ApiResult<bool>.Fail("Đăng ký thất bại: " + errors);
+            }
+
+            // 4. Tạo UserProfile
+            _context.UserProfiles.Add(new UserProfile
+            {
+                UserId = user.Id,
+                FullName = request.FullName.Trim()
+            });
+            await _context.SaveChangesAsync();
+
+            // 5. Assign role
+            await _userManager.AddToRoleAsync(user, "Customer");
+
+            return ApiResult<bool>.Ok(true, "Đăng ký tài khoản thành công. Vui lòng đăng nhập.");
         }
     }
 }

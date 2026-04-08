@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
+using PBL3.Shared.DTOs.Customers;
 
 namespace Client.Services
 {
@@ -66,6 +67,21 @@ namespace Client.Services
 
             // Redirect về trang đăng nhập
             _navigationManager.NavigateTo("/login");
+        }
+
+        public async Task<ApiResult<bool>> RegisterAsync(RegisterCustomerRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync($"{BaseUrl}/register", request);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+
+                return result ?? ApiResult<bool>.Fail("Đăng ký thất bại.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
         }
     }
 }

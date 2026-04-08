@@ -1,5 +1,6 @@
 using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
+using PBL3.Shared.DTOs.Customers;
 
 namespace PBL3.Service.Auth
 {
@@ -15,5 +16,11 @@ namespace PBL3.Service.Auth
         /// Client gửi lên cặp (Access Token cũ + Refresh Token) để xác thực.
         /// </summary>
         Task<ApiResult<TokenResponse>> RefreshTokenAsync(RefreshTokenRequest request);
+
+        /// <summary>
+        /// UC001: Khách hàng tự đăng ký tài khoản.
+        /// Tạo tài khoản mới, yêu cầu đăng nhập lại (không trả JWT).
+        /// </summary>
+        Task<ApiResult<bool>> RegisterAsync(RegisterCustomerRequest request);
     }
 }

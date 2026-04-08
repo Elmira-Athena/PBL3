@@ -1,5 +1,8 @@
 @page "/register"
 @layout LoginLayout
+@using PBL3.Shared.DTOs.Auth
+@using PBL3.Shared.DTOs.Customers
+@inject IAuthClientService AuthService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -18,16 +21,27 @@
             <MudGrid>
                 <MudItem xs="12" sm="8">
                     @* Form Đăng Ký *@
-                     <MudTextField T="string" Label="Email đăng nhập" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                     <MudTextField T="string" Label="Họ tên" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                     <MudTextField T="string" Label="Mật khẩu" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                     <MudTextField T="string" Label="Nhập lại mật khẩu" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                     <MudTextField T="string" Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                     <MudTextField T="string" Label="Địa chỉ" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                    
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" OnClick="HandleRegister" Class="mt-2">
-                        Đăng ký
-                    </MudButton>
+                    <EditForm Model="@_model" OnValidSubmit="HandleRegister">
+                        <FluentValidationValidator />
+                        <MudTextField @bind-Value="_model.Email" For="@(() => _model.Email)" Label="Email đăng nhập" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                        <MudTextField @bind-Value="_model.FullName" For="@(() => _model.FullName)" Label="Họ tên" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                        <MudTextField @bind-Value="_model.PhoneNumber" For="@(() => _model.PhoneNumber)" Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                        
+                        <MudTextField @bind-Value="_model.Password" For="@(() => _model.Password)" Label="Mật khẩu" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                        <MudTextField @bind-Value="_model.ConfirmPassword" For="@(() => _model.ConfirmPassword)" Label="Nhập lại mật khẩu" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                        
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" ButtonType="ButtonType.Submit" Class="mt-2" Disabled="@_isLoading">
+                            @if (_isLoading)
+                            {
+                                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
+                                <MudText Class="ms-2">Đang xử lý...</MudText>
+                            }
+                            else
+                            {
+                                <MudText>Đăng ký</MudText>
+                            }
+                        </MudButton>
+                    </EditForm>
                 </MudItem>
 
                 <MudItem xs="12" sm="4" Class="d-flex flex-column align-center justify-center">
@@ -53,9 +67,32 @@
 </MudContainer>
 
 @code {
-    private void HandleRegister()
+    private RegisterCustomerRequest _model = new();
+    private bool _isLoading = false;
+
+    private async Task HandleRegister()
     {
-        // Placeholder implementation
-        Snackbar.Add("Chức năng đăng ký đang được phát triển!", Severity.Info);
+        _isLoading = true;
+        try
+        {
+            var result = await AuthService.RegisterAsync(_model);
+            if (result.Success)
+            {
+                Snackbar.Add("Đăng ký tài khoản thành công! Vui lòng đăng nhập.", Severity.Success);
+                Navigation.NavigateTo("/login");
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Đăng ký thất bại.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Đã xảy ra lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 }

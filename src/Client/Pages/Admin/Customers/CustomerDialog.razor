@@ -1,0 +1,178 @@
+@using PBL3.Shared.DTOs.Customers
+@using PBL3.Shared.DTOs.Common
+@using MudBlazor
+@inject ICustomerClientService CustomerService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="@_model" OnValidSubmit="HandleSubmit">
+            <FluentValidationValidator />
+            
+            <MudGrid>
+                @if (IsEditMode)
+                {
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="Email" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" />
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.Email" For="@(() => _model.Email)" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudItem>
+                }
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_model.FullName" For="@(() => _model.FullName)" Label="Họ và tên" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+
+                @if (IsEditMode)
+                {
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="PhoneNumber" Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" />
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.PhoneNumber" For="@(() => _model.PhoneNumber)" Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudItem>
+                }
+
+                <MudItem xs="6">
+                    <MudSelect @bind-Value="_model.Gender" Label="Giới tính" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="@((byte)0)">Nam</MudSelectItem>
+                        <MudSelectItem Value="@((byte)1)">Nữ</MudSelectItem>
+                        <MudSelectItem Value="@((byte)2)">Khác</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" Margin="Margin.Dense" DisableToolbar="true" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_model.Address" For="@(() => _model.Address)" Label="Địa chỉ" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_model.City" For="@(() => _model.City)" Label="Thành phố" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+            </MudGrid>
+
+            <div class="d-flex justify-end mt-4">
+                <MudButton OnClick="Cancel" Class="mr-2">Hủy</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" ButtonType="ButtonType.Submit" Disabled="@_isSaving">
+                    @if (_isSaving)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    }
+                    else
+                    {
+                        @(IsEditMode ? "Cập nhật" : "Tạo mới")
+                    }
+                </MudButton>
+            </div>
+        </EditForm>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public Guid? InitialId { get; set; }
+    
+    // Khi Edit, EditForm xử lý Validation dựa trên loại DTO.
+    // Vì DTO tạo mới và DTO Cập nhật khác nhau, ta sử dụng 1 model chung (hoặc kiểu dynamic/obj base) 
+    // Tuy nhiên đơn giản nhất là map vào class local và xử lý call.
+    
+    // We will use a local unified model and map manually to Request objects.
+    public class DialogFormModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public byte Gender { get; set; }
+        public DateTime? DateOfBirth { get; set; }
+        public string? Address { get; set; }
+        public string? City { get; set; }
+    }
+
+    private DialogFormModel _model = new();
+
+    // Để giữ info hiển thị ReadOnly khi Edit
+    private string Email { get; set; } = string.Empty;
+    private string PhoneNumber { get; set; } = string.Empty;
+
+    private bool IsEditMode => InitialId.HasValue && InitialId.Value != Guid.Empty;
+    private bool _isSaving = false;
+
+    // Method to pass existing data into dialog
+    public void LoadData(CustomerDto customer)
+    {
+        _model.FullName = customer.FullName;
+        _model.Gender = customer.Gender;
+        _model.DateOfBirth = customer.DateOfBirth;
+        _model.Address = customer.Address;
+        _model.City = customer.City;
+
+        Email = customer.Email;
+        PhoneNumber = customer.PhoneNumber;
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSaving = true;
+        try
+        {
+            ApiResult<CustomerDto>? result = null;
+
+            if (IsEditMode)
+            {
+                var request = new UpdateCustomerRequest
+                {
+                    FullName = _model.FullName,
+                    Gender = _model.Gender,
+                    DateOfBirth = _model.DateOfBirth,
+                    Address = _model.Address,
+                    City = _model.City
+                };
+                result = await CustomerService.UpdateAsync(InitialId!.Value, request);
+            }
+            else
+            {
+                var request = new CreateCustomerRequest
+                {
+                    Email = _model.Email,
+                    FullName = _model.FullName,
+                    PhoneNumber = _model.PhoneNumber,
+                    Gender = _model.Gender,
+                    DateOfBirth = _model.DateOfBirth,
+                    Address = _model.Address,
+                    City = _model.City
+                };
+                result = await CustomerService.CreateAsync(request);
+            }
+
+            if (result != null && result.Success)
+            {
+                Snackbar.Add(IsEditMode ? "Cập nhật thành công!" : "Tạo khách hàng thành công!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add(result?.Message ?? "Có lỗi xảy ra.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi thao tác: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

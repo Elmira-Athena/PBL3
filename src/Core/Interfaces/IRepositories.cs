@@ -219,4 +219,42 @@ namespace PBL3.Core.Interfaces
         Task AddRangeAsync(IEnumerable<Warranty> warranties);
         Task SaveChangesAsync();
     }
+
+    /// <summary>
+    /// Repository interface cho Customer (Quản lý User).
+    /// </summary>
+    public interface ICustomerRepository
+    {
+        /// <summary>
+        /// Lấy danh sách khách hàng có phân trang và bộ lọc.
+        /// </summary>
+        Task<(List<AppUser> Items, int TotalCount)> GetPagedListAsync(
+            string? keyword,
+            bool? isActive,
+            int pageNumber,
+            int pageSize,
+            string? sortBy,
+            bool sortDescending);
+
+        /// <summary>
+        /// Lấy chi tiết khách hàng và profile.
+        /// </summary>
+        Task<AppUser?> GetByIdWithProfileAsync(Guid id);
+
+        /// <summary>
+        /// Lấy danh sách N đơn hàng mới nhất của người dùng.
+        /// </summary>
+        Task<List<Order>> GetRecentOrdersAsync(Guid userId, int count);
+
+        /// <summary>
+        /// Lấy danh sách thiết bị/sản phẩm trong giỏ hàng.
+        /// </summary>
+        Task<List<Cart>> GetCartItemsAsync(Guid userId);
+
+        /// <summary>
+        /// Kiểm tra xem người dùng có đơn hàng nào chưa hoàn tất không.
+        /// (0: Pending, 1: Confirmed, 2: Shipping)
+        /// </summary>
+        Task<bool> HasPendingOrdersAsync(Guid userId);
+    }
 }
