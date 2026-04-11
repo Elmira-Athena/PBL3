@@ -3,7 +3,7 @@ using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Products;
 using PBL3.Shared.DTOs.Suppliers;
 
-namespace Client.Services
+namespace Client.Services.Supplier
 {
     public class SupplierClientService : ISupplierClientService
     {

@@ -7,7 +7,7 @@ using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
 
-namespace Client.Services
+namespace Client.Services.Auth
 {
     public class AuthClientService : IAuthClientService
     {

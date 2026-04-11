@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using PBL3.Shared.DTOs.Pos;
 using PBL3.Shared.DTOs.Common;
 
-namespace Client.Services
+namespace Client.Services.Pos
 {
     public class PosClientService : IPosClientService
     {

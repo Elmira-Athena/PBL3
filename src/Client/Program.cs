@@ -8,6 +8,12 @@ using FluentValidation;
 using Client;
 using Client.Auth;
 using Client.Services;
+using Client.Services.Auth;
+using Client.Services.Category;
+using Client.Services.Customer;
+using Client.Services.Pos;
+using Client.Services.Product;
+using Client.Services.Supplier;
 using Client.Services.Inventory;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);

@@ -2,7 +2,7 @@ using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Categories;
 using PBL3.Shared.DTOs.Common;
 
-namespace Client.Services
+namespace Client.Services.Category
 {
     public class CategoryClientService : ICategoryClientService
     {

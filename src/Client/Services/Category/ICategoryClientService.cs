@@ -1,7 +1,7 @@
 using PBL3.Shared.DTOs.Categories;
 using PBL3.Shared.DTOs.Common;
 
-namespace Client.Services
+namespace Client.Services.Category
 {
     public interface ICategoryClientService
     {

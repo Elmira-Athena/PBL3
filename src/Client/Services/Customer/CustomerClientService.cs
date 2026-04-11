@@ -3,7 +3,7 @@ using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
 using PBL3.Shared.DTOs.Products;
 
-namespace Client.Services
+namespace Client.Services.Customer
 {
     public class CustomerClientService : ICustomerClientService
     {

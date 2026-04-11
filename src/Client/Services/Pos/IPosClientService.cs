@@ -1,7 +1,7 @@
 using PBL3.Shared.DTOs.Pos;
 using PBL3.Shared.DTOs.Common;
 
-namespace Client.Services
+namespace Client.Services.Pos
 {
     // Giả định dùng ApiResult<T> hoặc tương tự, nhưng tạm dùng direct model hoặc dynamic.
     // Thực tế sẽ dùng ApiResult.
