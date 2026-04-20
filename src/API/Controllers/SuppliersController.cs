@@ -12,18 +12,12 @@ namespace PBL3.API.Controllers
     [Route("api/[controller]")]
     [Produces("application/json")]
     [Authorize(Roles = "Admin, WarehouseManager")]
-    public class SuppliersController : ControllerBase
+    public class SuppliersController(
+        ISupplierService supplierService,
+        IValidator<(int Id, UpdateSupplierRequest Request)> updateValidator) : ControllerBase
     {
-        private readonly ISupplierService _supplierService;
-        private readonly IValidator<(int Id, UpdateSupplierRequest Request)> _updateValidator;
-
-        public SuppliersController(
-            ISupplierService supplierService,
-            IValidator<(int Id, UpdateSupplierRequest Request)> updateValidator)
-        {
-            _supplierService = supplierService;
-            _updateValidator = updateValidator;
-        }
+        private readonly ISupplierService _supplierService = supplierService;
+        private readonly IValidator<(int Id, UpdateSupplierRequest Request)> _updateValidator = updateValidator;
 
         /// <summary>
         /// Lấy danh sách nhà cung cấp (phân trang, tìm kiếm theo Tên hoặc SĐT).

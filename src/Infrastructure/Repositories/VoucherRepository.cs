@@ -9,14 +9,10 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class VoucherRepository : IVoucherRepository
+    public class VoucherRepository(HushStoreDbContext dbContext) : IVoucherRepository
     {
-        private readonly HushStoreDbContext _dbContext;
-
-        public VoucherRepository(HushStoreDbContext dbContext)
-        {
-            _dbContext = dbContext;
-        }
+        private readonly HushStoreDbContext _dbContext = dbContext;
+        
 
         public async Task<List<Voucher>> GetByCodesAsync(List<string> codes)
         {

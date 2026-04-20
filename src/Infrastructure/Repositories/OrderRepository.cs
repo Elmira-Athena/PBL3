@@ -8,14 +8,9 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class OrderRepository : IOrderRepository
+    public class OrderRepository(HushStoreDbContext dbContext) : IOrderRepository
     {
-        private readonly HushStoreDbContext _dbContext;
-
-        public OrderRepository(HushStoreDbContext dbContext)
-        {
-            _dbContext = dbContext;
-        }
+        private readonly HushStoreDbContext _dbContext = dbContext;
 
         public async Task<Order?> GetByIdWithDetailsAsync(int id)
         {

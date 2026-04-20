@@ -6,16 +6,10 @@ using PBL3.Shared.DTOs.Common;
 
 namespace PBL3.Service.Categories
 {
-    public class CategoryService : ICategoryService
+    public class CategoryService(ICategoryRepository categoryRepo, ILogger<CategoryService> logger) : ICategoryService
     {
-        private readonly ICategoryRepository _categoryRepo;
-        private readonly ILogger<CategoryService> _logger;
-
-        public CategoryService(ICategoryRepository categoryRepo, ILogger<CategoryService> logger)
-        {
-            _categoryRepo = categoryRepo;
-            _logger = logger;
-        }
+        private readonly ICategoryRepository _categoryRepo = categoryRepo;
+        private readonly ILogger<CategoryService> _logger = logger;
 
         // ========================================================
         // GET TREE — Trả về toàn bộ cây danh mục (recursive DTO)

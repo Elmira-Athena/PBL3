@@ -5,15 +5,9 @@ using PBL3.Shared.DTOs.Products;
 
 namespace Client.Services.Customer
 {
-    public class CustomerClientService : ICustomerClientService
+    public class CustomerClientService(HttpClient httpClient) : ICustomerClientService
     {
-        private readonly HttpClient _httpClient;
-        private const string BaseUrl = "api/customers";
-
-        public CustomerClientService(HttpClient httpClient)
-        {
-            _httpClient = httpClient;
-        }
+        private readonly HttpClient _httpClient = httpClient;
 
         public async Task<ApiResult<PagedResult<CustomerDto>>> GetListAsync(CustomerFilterRequest request)
         {

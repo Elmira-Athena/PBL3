@@ -9,14 +9,9 @@ using System.Threading.Tasks;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class CustomerRepository : ICustomerRepository
+    public class CustomerRepository(HushStoreDbContext context) : ICustomerRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public CustomerRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context = context;
 
         public async Task<(List<AppUser> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,

@@ -11,14 +11,9 @@ namespace PBL3.API.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize(Roles = "Admin,Employee")]
-    public class PosController : ControllerBase
+    public class PosController(IPosService posService) : ControllerBase
     {
-        private readonly IPosService _posService;
-
-        public PosController(IPosService posService)
-        {
-            _posService = posService;
-        }
+        private readonly IPosService _posService = posService;
 
         private Guid GetCurrentUserId()
         {

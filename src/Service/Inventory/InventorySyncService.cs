@@ -7,14 +7,9 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Service.Inventory
 {
-    public class InventorySyncService : IInventorySyncService
+    public class InventorySyncService(HushStoreDbContext context) : IInventorySyncService
     {
-        private readonly HushStoreDbContext _context;
-
-        public InventorySyncService(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context = context;
 
         public async Task SyncStockAsync(int variantId)
         {

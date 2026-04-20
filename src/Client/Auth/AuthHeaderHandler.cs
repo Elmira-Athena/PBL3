@@ -9,15 +9,9 @@ namespace Client.Auth;
 /// handler này sẽ chặn lại, lấy token từ LocalStorage và nhét vào header
 /// "Authorization: Bearer {token}" trước khi cho request đi tiếp.
 /// </summary>
-public class AuthHeaderHandler : DelegatingHandler
+public class AuthHeaderHandler(ILocalStorageService localStorage) : DelegatingHandler
 {
-    private readonly ILocalStorageService _localStorage;
-    private const string TokenKey = "authToken";
-
-    public AuthHeaderHandler(ILocalStorageService localStorage)
-    {
-        _localStorage = localStorage;
-    }
+    private readonly ILocalStorageService _localStorage = localStorage;
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)

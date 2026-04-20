@@ -7,30 +7,20 @@ using PBL3.Shared.DTOs.Products;
 
 namespace PBL3.Service.ImportReceipts
 {
-    public class ImportReceiptService : IImportReceiptService
+    public class ImportReceiptService(
+        IImportReceiptRepository receiptRepo,
+        IProductSerialRepository serialRepo,
+        ISupplierRepository supplierRepo,
+        IProductRepository productRepo,
+        IUnitOfWork unitOfWork,
+        ILogger<ImportReceiptService> logger) : IImportReceiptService
     {
-        private readonly IImportReceiptRepository _receiptRepo;
-        private readonly IProductSerialRepository _serialRepo;
-        private readonly ISupplierRepository _supplierRepo;
-        private readonly IProductRepository _productRepo;
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly ILogger<ImportReceiptService> _logger;
-
-        public ImportReceiptService(
-            IImportReceiptRepository receiptRepo,
-            IProductSerialRepository serialRepo,
-            ISupplierRepository supplierRepo,
-            IProductRepository productRepo,
-            IUnitOfWork unitOfWork,
-            ILogger<ImportReceiptService> logger)
-        {
-            _receiptRepo = receiptRepo;
-            _serialRepo = serialRepo;
-            _supplierRepo = supplierRepo;
-            _productRepo = productRepo;
-            _unitOfWork = unitOfWork;
-            _logger = logger;
-        }
+        private readonly IImportReceiptRepository _receiptRepo = receiptRepo;
+        private readonly IProductSerialRepository _serialRepo = serialRepo;
+        private readonly ISupplierRepository _supplierRepo = supplierRepo;
+        private readonly IProductRepository _productRepo = productRepo;
+        private readonly IUnitOfWork _unitOfWork = unitOfWork;
+        private readonly ILogger<ImportReceiptService> _logger = logger;
 
         // ========================================================
         // CREATE — Tạo phiếu nhập kho (Transaction Required)

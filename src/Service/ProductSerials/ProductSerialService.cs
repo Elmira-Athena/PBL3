@@ -3,14 +3,9 @@ using PBL3.Shared.DTOs.Common;
 
 namespace PBL3.Service.ProductSerials
 {
-    public class ProductSerialService : IProductSerialService
+    public class ProductSerialService(IProductSerialRepository productSerialRepository) : IProductSerialService
     {
-        private readonly IProductSerialRepository _productSerialRepository;
-
-        public ProductSerialService(IProductSerialRepository productSerialRepository)
-        {
-            _productSerialRepository = productSerialRepository;
-        }
+        private readonly IProductSerialRepository _productSerialRepository = productSerialRepository;
 
         public async Task<ApiResult<bool>> CheckExistAsync(string serialNumber, int variantId)
         {

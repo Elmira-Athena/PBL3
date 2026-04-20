@@ -4,15 +4,9 @@ using PBL3.Shared.DTOs.Products;
 
 namespace Client.Services.Product
 {
-    public class ProductClientService : IProductClientService
+    public class ProductClientService(HttpClient httpClient) : IProductClientService
     {
-        private readonly HttpClient _httpClient;
-        private const string BaseUrl = "api/products";
-
-        public ProductClientService(HttpClient httpClient)
-        {
-            _httpClient = httpClient;
-        }
+        private readonly HttpClient _httpClient = httpClient;
 
         public async Task<ApiResult<PagedResult<ProductListDto>>> GetListAsync(ProductFilterRequest request)
         {

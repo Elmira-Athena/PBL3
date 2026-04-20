@@ -11,14 +11,9 @@ namespace PBL3.API.Controllers
     [Route("api/import-receipts")]
     [Produces("application/json")]
     [Authorize(Roles = "WarehouseManager")]
-    public class ImportReceiptsController : ControllerBase
+    public class ImportReceiptsController(IImportReceiptService importReceiptService) : ControllerBase
     {
-        private readonly IImportReceiptService _importReceiptService;
-
-        public ImportReceiptsController(IImportReceiptService importReceiptService)
-        {
-            _importReceiptService = importReceiptService;
-        }
+        private readonly IImportReceiptService _importReceiptService = importReceiptService;
 
         /// <summary>
         /// Tạo phiếu nhập kho mới.

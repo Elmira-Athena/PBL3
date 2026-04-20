@@ -11,18 +11,12 @@ namespace PBL3.API.Controllers
     [Route("api/[controller]")]
     [Produces("application/json")]
     [Authorize(Roles = "Admin, WarehouseManager")]
-    public class CategoriesController : ControllerBase
+    public class CategoriesController(
+        ICategoryService categoryService,
+        IValidator<(int Id, UpdateCategoryRequest Request)> updateValidator) : ControllerBase
     {
-        private readonly ICategoryService _categoryService;
-        private readonly IValidator<(int Id, UpdateCategoryRequest Request)> _updateValidator;
-
-        public CategoriesController(
-            ICategoryService categoryService,
-            IValidator<(int Id, UpdateCategoryRequest Request)> updateValidator)
-        {
-            _categoryService = categoryService;
-            _updateValidator = updateValidator;
-        }
+        private readonly ICategoryService _categoryService = categoryService;
+        private readonly IValidator<(int Id, UpdateCategoryRequest Request)> _updateValidator = updateValidator;
 
         /// <summary>
         /// Lấy toàn bộ cây danh mục (Recursive Tree).

@@ -13,14 +13,9 @@ namespace PBL3.API.Controllers
     [Route("api/[controller]")]
     [Produces("application/json")]
     [Authorize(Roles = "Admin, Employee")]
-    public class CustomersController : ControllerBase
+    public class CustomersController(ICustomerService customerService) : ControllerBase
     {
-        private readonly ICustomerService _customerService;
-
-        public CustomersController(ICustomerService customerService)
-        {
-            _customerService = customerService;
-        }
+        private readonly ICustomerService _customerService = customerService;
 
         /// <summary>
         /// Lấy danh sách khách hàng (phân trang, tìm kiếm theo Tên, Email, SĐT).

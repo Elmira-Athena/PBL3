@@ -7,14 +7,9 @@ using PBL3.Shared.DTOs.Common;
 
 namespace Client.Services.Pos
 {
-    public class PosClientService : IPosClientService
+    public class PosClientService(HttpClient httpClient) : IPosClientService
     {
-        private readonly HttpClient _httpClient;
-
-        public PosClientService(HttpClient httpClient)
-        {
-            _httpClient = httpClient;
-        }
+        private readonly HttpClient _httpClient = httpClient;
 
         public async Task<ApiResult<PosScanResponse>> ScanBarcodeAsync(string serialNumber)
         {

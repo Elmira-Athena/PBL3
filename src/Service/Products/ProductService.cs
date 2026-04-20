@@ -10,16 +10,10 @@ using PBL3.Shared.DTOs.Products;
 
 namespace PBL3.Service.Products
 {
-    public class ProductService : IProductService
+    public class ProductService(IProductRepository productRepo, ILogger<ProductService> logger) : IProductService
     {
-        private readonly IProductRepository _productRepo;
-        private readonly ILogger<ProductService> _logger;
-
-        public ProductService(IProductRepository productRepo, ILogger<ProductService> logger)
-        {
-            _productRepo = productRepo;
-            _logger = logger;
-        }
+        private readonly IProductRepository _productRepo = productRepo;
+        private readonly ILogger<ProductService> _logger = logger;
 
         // ========================================================
         // GET LIST — Danh sách sản phẩm (phân trang + filter)

@@ -12,21 +12,14 @@ using System.Threading.Tasks;
 
 namespace PBL3.Service.Customers
 {
-    public class CustomerService : ICustomerService
+    public class CustomerService(
+        ICustomerRepository customerRepo,
+        UserManager<AppUser> userManager,
+        ILogger<CustomerService> logger) : ICustomerService
     {
-        private readonly ICustomerRepository _customerRepo;
-        private readonly UserManager<AppUser> _userManager;
-        private readonly ILogger<CustomerService> _logger;
-
-        public CustomerService(
-            ICustomerRepository customerRepo,
-            UserManager<AppUser> userManager,
-            ILogger<CustomerService> logger)
-        {
-            _customerRepo = customerRepo;
-            _userManager = userManager;
-            _logger = logger;
-        }
+        private readonly ICustomerRepository _customerRepo = customerRepo;
+        private readonly UserManager<AppUser> _userManager = userManager;
+        private readonly ILogger<CustomerService> _logger = logger;
 
         public async Task<ApiResult<PagedResult<CustomerDto>>> GetPagedListAsync(CustomerFilterRequest filter)
         {

@@ -13,39 +13,26 @@ using PBL3.Shared.Enums;
 
 namespace PBL3.Service.Pos
 {
-    public class PosService : IPosService
+    public class PosService(
+        IUnitOfWork unitOfWork,
+        IOrderRepository orderRepo,
+        IProductSerialRepository serialRepo,
+        IVoucherRepository voucherRepo,
+        IWarrantyRepository warrantyRepo,
+        IProductRepository productRepo,
+        IInventorySyncService inventorySyncService,
+        HushStoreDbContext dbContext,
+        UserManager<AppUser> userManager) : IPosService
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IOrderRepository _orderRepo;
-        private readonly IProductSerialRepository _serialRepo;
-        private readonly IVoucherRepository _voucherRepo;
-        private readonly IWarrantyRepository _warrantyRepo;
-        private readonly IProductRepository _productRepo;
-        private readonly IInventorySyncService _inventorySyncService;
-        private readonly HushStoreDbContext _dbContext; // For user lookup and quick queries
-        private readonly UserManager<AppUser> _userManager;
-
-        public PosService(
-            IUnitOfWork unitOfWork,
-            IOrderRepository orderRepo,
-            IProductSerialRepository serialRepo,
-            IVoucherRepository voucherRepo,
-            IWarrantyRepository warrantyRepo,
-            IProductRepository productRepo,
-            IInventorySyncService inventorySyncService,
-            HushStoreDbContext dbContext,
-            UserManager<AppUser> userManager)
-        {
-            _unitOfWork = unitOfWork;
-            _orderRepo = orderRepo;
-            _serialRepo = serialRepo;
-            _voucherRepo = voucherRepo;
-            _warrantyRepo = warrantyRepo;
-            _productRepo = productRepo;
-            _inventorySyncService = inventorySyncService;
-            _dbContext = dbContext;
-            _userManager = userManager;
-        }
+        private readonly IUnitOfWork _unitOfWork = unitOfWork;
+        private readonly IOrderRepository _orderRepo = orderRepo;
+        private readonly IProductSerialRepository _serialRepo = serialRepo;
+        private readonly IVoucherRepository _voucherRepo = voucherRepo;
+        private readonly IWarrantyRepository _warrantyRepo = warrantyRepo;
+        private readonly IProductRepository _productRepo = productRepo;
+        private readonly IInventorySyncService _inventorySyncService = inventorySyncService;
+        private readonly HushStoreDbContext _dbContext = dbContext;
+        private readonly UserManager<AppUser> _userManager = userManager;
 
         public async Task<ApiResult<PosScanResponse>> ScanSerialAsync(string serialNumber)
         {

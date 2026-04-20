@@ -10,27 +10,18 @@ using PBL3.Shared.DTOs.Sale;
 
 namespace PBL3.Service.Orders
 {
-    public class OrderService : IOrderService
+    public class OrderService(
+        IUnitOfWork unitOfWork,
+        IOrderRepository orderRepo,
+        IVoucherRepository voucherRepo,
+        IProductRepository productRepo,
+        IMapper mapper) : IOrderService
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IOrderRepository _orderRepo;
-        private readonly IVoucherRepository _voucherRepo;
-        private readonly IProductRepository _productRepo; // Assuming we need to get prices
-        private readonly IMapper _mapper;
-
-        public OrderService(
-            IUnitOfWork unitOfWork,
-            IOrderRepository orderRepo,
-            IVoucherRepository voucherRepo,
-            IProductRepository productRepo,
-            IMapper mapper)
-        {
-            _unitOfWork = unitOfWork;
-            _orderRepo = orderRepo;
-            _voucherRepo = voucherRepo;
-            _productRepo = productRepo;
-            _mapper = mapper;
-        }
+        private readonly IUnitOfWork _unitOfWork = unitOfWork;
+        private readonly IOrderRepository _orderRepo = orderRepo;
+        private readonly IVoucherRepository _voucherRepo = voucherRepo;
+        private readonly IProductRepository _productRepo = productRepo;
+        private readonly IMapper _mapper = mapper;
 
         public async Task<ApiResult<OrderDetailDto>> PlaceOrderAsync(CreateOrderRequest request, Guid userId)
         {

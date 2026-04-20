@@ -5,15 +5,9 @@ using PBL3.Shared.DTOs.Products;
 
 namespace Client.Services.Inventory
 {
-    public class ImportReceiptClientService : IImportReceiptClientService
+    public class ImportReceiptClientService(HttpClient httpClient) : IImportReceiptClientService
     {
-        private readonly HttpClient _httpClient;
-        private const string BaseUrl = "api/import-receipts";
-
-        public ImportReceiptClientService(HttpClient httpClient)
-        {
-            _httpClient = httpClient;
-        }
+        private readonly HttpClient _httpClient = httpClient;
 
         public async Task<ApiResult<ImportReceiptDto>> CreateAsync(CreateImportReceiptRequest request)
         {

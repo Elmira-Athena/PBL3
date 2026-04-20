@@ -5,14 +5,9 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class CategoryRepository : ICategoryRepository
+    public class CategoryRepository(HushStoreDbContext context) : ICategoryRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public CategoryRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context = context;
 
         public async Task<List<Category>> GetAllActiveAsync()
         {

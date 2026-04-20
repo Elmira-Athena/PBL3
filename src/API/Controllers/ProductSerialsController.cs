@@ -9,14 +9,9 @@ namespace PBL3.API.Controllers
     [Route("api/product-serials")]
     [Produces("application/json")]
     [Authorize(Roles = "Admin, WarehouseManager")]
-    public class ProductSerialsController : ControllerBase
+    public class ProductSerialsController(IProductSerialService productSerialService) : ControllerBase
     {
-        private readonly IProductSerialService _productSerialService;
-
-        public ProductSerialsController(IProductSerialService productSerialService)
-        {
-            _productSerialService = productSerialService;
-        }
+        private readonly IProductSerialService _productSerialService = productSerialService;
 
         /// <summary>
         /// Kiểm tra mã Serial đã tồn tại trong DB chưa (Real-time check khi quét mã vạch).

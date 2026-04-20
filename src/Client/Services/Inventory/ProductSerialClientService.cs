@@ -3,15 +3,9 @@ using PBL3.Shared.DTOs.Common;
 
 namespace Client.Services.Inventory
 {
-    public class ProductSerialClientService : IProductSerialClientService
+    public class ProductSerialClientService(HttpClient httpClient) : IProductSerialClientService
     {
-        private readonly HttpClient _httpClient;
-        private const string BaseUrl = "api/product-serials";
-
-        public ProductSerialClientService(HttpClient httpClient)
-        {
-            _httpClient = httpClient;
-        }
+        private readonly HttpClient _httpClient = httpClient;
 
         public async Task<ApiResult<bool>> CheckExistAsync(string serialNumber, int variantId)
         {

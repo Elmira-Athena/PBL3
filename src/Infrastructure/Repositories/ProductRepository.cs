@@ -5,14 +5,9 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class ProductRepository : IProductRepository
+    public class ProductRepository(HushStoreDbContext context) : IProductRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public ProductRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context = context;
 
         public async Task<Product?> GetByIdAsync(int id)
         {

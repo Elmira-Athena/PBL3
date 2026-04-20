@@ -11,15 +11,9 @@ namespace Client.Auth;
 /// LƯU Ý: Class này chỉ phục vụ UX (ẩn/hiện menu), KHÔNG có tác dụng bảo mật.
 /// Mọi bảo mật thực sự đều nằm ở API Backend.
 /// </summary>
-public class JwtAuthenticationStateProvider : AuthenticationStateProvider
+public class JwtAuthenticationStateProvider(ILocalStorageService localStorage) : AuthenticationStateProvider
 {
-    private readonly ILocalStorageService _localStorage;
-    private const string TokenKey = "authToken";
-
-    public JwtAuthenticationStateProvider(ILocalStorageService localStorage)
-    {
-        _localStorage = localStorage;
-    }
+    private readonly ILocalStorageService _localStorage = localStorage;
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {

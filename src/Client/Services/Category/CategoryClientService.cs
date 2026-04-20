@@ -4,15 +4,9 @@ using PBL3.Shared.DTOs.Common;
 
 namespace Client.Services.Category
 {
-    public class CategoryClientService : ICategoryClientService
+    public class CategoryClientService(HttpClient httpClient) : ICategoryClientService
     {
-        private readonly HttpClient _httpClient;
-        private const string BaseUrl = "api/categories";
-
-        public CategoryClientService(HttpClient httpClient)
-        {
-            _httpClient = httpClient;
-        }
+        private readonly HttpClient _httpClient = httpClient;
 
         public async Task<ApiResult<List<CategoryTreeDto>>> GetTreeAsync()
         {

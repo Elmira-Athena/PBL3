@@ -11,18 +11,12 @@ namespace PBL3.API.Controllers
     [Route("api/[controller]")]
     [Produces("application/json")]
     [Authorize(Roles = "Admin, WarehouseManager")]
-    public class ProductsController : ControllerBase
+    public class ProductsController(
+        IProductService productService,
+        IValidator<(int Id, UpdateProductRequest Request)> updateValidator) : ControllerBase
     {
-        private readonly IProductService _productService;
-        private readonly IValidator<(int Id, UpdateProductRequest Request)> _updateValidator;
-
-        public ProductsController(
-            IProductService productService,
-            IValidator<(int Id, UpdateProductRequest Request)> updateValidator)
-        {
-            _productService = productService;
-            _updateValidator = updateValidator;
-        }
+        private readonly IProductService _productService = productService;
+        private readonly IValidator<(int Id, UpdateProductRequest Request)> _updateValidator = updateValidator;
 
         /// <summary>
         /// Lấy danh sách sản phẩm (phân trang, lọc theo Category/Price/Keyword).

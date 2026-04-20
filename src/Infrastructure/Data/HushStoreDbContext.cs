@@ -5,13 +5,10 @@ using PBL3.Core.Entities;
 
 namespace PBL3.Infrastructure.Data
 {
-    public class HushStoreDbContext : IdentityDbContext<AppUser, AppRole, Guid,
+    public class HushStoreDbContext(DbContextOptions<HushStoreDbContext> options) : IdentityDbContext<AppUser, AppRole, Guid,
         IdentityUserClaim<Guid>, IdentityUserRole<Guid>, IdentityUserLogin<Guid>,
-        IdentityRoleClaim<Guid>, IdentityUserToken<Guid>>
+        IdentityRoleClaim<Guid>, IdentityUserToken<Guid>>(options)
     {
-        public HushStoreDbContext(DbContextOptions<HushStoreDbContext> options) : base(options)
-        {
-        }
 
         // Product
         public DbSet<Manufacturer> Manufacturers { get; set; }

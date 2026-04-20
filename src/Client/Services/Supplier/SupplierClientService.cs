@@ -5,15 +5,9 @@ using PBL3.Shared.DTOs.Suppliers;
 
 namespace Client.Services.Supplier
 {
-    public class SupplierClientService : ISupplierClientService
+    public class SupplierClientService(HttpClient httpClient) : ISupplierClientService
     {
-        private readonly HttpClient _httpClient;
-        private const string BaseUrl = "api/suppliers";
-
-        public SupplierClientService(HttpClient httpClient)
-        {
-            _httpClient = httpClient;
-        }
+        private readonly HttpClient _httpClient = httpClient;
 
         public async Task<ApiResult<PagedResult<SupplierDto>>> GetListAsync(SupplierFilterRequest request)
         {

@@ -7,15 +7,9 @@ namespace PBL3.Infrastructure.Data
     /// Unit of Work implementation — bọc HushStoreDbContext.
     /// Quản lý IDbContextTransaction cho các nghiệp vụ phức tạp (nhập kho, đặt hàng...).
     /// </summary>
-    public class UnitOfWork : IUnitOfWork
+    public class UnitOfWork(HushStoreDbContext context) : IUnitOfWork
     {
-        private readonly HushStoreDbContext _context;
-        private IDbContextTransaction? _transaction;
-
-        public UnitOfWork(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context = context;
 
         public async Task BeginTransactionAsync()
         {

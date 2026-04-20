@@ -9,27 +9,16 @@ using PBL3.Shared.DTOs.Customers;
 
 namespace Client.Services.Auth
 {
-    public class AuthClientService : IAuthClientService
+    public class AuthClientService(
+        HttpClient httpClient,
+        ILocalStorageService localStorage,
+        AuthenticationStateProvider authStateProvider,
+        NavigationManager navigationManager) : IAuthClientService
     {
-        private readonly HttpClient _httpClient;
-        private readonly ILocalStorageService _localStorage;
-        private readonly AuthenticationStateProvider _authStateProvider;
-        private readonly NavigationManager _navigationManager;
-        private const string BaseUrl = "api/auth";
-        private const string TokenKey = "authToken";
-        private const string RefreshTokenKey = "refreshToken";
-
-        public AuthClientService(
-            HttpClient httpClient,
-            ILocalStorageService localStorage,
-            AuthenticationStateProvider authStateProvider,
-            NavigationManager navigationManager)
-        {
-            _httpClient = httpClient;
-            _localStorage = localStorage;
-            _authStateProvider = authStateProvider;
-            _navigationManager = navigationManager;
-        }
+        private readonly HttpClient _httpClient = httpClient;
+        private readonly ILocalStorageService _localStorage = localStorage;
+        private readonly AuthenticationStateProvider _authStateProvider = authStateProvider;
+        private readonly NavigationManager _navigationManager = navigationManager;
 
         public async Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest request)
         {

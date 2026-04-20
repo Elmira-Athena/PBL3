@@ -10,14 +10,9 @@ namespace PBL3.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthController : ControllerBase
+    public class AuthController(IAuthService authService) : ControllerBase
     {
-        private readonly IAuthService _authService;
-
-        public AuthController(IAuthService authService)
-        {
-            _authService = authService;
-        }
+        private readonly IAuthService _authService = authService;
 
         /// <summary>
         /// Đăng nhập: Nhận Email + Password, trả về cặp Access Token + Refresh Token.
