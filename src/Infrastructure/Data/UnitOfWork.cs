@@ -10,6 +10,7 @@ namespace PBL3.Infrastructure.Data
     public class UnitOfWork(HushStoreDbContext context) : IUnitOfWork
     {
         private readonly HushStoreDbContext _context = context;
+        private IDbContextTransaction? _transaction;
 
         public async Task BeginTransactionAsync()
         {
