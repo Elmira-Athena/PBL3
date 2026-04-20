@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.Categories;
 using PBL3.Shared.DTOs.Categories;
 using PBL3.Shared.DTOs.Common;
+using FluentValidation;
 
 namespace PBL3.API.Controllers
 {
@@ -13,10 +14,14 @@ namespace PBL3.API.Controllers
     public class CategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;
+        private readonly IValidator<(int Id, UpdateCategoryRequest Request)> _updateValidator;
 
-        public CategoriesController(ICategoryService categoryService)
+        public CategoriesController(
+            ICategoryService categoryService,
+            IValidator<(int Id, UpdateCategoryRequest Request)> updateValidator)
         {
             _categoryService = categoryService;
+            _updateValidator = updateValidator;
         }
 
         /// <summary>
@@ -73,6 +78,12 @@ namespace PBL3.API.Controllers
         [ProducesResponseType(typeof(ApiResult<CategoryDto>), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateCategoryRequest request)
         {
+            var validationResult = await _updateValidator.ValidateAsync((id, request));
+            if (!validationResult.IsValid)
+            {
+                return BadRequest(ApiResult<CategoryDto>.Fail(string.Join(". ", validationResult.Errors.Select(e => e.ErrorMessage))));
+            }
+
             var result = await _categoryService.UpdateAsync(id, request);
 
             if (!result.Success)

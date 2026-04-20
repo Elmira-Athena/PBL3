@@ -46,24 +46,13 @@ namespace PBL3.Service.Categories
         // ========================================================
         public async Task<ApiResult<CategoryDto>> CreateAsync(CreateCategoryRequest request)
         {
-            // Rule: Unique Name Per Level (cùng ParentId)
-            if (await _categoryRepo.IsDuplicateNameAsync(request.ParentId, request.Name))
-                return ApiResult<CategoryDto>.Fail("Tên danh mục đã tồn tại trong cấp này.");
-
-            // Kiểm tra Slug unique
-            if (await _categoryRepo.IsDuplicateSlugAsync(request.Slug))
-                return ApiResult<CategoryDto>.Fail("Slug đã tồn tại. Vui lòng chọn slug khác.");
-
             // Tính Level tự động
             int level = 0;
             if (request.ParentId.HasValue)
             {
                 var parent = await _categoryRepo.GetByIdAsync(request.ParentId.Value);
-
-                if (parent == null)
-                    return ApiResult<CategoryDto>.Fail("Danh mục cha không tồn tại.");
-
-                level = parent.Level + 1;
+                // Note: Parent null check handled by Validator
+                level = parent!.Level + 1;
             }
 
             var category = new Category
@@ -100,37 +89,14 @@ namespace PBL3.Service.Categories
             if (category == null)
                 return ApiResult<CategoryDto>.Fail("Không tìm thấy danh mục yêu cầu.");
 
-            // Rule: Unique Name Per Level (cùng ParentId, trừ chính nó)
-            if (await _categoryRepo.IsDuplicateNameAsync(request.ParentId, request.Name, excludeId: id))
-                return ApiResult<CategoryDto>.Fail("Tên danh mục đã tồn tại trong cấp này.");
-
-            // Kiểm tra Slug unique (trừ chính nó)
-            if (await _categoryRepo.IsDuplicateSlugAsync(request.Slug, excludeId: id))
-                return ApiResult<CategoryDto>.Fail("Slug đã tồn tại. Vui lòng chọn slug khác.");
-
-            // =====================================================
-            // CIRCULAR REFERENCE CHECK
-            // =====================================================
-            if (request.ParentId.HasValue)
-            {
-                if (request.ParentId.Value == id)
-                    return ApiResult<CategoryDto>.Fail("Lỗi tham chiếu vòng: Không thể chọn chính mình làm danh mục cha.");
-
-                var isCircular = await DetectCircularReferenceAsync(id, request.ParentId.Value);
-                if (isCircular)
-                    return ApiResult<CategoryDto>.Fail("Lỗi tham chiếu vòng: Không thể chọn cấp dưới làm cha của cấp trên.");
-            }
+            // Note: Duplication and Circular Reference checks handled by Validator
 
             // Tính Level mới
             int newLevel = 0;
             if (request.ParentId.HasValue)
             {
                 var parent = await _categoryRepo.GetByIdAsync(request.ParentId.Value);
-
-                if (parent == null)
-                    return ApiResult<CategoryDto>.Fail("Danh mục cha không tồn tại.");
-
-                newLevel = parent.Level + 1;
+                newLevel = parent!.Level + 1;
             }
 
             bool parentChanged = category.ParentId != request.ParentId;

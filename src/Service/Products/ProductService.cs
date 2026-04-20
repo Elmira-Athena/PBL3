@@ -77,25 +77,7 @@ namespace PBL3.Service.Products
         // ========================================================
         public async Task<ApiResult<ProductDetailDto>> CreateAsync(CreateProductRequest request)
         {
-            // Validate: Manufacturer tồn tại
-            if (!await _productRepo.ManufacturerExistsAsync(request.ManufacturerId))
-                return ApiResult<ProductDetailDto>.Fail("Nhà sản xuất không tồn tại.");
-
-            // Validate: Category tồn tại
-            if (!await _productRepo.CategoryExistsAsync(request.CategoryId))
-                return ApiResult<ProductDetailDto>.Fail("Danh mục không tồn tại.");
-
-            // Validate: SKU unique cho tất cả Variants
-            foreach (var variant in request.Variants)
-            {
-                if (await _productRepo.IsSkuExistsAsync(variant.SKU))
-                    return ApiResult<ProductDetailDto>.Fail($"Mã SKU '{variant.SKU}' đã tồn tại trong hệ thống.");
-            }
-
-            // Check duplicate SKU trong cùng request
-            var skus = request.Variants.Select(v => v.SKU.ToUpper()).ToList();
-            if (skus.Distinct().Count() != skus.Count)
-                return ApiResult<ProductDetailDto>.Fail("Các phiên bản trong cùng sản phẩm không được trùng mã SKU.");
+            // Note: Manufacturer, Category exists and SKU unique checks handled by Validator
 
             // Build Entity
             var product = new Product
@@ -161,13 +143,7 @@ namespace PBL3.Service.Products
             if (product == null)
                 return ApiResult<ProductDetailDto>.Fail("Không tìm thấy sản phẩm yêu cầu.");
 
-            // Validate: Manufacturer tồn tại
-            if (!await _productRepo.ManufacturerExistsAsync(request.ManufacturerId))
-                return ApiResult<ProductDetailDto>.Fail("Nhà sản xuất không tồn tại.");
-
-            // Validate: Category tồn tại
-            if (!await _productRepo.CategoryExistsAsync(request.CategoryId))
-                return ApiResult<ProductDetailDto>.Fail("Danh mục không tồn tại.");
+            // Note: Manufacturer and Category existence handled by Validator
 
             // Update fields
             product.Name = request.Name;
@@ -199,9 +175,7 @@ namespace PBL3.Service.Products
             if (product == null)
                 return ApiResult<ProductVariantDto>.Fail("Không tìm thấy sản phẩm yêu cầu.");
 
-            // Check SKU unique
-            if (await _productRepo.IsSkuExistsAsync(request.SKU))
-                return ApiResult<ProductVariantDto>.Fail($"Mã SKU '{request.SKU}' đã tồn tại trong hệ thống.");
+            // Note: SKU unique check handled by Validator
 
             var variant = new ProductVariant
             {

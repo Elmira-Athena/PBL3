@@ -103,15 +103,7 @@ namespace PBL3.Service.Customers
 
         public async Task<ApiResult<CustomerDto>> CreateAsync(CreateCustomerRequest request)
         {
-            // Kiểm tra trùng lặp email/phone (UserManager tự làm hoặc làm thủ công)
-            if (!string.IsNullOrWhiteSpace(request.Email))
-            {
-                var existingUserByEmail = await _userManager.FindByEmailAsync(request.Email);
-                if (existingUserByEmail != null)
-                {
-                    return ApiResult<CustomerDto>.Fail("Email đã được sử dụng.");
-                }
-            }
+            // Note: Email and Phone uniqueness handled by Validator
 
             // Create user
             var user = new AppUser

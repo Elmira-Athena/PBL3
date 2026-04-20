@@ -18,12 +18,33 @@ using PBL3.Service.Suppliers;
 using PBL3.Service.Inventory;
 using PBL3.Service.Pos;
 using PBL3.Service.Customers;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using Microsoft.AspNetCore.Mvc;
+using PBL3.Shared.DTOs.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => e.ErrorMessage)
+                .ToList();
+
+            var result = ApiResult<object>.Fail(string.Join(". ", errors));
+            return new BadRequestObjectResult(result);
+        };
+    });
+
+// FluentValidation: Đăng ký Validator từ Shared Assembly
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<CreateCategoryRequestValidator>();
 
 // CORS: Cho phép Frontend (Blazor WASM) gọi API
 builder.Services.AddCors(options =>

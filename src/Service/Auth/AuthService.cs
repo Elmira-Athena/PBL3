@@ -261,19 +261,7 @@ namespace PBL3.Service.Auth
         // =====================================================================
         public async Task<ApiResult<bool>> RegisterAsync(RegisterCustomerRequest request)
         {
-            // 1. Kiểm tra Email đã tồn tại chưa
-            var existingUser = await _userManager.FindByEmailAsync(request.Email);
-            if (existingUser != null)
-            {
-                return ApiResult<bool>.Fail("Email này đã được sử dụng.");
-            }
-
-            // 2. Kiểm tra SĐT đã tồn tại chưa
-            var existingPhone = _context.Users.Any(u => u.PhoneNumber == request.PhoneNumber);
-            if (existingPhone)
-            {
-                return ApiResult<bool>.Fail("Số điện thoại này đã được sử dụng.");
-            }
+            // Note: Email and Phone uniqueness handled by Validator
 
             // 3. Tạo AppUser
             var user = new AppUser

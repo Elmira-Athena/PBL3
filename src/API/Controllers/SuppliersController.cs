@@ -4,6 +4,7 @@ using PBL3.Service.Suppliers;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Products;
 using PBL3.Shared.DTOs.Suppliers;
+using FluentValidation;
 
 namespace PBL3.API.Controllers
 {
@@ -14,10 +15,14 @@ namespace PBL3.API.Controllers
     public class SuppliersController : ControllerBase
     {
         private readonly ISupplierService _supplierService;
+        private readonly IValidator<(int Id, UpdateSupplierRequest Request)> _updateValidator;
 
-        public SuppliersController(ISupplierService supplierService)
+        public SuppliersController(
+            ISupplierService supplierService,
+            IValidator<(int Id, UpdateSupplierRequest Request)> updateValidator)
         {
             _supplierService = supplierService;
+            _updateValidator = updateValidator;
         }
 
         /// <summary>
@@ -72,6 +77,12 @@ namespace PBL3.API.Controllers
         [ProducesResponseType(typeof(ApiResult<SupplierDto>), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateSupplierRequest request)
         {
+            var validationResult = await _updateValidator.ValidateAsync((id, request));
+            if (!validationResult.IsValid)
+            {
+                return BadRequest(ApiResult<SupplierDto>.Fail(string.Join(". ", validationResult.Errors.Select(e => e.ErrorMessage))));
+            }
+
             var result = await _supplierService.UpdateAsync(id, request);
 
             if (!result.Success)

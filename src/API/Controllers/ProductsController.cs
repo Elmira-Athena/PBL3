@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.Products;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Products;
+using FluentValidation;
 
 namespace PBL3.API.Controllers
 {
@@ -13,10 +14,14 @@ namespace PBL3.API.Controllers
     public class ProductsController : ControllerBase
     {
         private readonly IProductService _productService;
+        private readonly IValidator<(int Id, UpdateProductRequest Request)> _updateValidator;
 
-        public ProductsController(IProductService productService)
+        public ProductsController(
+            IProductService productService,
+            IValidator<(int Id, UpdateProductRequest Request)> updateValidator)
         {
             _productService = productService;
+            _updateValidator = updateValidator;
         }
 
         /// <summary>
@@ -73,6 +78,12 @@ namespace PBL3.API.Controllers
         [ProducesResponseType(typeof(ApiResult<ProductDetailDto>), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateProductRequest request)
         {
+            var validationResult = await _updateValidator.ValidateAsync((id, request));
+            if (!validationResult.IsValid)
+            {
+                return BadRequest(ApiResult<ProductDetailDto>.Fail(string.Join(". ", validationResult.Errors.Select(e => e.ErrorMessage))));
+            }
+
             var result = await _productService.UpdateAsync(id, request);
 
             if (!result.Success)
