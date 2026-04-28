@@ -8,5 +8,6 @@ namespace PBL3.Service.Orders
     public interface IOrderService
     {
         Task<ApiResult<OrderDetailDto>> PlaceOrderAsync(CreateOrderRequest request, Guid userId);
+        Task<ApiResult<OrderDetailDto>> GetByIdAsync(int id);
     }
 }

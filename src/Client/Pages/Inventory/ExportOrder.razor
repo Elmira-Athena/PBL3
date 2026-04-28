@@ -1,0 +1,382 @@
+@page "/inventory/export"
+@using Client.Services.Inventory
+@using Client.Services.Orders
+@using PBL3.Shared.DTOs.Inventory
+@using PBL3.Shared.DTOs.Sale
+
+<PageTitle>Xuất kho đơn hàng - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+    @* ===== HEADER ===== *@
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Xuất kho đơn hàng @(_currentOrder != null ? $"#{_currentOrder.OrderCode}" : "")
+            </MudText>
+            @if (_currentOrder != null)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Khách hàng: @(_currentOrder.ShipName ?? "Khách lẻ") - @(_currentOrder.ShipPhone ?? "")
+                </MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    Nhập mã đơn hàng để tải dữ liệu xuất kho
+                </MudText>
+            }
+        </div>
+    </MudPaper>
+
+    @* ===== TOP BAR (Tải đơn hàng) ===== *@
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex align-center gap-4">
+        <MudTextField T="int?" @bind-Value="_searchOrderId" Label="ID Đơn hàng (OrderId)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 300px;" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadOrderAsync" Disabled="@_isLoadingOrder">
+            @if (_isLoadingOrder)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Tải dữ liệu đơn hàng
+        </MudButton>
+    </MudPaper>
+
+    @if (_currentOrder != null)
+    {
+        <MudGrid Spacing="4">
+            @* ================================================================ *@
+            @* CỘT TRÁI (8 cột): Bảng sản phẩm cần xuất                       *@
+            @* ================================================================ *@
+            <MudItem xs="12" md="8">
+                <MudPaper Elevation="1" Class="pa-5 rounded-lg">
+                    <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 700;">
+                        Sản phẩm
+                    </MudText>
+
+                    <MudTable Items="@_details" Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="0" Class="rounded-lg" Style="border: 1px solid var(--mud-palette-lines-default);">
+                        <HeaderContent>
+                            <MudTh>Mã SP</MudTh>
+                            <MudTh>Tên Sản phẩm</MudTh>
+                            <MudTh>Tùy chọn</MudTh>
+                            <MudTh Style="text-align: center;">Số lượng</MudTh>
+                            <MudTh Style="text-align: right;">Đơn giá</MudTh>
+                            <MudTh Style="text-align: right;">Tổng tiền</MudTh>
+                            <MudTh Style="text-align: center;">Đã xuất</MudTh>
+                            <MudTh Style="text-align: center;">Trạng thái</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Mã SP">
+                                <MudText Typo="Typo.body2">@context.SKU</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Tên SP">
+                                <MudText Typo="Typo.body2" Style="font-weight: 500;">@context.ProductName</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Tùy chọn">
+                                <MudText Typo="Typo.body2">@context.VariantName</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Số lượng" Style="text-align: center;">
+                                @context.RequiredQuantity
+                            </MudTd>
+                            <MudTd DataLabel="Đơn giá" Style="text-align: right;">
+                                @context.UnitPrice.ToString("N0") đ
+                            </MudTd>
+                            <MudTd DataLabel="Tổng tiền" Style="text-align: right;">
+                                <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                                    @((context.RequiredQuantity * context.UnitPrice).ToString("N0")) đ
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Đã xuất" Style="text-align: center;">
+                                <MudChip T="string" Size="Size.Small" Color="@(context.ScannedSerials.Count >= context.RequiredQuantity ? Color.Success : Color.Error)" Variant="Variant.Filled">
+                                    @context.ScannedSerials.Count
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Trạng thái" Style="text-align: center;">
+                                @if (context.ScannedSerials.Count >= context.RequiredQuantity)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" Style="pointer-events: none;">
+                                        Đã hoàn tất
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudButton Variant="@(_activeDetail == context ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Small" OnClick="@(() => SelectDetail(context))" Style="text-transform: none; border-radius: 6px; font-size: 0.75rem;">
+                                        Nhập mã
+                                    </MudButton>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center">
+                        <div>
+                            <MudText Typo="Typo.body1" Style="font-weight: 700;">
+                                Tổng sản phẩm : <span style="float: right; margin-left: 16px;">@TotalAmount.ToString("N0") đ</span>
+                            </MudText>
+                        </div>
+                    </MudStack>
+                    
+                    <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd">
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Medium" OnClick="SubmitExportAsync" Disabled="@(!IsAllScanned || _isSubmitting)" Style="text-transform: none; border-radius: 8px; font-weight: 600; min-width: 180px;">
+                            @if (_isSubmitting)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            }
+                            Lưu phiếu xuất hàng
+                        </MudButton>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            @* ================================================================ *@
+            @* CỘT PHẢI (4 cột): Khu vực Quét Serial                          *@
+            @* ================================================================ *@
+            <MudItem xs="12" md="4">
+                <MudPaper Elevation="1" Class="pa-5 rounded-lg" Style="position: sticky; top: 16px;">
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">
+                        Xuất hàng
+                    </MudText>
+
+                    @if (_activeDetail == null)
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="rounded-lg">
+                            Chọn một sản phẩm ở bảng bên trái và bấm <b>"Nhập mã"</b> để bắt đầu quét Serial.
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="1" Class="mb-3">
+                            <MudText Typo="Typo.body1" Style="font-weight: 600;">
+                                @_activeDetail.SKU &nbsp; @_activeDetail.ProductName &nbsp; @_activeDetail.VariantName
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                Số lượng: &nbsp;
+                                <b style="color: var(--mud-palette-primary);">@_activeDetail.ScannedSerials.Count</b>
+                                &nbsp;/&nbsp;
+                                <b>@_activeDetail.RequiredQuantity</b>
+                            </MudText>
+                        </MudStack>
+
+                        <MudTextField @ref="_serialInput" T="string" @bind-Value="_scannedCode" Label="Quét mã Serial" Placeholder="Quét hoặc nhập mã Serial..." Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@_isScanning" Adornment="Adornment.End" AdornmentIcon="@(_isScanning ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.QrCodeScanner)" OnKeyUp="OnSerialKeyUp" Immediate="true" Class="mb-3" Style="border-radius: 8px;" />
+
+                        @if (_activeDetail.ScannedSerials.Count > 0)
+                        {
+                            <MudSimpleTable Dense="true" Hover="true" Bordered="false" Style="border: 1px solid var(--mud-palette-lines-default); border-radius: 8px; max-height: 400px; overflow-y: auto;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;">STT</th>
+                                        <th>Serial</th>
+                                        <th style="width: 80px; text-align: center;">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = _activeDetail.ScannedSerials.Count - 1; i >= 0; i--)
+                                    {
+                                        var index = i;
+                                        var serial = _activeDetail.ScannedSerials[index];
+                                        <tr>
+                                            <td>@(_activeDetail.ScannedSerials.Count - index)</td>
+                                            <td>@serial</td>
+                                            <td style="text-align: center;">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveSerial(index))" />
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    [Inject] private IOrderClientService OrderService { get; set; } = null!;
+    [Inject] private IInventoryExportClientService InventoryExportService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    private int? _searchOrderId;
+    private bool _isLoadingOrder;
+    private OrderDetailDto? _currentOrder;
+    private List<ExportDetailViewModel> _details = new();
+    private ExportDetailViewModel? _activeDetail;
+
+    private string _scannedCode = string.Empty;
+    private bool _isScanning;
+    private MudTextField<string>? _serialInput;
+    private bool _isSubmitting;
+
+    private decimal TotalAmount => _currentOrder?.TotalAmount ?? 0;
+    private bool IsAllScanned => _details.Count > 0 && _details.All(d => d.ScannedSerials.Count == d.RequiredQuantity);
+
+    private async Task LoadOrderAsync()
+    {
+        if (_searchOrderId == null || _searchOrderId <= 0)
+        {
+            Snackbar.Add("Vui lòng nhập ID Đơn hàng hợp lệ.", Severity.Warning);
+            return;
+        }
+
+        _isLoadingOrder = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await OrderService.GetByIdAsync(_searchOrderId.Value);
+            if (result.Success && result.Data != null)
+            {
+                _currentOrder = result.Data;
+                _details = _currentOrder.Items.Select(i => new ExportDetailViewModel
+                {
+                    OrderDetailId = i.Id, // i.Id in OrderDetailLineDto mapping might be needed! Let's check this next.
+                    VariantId = i.VariantId,
+                    ProductName = i.VariantName.Split(" - ").FirstOrDefault() ?? i.VariantName, // fallback if format varies
+                    VariantName = i.VariantName,
+                    SKU = i.SKU,
+                    RequiredQuantity = i.Quantity,
+                    UnitPrice = i.UnitPrice,
+                    ScannedSerials = new List<string>()
+                }).ToList();
+                _activeDetail = null;
+                Snackbar.Add("Tải dữ liệu đơn hàng thành công.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Không tìm thấy đơn hàng.", Severity.Error);
+                _currentOrder = null;
+                _details.Clear();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoadingOrder = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectDetail(ExportDetailViewModel detail)
+    {
+        _activeDetail = detail;
+        _scannedCode = string.Empty;
+        StateHasChanged();
+        
+        _ = Task.Delay(100).ContinueWith(_ =>
+            InvokeAsync(async () =>
+            {
+                if (_serialInput != null)
+                    await _serialInput.FocusAsync();
+            }));
+    }
+
+    private async Task OnSerialKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        if (_activeDetail == null) return;
+
+        var code = _scannedCode?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(code)) return;
+
+        if (_activeDetail.ScannedSerials.Count >= _activeDetail.RequiredQuantity)
+        {
+            Snackbar.Add("Đã xuất đủ số lượng cho sản phẩm này!", Severity.Warning);
+            _scannedCode = string.Empty;
+            return;
+        }
+
+        if (_activeDetail.ScannedSerials.Contains(code) || _details.Any(d => d.ScannedSerials.Contains(code)))
+        {
+            Snackbar.Add("Mã Serial này đã được quét trong đơn này!", Severity.Error);
+            _scannedCode = string.Empty;
+            return;
+        }
+
+        // Add to list immediately (Backend validates on Submit)
+        _activeDetail.ScannedSerials.Add(code);
+        _scannedCode = string.Empty;
+
+        if (_activeDetail.ScannedSerials.Count >= _activeDetail.RequiredQuantity)
+        {
+            Snackbar.Add($"Đã quét đủ {_activeDetail.RequiredQuantity} mã cho {_activeDetail.ProductName}!", Severity.Success);
+        }
+
+        // Re-focus input
+        if (_serialInput != null)
+        {
+            await Task.Delay(50);
+            await _serialInput.FocusAsync();
+        }
+    }
+
+    private void RemoveSerial(int index)
+    {
+        if (_activeDetail != null && index >= 0 && index < _activeDetail.ScannedSerials.Count)
+        {
+            _activeDetail.ScannedSerials.RemoveAt(index);
+        }
+    }
+
+    private async Task SubmitExportAsync()
+    {
+        if (_currentOrder == null) return;
+        if (!IsAllScanned)
+        {
+            Snackbar.Add("Cần quét đủ mã Serial cho tất cả sản phẩm!", Severity.Error);
+            return;
+        }
+
+        _isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            var request = new ExportOrderRequest
+            {
+                OrderId = _currentOrder.Id, // Should map OrderId
+                Details = _details.Select(d => new ExportOrderDetailRequest
+                {
+                    OrderDetailId = d.OrderDetailId,
+                    SerialNumbers = d.ScannedSerials.ToList()
+                }).ToList()
+            };
+
+            var result = await InventoryExportService.ExportOrderAsync(request);
+            if (result.Success)
+            {
+                Snackbar.Add("Lưu phiếu xuất kho thành công!", Severity.Success);
+                _currentOrder = null; // reset
+                _details.Clear();
+                _searchOrderId = null;
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Lỗi khi xuất kho.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    public class ExportDetailViewModel
+    {
+        public int OrderDetailId { get; set; }
+        public int VariantId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public string VariantName { get; set; } = string.Empty;
+        public string SKU { get; set; } = string.Empty;
+        public int RequiredQuantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public List<string> ScannedSerials { get; set; } = new();
+    }
+}

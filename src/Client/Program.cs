@@ -49,5 +49,7 @@ builder.Services.AddScoped<IProductSerialClientService, ProductSerialClientServi
 builder.Services.AddScoped<IAuthClientService, AuthClientService>();
 builder.Services.AddScoped<IPosClientService, PosClientService>();
 builder.Services.AddScoped<ICustomerClientService, CustomerClientService>();
+builder.Services.AddScoped<Client.Services.Orders.IOrderClientService, Client.Services.Orders.OrderClientService>();
+builder.Services.AddScoped<IInventoryExportClientService, InventoryExportClientService>();
 
 await builder.Build().RunAsync();

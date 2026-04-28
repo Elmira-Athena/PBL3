@@ -43,6 +43,7 @@ namespace PBL3.Shared.DTOs.Sale
 
     public class OrderDetailLineDto
     {
+        public int Id { get; set; }
         public int VariantId { get; set; }
         public string VariantName { get; set; } = string.Empty;
         public string SKU { get; set; } = string.Empty;

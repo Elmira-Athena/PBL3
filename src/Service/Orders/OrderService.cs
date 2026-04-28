@@ -235,5 +235,15 @@ namespace PBL3.Service.Orders
 
             return (usages, totalDiscount);
         }
+
+        public async Task<ApiResult<OrderDetailDto>> GetByIdAsync(int id)
+        {
+            var order = await _orderRepo.GetByIdWithDetailsAsync(id);
+            if (order == null)
+                return ApiResult<OrderDetailDto>.Fail("Không tìm thấy đơn hàng.");
+
+            var dto = _mapper.Map<OrderDetailDto>(order);
+            return ApiResult<OrderDetailDto>.Ok(dto);
+        }
     }
 }
