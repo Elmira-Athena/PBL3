@@ -176,11 +176,7 @@ namespace PBL3.Service.Pos
 
             foreach (var item in request.Items)
             {
-                var serial = await _serialRepo.GetBySerialNumberAsync(item.SerialId.ToString()); // Quick fix: need to load by ID, actually serialRepo only has GetBySerialNumberAsync(string). Let's load directly via context.
-                // Wait, item.SerialId is int. So let's use the DbContext directly for speed here or add GetById to repo.
-                var dbSerial = await _dbContext.ProductSerials
-                    .Include(s => s.Variant)
-                    .FirstOrDefaultAsync(s => s.Id == item.SerialId);
+                var dbSerial = await _serialRepo.GetByIdWithTrackingAsync(item.SerialId);
 
                 if (dbSerial == null || dbSerial.Status != (byte)SerialStatus.Available)
                 {

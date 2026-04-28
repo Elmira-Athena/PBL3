@@ -62,6 +62,21 @@ namespace PBL3.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<ProductSerial>> GetSerialsWithTrackingAsync(List<string> serialNumbers)
+        {
+            return await _context.ProductSerials
+                .Include(s => s.Variant)
+                .Where(s => serialNumbers.Contains(s.SerialNumber))
+                .ToListAsync(); // WITH tracking (no AsNoTracking)
+        }
+
+        public async Task<ProductSerial?> GetByIdWithTrackingAsync(int id)
+        {
+            return await _context.ProductSerials
+                .Include(s => s.Variant)
+                .FirstOrDefaultAsync(s => s.Id == id); // WITH tracking (no AsNoTracking)
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

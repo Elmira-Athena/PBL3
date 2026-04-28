@@ -110,6 +110,7 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IImportReceiptService, ImportReceiptService>();
 builder.Services.AddScoped<IProductSerialService, ProductSerialService>();
 builder.Services.AddScoped<IInventorySyncService, InventorySyncService>();
+builder.Services.AddScoped<IInventoryExportService, InventoryExportService>();
 builder.Services.AddScoped<IPosService, PosService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 

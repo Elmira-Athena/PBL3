@@ -161,6 +161,17 @@ namespace PBL3.Core.Interfaces
         Task<ProductSerial?> GetBySerialNumberAsync(string serialNumber);
 
         /// <summary>
+        /// Lấy danh sách ProductSerial theo SerialNumbers (WITH TRACKING để update).
+        /// Dùng cho luồng xuất kho — cần ghi nhận trạng thái Sold.
+        /// </summary>
+        Task<List<ProductSerial>> GetSerialsWithTrackingAsync(List<string> serialNumbers);
+
+        /// <summary>
+        /// Lấy chi tiết Serial theo Id (WITH TRACKING để update).
+        /// </summary>
+        Task<ProductSerial?> GetByIdWithTrackingAsync(int id);
+
+        /// <summary>
         /// Lấy N Serials đang Available của một Variant (dùng cho hàng generic khi checkout).
         /// </summary>
         Task<List<ProductSerial>> GetAvailableSerialsByVariantAsync(int variantId, int count);
