@@ -1,0 +1,131 @@
+@page "/inventory/pending-export"
+@using Client.Services.Orders
+@using PBL3.Shared.DTOs.Sale
+@inject IOrderClientService OrderService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Danh sách chờ xuất kho - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+            Đơn hàng chờ xuất kho
+        </MudText>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-4 align-center">
+        <MudTextField @bind-Value="_filter.Keyword" Label="Tìm theo SĐT / Mã đơn" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 300px;" Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" OnKeyUp="OnSearchKeyPress" />
+        
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadDataAsync" Class="ml-auto">
+            Tìm kiếm
+        </MudButton>
+    </MudPaper>
+
+    <MudTable ServerData="@(new Func<TableState, Task<TableData<OrderSummaryResponse>>>(ServerReload))"
+              Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1" Class="rounded-lg" @ref="_table">
+        <HeaderContent>
+            <MudTh>Mã đơn</MudTh>
+            <MudTh>Khách hàng</MudTh>
+            <MudTh>SĐT</MudTh>
+            <MudTh>Ngày tạo</MudTh>
+            <MudTh>Tổng tiền</MudTh>
+            <MudTh>Trạng thái</MudTh>
+            <MudTh Style="text-align: right;">Hành động</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã đơn">
+                <MudText Typo="Typo.body2" Style="font-weight: 500;">#@context.OrderCode</MudText>
+            </MudTd>
+            <MudTd DataLabel="Khách hàng">
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Color="Color.Primary" Size="Size.Small">
+                        @GetInitials(context.CustomerName)
+                    </MudAvatar>
+                    <MudText Typo="Typo.body2">@context.CustomerName</MudText>
+                </div>
+            </MudTd>
+            <MudTd DataLabel="SĐT">@context.CustomerPhone</MudTd>
+            <MudTd DataLabel="Ngày tạo">@context.CreatedDate.ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Tổng tiền">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.TotalAmount.ToString("N0") đ</MudText>
+            </MudTd>
+            <MudTd DataLabel="Trạng thái">
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">
+                    Chờ xuất kho
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Hành động" Style="text-align: right;">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.RocketLaunch" OnClick="@(() => NavigateToExport(context.Id))">
+                    Tiến hành Xuất kho
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>Không có đơn hàng nào đang chờ xuất kho.</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText>Đang tải dữ liệu...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private MudTable<OrderSummaryResponse>? _table;
+    private OrderFilterRequest _filter = new OrderFilterRequest();
+
+    protected override void OnInitialized()
+    {
+        // Ép cứng Status = 1 (Confirmed / Chờ xuất kho)
+        _filter.Status = 1;
+    }
+
+    private async Task<TableData<OrderSummaryResponse>> ServerReload(TableState state)
+    {
+        _filter.PageIndex = state.Page + 1;
+        _filter.PageSize = state.PageSize;
+        
+        // Đảm bảo luôn luôn là Status = 1 dù có chuyện gì xảy ra
+        _filter.Status = 1;
+
+        var result = await OrderService.GetPagedOrdersAsync(_filter);
+
+        if (result.Items != null)
+        {
+            return new TableData<OrderSummaryResponse>() { TotalItems = result.TotalCount, Items = result.Items };
+        }
+
+        return new TableData<OrderSummaryResponse>() { TotalItems = 0, Items = new List<OrderSummaryResponse>() };
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (_table != null)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private void NavigateToExport(int orderId)
+    {
+        NavigationManager.NavigateTo($"/inventory/export/{orderId}");
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+    }
+}

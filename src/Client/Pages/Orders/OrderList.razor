@@ -1,0 +1,185 @@
+@page "/orders"
+@using Client.Services.Orders
+@using PBL3.Shared.DTOs.Sale
+@using Client.Pages.Orders.Components
+@inject IOrderClientService OrderService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Quản lý đơn hàng - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+            Quản lý đơn hàng
+        </MudText>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-4 align-center">
+        <MudTextField @bind-Value="_filter.Keyword" Label="Tìm theo SĐT / Mã đơn" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 300px;" Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" OnKeyUp="OnSearchKeyPress" />
+        
+        <MudSelect T="int?" @bind-Value="_filter.Status" Label="Trạng thái" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 200px;">
+            <MudSelectItem T="int?" Value="@null">Tất cả</MudSelectItem>
+            <MudSelectItem T="int?" Value="0">Chờ duyệt</MudSelectItem>
+            <MudSelectItem T="int?" Value="1">Chờ xuất kho</MudSelectItem>
+            <MudSelectItem T="int?" Value="2">Đang giao</MudSelectItem>
+            <MudSelectItem T="int?" Value="3">Thành công</MudSelectItem>
+            <MudSelectItem T="int?" Value="4">Đã hủy</MudSelectItem>
+        </MudSelect>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadDataAsync" Class="ml-auto">
+            Lọc kết quả
+        </MudButton>
+    </MudPaper>
+
+    <MudTable ServerData="@(new Func<TableState, Task<TableData<OrderSummaryResponse>>>(ServerReload))"
+              Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1" Class="rounded-lg" @ref="_table">
+        <HeaderContent>
+            <MudTh>Mã đơn</MudTh>
+            <MudTh>Khách hàng</MudTh>
+            <MudTh>SĐT</MudTh>
+            <MudTh>Ngày tạo</MudTh>
+            <MudTh>Tổng tiền</MudTh>
+            <MudTh>Trạng thái</MudTh>
+            <MudTh Style="text-align: right;">Hành động</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã đơn">
+                <MudText Typo="Typo.body2" Style="font-weight: 500;">#@context.OrderCode</MudText>
+            </MudTd>
+            <MudTd DataLabel="Khách hàng">
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Color="Color.Primary" Size="Size.Small">
+                        @GetInitials(context.CustomerName)
+                    </MudAvatar>
+                    <MudText Typo="Typo.body2">@context.CustomerName</MudText>
+                </div>
+            </MudTd>
+            <MudTd DataLabel="SĐT">@context.CustomerPhone</MudTd>
+            <MudTd DataLabel="Ngày tạo">@context.CreatedDate.ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Tổng tiền">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.TotalAmount.ToString("N0") đ</MudText>
+            </MudTd>
+            <MudTd DataLabel="Trạng thái">
+                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)" Variant="Variant.Filled">
+                    @GetStatusText(context.Status)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Hành động" Style="text-align: right;">
+                <MudTooltip Text="Xem chi tiết">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small" OnClick="@(() => ViewDetails(context.Id))" />
+                </MudTooltip>
+                @if (context.Status == 0 || context.Status == 1) // Pending or Confirmed
+                {
+                    <MudTooltip Text="Hủy đơn">
+                        <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small" OnClick="@(() => ConfirmCancelOrder(context.Id))" />
+                    </MudTooltip>
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>Không tìm thấy đơn hàng nào.</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText>Đang tải dữ liệu...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private MudTable<OrderSummaryResponse>? _table;
+    private OrderFilterRequest _filter = new OrderFilterRequest();
+
+    private async Task<TableData<OrderSummaryResponse>> ServerReload(TableState state)
+    {
+        _filter.PageIndex = state.Page + 1;
+        _filter.PageSize = state.PageSize;
+
+        var result = await OrderService.GetPagedOrdersAsync(_filter);
+
+        if (result.Items != null)
+        {
+            return new TableData<OrderSummaryResponse>() { TotalItems = result.TotalCount, Items = result.Items };
+        }
+
+        return new TableData<OrderSummaryResponse>() { TotalItems = 0, Items = new List<OrderSummaryResponse>() };
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (_table != null)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private void ViewDetails(int id)
+    {
+        // Điều hướng tới trang chi tiết đơn hàng (Sẽ implement sau)
+        // NavigationManager.NavigateTo($"/orders/{id}");
+        Snackbar.Add($"Tính năng xem chi tiết đơn hàng {id} đang phát triển.", Severity.Info);
+    }
+
+    private async Task ConfirmCancelOrder(int orderId)
+    {
+        var parameters = new DialogParameters();
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        
+        var dialog = await DialogService.ShowAsync<CancelOrderDialog>("Hủy Đơn Hàng", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is string cancelReason)
+        {
+            var apiResult = await OrderService.CancelOrderAsync(orderId, cancelReason);
+            if (apiResult.Success)
+            {
+                Snackbar.Add("Đã hủy đơn hàng thành công.", Severity.Success);
+                await LoadDataAsync();
+            }
+            else
+            {
+                Snackbar.Add(apiResult.Message ?? "Lỗi khi hủy đơn hàng.", Severity.Error);
+            }
+        }
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+    }
+
+    private string GetStatusText(byte status) => status switch
+    {
+        0 => "Chờ duyệt",
+        1 => "Chờ xuất kho",
+        2 => "Đang giao",
+        3 => "Thành công",
+        4 => "Đã hủy",
+        _ => "Không xác định"
+    };
+
+    private Color GetStatusColor(byte status) => status switch
+    {
+        0 => Color.Default,
+        1 => Color.Warning,
+        2 => Color.Info,
+        3 => Color.Success,
+        4 => Color.Error,
+        _ => Color.Default
+    };
+}

@@ -210,6 +210,8 @@ namespace PBL3.Core.Interfaces
     /// </summary>
     public interface IOrderRepository
     {
+        IQueryable<Order> GetQueryable();
+        Task<Order?> GetByIdAsync(int id);
         Task<Order?> GetByIdWithDetailsAsync(int id);
         Task<string?> GetLastOrderCodeByDateAsync(string datePrefix);
         

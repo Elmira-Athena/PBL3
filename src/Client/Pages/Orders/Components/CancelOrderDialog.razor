@@ -1,0 +1,33 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Vui lòng nhập lý do hủy đơn hàng này. Thao tác này không thể hoàn tác.
+        </MudText>
+        <MudTextField @bind-Value="CancelReason" Label="Lý do hủy" Variant="Variant.Outlined" Lines="3" AutoFocus="true" Required="true" RequiredError="Lý do hủy không được để trống" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Đóng</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Error" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(CancelReason))">Xác nhận hủy</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+
+    public string CancelReason { get; set; } = string.Empty;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(CancelReason))
+        {
+            MudDialog.Close(DialogResult.Ok(CancelReason));
+        }
+    }
+}

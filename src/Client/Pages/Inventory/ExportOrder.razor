@@ -1,4 +1,5 @@
 @page "/inventory/export"
+@page "/inventory/export/{OrderId:int}"
 @using Client.Services.Inventory
 @using Client.Services.Orders
 @using PBL3.Shared.DTOs.Inventory
@@ -195,6 +196,9 @@
     [Inject] private IInventoryExportClientService InventoryExportService { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
 
+    [Parameter]
+    public int? OrderId { get; set; }
+
     private int? _searchOrderId;
     private bool _isLoadingOrder;
     private OrderDetailDto? _currentOrder;
@@ -208,6 +212,15 @@
 
     private decimal TotalAmount => _currentOrder?.TotalAmount ?? 0;
     private bool IsAllScanned => _details.Count > 0 && _details.All(d => d.ScannedSerials.Count == d.RequiredQuantity);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (OrderId.HasValue && OrderId.Value > 0)
+        {
+            _searchOrderId = OrderId.Value;
+            await LoadOrderAsync();
+        }
+    }
 
     private async Task LoadOrderAsync()
     {

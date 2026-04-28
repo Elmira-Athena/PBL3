@@ -7,5 +7,7 @@ namespace Client.Services.Orders
     public interface IOrderClientService
     {
         Task<ApiResult<OrderDetailDto>> GetByIdAsync(int id);
+        Task<PagedResult<OrderSummaryResponse>> GetPagedOrdersAsync(OrderFilterRequest request);
+        Task<ApiResult<bool>> CancelOrderAsync(int id, string cancelReason);
     }
 }

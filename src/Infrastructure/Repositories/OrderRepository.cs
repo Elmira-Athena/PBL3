@@ -17,6 +17,16 @@ namespace PBL3.Infrastructure.Repositories
             _dbContext = dbContext;
         }
 
+        public IQueryable<Order> GetQueryable()
+        {
+            return _dbContext.Orders.AsQueryable();
+        }
+
+        public async Task<Order?> GetByIdAsync(int id)
+        {
+            return await _dbContext.Orders.FindAsync(id);
+        }
+
         public async Task<Order?> GetByIdWithDetailsAsync(int id)
         {
             return await _dbContext.Orders

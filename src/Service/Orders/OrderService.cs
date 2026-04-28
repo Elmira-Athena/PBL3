@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using AutoMapper;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
@@ -244,6 +245,88 @@ namespace PBL3.Service.Orders
 
             var dto = _mapper.Map<OrderDetailDto>(order);
             return ApiResult<OrderDetailDto>.Ok(dto);
+        }
+
+        public async Task<ApiResult<PagedResult<OrderSummaryResponse>>> GetPagedOrdersAsync(OrderFilterRequest request)
+        {
+            var query = _orderRepo.GetQueryable().AsNoTracking();
+
+            if (!string.IsNullOrEmpty(request.Keyword))
+            {
+                var lowerKeyword = request.Keyword.ToLower();
+                query = query.Where(o => o.OrderCode.ToLower().Contains(lowerKeyword) || 
+                                         o.ShipName.ToLower().Contains(lowerKeyword) || 
+                                         o.ShipPhone.Contains(request.Keyword));
+            }
+
+            if (request.Status.HasValue)
+            {
+                query = query.Where(o => o.Status == request.Status.Value);
+            }
+
+            if (request.FromDate.HasValue)
+            {
+                query = query.Where(o => o.OrderDate >= request.FromDate.Value);
+            }
+
+            if (request.ToDate.HasValue)
+            {
+                query = query.Where(o => o.OrderDate <= request.ToDate.Value);
+            }
+
+            int totalCount = await query.CountAsync();
+
+            var items = await query
+                .OrderByDescending(o => o.OrderDate)
+                .Skip((request.PageIndex - 1) * request.PageSize)
+                .Take(request.PageSize)
+                .Select(o => new OrderSummaryResponse
+                {
+                    Id = o.Id,
+                    OrderCode = o.OrderCode,
+                    CustomerName = o.ShipName,
+                    CustomerPhone = o.ShipPhone,
+                    TotalAmount = o.TotalAmount,
+                    CreatedDate = o.OrderDate,
+                    Status = o.Status,
+                    PaymentStatus = o.PaymentStatus
+                })
+                .ToListAsync();
+
+            var result = new PagedResult<OrderSummaryResponse>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageSize = request.PageSize,
+                PageNumber = request.PageIndex
+            };
+
+            return ApiResult<PagedResult<OrderSummaryResponse>>.Ok(result);
+        }
+
+        public async Task<ApiResult<bool>> CancelOrderAsync(int id, CancelOrderRequest request)
+        {
+            var order = await _orderRepo.GetByIdAsync(id);
+            if (order == null)
+            {
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+            }
+
+            if (order.Status == 2)
+            {
+                throw new Exception("Đơn hàng đang giao (Shipping). Tuyệt đối cấm hủy.");
+            }
+
+            if (order.Status != 0 && order.Status != 1)
+            {
+                return ApiResult<bool>.Fail($"Không thể hủy đơn hàng ở trạng thái hiện tại.");
+            }
+
+            order.Status = 4; // Cancelled
+            order.CancelReason = request.CancelReason;
+
+            await _unitOfWork.SaveChangesAsync();
+            return ApiResult<bool>.Ok(true, "Hủy đơn hàng thành công.");
         }
     }
 }
