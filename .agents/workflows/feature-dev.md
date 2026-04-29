@@ -25,6 +25,7 @@ description: Comprehensive feature development workflow with specialized agents 
    - Implement the chosen architecture.
    - Follow conventions strictly.
 8. Execute Phase 6: Quality Review.
+   - Build and fix the syntax errors.
    - Review for bugs, simplicity, and conventions.
    - **User Review Required**: Present findings and ask what to do (fix now, fix later, proceed).
 9. Execute Phase 7: Summary.

@@ -1,7 +1,202 @@
-﻿@page "/"
+@page "/"
+@layout StorefrontLayout
+@using PBL3.Shared.DTOs.Storefront
+@using Client.Services.Storefront
+@using Client.Shared.Components.Storefront
+@inject IStorefrontClientService StorefrontService
+@inject ISnackbar Snackbar
 
-<PageTitle>Home</PageTitle>
+<PageTitle>HushStore - Trang chủ</PageTitle>
 
-<h1>Hello, world!</h1>
+@if (_isLoading)
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="400px" />
+            </MudItem>
+            <MudItem xs="12" md="9">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="400px" />
+            </MudItem>
+        </MudGrid>
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" Class="mt-4" />
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" Class="mt-4" />
+    </MudContainer>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4 mb-8">
+        
+        <!-- Khối 1: Hero Section -->
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudPaper Elevation="2" Class="pa-0 h-100 overflow-hidden">
+                    <MudList T="CategoryMenuResponse" Dense="true" Class="py-2">
+                        @foreach (var cat in _categories)
+                        {
+                            <MudListItem T="CategoryMenuResponse" OnClick="@(() => HandleComingSoon())">
+                                <div class="d-flex align-center">
+                                    @if (!string.IsNullOrEmpty(cat.IconUrl))
+                                    {
+                                        <img src="@cat.IconUrl" style="width: 24px; height: 24px; object-fit: contain;" class="mr-3" alt="@cat.Name" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Class="mr-3" />
+                                    }
+                                    <MudText Typo="Typo.body2">@cat.Name</MudText>
+                                    <MudSpacer />
+                                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="9">
+                <MudImage Src="@BannerUrl" ObjectFit="ObjectFit.Cover" Fluid="true" Height="400" Class="rounded-lg w-100" Elevation="2" />
+            </MudItem>
+        </MudGrid>
 
-Welcome to your new app.
+        <!-- Khối 2: PC bán chạy -->
+        <div class="mt-8">
+            <div class="d-flex align-center justify-space-between mb-4">
+                <MudText Typo="Typo.h5" Class="fw-bold">PC bán chạy</MudText>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward" OnClick="HandleComingSoon">Xem tất cả</MudButton>
+            </div>
+            <MudGrid>
+                @foreach (var pc in _featuredPCs)
+                {
+                    <MudItem xs="12" sm="6" md="4" lg="2">
+                        <ProductCard Product="pc" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </div>
+
+        <!-- Khối 3: Laptop bán chạy -->
+        <div class="mt-8">
+            <div class="d-flex align-center justify-space-between mb-4">
+                <MudText Typo="Typo.h5" Class="fw-bold">Laptop bán chạy</MudText>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward" OnClick="HandleComingSoon">Xem tất cả</MudButton>
+            </div>
+            <MudGrid>
+                @foreach (var laptop in _featuredLaptops)
+                {
+                    <MudItem xs="12" sm="6" md="4" lg="2">
+                        <ProductCard Product="laptop" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </div>
+
+        <!-- Khối 4: Danh mục sản phẩm Grid -->
+        <div class="mt-8">
+            <MudText Typo="Typo.h5" Class="fw-bold mb-4">Danh mục sản phẩm</MudText>
+            <MudGrid>
+                @foreach (var cat in _categories)
+                {
+                    <MudItem xs="6" sm="4" md="2">
+                        <MudPaper Elevation="1" Class="pa-4 d-flex flex-column align-center justify-center h-100" Style="cursor:pointer" @onclick="HandleComingSoon">
+                            @if (!string.IsNullOrEmpty(cat.IconUrl))
+                            {
+                                <img src="@cat.IconUrl" style="width: 48px; height: 48px; object-fit: contain;" class="mb-2" alt="@cat.Name" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Large" Class="mb-2" />
+                            }
+                            <MudText Typo="Typo.body2" Align="Align.Center">@cat.Name</MudText>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        </div>
+
+    </MudContainer>
+
+    <!-- Khối 5: Footer -->
+    <MudPaper Elevation="0" Class="pa-8 mt-16" Style="background-color: #f5f5f5;">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge">
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold mb-4">HUSH STORE</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2">CÔNG TY TNHH HUSH STORE</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2 d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />123 Nguyễn Lương Bằng, Đà Nẵng</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2 d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Phone" Size="Size.Small" Class="mr-2" />0236.3636367</MudText>
+                    <MudText Typo="Typo.body2" Class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Email" Size="Size.Small" Class="mr-2" />hotro@hushstore.vn</MudText>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-4">SOCIAL</MudText>
+                    <div class="d-flex gap-4">
+                        <MudIconButton Icon="@Icons.Custom.Brands.Facebook" Color="Color.Info" Size="Size.Large" />
+                        <MudIconButton Icon="@Icons.Custom.Brands.Twitter" Color="Color.Info" Size="Size.Large" />
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-4">Hỗ trợ khách hàng</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách bảo mật</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách bảo hành</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách thanh toán</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách vận chuyển</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudContainer>
+    </MudPaper>
+}
+
+@code {
+    private static readonly string BannerUrl = "https://placehold.co/1200x400?text=HushStore+Banner";
+
+    private bool _isLoading = true;
+    private List<CategoryMenuResponse> _categories = new();
+    private List<ProductCardResponse> _featuredPCs = new();
+    private List<ProductCardResponse> _featuredLaptops = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _isLoading = true;
+
+            var catResult = await StorefrontService.GetActiveCategoriesAsync();
+            if (catResult.Success && catResult.Data != null)
+            {
+                _categories = catResult.Data;
+            }
+
+            var pcId = _categories.FirstOrDefault(x => x.Slug.ToLower().Contains("pc") || x.Name.ToLower().Contains("pc") || x.Name.Contains("Linh kiện"))?.Id;
+            if (pcId.HasValue)
+            {
+                var pcResult = await StorefrontService.GetFeaturedProductsAsync(pcId.Value, 6);
+                if (pcResult.Success && pcResult.Data != null)
+                {
+                    _featuredPCs = pcResult.Data;
+                }
+            }
+
+            var laptopId = _categories.FirstOrDefault(x => x.Slug.ToLower().Contains("laptop") || x.Name.ToLower().Contains("laptop"))?.Id;
+            if (laptopId.HasValue)
+            {
+                var laptopResult = await StorefrontService.GetFeaturedProductsAsync(laptopId.Value, 6);
+                if (laptopResult.Success && laptopResult.Data != null)
+                {
+                    _featuredLaptops = laptopResult.Data;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Có lỗi xảy ra khi tải dữ liệu", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void HandleComingSoon()
+    {
+        Snackbar.Add("Tính năng đang phát triển", Severity.Info);
+    }
+}

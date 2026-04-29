@@ -1,0 +1,95 @@
+@inherits LayoutComponentBase
+@inject IAuthClientService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<MudLayout>
+    @* ===== TOP APP BAR ===== *@
+    <MudAppBar Elevation="2" Dense="false" Fixed="true"
+               Style="background: linear-gradient(135deg, #1a1a2e 0%, #c0392b 100%); color: white;">
+
+        @* -- Logo -- *@
+        <MudImage Src="images/logo.png" Alt="HushStore"
+                  Width="120" Height="40"
+                  ObjectFit="ObjectFit.Contain"
+                  Class="mr-4" Style="cursor: pointer;" />
+
+        @* -- DANH MỤC Button -- *@
+        <MudButton Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.Menu"
+                   Style="background-color: rgba(255,255,255,0.15); color: white; font-weight: 700; letter-spacing: 0.05em; border-radius: 4px;"
+                   Class="mr-4"
+                   OnClick="@(() => Snackbar.Add("Tính năng đang phát triển", Severity.Info))">
+            DANH MỤC
+        </MudButton>
+
+        @* -- Search Bar -- *@
+        <MudPaper Elevation="0" Class="d-flex align-center rounded-lg px-3 flex-grow-1"
+                  Style="background-color: white; max-width: 600px;">
+            <MudTextField T="string" Placeholder="Nhập từ khóa tìm kiếm..."
+                          Variant="Variant.Text"
+                          Class="flex-grow-1"
+                          Style="font-size: 0.9rem;"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          AdornmentColor="Color.Error" />
+        </MudPaper>
+        <MudSpacer />
+
+        @* -- Cart Icon -- *@
+        <MudTooltip Text="Giỏ hàng">
+            <MudIconButton Icon="@Icons.Material.Filled.ShoppingCart"
+                           Color="Color.Inherit"
+                           Href="/cart"
+                           Size="Size.Medium" />
+        </MudTooltip>
+
+        @* -- Build PC Button -- *@
+        <MudButton Variant="Variant.Text"
+                   StartIcon="@Icons.Material.Filled.Build"
+                   Style="color: white; white-space: nowrap;"
+                   OnClick="@(() => Snackbar.Add("Tính năng đang phát triển", Severity.Info))">
+            Xây dựng PC
+        </MudButton>
+
+        @* -- User Menu -- *@
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <ActivatorContent>
+                        <MudAvatar Size="Size.Small" Color="Color.Secondary" Class="cursor-pointer ml-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                        </MudAvatar>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Person">@context.User.Identity?.Name</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.ReceiptLong" Href="/orders">Đơn hàng của tôi</MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout">Đăng xuất</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Variant="Variant.Text"
+                           Style="color: white;"
+                           StartIcon="@Icons.Material.Filled.Login"
+                           Href="/login">
+                    Đăng nhập
+                </MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    @* ===== MAIN CONTENT (no sidebar) ===== *@
+    <MudMainContent Style="min-height: 100vh; padding-top: 68px !important; background-color: #f5f5f5;">
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+    }
+}
