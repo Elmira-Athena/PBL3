@@ -77,6 +77,15 @@ namespace PBL3.Infrastructure.Repositories
                 .FirstOrDefaultAsync(s => s.Id == id); // WITH tracking (no AsNoTracking)
         }
 
+        public async Task<Dictionary<int, int>> CountAvailableByVariantIdsAsync(List<int> variantIds)
+        {
+            return await _context.ProductSerials
+                .AsNoTracking()
+                .Where(s => s.Status == 0 && variantIds.Contains(s.VariantId))
+                .GroupBy(s => s.VariantId)
+                .ToDictionaryAsync(g => g.Key, g => g.Count());
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

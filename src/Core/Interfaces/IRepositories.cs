@@ -176,6 +176,11 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<List<ProductSerial>> GetAvailableSerialsByVariantAsync(int variantId, int count);
         
+        /// <summary>
+        /// Đếm số Serial Available (Status=0) theo danh sách VariantId — batch query.
+        /// </summary>
+        Task<Dictionary<int, int>> CountAvailableByVariantIdsAsync(List<int> variantIds);
+        
         Task SaveChangesAsync();
     }
 
@@ -220,6 +225,12 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<List<Order>> GetDraftsByEmployeeAsync(Guid employeeId);
         
+        /// <summary>
+        /// Tính tổng Quantity đã đặt theo VariantId cho các đơn Active (Status 0 hoặc 1).
+        /// Dùng cho Virtual Inventory Hold — 1 query batch, không N+1.
+        /// </summary>
+        Task<Dictionary<int, int>> GetActiveOrderQuantitiesByVariantIdsAsync(List<int> variantIds);
+        
         Task AddAsync(Order order);
         Task SaveChangesAsync();
     }
@@ -260,14 +271,31 @@ namespace PBL3.Core.Interfaces
         Task<List<Order>> GetRecentOrdersAsync(Guid userId, int count);
 
         /// <summary>
-        /// Lấy danh sách thiết bị/sản phẩm trong giỏ hàng.
-        /// </summary>
-        Task<List<Cart>> GetCartItemsAsync(Guid userId);
-
-        /// <summary>
         /// Kiểm tra xem người dùng có đơn hàng nào chưa hoàn tất không.
         /// (0: Pending, 1: Confirmed, 2: Shipping)
         /// </summary>
         Task<bool> HasPendingOrdersAsync(Guid userId);
+    }
+
+    /// <summary>
+    /// Repository interface cho Cart.
+    /// </summary>
+    public interface ICartRepository
+    {
+        Task<List<Cart>> GetCartItemsByUserAsync(Guid userId);
+        Task<List<Cart>> GetCartItemsWithTrackingAsync(Guid userId);
+        void RemoveRange(IEnumerable<Cart> carts);
+        Task SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Repository interface cho UserAddress.
+    /// </summary>
+    public interface IUserAddressRepository
+    {
+        Task<UserAddress?> GetByIdAsync(int id);
+        Task<List<UserAddress>> GetByUserIdAsync(Guid userId);
+        Task AddAsync(UserAddress address);
+        Task SaveChangesAsync();
     }
 }

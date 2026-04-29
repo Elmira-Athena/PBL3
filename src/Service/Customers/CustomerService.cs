@@ -15,15 +15,18 @@ namespace PBL3.Service.Customers
     public class CustomerService : ICustomerService
     {
         private readonly ICustomerRepository _customerRepo;
+        private readonly ICartRepository _cartRepo;
         private readonly UserManager<AppUser> _userManager;
         private readonly ILogger<CustomerService> _logger;
 
         public CustomerService(
             ICustomerRepository customerRepo,
+            ICartRepository cartRepo,
             UserManager<AppUser> userManager,
             ILogger<CustomerService> logger)
         {
             _customerRepo = customerRepo;
+            _cartRepo = cartRepo;
             _userManager = userManager;
             _logger = logger;
         }
@@ -86,7 +89,7 @@ namespace PBL3.Service.Customers
             }).ToList();
 
             // Get cart items
-            var cartItems = await _customerRepo.GetCartItemsAsync(id);
+            var cartItems = await _cartRepo.GetCartItemsByUserAsync(id);
             dto.CartItems = cartItems.Select(c => new CustomerCartItemDto
             {
                 Id = c.Id,

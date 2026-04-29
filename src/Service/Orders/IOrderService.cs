@@ -1,12 +1,14 @@
 using System;
 using System.Threading.Tasks;
 using PBL3.Shared.DTOs.Sale;
-using PBL3.Shared.DTOs.Common; 
+using PBL3.Shared.DTOs.Common;
+using PBL3.Shared.DTOs.Products;
 
 namespace PBL3.Service.Orders
 {
     public interface IOrderService
     {
+        Task<ApiResult<CheckoutResponse>> CheckoutAsync(CheckoutRequest request, Guid userId);
         Task<ApiResult<OrderDetailDto>> PlaceOrderAsync(CreateOrderRequest request, Guid userId);
         Task<ApiResult<OrderDetailDto>> GetByIdAsync(int id);
         Task<ApiResult<PagedResult<OrderSummaryResponse>>> GetPagedOrdersAsync(OrderFilterRequest request);

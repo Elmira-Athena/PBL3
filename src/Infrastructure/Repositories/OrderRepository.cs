@@ -60,6 +60,18 @@ namespace PBL3.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<Dictionary<int, int>> GetActiveOrderQuantitiesByVariantIdsAsync(List<int> variantIds)
+        {
+            // Single query: JOIN Orders + OrderDetails
+            // WHERE Order.Status IN (0, 1) AND OrderDetail.VariantId IN (@variantIds)
+            // GROUP BY VariantId -> SUM(Quantity)
+            return await _dbContext.OrderDetails
+                .Where(od => (od.Order.Status == 0 || od.Order.Status == 1)
+                             && variantIds.Contains(od.VariantId))
+                .GroupBy(od => od.VariantId)
+                .ToDictionaryAsync(g => g.Key, g => g.Sum(od => od.Quantity));
+        }
+
         public async Task SaveChangesAsync()
         {
             await _dbContext.SaveChangesAsync();

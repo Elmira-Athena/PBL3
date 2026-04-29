@@ -111,16 +111,6 @@ namespace PBL3.Infrastructure.Repositories
                 .ToListAsync();
         }
 
-        public async Task<List<Cart>> GetCartItemsAsync(Guid userId)
-        {
-            return await _context.Carts
-                .Include(c => c.Variant)
-                    .ThenInclude(v => v.Product)
-                .Where(c => c.UserId == userId)
-                .AsNoTracking()
-                .ToListAsync();
-        }
-
         public async Task<bool> HasPendingOrdersAsync(Guid userId)
         {
             // Statuses: 0 = Pending, 1 = Confirmed, 2 = Shipping

@@ -20,6 +20,28 @@ namespace PBL3.API.Controllers
             _orderService = orderService;
         }
 
+        [HttpPost("checkout")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> Checkout([FromBody] CheckoutRequest request)
+        {
+            var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var userId))
+            {
+                return Unauthorized(ApiResult<CheckoutResponse>.Fail("Không thể xác thực thông tin người dùng."));
+            }
+
+            try
+            {
+                var result = await _orderService.CheckoutAsync(request, userId);
+                if (!result.Success) return BadRequest(result);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResult<CheckoutResponse>.Fail(ex.Message));
+            }
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {

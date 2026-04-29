@@ -8,7 +8,7 @@ using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Sale;
-
+using PBL3.Shared.DTOs.Products;
 namespace PBL3.Service.Orders
 {
     public class OrderService : IOrderService
@@ -16,7 +16,10 @@ namespace PBL3.Service.Orders
         private readonly IUnitOfWork _unitOfWork;
         private readonly IOrderRepository _orderRepo;
         private readonly IVoucherRepository _voucherRepo;
-        private readonly IProductRepository _productRepo; // Assuming we need to get prices
+        private readonly IProductRepository _productRepo;
+        private readonly ICartRepository _cartRepo;
+        private readonly IUserAddressRepository _userAddressRepo;
+        private readonly IProductSerialRepository _productSerialRepo;
         private readonly IMapper _mapper;
 
         public OrderService(
@@ -24,13 +27,189 @@ namespace PBL3.Service.Orders
             IOrderRepository orderRepo,
             IVoucherRepository voucherRepo,
             IProductRepository productRepo,
+            ICartRepository cartRepo,
+            IUserAddressRepository userAddressRepo,
+            IProductSerialRepository productSerialRepo,
             IMapper mapper)
         {
             _unitOfWork = unitOfWork;
             _orderRepo = orderRepo;
             _voucherRepo = voucherRepo;
             _productRepo = productRepo;
+            _cartRepo = cartRepo;
+            _userAddressRepo = userAddressRepo;
+            _productSerialRepo = productSerialRepo;
             _mapper = mapper;
+        }
+
+        public async Task<ApiResult<CheckoutResponse>> CheckoutAsync(CheckoutRequest request, Guid userId)
+        {
+            // Step 1: Data Source (Cart vs Buy Now)
+            var checkoutItems = new List<(int VariantId, int Quantity, decimal Price)>();
+            List<Cart>? cartsToRemove = null;
+
+            if (request.IsBuyNow)
+            {
+                if (!request.BuyNowVariantId.HasValue || !request.BuyNowQuantity.HasValue || request.BuyNowQuantity.Value <= 0)
+                {
+                    return ApiResult<CheckoutResponse>.Fail("Thông tin mua ngay không hợp lệ.");
+                }
+
+                var variant = await _productRepo.GetVariantByIdAsync(request.BuyNowVariantId.Value);
+                if (variant == null)
+                {
+                    return ApiResult<CheckoutResponse>.Fail("Sản phẩm không tồn tại.");
+                }
+
+                checkoutItems.Add((variant.Id, request.BuyNowQuantity.Value, variant.Price));
+            }
+            else
+            {
+                var carts = await _cartRepo.GetCartItemsWithTrackingAsync(userId);
+                if (!carts.Any())
+                {
+                    return ApiResult<CheckoutResponse>.Fail("Giỏ hàng của bạn đang trống.");
+                }
+
+                checkoutItems = carts.Select(c => (c.VariantId, c.Quantity, c.Variant.Price)).ToList();
+                cartsToRemove = carts;
+            }
+
+            // Step 2: Address & Inventory Validation
+            var address = await _userAddressRepo.GetByIdAsync(request.UserAddressId);
+            if (address == null || address.UserId != userId)
+            {
+                return ApiResult<CheckoutResponse>.Fail("Địa chỉ giao hàng không hợp lệ.");
+            }
+
+            var variantIds = checkoutItems.Select(x => x.VariantId).Distinct().ToList();
+            
+            // Batch Query: Count available serials
+            var availableSerialsMap = await _productSerialRepo.CountAvailableByVariantIdsAsync(variantIds);
+            
+            // Batch Query: Sum quantities in active orders
+            var activeOrderQuantitiesMap = await _orderRepo.GetActiveOrderQuantitiesByVariantIdsAsync(variantIds);
+
+            // Check Virtual Inventory
+            foreach (var item in checkoutItems)
+            {
+                var availableSerials = availableSerialsMap.ContainsKey(item.VariantId) ? availableSerialsMap[item.VariantId] : 0;
+                var reservedInOrders = activeOrderQuantitiesMap.ContainsKey(item.VariantId) ? activeOrderQuantitiesMap[item.VariantId] : 0;
+                var realAvailableStock = availableSerials - reservedInOrders;
+
+                if (realAvailableStock < item.Quantity)
+                {
+                    return ApiResult<CheckoutResponse>.Fail($"Sản phẩm có mã {item.VariantId} hiện đã hết hàng hoặc không đủ số lượng (Khả dụng: {Math.Max(0, realAvailableStock)}).");
+                }
+            }
+
+            // Step 3: Voucher & Price Calculation
+            decimal subTotal = checkoutItems.Sum(x => x.Price * x.Quantity);
+            
+            var (usages, totalDiscount) = await ApplyVouchersAsync(subTotal, request.VoucherCodes, userId);
+            totalDiscount = Math.Min(totalDiscount, subTotal);
+
+            decimal totalAmount = subTotal + request.ShippingFee - totalDiscount;
+
+            // Step 4: Create Order (within Transaction)
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                string datePrefix = "ORD-" + DateTime.Now.ToString("yyyyMMdd");
+                string? lastCode = await _orderRepo.GetLastOrderCodeByDateAsync(datePrefix);
+                int nextIndex = 1;
+                if (!string.IsNullOrEmpty(lastCode))
+                {
+                    string suffix = lastCode.Substring(lastCode.LastIndexOf('-') + 1);
+                    if (int.TryParse(suffix, out int lastIndex))
+                    {
+                        nextIndex = lastIndex + 1;
+                    }
+                }
+                string newOrderCode = $"{datePrefix}-{nextIndex:D3}";
+
+                byte orderStatus = (byte)(request.PaymentMethod == 0 ? 1 : 0); // 1: Confirmed (COD), 0: Pending (Online)
+
+                var order = new Order
+                {
+                    OrderCode = newOrderCode,
+                    UserId = userId,
+                    OrderDate = DateTime.UtcNow,
+                    Status = orderStatus,
+                    SubTotal = subTotal,
+                    ShippingFee = request.ShippingFee,
+                    DiscountAmount = totalDiscount,
+                    TotalAmount = totalAmount,
+                    ShipName = address.ReceiverName,
+                    ShipPhone = address.PhoneNumber,
+                    ShipAddress = address.AddressLine,
+                    ShipCity = address.City,
+                    PaymentMethod = request.PaymentMethod,
+                    PaymentStatus = 0,
+                    OrderType = 0, // Online
+                    Note = request.Note
+                };
+
+                await _orderRepo.AddAsync(order);
+                await _unitOfWork.SaveChangesAsync(); // To get order.Id
+
+                // Insert OrderDetails
+                foreach (var item in checkoutItems)
+                {
+                    order.OrderDetails.Add(new OrderDetail
+                    {
+                        OrderId = order.Id,
+                        VariantId = item.VariantId,
+                        Quantity = item.Quantity,
+                        UnitPrice = item.Price
+                    });
+                }
+
+                // Apply voucher usages
+                foreach (var usage in usages)
+                {
+                    usage.OrderId = order.Id;
+                }
+                if (usages.Any())
+                {
+                    await _voucherRepo.AddUsagesAsync(usages);
+                    
+                    if (request.VoucherCodes != null && request.VoucherCodes.Any())
+                    {
+                        var vouchersToUpdate = await _voucherRepo.GetByCodesAsync(request.VoucherCodes);
+                        foreach (var voucher in vouchersToUpdate)
+                        {
+                            voucher.UsedCount += 1;
+                        }
+                    }
+                }
+
+                // Step 5: Cleanup & Commit
+                if (!request.IsBuyNow && cartsToRemove != null)
+                {
+                    _cartRepo.RemoveRange(cartsToRemove);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitAsync();
+
+                var response = new CheckoutResponse
+                {
+                    OrderId = order.Id,
+                    OrderCode = order.OrderCode,
+                    TotalAmount = order.TotalAmount,
+                    Status = order.Status,
+                    PaymentMethod = order.PaymentMethod,
+                    PaymentUrl = null // TODO: Generate MoMo/VNPay URL if PaymentMethod == 1
+                };
+
+                return ApiResult<CheckoutResponse>.Ok(response, "Đặt hàng thành công!");
+            }
+            catch (Exception ex)
+            {
+                await _unitOfWork.RollbackAsync();
+                throw new Exception("Lỗi hệ thống khi đặt hàng: " + ex.Message, ex);
+            }
         }
 
         public async Task<ApiResult<OrderDetailDto>> PlaceOrderAsync(CreateOrderRequest request, Guid userId)
