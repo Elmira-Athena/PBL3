@@ -78,8 +78,8 @@ SET @ManId = (SELECT TOP 1 Id FROM Manufacturers WHERE Name = 'ASUS');
 
 IF NOT EXISTS (SELECT 1 FROM Products WHERE Name = N'Laptop ASUS ExpertBook')
 BEGIN
-    INSERT INTO Products (Name, ShortDescription, Description, ManufacturerId, CategoryId, Status, CreatedDate, IsDeleted)
-    VALUES (N'Laptop ASUS ExpertBook', N'Dòng laptop doanh nhân siêu bền nhẹ', N'Chi tiết sản phẩm Laptop ASUS ExpertBook B9...', @ManId, @CatId, 1, GETUTCDATE(), 0);
+    INSERT INTO Products (Name, Slug, ShortDescription, Description, ManufacturerId, CategoryId, Status, CreatedDate, IsDeleted)
+    VALUES (N'Laptop ASUS ExpertBook', 'laptop-asus-expertbook', N'Dòng laptop doanh nhân siêu bền nhẹ', N'Chi tiết sản phẩm Laptop ASUS ExpertBook B9...', @ManId, @CatId, 1, GETUTCDATE(), 0);
 END
 SET @ProdId = (SELECT TOP 1 Id FROM Products WHERE Name = N'Laptop ASUS ExpertBook');
 

@@ -101,6 +101,7 @@ namespace PBL3.Service.Products
             var product = new Product
             {
                 Name = request.Name,
+                Slug = GenerateProductSlug(request.Name),
                 ShortDescription = request.ShortDescription,
                 Description = request.Description,
                 ManufacturerId = request.ManufacturerId,
@@ -171,6 +172,7 @@ namespace PBL3.Service.Products
 
             // Update fields
             product.Name = request.Name;
+            product.Slug = GenerateProductSlug(request.Name);
             product.ShortDescription = request.ShortDescription;
             product.Description = request.Description;
             product.ManufacturerId = request.ManufacturerId;
@@ -271,6 +273,7 @@ namespace PBL3.Service.Products
             {
                 Id = entity.Id,
                 Name = entity.Name,
+                Slug = entity.Slug,
                 ShortDescription = entity.ShortDescription,
                 Description = entity.Description,
                 ManufacturerId = entity.ManufacturerId,
@@ -362,6 +365,29 @@ namespace PBL3.Service.Products
             var combined = $"{productName} {sku}";
             // Remove diacritics (dấu tiếng Việt)
             var normalized = combined.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder();
+            foreach (var c in normalized)
+            {
+                var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+                if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+                    sb.Append(c);
+            }
+            var noDiacritics = sb.ToString().Normalize(NormalizationForm.FormC);
+
+            // Convert to lowercase, replace spaces and special chars with dashes
+            var slug = Regex.Replace(noDiacritics.ToLower(), @"[^a-z0-9\s-]", "");
+            slug = Regex.Replace(slug, @"[\s-]+", "-").Trim('-');
+
+            return slug;
+        }
+
+        /// <summary>
+        /// Sinh slug từ tên sản phẩm.
+        /// </summary>
+        private static string GenerateProductSlug(string productName)
+        {
+            // Remove diacritics (dấu tiếng Việt)
+            var normalized = productName.Normalize(NormalizationForm.FormD);
             var sb = new StringBuilder();
             foreach (var c in normalized)
             {

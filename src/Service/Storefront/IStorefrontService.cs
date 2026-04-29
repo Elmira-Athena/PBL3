@@ -7,5 +7,7 @@ namespace PBL3.Service.Storefront
     {
         Task<ApiResult<List<CategoryMenuResponse>>> GetActiveCategoriesAsync();
         Task<ApiResult<List<ProductCardResponse>>> GetFeaturedProductsAsync(int? categoryId, int take = 5);
+        Task<ApiResult<ProductDetailResponse>> GetProductDetailAsync(string slug);
+        Task<ApiResult<List<ProductCardResponse>>> GetRelatedProductsAsync(string slug);
     }
 }

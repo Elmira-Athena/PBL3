@@ -74,6 +74,11 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<IdentityUserToken<Guid>>().ToTable("AppUserTokens");
 
             // --- PRODUCT ---
+            modelBuilder.Entity<Product>(entity =>
+            {
+                entity.HasIndex(p => p.Slug).IsUnique();
+            });
+
             modelBuilder.Entity<Category>(entity =>
             {
                 entity.HasIndex(c => c.Slug).IsUnique();
