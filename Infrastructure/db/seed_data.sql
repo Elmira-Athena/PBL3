@@ -10,14 +10,20 @@ DECLARE @AdminRoleId UNIQUEIDENTIFIER = '29837492-3847-4837-2938-472938472938';
 DECLARE @EmployeeRoleId UNIQUEIDENTIFIER = '39485729-3847-4837-2938-472938472939';
 DECLARE @CustomerRoleId UNIQUEIDENTIFIER = '49586730-3847-4837-2938-472938472940';
 
-IF NOT EXISTS (SELECT 1 FROM AppRoles WHERE Id = @AdminRoleId)
-BEGIN
+IF NOT EXISTS (SELECT 1 FROM AppRoles WHERE RoleCode = 'ADMIN')
     INSERT INTO AppRoles (Id, Name, NormalizedName, ConcurrencyStamp, Description, RoleCode)
-    VALUES 
-    (@AdminRoleId, 'Admin', 'ADMIN', NEWID(), 'Administrator with full access', 'ADMIN'),
-    (@EmployeeRoleId, 'Employee', 'EMPLOYEE', NEWID(), 'Staff with POS and Warehouse access', 'EMPLOYEE'),
-    (@CustomerRoleId, 'Customer', 'CUSTOMER', NEWID(), 'Regular customer', 'CUSTOMER');
-END
+    VALUES (@AdminRoleId, 'Admin', 'ADMIN', NEWID(), 'Administrator with full access', 'ADMIN');
+SET @AdminRoleId = (SELECT TOP 1 Id FROM AppRoles WHERE RoleCode = 'ADMIN');
+
+IF NOT EXISTS (SELECT 1 FROM AppRoles WHERE RoleCode = 'EMPLOYEE')
+    INSERT INTO AppRoles (Id, Name, NormalizedName, ConcurrencyStamp, Description, RoleCode)
+    VALUES (@EmployeeRoleId, 'Employee', 'EMPLOYEE', NEWID(), 'Staff with POS and Warehouse access', 'EMPLOYEE');
+SET @EmployeeRoleId = (SELECT TOP 1 Id FROM AppRoles WHERE RoleCode = 'EMPLOYEE');
+
+IF NOT EXISTS (SELECT 1 FROM AppRoles WHERE RoleCode = 'CUSTOMER')
+    INSERT INTO AppRoles (Id, Name, NormalizedName, ConcurrencyStamp, Description, RoleCode)
+    VALUES (@CustomerRoleId, 'Customer', 'CUSTOMER', NEWID(), 'Regular customer', 'CUSTOMER');
+SET @CustomerRoleId = (SELECT TOP 1 Id FROM AppRoles WHERE RoleCode = 'CUSTOMER');
 
 -- 2. SEED ADMIN ACCOUNT (Password: Admin@123)
 -- Verified Hash generated via Microsoft.AspNetCore.Identity.PasswordHasher
@@ -44,9 +50,9 @@ END
 DECLARE @CustomerUserId UNIQUEIDENTIFIER = '22222222-2222-2222-2222-222222222222';
 IF NOT EXISTS (SELECT 1 FROM AppUsers WHERE Id = @CustomerUserId)
 BEGIN
-    INSERT INTO AppUsers (Id, UserName, NormalizedUserName, Email, NormalizedEmail, EmailConfirmed, SecurityStamp, ConcurrencyStamp, PhoneNumber, PhoneNumberConfirmed, TwoFactorEnabled, LockoutEnabled, AccessFailedCount, IsActive, Type, CreatedDate, IsDeleted)
+    INSERT INTO AppUsers (Id, UserName, NormalizedUserName, Email, NormalizedEmail, EmailConfirmed, PasswordHash, SecurityStamp, ConcurrencyStamp, PhoneNumber, PhoneNumberConfirmed, TwoFactorEnabled, LockoutEnabled, AccessFailedCount, IsActive, Type, CreatedDate, IsDeleted)
     VALUES 
-    (@CustomerUserId, 'customer1', 'CUSTOMER1', 'customer1@gmail.com', 'CUSTOMER1@GMAIL.COM', 1, NEWID(), NEWID(), '0987654321', 1, 0, 1, 0, 1, 2, GETUTCDATE(), 0);
+    (@CustomerUserId, 'customer1', 'CUSTOMER1', 'customer1@gmail.com', 'CUSTOMER1@GMAIL.COM', 1, @PasswordHash, NEWID(), NEWID(), '0987654321', 1, 0, 1, 0, 1, 2, GETUTCDATE(), 0);
 
     INSERT INTO UserProfiles (UserId, FullName, Gender, DateOfBirth, Address, City)
     VALUES (@CustomerUserId, 'Nguyễn Văn A', 0, '1995-05-10', '456 Le Duan', 'Da Nang');

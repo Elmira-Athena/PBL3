@@ -21,7 +21,7 @@
         </MudButton>
     </MudPaper>
 
-    <MudTable ServerData="@(new Func<TableState, Task<TableData<OrderSummaryResponse>>>(ServerReload))"
+    <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<OrderSummaryResponse>>>(ServerReload))"
               Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1" Class="rounded-lg" @ref="_table">
         <HeaderContent>
             <MudTh>Mã đơn</MudTh>
@@ -82,7 +82,7 @@
         _filter.Status = 1;
     }
 
-    private async Task<TableData<OrderSummaryResponse>> ServerReload(TableState state)
+    private async Task<TableData<OrderSummaryResponse>> ServerReload(TableState state, CancellationToken cancellationToken)
     {
         _filter.PageIndex = state.Page + 1;
         _filter.PageSize = state.PageSize;

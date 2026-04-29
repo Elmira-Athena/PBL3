@@ -1,0 +1,334 @@
+@page "/checkout"
+@using PBL3.Shared.DTOs.Sale
+@using System.ComponentModel.DataAnnotations
+@using PBL3.Shared.DTOs.Customers
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Thanh toán - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8 mb-16">
+    <MudText Typo="Typo.h4" Class="mb-6 fw-bold" Color="Color.Dark">Thanh toán đơn hàng</MudText>
+
+    @if (_isLoading)
+    {
+        <MudGrid>
+            <MudItem xs="12" md="8">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="250px" Class="mb-4 rounded-lg" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="200px" Class="rounded-lg" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="400px" Class="rounded-lg" />
+            </MudItem>
+        </MudGrid>
+    }
+    else
+    {
+        <MudGrid>
+            <!-- Cột trái: Thông tin giao hàng & Thanh toán -->
+            <MudItem xs="12" md="8">
+                
+                <!-- Card: Địa chỉ nhận hàng -->
+                <MudCard Elevation="2" Class="mb-6 rounded-lg overflow-hidden">
+                    <MudCardHeader Class="bg-light pb-2">
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Class="fw-bold d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Color="Color.Primary" Class="mr-2" />
+                                Địa chỉ nhận hàng
+                            </MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddAddressDialog">
+                                Thêm địa chỉ mới
+                            </MudButton>
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (_addresses == null || !_addresses.Any())
+                        {
+                            <MudAlert Severity="Severity.Warning" Class="rounded-lg">
+                                Bạn chưa có địa chỉ nhận hàng nào. Vui lòng thêm địa chỉ mới để tiếp tục.
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudRadioGroup @bind-Value="_selectedAddressId" T="int">
+                                <MudGrid>
+                                    @foreach (var address in _addresses)
+                                    {
+                                        <MudItem xs="12" sm="6">
+                                            <MudCard Outlined="true" Class="@GetAddressCardClass(address.Id)" @onclick="() => SelectAddress(address.Id)" Style="cursor: pointer; transition: all 0.2s ease;">
+                                                <MudCardContent Class="pa-4">
+                                                    <div class="d-flex align-start">
+                                                        <MudRadio Value="@address.Id" Color="Color.Primary" Class="mr-2 mt-n1" />
+                                                        <div>
+                                                            <MudText Typo="Typo.subtitle1" Class="fw-bold">
+                                                                @address.ReceiverName
+                                                                @if (address.IsDefault)
+                                                                {
+                                                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2">Mặc định</MudChip>
+                                                                }
+                                                            </MudText>
+                                                            <MudText Typo="Typo.body2" Class="text-muted mb-1">@address.PhoneNumber</MudText>
+                                                            <MudText Typo="Typo.body2">@address.DetailAddress, @address.Ward, @address.District, @address.Province</MudText>
+                                                        </div>
+                                                    </div>
+                                                </MudCardContent>
+                                            </MudCard>
+                                        </MudItem>
+                                    }
+                                </MudGrid>
+                            </MudRadioGroup>
+                        }
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Card: Phương thức thanh toán -->
+                <MudCard Elevation="2" Class="rounded-lg overflow-hidden">
+                    <MudCardHeader Class="bg-light pb-2">
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Class="fw-bold d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Payment" Color="Color.Primary" Class="mr-2" />
+                                Phương thức thanh toán
+                            </MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudRadioGroup @bind-Value="_selectedPaymentMethod" T="int">
+                            <MudGrid>
+                                <MudItem xs="12" sm="6">
+                                    <MudCard Outlined="true" Class="@GetPaymentCardClass(0)" @onclick="() => _selectedPaymentMethod = 0" Style="cursor: pointer; transition: all 0.2s ease;">
+                                        <MudCardContent Class="pa-4 d-flex align-center">
+                                            <MudRadio Value="0" Color="Color.Primary" Class="mr-2" />
+                                            <div>
+                                                <MudText Typo="Typo.subtitle1" Class="fw-bold">Thanh toán khi nhận hàng</MudText>
+                                                <MudText Typo="Typo.body2" Class="text-muted">Phí thu hộ: 0đ</MudText>
+                                            </div>
+                                        </MudCardContent>
+                                    </MudCard>
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudCard Outlined="true" Class="@GetPaymentCardClass(1)" @onclick="() => _selectedPaymentMethod = 1" Style="cursor: pointer; transition: all 0.2s ease;">
+                                        <MudCardContent Class="pa-4 d-flex align-center">
+                                            <MudRadio Value="1" Color="Color.Secondary" Class="mr-2" />
+                                            <div>
+                                                <MudText Typo="Typo.subtitle1" Class="fw-bold">Thanh toán qua MoMo</MudText>
+                                                <MudText Typo="Typo.body2" Class="text-muted">Miễn phí giao dịch</MudText>
+                                            </div>
+                                        </MudCardContent>
+                                    </MudCard>
+                                </MudItem>
+                            </MudGrid>
+                        </MudRadioGroup>
+                    </MudCardContent>
+                </MudCard>
+
+            </MudItem>
+
+            <!-- Cột phải: Tóm tắt đơn hàng -->
+            <MudItem xs="12" md="4">
+                <MudCard Elevation="2" Class="rounded-lg order-summary-card" Style="position: sticky; top: 20px;">
+                    <MudCardHeader Class="pb-0">
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Class="fw-bold">Tóm tắt đơn hàng</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <!-- Danh sách sản phẩm thu gọn -->
+                        <div class="mb-4" style="max-height: 200px; overflow-y: auto;">
+                            @foreach (var item in _cartItems)
+                            {
+                                <div class="d-flex justify-space-between mb-3 align-center">
+                                    <div class="d-flex align-center">
+                                        <MudImage Src="@item.ImageUrl" Width="50" Height="50" ObjectFit="ObjectFit.Cover" Class="rounded mr-3" />
+                                        <div>
+                                            <MudText Typo="Typo.body2" Class="fw-bold line-clamp-2">@item.ProductName</MudText>
+                                            <MudText Typo="Typo.caption" Class="text-muted">@item.VariantName x @item.Quantity</MudText>
+                                        </div>
+                                    </div>
+                                    <MudText Typo="Typo.body2" Class="fw-bold">@((item.Price * item.Quantity).ToString("N0"))đ</MudText>
+                                </div>
+                            }
+                        </div>
+
+                        <MudDivider Class="mb-4" />
+
+                        <!-- Voucher -->
+                        <div class="d-flex mb-4">
+                            <MudTextField @bind-Value="_voucherCode" Placeholder="Nhập mã giảm giá" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mr-2 flex-grow-1" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Dark" OnClick="ApplyVoucher" Disabled="@string.IsNullOrWhiteSpace(_voucherCode)">Áp dụng</MudButton>
+                        </div>
+
+                        <MudDivider Class="mb-4" />
+
+                        <!-- Tính toán chi phí -->
+                        <div class="d-flex justify-space-between mb-2">
+                            <MudText Typo="Typo.body1">Tạm tính</MudText>
+                            <MudText Typo="Typo.body1" Class="fw-bold">@SubTotal.ToString("N0") đ</MudText>
+                        </div>
+                        <div class="d-flex justify-space-between mb-2">
+                            <MudText Typo="Typo.body1">Phí vận chuyển</MudText>
+                            <MudText Typo="Typo.body1" Class="fw-bold">@ShippingFee.ToString("N0") đ</MudText>
+                        </div>
+                        <div class="d-flex justify-space-between mb-4">
+                            <MudText Typo="Typo.body1">Giảm giá</MudText>
+                            <MudText Typo="Typo.body1" Color="Color.Success" Class="fw-bold">- @DiscountAmount.ToString("N0") đ</MudText>
+                        </div>
+
+                        <MudDivider Class="mb-4" />
+
+                        <div class="d-flex justify-space-between align-center mb-6">
+                            <MudText Typo="Typo.h6" Class="fw-bold">Tổng thanh toán</MudText>
+                            <MudText Typo="Typo.h5" Color="Color.Error" Class="fw-bold">@Total.ToString("N0") đ</MudText>
+                        </div>
+
+                        <MudButton Variant="Variant.Filled" 
+                                   Color="Color.Error" 
+                                   Size="Size.Large" 
+                                   FullWidth="true" 
+                                   Class="rounded-lg py-3 fw-bold text-white"
+                                   OnClick="PlaceOrder"
+                                   Disabled="@(!CanPlaceOrder)"
+                                   StartIcon="@(_isSubmitting ? null : Icons.Material.Filled.ShoppingCartCheckout)">
+                            @if (_isSubmitting)
+                            {
+                                <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                                <MudText>Đang xử lý...</MudText>
+                            }
+                            else
+                            {
+                                <MudText>ĐẶT HÀNG</MudText>
+                            }
+                        </MudButton>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+<style>
+    .fw-bold { font-weight: 600; }
+    .text-muted { color: var(--mud-palette-text-secondary); }
+    .bg-light { background-color: rgba(0,0,0,0.03); }
+    .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .selected-card {
+        border-color: var(--mud-palette-primary) !important;
+        background-color: rgba(var(--mud-palette-primary-rgb), 0.05);
+        box-shadow: 0 0 0 1px var(--mud-palette-primary) !important;
+    }
+    .order-summary-card {
+        border-top: 4px solid var(--mud-palette-primary);
+    }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private bool _isSubmitting = false;
+    private int _selectedAddressId = 0;
+    private int _selectedPaymentMethod = 0; // 0: COD, 1: MoMo
+    private string _voucherCode = "";
+    
+    // Mock data classes
+    public class AddressDto { public int Id { get; set; } public string ReceiverName { get; set; } = ""; public string PhoneNumber { get; set; } = ""; public string DetailAddress { get; set; } = ""; public string Province { get; set; } = ""; public string District { get; set; } = ""; public string Ward { get; set; } = ""; public bool IsDefault { get; set; } }
+    public class CartItemDto { public int ProductId { get; set; } public string ProductName { get; set; } = ""; public string VariantName { get; set; } = ""; public int Quantity { get; set; } public decimal Price { get; set; } public string ImageUrl { get; set; } = ""; }
+
+    private List<AddressDto> _addresses = new();
+    private List<CartItemDto> _cartItems = new();
+
+    private decimal SubTotal => _cartItems.Sum(x => x.Price * x.Quantity);
+    private decimal ShippingFee => 30000;
+    private decimal DiscountAmount = 0;
+    private decimal Total => SubTotal + ShippingFee - DiscountAmount;
+    private bool CanPlaceOrder => _selectedAddressId > 0 && !_isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Inject Client Services and call API
+        // _addresses = await UserAddressClientService.GetMyAddressesAsync();
+        // _cartItems = await CartClientService.GetMyCartAsync();
+
+        // Mock data for UI presentation
+        await Task.Delay(800); // Simulate network
+        _addresses = new List<AddressDto>
+        {
+            new AddressDto { Id = 1, ReceiverName = "Nguyễn Văn A", PhoneNumber = "0901234567", DetailAddress = "123 Lê Lợi", Ward = "Phường 1", District = "Quận 1", Province = "TP Hồ Chí Minh", IsDefault = true },
+            new AddressDto { Id = 2, ReceiverName = "Nguyễn Văn A", PhoneNumber = "0901234567", DetailAddress = "45 Tôn Đức Thắng", Ward = "Phường Bến Nghé", District = "Quận 1", Province = "TP Hồ Chí Minh", IsDefault = false }
+        };
+        _selectedAddressId = _addresses.FirstOrDefault(x => x.IsDefault)?.Id ?? 0;
+
+        _cartItems = new List<CartItemDto>
+        {
+            new CartItemDto { ProductId = 1, ProductName = "Laptop Asus ExpertBook B5", VariantName = "Core i7 / 16GB / 512GB", Price = 25000000, Quantity = 1, ImageUrl = "https://picsum.photos/200" },
+            new CartItemDto { ProductId = 2, ProductName = "Chuột Logitech MX Master 3S", VariantName = "Đen", Price = 2500000, Quantity = 1, ImageUrl = "https://picsum.photos/201" }
+        };
+
+        _isLoading = false;
+    }
+
+    private string GetAddressCardClass(int id) => _selectedAddressId == id ? "selected-card" : "";
+    private string GetPaymentCardClass(int method) => _selectedPaymentMethod == method ? "selected-card" : "";
+
+    private void SelectAddress(int id)
+    {
+        _selectedAddressId = id;
+    }
+
+    private void OpenAddAddressDialog()
+    {
+        Snackbar.Add("Chức năng thêm địa chỉ đang được phát triển", Severity.Info);
+        // TODO: var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        // DialogService.Show<AddAddressDialog>("Thêm địa chỉ mới", options);
+    }
+
+    private void ApplyVoucher()
+    {
+        // TODO: Call API to validate voucher
+        if (_voucherCode.ToUpper() == "DISCOUNT100K")
+        {
+            DiscountAmount = 100000;
+            Snackbar.Add("Áp dụng mã giảm giá thành công!", Severity.Success);
+        }
+        else
+        {
+            DiscountAmount = 0;
+            Snackbar.Add("Mã giảm giá không hợp lệ", Severity.Error);
+        }
+    }
+
+    private async Task PlaceOrder()
+    {
+        if (_selectedAddressId == 0)
+        {
+            Snackbar.Add("Vui lòng chọn địa chỉ giao hàng", Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+
+        try
+        {
+            // var request = new CheckoutRequest { UserAddressId = _selectedAddressId, PaymentMethod = _selectedPaymentMethod, VoucherCode = _voucherCode };
+            // var result = await CheckoutClientService.PlaceOrderAsync(request);
+            
+            // Simulate API call
+            await Task.Delay(1500);
+            
+            Snackbar.Add("Đặt hàng thành công!", Severity.Success);
+            NavigationManager.NavigateTo("/order-success/ORD-12345");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi khi đặt hàng: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}
