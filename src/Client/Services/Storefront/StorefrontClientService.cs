@@ -27,5 +27,19 @@ namespace Client.Services.Storefront
             var result = await response.Content.ReadFromJsonAsync<ApiResult<List<ProductCardResponse>>>();
             return result ?? ApiResult<List<ProductCardResponse>>.Fail("Lỗi kết nối server.");
         }
+
+        public async Task<ApiResult<ProductDetailResponse>> GetProductDetailAsync(string slug)
+        {
+            var response = await _httpClient.GetAsync($"/api/storefront/products/{slug}");
+            var result = await response.Content.ReadFromJsonAsync<ApiResult<ProductDetailResponse>>();
+            return result ?? ApiResult<ProductDetailResponse>.Fail("Lỗi kết nối server.");
+        }
+
+        public async Task<ApiResult<List<ProductCardResponse>>> GetRelatedProductsAsync(string slug, int take = 5)
+        {
+            var response = await _httpClient.GetAsync($"/api/storefront/products/{slug}/related?take={take}");
+            var result = await response.Content.ReadFromJsonAsync<ApiResult<List<ProductCardResponse>>>();
+            return result ?? ApiResult<List<ProductCardResponse>>.Fail("Lỗi kết nối server.");
+        }
     }
 }

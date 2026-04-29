@@ -1,0 +1,345 @@
+@page "/product/{slug}"
+@layout StorefrontLayout
+@using PBL3.Shared.DTOs.Storefront
+@using Client.Services.Storefront
+@using Client.Services.Cart
+@inject IStorefrontClientService StorefrontClientService
+@inject ICartClientService CartClientService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_product?.Name ?? "Chi tiết sản phẩm") - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6 mb-16">
+    @if (_isLoading)
+    {
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="500px" Class="rounded-lg" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSkeleton SkeletonType="SkeletonType.Text" Height="40px" Width="80%" Class="mb-4" />
+                <MudSkeleton SkeletonType="SkeletonType.Text" Height="30px" Width="50%" Class="mb-6" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="100px" Class="mb-6" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="60px" Class="mb-4" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="50px" />
+            </MudItem>
+        </MudGrid>
+    }
+    else if (_product == null)
+    {
+        <div class="d-flex flex-column align-center justify-center py-16">
+            <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Style="font-size: 80px;" Color="Color.Error" Class="mb-4 opacity-50" />
+            <MudText Typo="Typo.h5" Class="fw-bold mb-2">Không tìm thấy sản phẩm</MudText>
+            <MudText Typo="Typo.body1" Class="text-muted mb-6">Sản phẩm này không tồn tại hoặc đã bị xóa.</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/"))">Về trang chủ</MudButton>
+        </div>
+    }
+    else
+    {
+        <!-- Main Info -->
+        <MudGrid Class="mb-10">
+            <!-- Left: Gallery -->
+            <MudItem xs="12" md="5">
+                <MudCard Elevation="0" Class="rounded-lg overflow-hidden border mb-3 p-2">
+                    <MudImage Src="@_mainImage" Alt="@_product.Name" ObjectFit="ObjectFit.Contain" Style="width: 100%; height: 400px;" />
+                </MudCard>
+                <div class="d-flex flex-row overflow-x-auto gap-2 py-2">
+                    @foreach (var img in _product.Images)
+                    {
+                        var isSelected = _mainImage == img;
+                        <MudImage Src="@img" Alt="Thumbnail" ObjectFit="ObjectFit.Cover" Width="80" Height="80" 
+                                  Class="@($"rounded cursor-pointer border {(isSelected ? "border-primary border-2" : "")}")" 
+                                  onclick="@(() => ChangeMainImage(img))" />
+                    }
+                </div>
+            </MudItem>
+
+            <!-- Right: Order Area -->
+            <MudItem xs="12" md="7" Class="pl-md-8">
+                <MudText Typo="Typo.h4" Class="fw-bold mb-2">@_product.Name</MudText>
+                <div class="d-flex align-center mb-4 gap-4">
+                    <MudText Typo="Typo.body2" Class="text-muted">
+                        Thương hiệu: <span class="fw-bold text-dark">@_product.ManufacturerName</span>
+                    </MudText>
+                    <MudDivider Vertical="true" FlexItem="true" />
+                    <div class="d-flex align-center">
+                        <MudRating SelectedValue="(int)_product.Rating" Max="5" ReadOnly="true" Size="Size.Small" />
+                        <MudText Typo="Typo.caption" Class="ml-2 text-muted">(@_product.ReviewCount đánh giá)</MudText>
+                    </div>
+                </div>
+
+                <MudDivider Class="mb-6" />
+
+                <!-- Price -->
+                <div class="mb-6">
+                    @if (_currentVariant != null)
+                    {
+                        <MudText Typo="Typo.h3" Color="Color.Error" Class="fw-bold mb-1">
+                            @_currentVariant.Price.ToString("N0") ₫
+                        </MudText>
+                        @if (!_currentVariant.IsAvailable)
+                        {
+                            <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">Hết hàng</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">Còn hàng</MudChip>
+                        }
+                    }
+                </div>
+
+                <!-- Variants -->
+                @if (_product.Variants.Any())
+                {
+                    <div class="mb-6">
+                        <MudText Typo="Typo.subtitle2" Class="fw-bold mb-2">Chọn phiên bản:</MudText>
+                        <MudChipGroup T="StorefrontVariantResponse" Value="_currentVariant" ValueChanged="OnVariantChanged" SelectionMode="SelectionMode.SingleSelection" Class="gap-2">
+                            @foreach (var variant in _product.Variants)
+                            {
+                                <MudChip T="StorefrontVariantResponse" Value="@variant" Variant="Variant.Text" Color="Color.Primary" 
+                                         Disabled="!variant.IsAvailable"
+                                         Class="@($"border {(variant.Id == _currentVariant?.Id ? "border-primary border-2 bg-light-primary" : "border-lines-default")}")">
+                                    @variant.VariantName
+                                </MudChip>
+                            }
+                        </MudChipGroup>
+                    </div>
+                }
+
+                <!-- Quantity -->
+                <div class="mb-6 d-flex align-center gap-4">
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold">Số lượng:</MudText>
+                    <MudNumericField @bind-Value="_quantity" Min="1" Max="99" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width: 100px;" Disabled="!IsCurrentVariantAvailable()" />
+                </div>
+
+                <!-- Actions -->
+                <div class="d-flex gap-4">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Class="flex-1 py-3 fw-bold rounded-lg" 
+                               StartIcon="@Icons.Material.Filled.AddShoppingCart" 
+                               OnClick="AddToCartAsync" Disabled="!IsCurrentVariantAvailable() || _isProcessing">
+                        THÊM VÀO GIỎ
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Large" Class="flex-1 py-3 fw-bold rounded-lg" 
+                               OnClick="BuyNowAsync" Disabled="!IsCurrentVariantAvailable() || _isProcessing">
+                        MUA NGAY
+                    </MudButton>
+                </div>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Tabs Information -->
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6" Class="mb-10">
+            <MudTabPanel Text="MÔ TẢ SẢN PHẨM" Icon="@Icons.Material.Filled.Description">
+                @if (!string.IsNullOrWhiteSpace(_product.Description))
+                {
+                    <div class="product-description-content">
+                        @((MarkupString)_product.Description)
+                    </div>
+                }
+                else
+                {
+                    <MudText Class="text-muted text-center py-8">Chưa có thông tin mô tả cho sản phẩm này.</MudText>
+                }
+            </MudTabPanel>
+            <MudTabPanel Text="THÔNG SỐ KỸ THUẬT" Icon="@Icons.Material.Filled.Tune">
+                @if (_currentVariant != null && _currentVariant.Specifications.Any())
+                {
+                    <MudTable Items="@_currentVariant.Specifications" Hover="true" Elevation="0" Class="border rounded">
+                        <HeaderContent>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Thông số</MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Giá trị</MudText></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Thông số" Class="fw-bold" Style="width: 30%; background-color: rgba(0,0,0,0.02);">@context.Key</MudTd>
+                            <MudTd DataLabel="Giá trị">@context.Value</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <MudText Class="text-muted text-center py-8">Không có thông số kỹ thuật cho phiên bản này.</MudText>
+                }
+            </MudTabPanel>
+        </MudTabs>
+
+        <!-- Related Products -->
+        @if (_relatedProducts != null && _relatedProducts.Any())
+        {
+            <div class="mb-10">
+                <MudText Typo="Typo.h5" Class="fw-bold mb-6 border-l-4 border-primary pl-3">Sản phẩm tương tự</MudText>
+                <MudGrid>
+                    @foreach (var p in _relatedProducts)
+                    {
+                        <MudItem xs="12" sm="6" md="4" lg="2">
+                            <!-- TODO: Inject ProductCard component once it's available. Assuming we use a simple view here if not -->
+                            <MudCard Elevation="1" Class="h-100 product-card cursor-pointer" @onclick="@(() => NavigateToProduct(p.Slug))">
+                                <MudCardMedia Image="@p.ThumbnailUrl" Height="150" Style="background-size: contain; margin-top: 10px;" />
+                                <MudCardContent Class="pa-3">
+                                    <MudText Typo="Typo.body2" Class="fw-bold line-clamp-2 mb-2" Style="min-height: 40px;">@p.Name</MudText>
+                                    <MudText Typo="Typo.subtitle1" Color="Color.Error" Class="fw-bold">@p.CurrentPrice.ToString("N0") ₫</MudText>
+                                    @if (p.OldPrice > p.CurrentPrice)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="text-muted text-decoration-line-through">@p.OldPrice.ToString("N0") ₫</MudText>
+                                    }
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </div>
+        }
+    }
+</MudContainer>
+
+<style>
+    .fw-bold { font-weight: 600; }
+    .text-muted { color: var(--mud-palette-text-secondary); }
+    .text-dark { color: var(--mud-palette-text-primary); }
+    .border-l-4 { border-left-width: 4px; border-left-style: solid; }
+    .border-primary { border-color: var(--mud-palette-primary) !important; }
+    .bg-light-primary { background-color: rgba(var(--mud-palette-primary-rgb), 0.1); }
+    .cursor-pointer { cursor: pointer; }
+    .product-card:hover { transform: translateY(-5px); transition: transform 0.3s ease; box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* CSS For HTML Description */
+    .product-description-content {
+        font-family: 'Roboto', 'Inter', sans-serif; /* Fallback to MudBlazor fonts */
+        color: var(--mud-palette-text-primary);
+        line-height: 1.8;
+        font-size: 1rem;
+    }
+    
+    .product-description-content p {
+        margin-bottom: 1rem;
+    }
+    
+    .product-description-content img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        margin: 1rem 0;
+        display: block;
+    }
+    
+    .product-description-content ul, .product-description-content ol {
+        margin-bottom: 1rem;
+        padding-left: 2rem;
+    }
+    
+    .product-description-content li {
+        margin-bottom: 0.5rem;
+    }
+    
+    .product-description-content h2, .product-description-content h3, .product-description-content h4 {
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        font-weight: 600;
+        color: var(--mud-palette-primary);
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string Slug { get; set; } = string.Empty;
+
+    private bool _isLoading = true;
+    private bool _isProcessing = false;
+    private ProductDetailResponse? _product;
+    private List<ProductCardResponse>? _relatedProducts;
+    private StorefrontVariantResponse? _currentVariant;
+    private string? _mainImage;
+    private int _quantity = 1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        _product = null;
+        _relatedProducts = null;
+        
+        var response = await StorefrontClientService.GetProductDetailAsync(Slug);
+        if (response.Success && response.Data != null)
+        {
+            _product = response.Data;
+            _mainImage = _product.Images.FirstOrDefault();
+            
+            // Set default variant (first available or just the first one)
+            _currentVariant = _product.Variants.FirstOrDefault(v => v.IsAvailable) ?? _product.Variants.FirstOrDefault();
+
+            // Load related products
+            var relatedResponse = await StorefrontClientService.GetRelatedProductsAsync(Slug);
+            if (relatedResponse.Success && relatedResponse.Data != null)
+            {
+                _relatedProducts = relatedResponse.Data;
+            }
+        }
+        else
+        {
+            Snackbar.Add(response.Message ?? "Không thể tải thông tin sản phẩm.", Severity.Error);
+        }
+
+        _isLoading = false;
+    }
+
+    private void ChangeMainImage(string url)
+    {
+        _mainImage = url;
+    }
+
+    private void OnVariantChanged(StorefrontVariantResponse variant)
+    {
+        if (variant == null) return;
+        _currentVariant = variant;
+        // In-memory UI update happens automatically due to bindings.
+    }
+
+    private bool IsCurrentVariantAvailable()
+    {
+        return _currentVariant?.IsAvailable == true;
+    }
+
+    private async Task AddToCartAsync()
+    {
+        if (_currentVariant == null || !_currentVariant.IsAvailable) return;
+
+        _isProcessing = true;
+        var result = await CartClientService.AddToCartAsync(_currentVariant.Id, _quantity);
+        if (result.Success)
+        {
+            Snackbar.Add("Đã thêm vào giỏ hàng thành công!", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi khi thêm vào giỏ hàng.", Severity.Error);
+        }
+        _isProcessing = false;
+    }
+
+    private async Task BuyNowAsync()
+    {
+        if (_currentVariant == null || !_currentVariant.IsAvailable) return;
+
+        _isProcessing = true;
+        var result = await CartClientService.AddToCartAsync(_currentVariant.Id, _quantity);
+        if (result.Success)
+        {
+            NavigationManager.NavigateTo("/checkout");
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi khi thực hiện mua ngay.", Severity.Error);
+            _isProcessing = false;
+        }
+    }
+
+    private void NavigateToProduct(string slug)
+    {
+        NavigationManager.NavigateTo($"/product/{slug}");
+    }
+}

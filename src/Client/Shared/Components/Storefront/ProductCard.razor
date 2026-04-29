@@ -1,4 +1,5 @@
 @using PBL3.Shared.DTOs.Storefront
+@inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
 <MudCard Elevation="2" Class="pa-2 rounded-lg position-relative d-flex flex-column h-100" Style="cursor:pointer;" @onclick="HandleClick">
@@ -48,6 +49,6 @@
 
     private void HandleClick()
     {
-        Snackbar.Add("Tính năng đang phát triển", Severity.Info);
+        NavigationManager.NavigateTo($"/product/{Product.Slug}");
     }
 }
