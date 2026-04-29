@@ -18,6 +18,7 @@ using PBL3.Service.Suppliers;
 using PBL3.Service.Inventory;
 using PBL3.Service.Pos;
 using PBL3.Service.Customers;
+using PBL3.Service.Storefront;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -115,6 +116,7 @@ builder.Services.AddScoped<IInventorySyncService, InventorySyncService>();
 builder.Services.AddScoped<IInventoryExportService, InventoryExportService>();
 builder.Services.AddScoped<IPosService, PosService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IStorefrontService, StorefrontService>();
 
 // DI: Auth
 builder.Services.AddScoped<IAuthService, AuthService>();
