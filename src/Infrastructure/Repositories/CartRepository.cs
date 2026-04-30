@@ -23,8 +23,11 @@ namespace PBL3.Infrastructure.Repositories
             return await _context.Carts
                 .Include(c => c.Variant)
                     .ThenInclude(v => v.Product)
+                .Include(c => c.Variant)
+                    .ThenInclude(v => v.Images)
                 .Where(c => c.UserId == userId)
                 .AsNoTracking()
+                .OrderByDescending(c => c.CreatedDate)
                 .ToListAsync();
         }
 
@@ -35,6 +38,28 @@ namespace PBL3.Infrastructure.Repositories
                     .ThenInclude(v => v.Product)
                 .Where(c => c.UserId == userId)
                 .ToListAsync();
+        }
+
+        public async Task<Cart?> GetCartItemAsync(int cartItemId, Guid userId)
+        {
+            return await _context.Carts
+                .FirstOrDefaultAsync(c => c.Id == cartItemId && c.UserId == userId);
+        }
+
+        public async Task<Cart?> FindByUserAndVariantAsync(Guid userId, int variantId)
+        {
+            return await _context.Carts
+                .FirstOrDefaultAsync(c => c.UserId == userId && c.VariantId == variantId);
+        }
+
+        public async Task AddAsync(Cart cart)
+        {
+            await _context.Carts.AddAsync(cart);
+        }
+
+        public void Remove(Cart cart)
+        {
+            _context.Carts.Remove(cart);
         }
 
         public void RemoveRange(IEnumerable<Cart> carts)

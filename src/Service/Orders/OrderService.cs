@@ -46,7 +46,7 @@ namespace PBL3.Service.Orders
         {
             // Step 1: Data Source (Cart vs Buy Now)
             var checkoutItems = new List<(int VariantId, int Quantity, decimal Price)>();
-            List<Cart>? cartsToRemove = null;
+            List<PBL3.Core.Entities.Cart>? cartsToRemove = null;
 
             if (request.IsBuyNow)
             {
