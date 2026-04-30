@@ -49,6 +49,7 @@ builder.Services.AddScoped<IProductSerialClientService, ProductSerialClientServi
 builder.Services.AddScoped<IAuthClientService, AuthClientService>();
 builder.Services.AddScoped<IPosClientService, PosClientService>();
 builder.Services.AddScoped<ICustomerClientService, CustomerClientService>();
+builder.Services.AddScoped<IUserAddressClientService, UserAddressClientService>();
 builder.Services.AddScoped<Client.Services.Orders.IOrderClientService, Client.Services.Orders.OrderClientService>();
 builder.Services.AddScoped<IInventoryExportClientService, InventoryExportClientService>();
 builder.Services.AddScoped<Client.Services.Storefront.IStorefrontClientService, Client.Services.Storefront.StorefrontClientService>();

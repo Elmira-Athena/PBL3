@@ -4,6 +4,8 @@
 @using PBL3.Shared.DTOs.Customers
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
+@inject Client.Services.Orders.IOrderClientService OrderClientService
+@inject Client.Services.Customer.IUserAddressClientService UserAddressClientService
 
 <PageTitle>Thanh toán - HushStore</PageTitle>
 
@@ -70,7 +72,7 @@
                                                                 }
                                                             </MudText>
                                                             <MudText Typo="Typo.body2" Class="text-muted mb-1">@address.PhoneNumber</MudText>
-                                                            <MudText Typo="Typo.body2">@address.DetailAddress, @address.Ward, @address.District, @address.Province</MudText>
+                                                            <MudText Typo="Typo.body2">@address.AddressLine, @address.City</MudText>
                                                         </div>
                                                     </div>
                                                 </MudCardContent>
@@ -235,10 +237,9 @@
     private string _voucherCode = "";
     
     // Mock data classes
-    public class AddressDto { public int Id { get; set; } public string ReceiverName { get; set; } = ""; public string PhoneNumber { get; set; } = ""; public string DetailAddress { get; set; } = ""; public string Province { get; set; } = ""; public string District { get; set; } = ""; public string Ward { get; set; } = ""; public bool IsDefault { get; set; } }
     public class CartItemDto { public int ProductId { get; set; } public string ProductName { get; set; } = ""; public string VariantName { get; set; } = ""; public int Quantity { get; set; } public decimal Price { get; set; } public string ImageUrl { get; set; } = ""; }
 
-    private List<AddressDto> _addresses = new();
+    private List<UserAddressDto> _addresses = new();
     private List<CartItemDto> _cartItems = new();
 
     private decimal SubTotal => _cartItems.Sum(x => x.Price * x.Quantity);
@@ -249,18 +250,26 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // TODO: Inject Client Services and call API
-        // _addresses = await UserAddressClientService.GetMyAddressesAsync();
+        // Fetch real addresses
+        var addressResult = await UserAddressClientService.GetMyAddressesAsync();
+        if (addressResult.Success && addressResult.Data != null)
+        {
+            _addresses = addressResult.Data;
+        }
+        else
+        {
+            _addresses = new List<UserAddressDto>();
+            if (!string.IsNullOrEmpty(addressResult.Message) && !addressResult.Message.Contains("chưa đăng nhập"))
+            {
+                Snackbar.Add("Không thể tải sổ địa chỉ: " + addressResult.Message, Severity.Error);
+            }
+        }
+        _selectedAddressId = _addresses.FirstOrDefault(x => x.IsDefault)?.Id ?? (_addresses.FirstOrDefault()?.Id ?? 0);
+
         // _cartItems = await CartClientService.GetMyCartAsync();
 
-        // Mock data for UI presentation
+        // Mock data for UI presentation (Cart)
         await Task.Delay(800); // Simulate network
-        _addresses = new List<AddressDto>
-        {
-            new AddressDto { Id = 1, ReceiverName = "Nguyễn Văn A", PhoneNumber = "0901234567", DetailAddress = "123 Lê Lợi", Ward = "Phường 1", District = "Quận 1", Province = "TP Hồ Chí Minh", IsDefault = true },
-            new AddressDto { Id = 2, ReceiverName = "Nguyễn Văn A", PhoneNumber = "0901234567", DetailAddress = "45 Tôn Đức Thắng", Ward = "Phường Bến Nghé", District = "Quận 1", Province = "TP Hồ Chí Minh", IsDefault = false }
-        };
-        _selectedAddressId = _addresses.FirstOrDefault(x => x.IsDefault)?.Id ?? 0;
 
         _cartItems = new List<CartItemDto>
         {
@@ -313,14 +322,25 @@
 
         try
         {
-            // var request = new CheckoutRequest { UserAddressId = _selectedAddressId, PaymentMethod = _selectedPaymentMethod, VoucherCode = _voucherCode };
-            // var result = await CheckoutClientService.PlaceOrderAsync(request);
+            var request = new CheckoutRequest 
+            { 
+                UserAddressId = _selectedAddressId, 
+                PaymentMethod = (byte)_selectedPaymentMethod, 
+                VoucherCodes = string.IsNullOrWhiteSpace(_voucherCode) ? null : new List<string> { _voucherCode },
+                ShippingFee = ShippingFee
+            };
             
-            // Simulate API call
-            await Task.Delay(1500);
+            var result = await OrderClientService.CheckoutAsync(request);
             
-            Snackbar.Add("Đặt hàng thành công!", Severity.Success);
-            NavigationManager.NavigateTo("/order-success/ORD-12345");
+            if (result.Success && result.Data != null)
+            {
+                Snackbar.Add("Đặt hàng thành công!", Severity.Success);
+                NavigationManager.NavigateTo($"/order-success/{result.Data.OrderCode}");
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Lỗi khi đặt hàng", Severity.Error);
+            }
         }
         catch (Exception ex)
         {

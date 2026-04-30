@@ -1,0 +1,46 @@
+@page "/order-success/{OrderCode}"
+@inject NavigationManager NavigationManager
+
+<PageTitle>Đặt hàng thành công - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16 mb-16">
+    <MudPaper Elevation="3" Class="pa-8 rounded-lg">
+        <MudStack AlignItems="AlignItems.Center" Spacing="4">
+            
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Style="font-size: 100px;" />
+
+            <MudText Typo="Typo.h4" Color="Color.Success" Class="fw-bold text-center">
+                ĐẶT HÀNG THÀNH CÔNG
+            </MudText>
+
+            <MudText Typo="Typo.body1" Class="text-center mt-2">
+                Cảm ơn bạn đã mua sắm tại HushStore. Mã đơn hàng của bạn là: <br/>
+                <MudText Typo="Typo.h6" Class="fw-bold mt-2">@OrderCode</MudText>
+            </MudText>
+
+            <MudText Typo="Typo.body2" Class="text-muted text-center mb-4">
+                Chúng tôi sẽ sớm liên hệ với bạn để xác nhận đơn hàng.
+            </MudText>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="rounded-pill px-8" OnClick="ContinueShopping">
+                Tiếp tục mua sắm
+            </MudButton>
+
+        </MudStack>
+    </MudPaper>
+</MudContainer>
+
+<style>
+    .fw-bold { font-weight: 600; }
+    .text-muted { color: var(--mud-palette-text-secondary); }
+</style>
+
+@code {
+    [Parameter]
+    public string OrderCode { get; set; } = string.Empty;
+
+    private void ContinueShopping()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+}

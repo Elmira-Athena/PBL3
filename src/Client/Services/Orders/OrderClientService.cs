@@ -50,5 +50,12 @@ namespace Client.Services.Orders
             
             return ApiResult<bool>.Fail($"Lỗi HTTP: {response.StatusCode}");
         }
+
+        public async Task<ApiResult<CheckoutResponse>> CheckoutAsync(CheckoutRequest request)
+        {
+            var response = await _httpClient.PostAsJsonAsync("/api/orders/checkout", request);
+            var result = await response.Content.ReadFromJsonAsync<ApiResult<CheckoutResponse>>();
+            return result ?? ApiResult<CheckoutResponse>.Fail("Không nhận được phản hồi từ máy chủ");
+        }
     }
 }
