@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using AutoMapper;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
 using PBL3.Shared.DTOs.Common;
@@ -20,7 +19,6 @@ namespace PBL3.Service.Orders
         private readonly ICartRepository _cartRepo;
         private readonly IUserAddressRepository _userAddressRepo;
         private readonly IProductSerialRepository _productSerialRepo;
-        private readonly IMapper _mapper;
 
         public OrderService(
             IUnitOfWork unitOfWork,
@@ -29,8 +27,7 @@ namespace PBL3.Service.Orders
             IProductRepository productRepo,
             ICartRepository cartRepo,
             IUserAddressRepository userAddressRepo,
-            IProductSerialRepository productSerialRepo,
-            IMapper mapper)
+            IProductSerialRepository productSerialRepo)
         {
             _unitOfWork = unitOfWork;
             _orderRepo = orderRepo;
@@ -39,7 +36,6 @@ namespace PBL3.Service.Orders
             _cartRepo = cartRepo;
             _userAddressRepo = userAddressRepo;
             _productSerialRepo = productSerialRepo;
-            _mapper = mapper;
         }
 
         public async Task<ApiResult<CheckoutResponse>> CheckoutAsync(CheckoutRequest request, Guid userId)
@@ -308,7 +304,6 @@ namespace PBL3.Service.Orders
                     foreach (var voucher in vouchers)
                     {
                         voucher.UsedCount += 1;
-                        // we can update it this way because EF Core tracks it from GetByCodesAsync! (Actually, GetByCodesAsync might need to be tracked or we get it fresh here)
                     }
                 }
 
@@ -316,14 +311,9 @@ namespace PBL3.Service.Orders
                 await _unitOfWork.SaveChangesAsync();
                 await _unitOfWork.CommitAsync();
 
-                // 5. Mapping
-                // Note: to get the full mapper correctly we'd map from order after loading details, 
-                // but since we just saved it we can construct the DTO directly or use a Db mapping.
-                
-                // For simplicity, we just return success without the full DTO tree immediately, or re-query.
-                // Re-query:
+                // 5. Manual Mapping
                 var savedOrderInfo = await _orderRepo.GetByIdWithDetailsAsync(order.Id);
-                var dto = _mapper.Map<OrderDetailDto>(savedOrderInfo);
+                var dto = MapToOrderDetailDto(savedOrderInfo);
 
                 return ApiResult<OrderDetailDto>.Ok(dto, "Đặt hàng thành công!");
             }
@@ -422,7 +412,7 @@ namespace PBL3.Service.Orders
             if (order == null)
                 return ApiResult<OrderDetailDto>.Fail("Không tìm thấy đơn hàng.");
 
-            var dto = _mapper.Map<OrderDetailDto>(order);
+            var dto = MapToOrderDetailDto(order);
             return ApiResult<OrderDetailDto>.Ok(dto);
         }
 
@@ -506,6 +496,42 @@ namespace PBL3.Service.Orders
 
             await _unitOfWork.SaveChangesAsync();
             return ApiResult<bool>.Ok(true, "Hủy đơn hàng thành công.");
+        }
+
+        private OrderDetailDto MapToOrderDetailDto(Order order)
+        {
+            return new OrderDetailDto
+            {
+                Id = order.Id,
+                OrderCode = order.OrderCode,
+                OrderDate = order.OrderDate,
+                Status = order.Status,
+                ShipName = order.ShipName,
+                ShipPhone = order.ShipPhone,
+                ShipAddress = order.ShipAddress,
+                SubTotal = order.SubTotal,
+                ShippingFee = order.ShippingFee,
+                DiscountAmount = order.DiscountAmount,
+                TotalAmount = order.TotalAmount,
+                Items = order.OrderDetails.Select(d => new OrderDetailLineDto
+                {
+                    Id = d.Id,
+                    VariantId = d.VariantId,
+                    VariantName = d.Variant.VariantName,
+                    SKU = d.Variant.SKU,
+                    Quantity = d.Quantity,
+                    UnitPrice = d.UnitPrice,
+                    TotalLine = d.Quantity * d.UnitPrice
+                }).ToList(),
+                AppliedVouchers = order.VoucherUsages?.Select(v => new VoucherUsageDto
+                {
+                    VoucherCode = v.Voucher.Code,
+                    VoucherName = v.Voucher.Name,
+                    DiscountType = v.Voucher.DiscountType,
+                    DiscountValue = v.Voucher.DiscountValue,
+                    DiscountApplied = v.DiscountApplied
+                }).ToList() ?? new List<VoucherUsageDto>()
+            };
         }
     }
 }

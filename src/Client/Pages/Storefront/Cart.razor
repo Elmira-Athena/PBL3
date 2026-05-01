@@ -1,14 +1,16 @@
 @page "/cart"
 @using PBL3.Shared.DTOs.Sale
+@using PBL3.Shared.DTOs.Cart
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject Client.Services.Cart.ICartClientService CartClientService
 
 <PageTitle>Giỏ hàng - HushStore</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-8 mb-16">
     <div class="d-flex justify-space-between align-center mb-6">
         <MudText Typo="Typo.h4" Class="fw-bold" Color="Color.Dark">Giỏ hàng của bạn</MudText>
-        <MudText Typo="Typo.body1" Class="text-muted">@(_cartItems?.Count ?? 0) sản phẩm</MudText>
+        <MudText Typo="Typo.body1" Class="text-muted">@(_cartData?.Items?.Count ?? 0) sản phẩm</MudText>
     </div>
 
     @if (_isLoading)
@@ -23,7 +25,7 @@
             </MudItem>
         </MudGrid>
     }
-    else if (_cartItems == null || !_cartItems.Any())
+    else if (_cartData == null || !_cartData.Items.Any())
     {
         <div class="d-flex flex-column align-center justify-center py-16">
             <MudIcon Icon="@Icons.Material.Filled.RemoveShoppingCart" Style="font-size: 80px;" Color="Color.Default" Class="mb-4 opacity-50" />
@@ -53,7 +55,7 @@
                         </CardHeaderContent>
                     </MudCardHeader>
                     <MudCardContent Class="pa-0">
-                        @foreach (var item in _cartItems)
+                        @foreach (var item in _cartData.Items)
                         {
                             <div class="cart-item-row pa-4">
                                 <MudGrid Class="align-center">
@@ -67,7 +69,7 @@
                                     
                                     <MudItem xs="6" sm="2" Class="d-flex justify-sm-center align-center">
                                         <div class="d-sm-none mr-2 text-muted">Giá:</div>
-                                        <MudText Typo="Typo.body1" Class="fw-bold">@item.Price.ToString("N0")đ</MudText>
+                                        <MudText Typo="Typo.body1" Class="fw-bold">@item.UnitPrice.ToString("N0")đ</MudText>
                                     </MudItem>
                                     
                                     <MudItem xs="6" sm="3" Class="d-flex justify-sm-center align-center justify-end">
@@ -75,7 +77,10 @@
                                             <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small" 
                                                          OnClick="() => UpdateQuantity(item, -1)" 
                                                          Disabled="@(_isUpdating || item.Quantity <= 1)" />
-                                            <div class="px-3 fw-bold">@item.Quantity</div>
+                                            <div class="px-3 fw-bold">
+                                                @if (_isUpdating) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="my-1"/> } 
+                                                else { @item.Quantity }
+                                            </div>
                                             <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" 
                                                          OnClick="() => UpdateQuantity(item, 1)" 
                                                          Disabled="@(_isUpdating)" />
@@ -88,7 +93,7 @@
                                     </MudItem>
                                 </MudGrid>
                             </div>
-                            @if (item != _cartItems.Last())
+                            @if (item != _cartData.Items.Last())
                             {
                                 <MudDivider />
                             }
@@ -113,8 +118,8 @@
                     </MudCardHeader>
                     <MudCardContent>
                         <div class="d-flex justify-space-between mb-4">
-                            <MudText Typo="Typo.body1" Class="text-muted">Tổng phụ (@_cartItems.Sum(x => x.Quantity) sản phẩm)</MudText>
-                            <MudText Typo="Typo.body1" Class="fw-bold">@SubTotal.ToString("N0") đ</MudText>
+                            <MudText Typo="Typo.body1" Class="text-muted">Tổng phụ (@_cartData.Items.Sum(x => x.Quantity) sản phẩm)</MudText>
+                            <MudText Typo="Typo.body1" Class="fw-bold">@_cartData.TotalAmount.ToString("N0") đ</MudText>
                         </div>
                         
                         <MudAlert Severity="Severity.Info" Class="rounded mb-6 py-2 px-3" Icon="@Icons.Material.Filled.LocalShipping" Dense="true">
@@ -125,7 +130,7 @@
 
                         <div class="d-flex justify-space-between align-center mb-6">
                             <MudText Typo="Typo.h6" Class="fw-bold">Tạm tính</MudText>
-                            <MudText Typo="Typo.h5" Color="Color.Error" Class="fw-bold">@SubTotal.ToString("N0") đ</MudText>
+                            <MudText Typo="Typo.h5" Color="Color.Error" Class="fw-bold">@_cartData.TotalAmount.ToString("N0") đ</MudText>
                         </div>
 
                         <MudButton Variant="Variant.Filled" 
@@ -168,28 +173,37 @@
 @code {
     private bool _isLoading = true;
     private bool _isUpdating = false;
-    
-    // Mock class for demo
-    public class CartItemDto { public int Id { get; set; } public int ProductId { get; set; } public string ProductName { get; set; } = ""; public string VariantName { get; set; } = ""; public int Quantity { get; set; } public decimal Price { get; set; } public string ImageUrl { get; set; } = ""; }
 
-    private List<CartItemDto> _cartItems = new();
-    private decimal SubTotal => _cartItems?.Sum(x => x.Price * x.Quantity) ?? 0;
+    private CartResponse _cartData = new();
 
     protected override async Task OnInitializedAsync()
     {
-        // TODO: Inject CartClientService and call API
-        await Task.Delay(600); // Simulate network
+        await LoadCartAsync();
+    }
 
-        _cartItems = new List<CartItemDto>
+    private async Task LoadCartAsync()
+    {
+        _isLoading = true;
+        var result = await CartClientService.GetMyCartAsync();
+        
+        if (result.Success && result.Data != null)
         {
-            new CartItemDto { Id = 1, ProductId = 1, ProductName = "Laptop Asus ExpertBook B5", VariantName = "Core i7 / 16GB / 512GB", Price = 25000000, Quantity = 1, ImageUrl = "https://picsum.photos/200" },
-            new CartItemDto { Id = 2, ProductId = 2, ProductName = "Chuột Logitech MX Master 3S", VariantName = "Đen", Price = 2500000, Quantity = 1, ImageUrl = "https://picsum.photos/201" }
-        };
-
+            _cartData = result.Data;
+        }
+        else if (result.Message == "Unauthorized")
+        {
+            Snackbar.Add("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", Severity.Error);
+            NavigationManager.NavigateTo("/login");
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Không thể tải giỏ hàng", Severity.Error);
+        }
+        
         _isLoading = false;
     }
 
-    private async Task UpdateQuantity(CartItemDto item, int change)
+    private async Task UpdateQuantity(CartItemResponse item, int change)
     {
         if (item.Quantity + change < 1) return;
         
@@ -197,14 +211,24 @@
         
         try
         {
-            // Simulate API call to update quantity
-            // await CartClientService.UpdateQuantityAsync(item.Id, item.Quantity + change);
-            await Task.Delay(300);
-            item.Quantity += change;
+            var result = await CartClientService.UpdateQuantityAsync(item.Id, item.Quantity + change);
+            if (result.Success && result.Data != null)
+            {
+                _cartData = result.Data;
+            }
+            else if (result.Message == "Unauthorized")
+            {
+                Snackbar.Add("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", Severity.Error);
+                NavigationManager.NavigateTo("/login");
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Không thể cập nhật số lượng", Severity.Error);
+            }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Snackbar.Add("Không thể cập nhật số lượng", Severity.Error);
+            Snackbar.Add("Lỗi khi cập nhật số lượng", Severity.Error);
         }
         finally
         {
@@ -212,21 +236,31 @@
         }
     }
 
-    private async Task RemoveItem(CartItemDto item)
+    private async Task RemoveItem(CartItemResponse item)
     {
         _isUpdating = true;
         
         try
         {
-            // Simulate API call to remove item
-            // await CartClientService.RemoveFromCartAsync(item.Id);
-            await Task.Delay(400);
-            _cartItems.Remove(item);
-            Snackbar.Add("Đã xóa sản phẩm khỏi giỏ hàng", Severity.Success);
+            var result = await CartClientService.RemoveItemAsync(item.Id);
+            if (result.Success && result.Data != null)
+            {
+                _cartData = result.Data;
+                Snackbar.Add("Đã xóa sản phẩm khỏi giỏ hàng", Severity.Success);
+            }
+            else if (result.Message == "Unauthorized")
+            {
+                Snackbar.Add("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", Severity.Error);
+                NavigationManager.NavigateTo("/login");
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Không thể xóa sản phẩm", Severity.Error);
+            }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Snackbar.Add("Không thể xóa sản phẩm", Severity.Error);
+            Snackbar.Add("Lỗi khi xóa sản phẩm", Severity.Error);
         }
         finally
         {

@@ -20,6 +20,7 @@ using PBL3.Service.Pos;
 using PBL3.Service.Customers;
 using PBL3.Service.Storefront;
 using PBL3.Service.Cart;
+using PBL3.Service.Orders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -119,6 +120,7 @@ builder.Services.AddScoped<IPosService, PosService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IStorefrontService, StorefrontService>();
 builder.Services.AddScoped<ICartService, CartService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 
 // DI: Auth
 builder.Services.AddScoped<IAuthService, AuthService>();

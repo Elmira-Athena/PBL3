@@ -2,10 +2,12 @@
 @using PBL3.Shared.DTOs.Sale
 @using System.ComponentModel.DataAnnotations
 @using PBL3.Shared.DTOs.Customers
+@using PBL3.Shared.DTOs.Cart
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 @inject Client.Services.Orders.IOrderClientService OrderClientService
 @inject Client.Services.Customer.IUserAddressClientService UserAddressClientService
+@inject Client.Services.Cart.ICartClientService CartClientService
 
 <PageTitle>Thanh toán - HushStore</PageTitle>
 
@@ -138,7 +140,7 @@
                     <MudCardContent>
                         <!-- Danh sách sản phẩm thu gọn -->
                         <div class="mb-4" style="max-height: 200px; overflow-y: auto;">
-                            @foreach (var item in _cartItems)
+                            @foreach (var item in _cartData.Items)
                             {
                                 <div class="d-flex justify-space-between mb-3 align-center">
                                     <div class="d-flex align-center">
@@ -148,7 +150,7 @@
                                             <MudText Typo="Typo.caption" Class="text-muted">@item.VariantName x @item.Quantity</MudText>
                                         </div>
                                     </div>
-                                    <MudText Typo="Typo.body2" Class="fw-bold">@((item.Price * item.Quantity).ToString("N0"))đ</MudText>
+                                    <MudText Typo="Typo.body2" Class="fw-bold">@((item.UnitPrice * item.Quantity).ToString("N0"))đ</MudText>
                                 </div>
                             }
                         </div>
@@ -236,13 +238,10 @@
     private int _selectedPaymentMethod = 0; // 0: COD, 1: MoMo
     private string _voucherCode = "";
     
-    // Mock data classes
-    public class CartItemDto { public int ProductId { get; set; } public string ProductName { get; set; } = ""; public string VariantName { get; set; } = ""; public int Quantity { get; set; } public decimal Price { get; set; } public string ImageUrl { get; set; } = ""; }
-
     private List<UserAddressDto> _addresses = new();
-    private List<CartItemDto> _cartItems = new();
+    private CartResponse _cartData = new();
 
-    private decimal SubTotal => _cartItems.Sum(x => x.Price * x.Quantity);
+    private decimal SubTotal => _cartData.TotalAmount;
     private decimal ShippingFee => 30000;
     private decimal DiscountAmount = 0;
     private decimal Total => SubTotal + ShippingFee - DiscountAmount;
@@ -266,16 +265,25 @@
         }
         _selectedAddressId = _addresses.FirstOrDefault(x => x.IsDefault)?.Id ?? (_addresses.FirstOrDefault()?.Id ?? 0);
 
-        // _cartItems = await CartClientService.GetMyCartAsync();
-
-        // Mock data for UI presentation (Cart)
-        await Task.Delay(800); // Simulate network
-
-        _cartItems = new List<CartItemDto>
+        var cartResult = await CartClientService.GetMyCartAsync();
+        if (cartResult.Success && cartResult.Data != null)
         {
-            new CartItemDto { ProductId = 1, ProductName = "Laptop Asus ExpertBook B5", VariantName = "Core i7 / 16GB / 512GB", Price = 25000000, Quantity = 1, ImageUrl = "https://picsum.photos/200" },
-            new CartItemDto { ProductId = 2, ProductName = "Chuột Logitech MX Master 3S", VariantName = "Đen", Price = 2500000, Quantity = 1, ImageUrl = "https://picsum.photos/201" }
-        };
+            _cartData = cartResult.Data;
+            if (!_cartData.Items.Any())
+            {
+                NavigationManager.NavigateTo("/cart");
+            }
+        }
+        else if (cartResult.Message == "Unauthorized")
+        {
+            Snackbar.Add("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", Severity.Error);
+            NavigationManager.NavigateTo("/login");
+        }
+        else
+        {
+            Snackbar.Add(cartResult.Message ?? "Không thể tải giỏ hàng", Severity.Error);
+            NavigationManager.NavigateTo("/cart");
+        }
 
         _isLoading = false;
     }
