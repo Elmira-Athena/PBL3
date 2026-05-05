@@ -33,6 +33,12 @@ builder.Services.AddHttpClient("HushStoreAPI", client =>
     client.BaseAddress = new Uri("https://localhost:7010");
 }).AddHttpMessageHandler<AuthHeaderHandler>();
 
+// HttpClient cho Provinces API (public, không cần auth)
+builder.Services.AddHttpClient("ProvincesAPI", client =>
+{
+    client.BaseAddress = new Uri("https://provinces.open-api.vn");
+});
+
 // Đăng ký HttpClient mặc định (inject HttpClient trực tiếp) dùng Named client ở trên
 builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("HushStoreAPI"));

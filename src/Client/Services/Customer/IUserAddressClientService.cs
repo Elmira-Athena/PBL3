@@ -8,5 +8,6 @@ namespace Client.Services.Customer
     public interface IUserAddressClientService
     {
         Task<ApiResult<List<UserAddressDto>>> GetMyAddressesAsync();
+        Task<ApiResult<int>> AddAddressAsync(UserAddressDto request);
     }
 }

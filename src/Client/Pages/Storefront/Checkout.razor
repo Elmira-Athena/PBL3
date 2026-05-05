@@ -5,6 +5,7 @@
 @using PBL3.Shared.DTOs.Cart
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
 @inject Client.Services.Orders.IOrderClientService OrderClientService
 @inject Client.Services.Customer.IUserAddressClientService UserAddressClientService
 @inject Client.Services.Cart.ICartClientService CartClientService
@@ -296,11 +297,26 @@
         _selectedAddressId = id;
     }
 
-    private void OpenAddAddressDialog()
+    private async Task OpenAddAddressDialog()
     {
-        Snackbar.Add("Chức năng thêm địa chỉ đang được phát triển", Severity.Info);
-        // TODO: var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        // DialogService.Show<AddAddressDialog>("Thêm địa chỉ mới", options);
+        var options = new DialogOptions
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+        var dialog = await DialogService.ShowAsync<AddAddressDialog>("Thêm địa chỉ mới", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is int newId)
+        {
+            var addressResult = await UserAddressClientService.GetMyAddressesAsync();
+            if (addressResult.Success && addressResult.Data != null)
+            {
+                _addresses = addressResult.Data;
+                _selectedAddressId = newId;
+            }
+        }
     }
 
     private void ApplyVoucher()

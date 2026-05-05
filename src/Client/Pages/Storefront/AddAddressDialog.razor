@@ -1,0 +1,267 @@
+@using PBL3.Shared.DTOs.Customers
+@using System.Text.Json
+@using System.Text.Json.Serialization
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.AddLocationAlt" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Thêm địa chỉ mới</MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_model">
+            <MudStack Spacing="3" Class="pt-2">
+
+                <MudTextField @bind-Value="_model.ReceiverName"
+                              Label="Tên người nhận"
+                              Placeholder="VD: Nguyễn Văn A"
+                              Required="true"
+                              RequiredError="Tên người nhận không được để trống."
+                              MaxLength="100"
+                              Variant="Variant.Outlined" />
+
+                <MudTextField @bind-Value="_model.PhoneNumber"
+                              Label="Số điện thoại"
+                              Placeholder="VD: 0901234567"
+                              Required="true"
+                              RequiredError="Số điện thoại không được để trống."
+                              MaxLength="20"
+                              Variant="Variant.Outlined"
+                              Validation="@(new Func<string, string?>(ValidatePhone))" />
+
+                <MudSelect T="ProvinceItem"
+                           Label="Tỉnh / Thành phố"
+                           Value="_selectedProvince"
+                           ValueChanged="OnProvinceChanged"
+                           ToStringFunc="@(p => p?.Name ?? string.Empty)"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           RequiredError="Vui lòng chọn tỉnh/thành phố."
+                           Disabled="_isLoadingProvinces"
+                           AnchorOrigin="Origin.BottomCenter">
+                    @if (_isLoadingProvinces)
+                    {
+                        <MudSelectItem T="ProvinceItem" Value="null" Disabled="true">Đang tải...</MudSelectItem>
+                    }
+                    else
+                    {
+                        @foreach (var p in _provinces)
+                        {
+                            <MudSelectItem T="ProvinceItem" Value="p">@p.Name</MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+
+                <MudSelect T="WardItem"
+                           Label="Phường / Xã"
+                           @bind-Value="_selectedWard"
+                           ToStringFunc="@(w => w?.Name ?? string.Empty)"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           RequiredError="Vui lòng chọn phường/xã."
+                           Disabled="@(_selectedProvince == null || _isLoadingWards)"
+                           AnchorOrigin="Origin.BottomCenter">
+                    @if (_isLoadingWards)
+                    {
+                        <MudSelectItem T="WardItem" Value="null" Disabled="true">Đang tải...</MudSelectItem>
+                    }
+                    else
+                    {
+                        @foreach (var w in _wards)
+                        {
+                            <MudSelectItem T="WardItem" Value="w">@w.Name</MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+
+                <MudTextField @bind-Value="_model.Street"
+                              Label="Số nhà, tên đường"
+                              Placeholder="VD: 123 Đường Lê Lợi"
+                              Required="true"
+                              RequiredError="Số nhà, tên đường không được để trống."
+                              MaxLength="200"
+                              Variant="Variant.Outlined" />
+
+                <MudCheckBox @bind-Value="_model.IsDefault"
+                             Label="Đặt làm địa chỉ mặc định"
+                             Color="Color.Primary" />
+
+            </MudStack>
+        </MudForm>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3 rounded-lg" Variant="Variant.Filled">
+                @_errorMessage
+            </MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default"
+                   Style="text-transform: none;">
+            Hủy
+        </MudButton>
+        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="_isSaving"
+                   Style="text-transform: none; border-radius: 8px;">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Lưu địa chỉ
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private IUserAddressClientService AddressService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+    [Inject] private IHttpClientFactory HttpClientFactory { get; set; } = null!;
+
+    private MudForm _form = null!;
+    private AddressFormModel _model = new();
+    private bool _isSaving;
+    private string? _errorMessage;
+
+    private List<ProvinceItem> _provinces = new();
+    private List<WardItem> _wards = new();
+    private ProvinceItem? _selectedProvince;
+    private WardItem? _selectedWard;
+    private bool _isLoadingProvinces;
+    private bool _isLoadingWards;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoadingProvinces = true;
+        try
+        {
+            var http = HttpClientFactory.CreateClient("ProvincesAPI");
+            var provinces = await http.GetFromJsonAsync<List<ProvinceItem>>("api/v2/p/");
+            _provinces = provinces ?? new List<ProvinceItem>();
+        }
+        catch
+        {
+            _errorMessage = "Không thể tải danh sách tỉnh/thành phố. Vui lòng thử lại.";
+        }
+        finally
+        {
+            _isLoadingProvinces = false;
+        }
+    }
+
+    private async Task OnProvinceChanged(ProvinceItem? province)
+    {
+        _selectedProvince = province;
+        _selectedWard = null;
+        _wards = new();
+
+        if (province == null) return;
+
+        _isLoadingWards = true;
+        StateHasChanged();
+        try
+        {
+            var http = HttpClientFactory.CreateClient("ProvincesAPI");
+            var detail = await http.GetFromJsonAsync<ProvinceDetail>($"api/v2/p/{province.Code}?depth=2");
+            _wards = detail?.Wards ?? new List<WardItem>();
+        }
+        catch
+        {
+            _errorMessage = "Không thể tải danh sách phường/xã.";
+        }
+        finally
+        {
+            _isLoadingWards = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string? ValidatePhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+            return "Số điện thoại không được để trống.";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(phone, @"^[0-9]{9,11}$"))
+            return "Số điện thoại phải từ 9 đến 11 chữ số.";
+        return null;
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        if (_selectedProvince == null || _selectedWard == null)
+        {
+            _errorMessage = "Vui lòng chọn đầy đủ tỉnh/thành phố và phường/xã.";
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var addressLine = $"{_model.Street}, {_selectedWard.Name}";
+            var request = new UserAddressDto
+            {
+                ReceiverName = _model.ReceiverName,
+                PhoneNumber = _model.PhoneNumber,
+                AddressLine = addressLine,
+                City = _selectedProvince.Name,
+                IsDefault = _model.IsDefault
+            };
+
+            var result = await AddressService.AddAddressAsync(request);
+            if (result.Success)
+            {
+                Snackbar.Add("Thêm địa chỉ thành công!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(result.Data));
+            }
+            else
+            {
+                _errorMessage = result.Message ?? "Không thể thêm địa chỉ.";
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    // ===== FORM MODEL =====
+    private class AddressFormModel
+    {
+        public string ReceiverName { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string Street { get; set; } = string.Empty;
+        public bool IsDefault { get; set; }
+    }
+
+    // ===== PROVINCES API v2 MODELS =====
+    private class ProvinceItem
+    {
+        [JsonPropertyName("code")] public int Code { get; set; }
+        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    }
+
+    private class ProvinceDetail
+    {
+        [JsonPropertyName("code")] public int Code { get; set; }
+        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+        [JsonPropertyName("wards")] public List<WardItem> Wards { get; set; } = new();
+    }
+
+    private class WardItem
+    {
+        [JsonPropertyName("code")] public int Code { get; set; }
+        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    }
+}

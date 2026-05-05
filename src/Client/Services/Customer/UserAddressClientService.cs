@@ -24,8 +24,19 @@ namespace Client.Services.Customer
                 var result = await response.Content.ReadFromJsonAsync<ApiResult<List<UserAddressDto>>>();
                 return result ?? ApiResult<List<UserAddressDto>>.Fail("Không thể parse dữ liệu.");
             }
-            
+
             return ApiResult<List<UserAddressDto>>.Fail($"Lỗi gọi API: {response.ReasonPhrase}");
+        }
+
+        public async Task<ApiResult<int>> AddAddressAsync(UserAddressDto request)
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/storefront/user-addresses", request);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<int>>();
+                return result ?? ApiResult<int>.Fail("Không thể parse kết quả.");
+            }
+            return ApiResult<int>.Fail($"Lỗi: {response.ReasonPhrase}");
         }
     }
 }
