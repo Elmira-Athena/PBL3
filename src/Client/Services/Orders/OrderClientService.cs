@@ -33,8 +33,8 @@ namespace Client.Services.Orders
             if (request.ToDate.HasValue)
                 queryString += $"&toDate={request.ToDate.Value:yyyy-MM-ddTHH:mm:ss}";
 
-            return await _httpClient.GetFromJsonAsync<PagedResult<OrderSummaryResponse>>($"/api/orders{queryString}")
-                   ?? new PagedResult<OrderSummaryResponse>();
+            var response = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<OrderSummaryResponse>>>($"/api/orders{queryString}");
+            return response?.Data ?? new PagedResult<OrderSummaryResponse>();
         }
 
         public async Task<ApiResult<bool>> CancelOrderAsync(int id, string cancelReason)

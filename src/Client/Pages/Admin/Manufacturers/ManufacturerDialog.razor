@@ -1,0 +1,254 @@
+@using PBL3.Shared.DTOs.Manufacturers
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(IsEditMode ? Icons.Material.Filled.Edit : Icons.Material.Filled.AddBusiness)"
+                     Color="Color.Primary" />
+            <MudText Typo="Typo.h6">
+                @(IsEditMode ? "Chỉnh sửa hãng sản xuất" : "Thêm hãng sản xuất mới")
+            </MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_isLoadingDetail)
+        {
+            <MudStack Spacing="3" Class="pa-4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+            </MudStack>
+        }
+        else
+        {
+            <MudForm @ref="_form" Model="_model">
+                <MudStack Spacing="3" Class="pt-2">
+
+                    @* Logo Preview *@
+                    @if (!string.IsNullOrWhiteSpace(_model.LogoUrl))
+                    {
+                        <div class="d-flex justify-center">
+                            <MudPaper Elevation="1" Class="pa-2 rounded-lg" Style="width: fit-content;">
+                                <MudImage Src="@_model.LogoUrl"
+                                          Alt="Logo preview"
+                                          Height="60"
+                                          ObjectFit="ObjectFit.Contain"
+                                          Style="display: block;" />
+                            </MudPaper>
+                        </div>
+                    }
+
+                    @* Tên hãng *@
+                    <MudTextField @bind-Value="_model.Name"
+                                  Label="Tên hãng sản xuất"
+                                  Placeholder="VD: Samsung, Apple, Dell..."
+                                  Required="true"
+                                  RequiredError="Tên hãng không được để trống."
+                                  MaxLength="100"
+                                  Counter="100"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Outlined.Business" />
+
+                    @* URL Logo *@
+                    <MudTextField @bind-Value="_model.LogoUrl"
+                                  Label="URL Logo"
+                                  Placeholder="https://example.com/logo.png"
+                                  MaxLength="500"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Outlined.Image"
+                                  HelperText="URL hình ảnh logo của hãng (không bắt buộc)" />
+
+                    @* Website *@
+                    <MudTextField @bind-Value="_model.Website"
+                                  Label="Website"
+                                  Placeholder="https://www.samsung.com"
+                                  MaxLength="255"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Outlined.Language"
+                                  Validation="@(new Func<string?, string?>(ValidateWebsite))" />
+
+                    @* Email hỗ trợ *@
+                    <MudTextField @bind-Value="_model.SupportEmail"
+                                  Label="Email hỗ trợ"
+                                  Placeholder="VD: support@samsung.com"
+                                  InputType="InputType.Email"
+                                  MaxLength="100"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Outlined.Email"
+                                  Validation="@(new Func<string?, string?>(ValidateEmail))" />
+
+                </MudStack>
+            </MudForm>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3 rounded-lg" Variant="Variant.Filled">
+                    @_errorMessage
+                </MudAlert>
+            }
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default"
+                   Style="text-transform: none;">
+            Hủy
+        </MudButton>
+        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="_isSaving"
+                   Style="text-transform: none; border-radius: 8px;">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(IsEditMode ? "Cập nhật" : "Tạo mới")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private IManufacturerClientService ManufacturerService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    /// <summary>Id hãng khi chỉnh sửa (null hoặc 0 = tạo mới)</summary>
+    [Parameter] public int? ManufacturerId { get; set; }
+
+    private bool IsEditMode => ManufacturerId.HasValue && ManufacturerId.Value > 0;
+
+    private MudForm _form = null!;
+    private ManufacturerFormModel _model = new();
+    private bool _isSaving;
+    private bool _isLoadingDetail;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEditMode)
+        {
+            _isLoadingDetail = true;
+            StateHasChanged();
+
+            var result = await ManufacturerService.GetByIdAsync(ManufacturerId!.Value);
+            if (result.Success && result.Data != null)
+            {
+                _model = new ManufacturerFormModel
+                {
+                    Name         = result.Data.Name,
+                    LogoUrl      = result.Data.LogoUrl,
+                    Website      = result.Data.Website,
+                    SupportEmail = result.Data.SupportEmail,
+                };
+            }
+            else
+            {
+                _errorMessage = result.Message;
+            }
+
+            _isLoadingDetail = false;
+        }
+    }
+
+    // ===== VALIDATION =====
+
+    private static string? ValidateWebsite(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return null; // Không bắt buộc
+
+        if (!url.StartsWith("http://") && !url.StartsWith("https://"))
+            return "Website phải bắt đầu bằng http:// hoặc https://";
+
+        return null;
+    }
+
+    private static string? ValidateEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return null; // Không bắt buộc
+
+        if (!email.Contains('@') || !email.Contains('.'))
+            return "Email không đúng định dạng.";
+
+        return null;
+    }
+
+    // ===== SUBMIT =====
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _isSaving = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            if (IsEditMode)
+            {
+                var request = new UpdateManufacturerRequest
+                {
+                    Name         = _model.Name,
+                    LogoUrl      = _model.LogoUrl,
+                    Website      = _model.Website,
+                    SupportEmail = _model.SupportEmail,
+                };
+
+                var result = await ManufacturerService.UpdateAsync(ManufacturerId!.Value, request);
+
+                if (result.Success)
+                {
+                    Snackbar.Add("Cập nhật hãng sản xuất thành công!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                }
+            }
+            else
+            {
+                var request = new CreateManufacturerRequest
+                {
+                    Name         = _model.Name,
+                    LogoUrl      = _model.LogoUrl,
+                    Website      = _model.Website,
+                    SupportEmail = _model.SupportEmail,
+                };
+
+                var result = await ManufacturerService.CreateAsync(request);
+
+                if (result.Success)
+                {
+                    Snackbar.Add("Tạo hãng sản xuất thành công!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                }
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    // ===== FORM MODEL =====
+    private class ManufacturerFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? LogoUrl { get; set; }
+        public string? Website { get; set; }
+        public string? SupportEmail { get; set; }
+    }
+}

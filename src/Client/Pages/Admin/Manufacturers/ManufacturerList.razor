@@ -1,0 +1,305 @@
+@page "/admin/manufacturers"
+@using PBL3.Shared.DTOs.Manufacturers
+
+<PageTitle>Quản lý Hãng sản xuất - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+
+    @* ===== HEADER ===== *@
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.Factory" Color="Color.Primary" Size="Size.Large" />
+                <div>
+                    <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                        Hãng sản xuất
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Quản lý danh sách hãng sản xuất sản phẩm
+                    </MudText>
+                </div>
+            </MudStack>
+        </div>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateDialog"
+                   Style="text-transform: none; border-radius: 8px; font-weight: 500;">
+            Thêm hãng mới
+        </MudButton>
+    </MudPaper>
+
+    @* ===== FILTER BAR ===== *@
+    <MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="_keyword"
+                              Placeholder="Tìm theo tên hãng hoặc website..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              DebounceInterval="400"
+                              OnDebounceIntervalElapsed="OnSearchChanged"
+                              Style="border-radius: 8px;" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="8" Class="d-flex align-center justify-end gap-2">
+                <MudChip T="string" Icon="@Icons.Material.Filled.Info" Color="Color.Info" Variant="Variant.Outlined" Size="Size.Small">
+                    @_totalCount hãng
+                </MudChip>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="@(() => { if (_table != null) _table.ReloadServerData(); })"
+                           Size="Size.Small"
+                           Style="text-transform: none;">
+                    Làm mới
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ===== DATA TABLE ===== *@
+    <MudPaper Elevation="1" Class="rounded-lg">
+        <MudTable @ref="_table"
+                  T="ManufacturerDto"
+                  ServerData="LoadServerData"
+                  Dense="false"
+                  Hover="true"
+                  Striped="false"
+                  Bordered="false"
+                  Loading="_isLoading"
+                  LoadingProgressColor="Color.Primary"
+                  RowsPerPage="10"
+                  Class="rounded-lg">
+
+            <HeaderContent>
+                <MudTh Style="width: 56px;"></MudTh>
+                <MudTh><MudTableSortLabel SortLabel="Name" T="ManufacturerDto">Tên hãng sản xuất</MudTableSortLabel></MudTh>
+                <MudTh>Website</MudTh>
+                <MudTh>Email hỗ trợ</MudTh>
+                <MudTh><MudTableSortLabel SortLabel="CreatedDate" T="ManufacturerDto">Ngày thêm</MudTableSortLabel></MudTh>
+                <MudTh Style="width: 120px; text-align: center;">Thao tác</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                @* Logo column *@
+                <MudTd>
+                    @if (!string.IsNullOrWhiteSpace(context.LogoUrl))
+                    {
+                        <MudAvatar Size="Size.Medium" Style="border-radius: 8px;">
+                            <MudImage Src="@context.LogoUrl" Alt="@context.Name" />
+                        </MudAvatar>
+                    }
+                    else
+                    {
+                        <MudAvatar Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Medium" Style="border-radius: 8px; font-size: 0.85rem; font-weight: 700;">
+                            @context.Name.Substring(0, Math.Min(2, context.Name.Length)).ToUpper()
+                        </MudAvatar>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Tên hãng">
+                    <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.Name</MudText>
+                </MudTd>
+                <MudTd DataLabel="Website">
+                    @if (!string.IsNullOrWhiteSpace(context.Website))
+                    {
+                        <MudLink Href="@context.Website" Target="_blank" Typo="Typo.body2" Color="Color.Primary">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                                @context.Website.Replace("https://", "").Replace("http://", "").TrimEnd('/')
+                            </MudStack>
+                        </MudLink>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-disabled">—</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Email hỗ trợ">
+                    @if (!string.IsNullOrWhiteSpace(context.SupportEmail))
+                    {
+                        <MudLink Href="@($"mailto:{context.SupportEmail}")" Typo="Typo.body2">
+                            @context.SupportEmail
+                        </MudLink>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-disabled">—</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Ngày thêm">
+                    <MudText Typo="Typo.body2">@context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Thao tác" Style="text-align: center;">
+                    <MudStack Row="true" Spacing="0" Justify="Justify.Center">
+                        <MudTooltip Text="Chỉnh sửa" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           OnClick="@(() => OpenEditDialog(context))" />
+                        </MudTooltip>
+                        <MudTooltip Text="Xóa" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="@(() => ConfirmDelete(context))" />
+                        </MudTooltip>
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
+
+            <NoRecordsContent>
+                <div class="d-flex flex-column align-center py-8">
+                    <MudIcon Icon="@Icons.Material.Outlined.Factory" Size="Size.Large" Class="mud-text-disabled mb-2" />
+                    <MudText Typo="Typo.body1" Class="mud-text-disabled">Không tìm thấy hãng sản xuất nào.</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-disabled">Thử thay đổi bộ lọc hoặc thêm hãng mới.</MudText>
+                </div>
+            </NoRecordsContent>
+
+            <LoadingContent>
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="pa-4">
+                    Đang tải dữ liệu...
+                </MudText>
+            </LoadingContent>
+
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 5, 10, 25, 50 }"
+                               InfoFormat="{first_item}-{last_item} / {all_items} hãng"
+                               RowsPerPageString="Hiển thị:" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Inject] private IManufacturerClientService ManufacturerService { get; set; } = null!;
+    [Inject] private IDialogService DialogService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    private MudTable<ManufacturerDto>? _table;
+    private bool _isLoading;
+    private string _keyword = string.Empty;
+    private int _totalCount;
+
+    /// <summary>
+    /// ServerData callback for MudTable — gọi API phân trang.
+    /// </summary>
+    private async Task<TableData<ManufacturerDto>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        var request = new ManufacturerFilterRequest
+        {
+            Keyword        = _keyword,
+            PageNumber     = state.Page + 1, // MudTable is 0-based, API is 1-based
+            PageSize       = state.PageSize,
+            SortBy         = state.SortLabel,
+            SortDescending = state.SortDirection == SortDirection.Descending
+        };
+
+        var result = await ManufacturerService.GetListAsync(request);
+
+        _isLoading = false;
+
+        if (result.Success && result.Data != null)
+        {
+            _totalCount = result.Data.TotalCount;
+            return new TableData<ManufacturerDto>
+            {
+                Items      = result.Data.Items,
+                TotalItems = result.Data.TotalCount
+            };
+        }
+
+        Snackbar.Add(result.Message, Severity.Error);
+        return new TableData<ManufacturerDto>
+        {
+            Items      = Enumerable.Empty<ManufacturerDto>(),
+            TotalItems = 0
+        };
+    }
+
+    private void OnSearchChanged(string value)
+    {
+        _keyword = value;
+        _table?.ReloadServerData();
+    }
+
+    /// <summary>
+    /// Mở dialog Thêm mới hãng sản xuất.
+    /// </summary>
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions
+        {
+            MaxWidth       = MaxWidth.Small,
+            FullWidth      = true,
+            CloseOnEscapeKey = true
+        };
+
+        var dialog = await DialogService.ShowAsync<ManufacturerDialog>("Thêm hãng sản xuất", options);
+        var dialogResult = await dialog.Result;
+
+        if (dialogResult != null && !dialogResult.Canceled)
+        {
+            await _table!.ReloadServerData();
+        }
+    }
+
+    /// <summary>
+    /// Mở dialog Chỉnh sửa hãng sản xuất.
+    /// </summary>
+    private async Task OpenEditDialog(ManufacturerDto manufacturer)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(ManufacturerDialog.ManufacturerId), manufacturer.Id }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth       = MaxWidth.Small,
+            FullWidth      = true,
+            CloseOnEscapeKey = true
+        };
+
+        var dialog = await DialogService.ShowAsync<ManufacturerDialog>("Chỉnh sửa hãng sản xuất", parameters, options);
+        var dialogResult = await dialog.Result;
+
+        if (dialogResult != null && !dialogResult.Canceled)
+        {
+            await _table!.ReloadServerData();
+        }
+    }
+
+    /// <summary>
+    /// Dialog xác nhận xóa hãng sản xuất (Soft Delete).
+    /// </summary>
+    private async Task ConfirmDelete(ManufacturerDto manufacturer)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Xác nhận xóa",
+            $"Bạn có chắc chắn muốn xóa hãng \"{manufacturer.Name}\" không?\nHãng sẽ bị ẩn và không thể chọn cho sản phẩm mới.",
+            yesText: "Xóa",
+            cancelText: "Hủy"
+        );
+
+        if (confirm == true)
+        {
+            var result = await ManufacturerService.DeleteAsync(manufacturer.Id);
+
+            if (result.Success)
+            {
+                Snackbar.Add("Đã xóa hãng sản xuất thành công!", Severity.Success);
+                await _table!.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+    }
+}

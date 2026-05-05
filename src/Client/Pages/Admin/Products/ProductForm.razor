@@ -190,15 +190,38 @@
                             }
                         </MudSelect>
 
-                        <MudTextField @bind-Value="_manufacturerIdInput"
-                                      Label="ID Hãng sản xuất *"
-                                      Placeholder="VD: 1"
-                                      Variant="Variant.Outlined"
-                                      Margin="Margin.Dense"
-                                      InputType="InputType.Number"
-                                      Class="mb-3"
-                                      Required="true"
-                                      RequiredError="Vui lòng nhập ID hãng sản xuất." />
+                        <MudSelect @bind-Value="_model.ManufacturerId"
+                                   Label="Hãng sản xuất *"
+                                   Placeholder="-- Chọn hãng sản xuất --"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Class="mb-3"
+                                   AnchorOrigin="Origin.BottomCenter"
+                                   Required="true"
+                                   RequiredError="Vui lòng chọn hãng sản xuất."
+                                   Disabled="_isLoadingManufacturers">
+                            @if (_isLoadingManufacturers)
+                            {
+                                <MudSelectItem Value="0" Disabled="true">Đang tải...</MudSelectItem>
+                            }
+                            else
+                            {
+                                @foreach (var mf in _manufacturers)
+                                {
+                                    <MudSelectItem Value="@mf.Id">
+                                        <div class="d-flex align-center gap-2">
+                                            @if (!string.IsNullOrWhiteSpace(mf.LogoUrl))
+                                            {
+                                                <MudAvatar Size="Size.Small" Style="border-radius: 4px; width:20px; height:20px;">
+                                                    <MudImage Src="@mf.LogoUrl" Alt="@mf.Name" />
+                                                </MudAvatar>
+                                            }
+                                            @mf.Name
+                                        </div>
+                                    </MudSelectItem>
+                                }
+                            }
+                        </MudSelect>
                     </MudPaper>
 
                     @* -- Trạng thái (chỉ hiện khi Edit) -- *@
@@ -353,6 +376,7 @@
 
     [Inject] private IProductClientService ProductService { get; set; } = null!;
     [Inject] private ICategoryClientService CategoryService { get; set; } = null!;
+    [Inject] private IManufacturerClientService ManufacturerService { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private NavigationManager Navigation { get; set; } = null!;
 
@@ -377,18 +401,31 @@
     // Danh sách Category để chọn
     private List<CategoryTreeDto>? _categories;
 
-    // ManufacturerId input (string → int parse)
-    private int _manufacturerIdInput;
+    // Danh sách Hãng sản xuất để chọn (dropdown)
+    private List<ManufacturerSummaryDto> _manufacturers = new();
+    private bool _isLoadingManufacturers;
 
     // Thông số kỹ thuật (Dynamic Key-Value)
     private List<SpecEntry> _specifications = new();
 
     protected override async Task OnInitializedAsync()
     {
-        // Load categories
-        var catResult = await CategoryService.GetTreeAsync();
+        // Load categories và manufacturers song song
+        _isLoadingManufacturers = true;
+        var catTask = CategoryService.GetTreeAsync();
+        var mfTask  = ManufacturerService.GetDropdownAsync();
+
+        await Task.WhenAll(catTask, mfTask);
+
+        var catResult = await catTask;
         if (catResult.Success && catResult.Data != null)
             _categories = catResult.Data;
+
+        var mfResult = await mfTask;
+        if (mfResult.Success && mfResult.Data != null)
+            _manufacturers = mfResult.Data;
+
+        _isLoadingManufacturers = false;
 
         // Nếu Edit mode → load product detail
         if (_isEditMode)
@@ -427,7 +464,7 @@
                 }).ToList()
             };
 
-            _manufacturerIdInput = _editDetail.ManufacturerId;
+            // ManufacturerId đã được set vào _model.ManufacturerId bên trên
             _statusForUpdate = _editDetail.Status;
 
             // Load specs từ variant đầu tiên (nếu có) hoặc để trống
@@ -509,8 +546,12 @@
             }
         }
 
-        // Gán ManufacturerId
-        _model.ManufacturerId = _manufacturerIdInput;
+        // Validate ManufacturerId
+        if (_model.ManufacturerId <= 0)
+        {
+            Snackbar.Add("Vui lòng chọn hãng sản xuất.", Severity.Warning);
+            return;
+        }
 
         // Gán Specifications vào mỗi Variant
         var specsDict = _specifications

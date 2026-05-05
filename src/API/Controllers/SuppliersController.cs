@@ -10,7 +10,7 @@ namespace PBL3.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
-    [Authorize(Roles = "Admin, WarehouseManager")]
+    [Authorize(Roles = "Admin, Employee")]
     public class SuppliersController : ControllerBase
     {
         private readonly ISupplierService _supplierService;

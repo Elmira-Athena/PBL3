@@ -1,0 +1,43 @@
+<MudNavMenu Bordered="true" Color="Color.Primary" Class="px-2">
+<AuthorizeView Roles="Employee,Admin">
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mud-text-secondary"
+             Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
+        Bán hàng & Đơn hàng
+    </MudText>
+
+    <MudNavLink Href="/pos" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.PointOfSale"
+                IconColor="Color.Primary">
+        Bán hàng (POS)
+    </MudNavLink>
+
+    <MudNavLink Href="/orders" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.ShoppingCart"
+                IconColor="Color.Default">
+        Đơn hàng
+    </MudNavLink>
+
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mt-3 mud-text-secondary"
+             Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
+        Quản lý kho
+    </MudText>
+
+    <MudNavLink Href="/warehouse/import-receipt" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.MoveToInbox"
+                IconColor="Color.Default">
+        Nhập kho
+    </MudNavLink>
+
+    <MudNavLink Href="/inventory/pending-export" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.PendingActions"
+                IconColor="Color.Default">
+        Đơn chờ xuất
+    </MudNavLink>
+
+    <MudNavLink Href="/inventory/export" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.Outbox"
+                IconColor="Color.Default">
+        Xuất kho
+    </MudNavLink>
+</AuthorizeView>
+</MudNavMenu>

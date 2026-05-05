@@ -5,22 +5,16 @@
         Quản lý
     </MudText>
 
-    <MudNavLink Href="/" Match="NavLinkMatch.All"
-                Icon="@Icons.Material.Outlined.Dashboard"
-                IconColor="Color.Default">
-        Tổng quan
-    </MudNavLink>
-
-    <MudNavLink Href="/pos" Match="NavLinkMatch.Prefix"
-                Icon="@Icons.Material.Outlined.PointOfSale"
-                IconColor="Color.Primary">
-        Bán hàng (POS)
-    </MudNavLink>
-
     <MudNavLink Href="/admin/categories" Match="NavLinkMatch.Prefix"
                 Icon="@Icons.Material.Outlined.Category"
                 IconColor="Color.Default">
         Danh mục
+    </MudNavLink>
+
+    <MudNavLink Href="/admin/manufacturers" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.Factory"
+                IconColor="Color.Default">
+        Hãng sản xuất
     </MudNavLink>
 
     <MudNavLink Href="/admin/products" Match="NavLinkMatch.Prefix"
@@ -33,17 +27,6 @@
                 Icon="@Icons.Material.Outlined.LocalShipping"
                 IconColor="Color.Default">
         Nhà cung cấp
-    </MudNavLink>
-
-    <MudText Typo="Typo.caption" Class="px-4 py-2 mt-3 mud-text-secondary"
-             Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
-        Bán hàng
-    </MudText>
-
-    <MudNavLink Href="/admin/orders" Match="NavLinkMatch.Prefix"
-                Icon="@Icons.Material.Outlined.ShoppingCart"
-                IconColor="Color.Default">
-        Đơn hàng
     </MudNavLink>
 
     <MudNavLink Href="/admin/customers" Match="NavLinkMatch.Prefix"

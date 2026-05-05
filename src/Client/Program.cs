@@ -11,6 +11,7 @@ using Client.Services;
 using Client.Services.Auth;
 using Client.Services.Category;
 using Client.Services.Customer;
+using Client.Services.Manufacturer;
 using Client.Services.Pos;
 using Client.Services.Product;
 using Client.Services.Supplier;
@@ -49,6 +50,7 @@ builder.Services.AddMudServices();
 // Client Services (DI)
 builder.Services.AddScoped<ICategoryClientService, CategoryClientService>();
 builder.Services.AddScoped<IProductClientService, ProductClientService>();
+builder.Services.AddScoped<IManufacturerClientService, ManufacturerClientService>();
 builder.Services.AddScoped<ISupplierClientService, SupplierClientService>();
 builder.Services.AddScoped<IImportReceiptClientService, ImportReceiptClientService>();
 builder.Services.AddScoped<IProductSerialClientService, ProductSerialClientService>();

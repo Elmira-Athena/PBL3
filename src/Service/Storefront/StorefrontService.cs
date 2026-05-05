@@ -233,5 +233,137 @@ namespace PBL3.Service.Storefront
 
             return ApiResult<List<ProductCardResponse>>.Ok(result);
         }
+
+        public async Task<ApiResult<CategoryDetailResponse>> GetCategoryBySlugAsync(string slug)
+        {
+            var category = await _context.Categories
+                .AsNoTracking()
+                .Where(c => c.Slug == slug && c.IsVisible && !c.IsDeleted)
+                .Select(c => new CategoryDetailResponse
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Slug = c.Slug,
+                    IconUrl = c.ImageUrl
+                })
+                .FirstOrDefaultAsync();
+
+            if (category == null)
+            {
+                return ApiResult<CategoryDetailResponse>.Fail("Không tìm thấy danh mục yêu cầu.");
+            }
+
+            return ApiResult<CategoryDetailResponse>.Ok(category);
+        }
+
+        public async Task<ApiResult<PagedResult<ProductCardResponse>>> GetProductsByCategoryAsync(
+            string categorySlug, int page, int pageSize)
+        {
+            // Bước 1: Tìm danh mục gốc theo slug
+            var rootCategory = await _context.Categories
+                .AsNoTracking()
+                .Where(c => c.Slug == categorySlug && c.IsVisible && !c.IsDeleted)
+                .Select(c => new { c.Id })
+                .FirstOrDefaultAsync();
+
+            if (rootCategory == null)
+            {
+                return ApiResult<PagedResult<ProductCardResponse>>.Fail("Không tìm thấy danh mục yêu cầu.");
+            }
+
+            // Bước 2: Load tất cả categories vào RAM để BFS collect descendant IDs
+            // Categories ít record nên safe khi load vào RAM
+            var allCategories = await _context.Categories
+                .AsNoTracking()
+                .Where(c => c.IsVisible && !c.IsDeleted)
+                .Select(c => new { c.Id, c.ParentId })
+                .ToListAsync();
+
+            // BFS để collect tất cả descendant IDs (bao gồm cả rootCategory)
+            var categoryIds = new HashSet<int> { rootCategory.Id };
+            var queue = new Queue<int>();
+            queue.Enqueue(rootCategory.Id);
+
+            while (queue.Count > 0)
+            {
+                var currentId = queue.Dequeue();
+                var children = allCategories.Where(c => c.ParentId == currentId).ToList();
+                foreach (var child in children)
+                {
+                    if (categoryIds.Add(child.Id))
+                    {
+                        queue.Enqueue(child.Id);
+                    }
+                }
+            }
+
+            // Bước 3: Query products WHERE CategoryId IN (categoryIds) với phân trang
+            var baseQuery = _context.Products
+                .AsNoTracking()
+                .Where(p => categoryIds.Contains(p.CategoryId) && p.Status == 1 && !p.IsDeleted);
+
+            var totalCount = await baseQuery.CountAsync();
+
+            var products = await baseQuery
+                .OrderByDescending(p => p.CreatedDate)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Name,
+                    p.Slug,
+                    ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
+                    MainImage = p.Variants.Where(v => !v.IsDeleted)
+                        .SelectMany(v => v.Images)
+                        .OrderByDescending(i => i.IsMain)
+                        .ThenBy(i => i.SortOrder)
+                        .FirstOrDefault()
+                })
+                .ToListAsync();
+
+            var result = products.Select(p =>
+            {
+                var variants = p.ActiveVariants.ToList();
+                decimal currentPrice = 0;
+                decimal oldPrice = 0;
+
+                if (variants.Any())
+                {
+                    currentPrice = variants.Min(v => v.Price);
+                    oldPrice = variants.Max(v => v.OriginalPrice ?? v.Price);
+                    if (oldPrice < currentPrice) oldPrice = currentPrice;
+                }
+
+                int discountPercent = 0;
+                if (oldPrice > 0 && currentPrice < oldPrice)
+                {
+                    discountPercent = (int)Math.Round((oldPrice - currentPrice) / oldPrice * 100);
+                }
+
+                return new ProductCardResponse
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Slug = p.Slug,
+                    ThumbnailUrl = p.MainImage?.ImageUrl,
+                    CurrentPrice = currentPrice,
+                    OldPrice = oldPrice,
+                    DiscountPercent = discountPercent,
+                    Rating = 5.0,
+                    ReviewCount = 0
+                };
+            }).ToList();
+
+            var pagedResult = new PagedResult<ProductCardResponse>
+            {
+                Items = result,
+                TotalCount = totalCount,
+                PageNumber = page,
+                PageSize = pageSize
+            };
+
+            return ApiResult<PagedResult<ProductCardResponse>>.Ok(pagedResult);
+        }
     }
 }

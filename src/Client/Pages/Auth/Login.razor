@@ -3,6 +3,7 @@
 @inject IAuthClientService AuthService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Đăng nhập - HushStore</PageTitle>
 
@@ -67,7 +68,22 @@
         if (result.Success)
         {
             Snackbar.Add("Đăng nhập thành công!", Severity.Success);
-            Navigation.NavigateTo("/");
+            
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.IsInRole("Admin"))
+            {
+                Navigation.NavigateTo("/admin/categories");
+            }
+            else if (user.IsInRole("Employee"))
+            {
+                Navigation.NavigateTo("/pos");
+            }
+            else
+            {
+                Navigation.NavigateTo("/");
+            }
         }
         else
         {

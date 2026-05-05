@@ -3,10 +3,12 @@
 @using PBL3.Shared.DTOs.Storefront
 @using Client.Services.Storefront
 @using Client.Services.Cart
+@using Microsoft.AspNetCore.Components.Authorization
 @inject IStorefrontClientService StorefrontClientService
 @inject ICartClientService CartClientService
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>@(_product?.Name ?? "Chi tiết sản phẩm") - HushStore</PageTitle>
 
@@ -115,8 +117,8 @@
 
                 <!-- Actions -->
                 <div class="d-flex gap-4">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Class="flex-1 py-3 fw-bold rounded-lg" 
-                               StartIcon="@Icons.Material.Filled.AddShoppingCart" 
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Class="flex-1 py-3 fw-bold rounded-lg"
+                               StartIcon="@Icons.Material.Filled.AddShoppingCart"
                                OnClick="AddToCartAsync" Disabled="!IsCurrentVariantAvailable() || _isProcessing">
                         THÊM VÀO GIỎ
                     </MudButton>
@@ -308,7 +310,17 @@
     {
         if (_currentVariant == null || !_currentVariant.IsAvailable) return;
 
+        // Kiểm tra đăng nhập trước khi thêm giỏ
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true)
+        {
+            Snackbar.Add("Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.", Severity.Warning);
+            NavigationManager.NavigateTo($"/login?returnUrl=/product/{Slug}");
+            return;
+        }
+
         _isProcessing = true;
+        StateHasChanged();
         var result = await CartClientService.AddToCartAsync(_currentVariant.Id, _quantity);
         if (result.Success)
         {
@@ -325,7 +337,17 @@
     {
         if (_currentVariant == null || !_currentVariant.IsAvailable) return;
 
+        // Kiểm tra đăng nhập trước khi mua
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true)
+        {
+            Snackbar.Add("Vui lòng đăng nhập để tiếp tục mua hàng.", Severity.Warning);
+            NavigationManager.NavigateTo($"/login?returnUrl=/product/{Slug}");
+            return;
+        }
+
         _isProcessing = true;
+        StateHasChanged();
         var result = await CartClientService.AddToCartAsync(_currentVariant.Id, _quantity);
         if (result.Success)
         {

@@ -3,50 +3,51 @@
 @inject NavigationManager Navigation
 
 <MudLayout>
-    @* ===== TOP APP BAR ===== *@
-    <MudAppBar Elevation="1" Dense="true" Fixed="true"
-               Style="background-color: var(--mud-palette-surface); border-bottom: 1px solid var(--mud-palette-divider);">
+    @* ===== TOP APP BAR (Colorful like Storefront) ===== *@
+    <MudAppBar Elevation="2" Dense="false" Fixed="true"
+               Style="background: linear-gradient(135deg, #1a1a2e 0%, #c0392b 100%); color: white;">
         
         <MudIconButton Icon="@Icons.Material.Filled.Menu"
                        Color="Color.Inherit"
-                       OnClick="ToggleDrawer"
-                       Style="color: var(--mud-palette-text-primary);" />
+                       OnClick="ToggleDrawer" />
 
-        @* -- Logo (trên AppBar) -- *@
+        @* -- Logo -- *@
         <MudImage Src="images/logo.png" Alt="HushStore"
                   Width="120" Height="40"
                   ObjectFit="ObjectFit.Contain"
-                  Class="mr-2" Style="cursor: pointer;" />
+                  Class="mr-4" Style="cursor: pointer;"
+                  @onclick='() => Navigation.NavigateTo("/pos")' />
 
-        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
-                 Style="font-weight: 600; pointer-events: none;">
-            Quản lý kho
+        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled"
+                 Style="font-weight: 600; pointer-events: none;" Class="mr-4">
+            Nhân viên
         </MudChip>
 
-        @* -- Search Bar -- *@
         <MudSpacer />
-        <MudPaper Elevation="0" Class="d-flex align-center rounded-lg px-3"
-                  Style="background-color: #F5F5F5; max-width: 480px; width: 100%;">
-            <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small"
-                     Style="color:#999;" Class="mr-2" />
-            <MudTextField T="string" Placeholder="Nhập từ khóa tìm kiếm..."
-                      Variant="Variant.Text"
-                      Class="flex-grow-1"
-                      Style="font-size: 0.85rem;"
-                      Margin="Margin.Dense" />
-        </MudPaper>
-        <MudSpacer />
+
+        @* -- Switch to Admin View (Only visible if Admin is logged in) -- *@
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <MudTooltip Text="Trở về giao diện Quản trị">
+                    <MudButton Variant="Variant.Filled"
+                               StartIcon="@Icons.Material.Filled.AdminPanelSettings"
+                               Style="background-color: rgba(255,255,255,0.15); color: white; border-radius: 4px;"
+                               Class="mr-4"
+                               Href="/admin/categories">
+                        Về Admin
+                    </MudButton>
+                </MudTooltip>
+            </Authorized>
+        </AuthorizeView>
 
         @* -- User Profile -- *@
         <AuthorizeView>
             <Authorized>
                 <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                     <ActivatorContent>
-                        <MudBadge Color="Color.Error" Dot="true" Overlap="true" Bordered="true" Class="cursor-pointer"> @* FIX: Chuyển cấu trúc AuthorizeView ra ngoài MudMenu để tránh lỗi Lifecycle/DOM khi Render *@
-                            <MudAvatar Size="Size.Small" Color="Color.Primary">
-                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" /> @* FIX: Giữ nguyên size Small đồng bộ *@
-                            </MudAvatar>
-                        </MudBadge>
+                        <MudAvatar Size="Size.Small" Color="Color.Secondary" Class="cursor-pointer ml-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                        </MudAvatar>
                     </ActivatorContent>
                     <ChildContent>
                         <MudMenuItem Icon="@Icons.Material.Filled.Person">@context.User.Identity?.Name</MudMenuItem>
@@ -57,7 +58,7 @@
                 </MudMenu>
             </Authorized>
             <NotAuthorized>
-                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/login" StartIcon="@Icons.Material.Filled.Login">
+                <MudButton Variant="Variant.Text" Style="color: white;" Href="/login" StartIcon="@Icons.Material.Filled.Login">
                     Đăng nhập
                 </MudButton>
             </NotAuthorized>
@@ -68,7 +69,7 @@
     <MudDrawer @bind-Open="_drawerOpen" Elevation="1"
                ClipMode="DrawerClipMode.Always"
                Variant="DrawerVariant.Mini" OpenMiniOnHover="true">
-        <WarehouseNavMenu />
+        <EmployeeNavMenu />
     </MudDrawer>
 
     @* ===== MAIN CONTENT ===== *@

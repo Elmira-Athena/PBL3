@@ -2,6 +2,7 @@
 @inject IAuthClientService AuthService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
 
 <MudLayout>
     @* ===== TOP APP BAR ===== *@
@@ -88,6 +89,24 @@
 </MudLayout>
 
 @code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            if (user.IsInRole("Admin"))
+            {
+                Navigation.NavigateTo("/admin/categories");
+            }
+            else if (user.IsInRole("Employee"))
+            {
+                Navigation.NavigateTo("/pos");
+            }
+        }
+    }
+
     private async Task Logout()
     {
         await AuthService.LogoutAsync();

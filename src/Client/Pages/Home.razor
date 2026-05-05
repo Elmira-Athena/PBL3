@@ -5,6 +5,7 @@
 @using Client.Shared.Components.Storefront
 @inject IStorefrontClientService StorefrontService
 @inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
 
 <PageTitle>HushStore - Trang chủ</PageTitle>
 
@@ -34,7 +35,7 @@ else
                     <MudList T="CategoryMenuResponse" Dense="true" Class="py-2">
                         @foreach (var cat in _categories)
                         {
-                            <MudListItem T="CategoryMenuResponse" OnClick="@(() => HandleComingSoon())">
+                            <MudListItem T="CategoryMenuResponse" OnClick="@(() => NavigateToCategory(cat.Slug))">
                                 <div class="d-flex align-center">
                                     @if (!string.IsNullOrEmpty(cat.IconUrl))
                                     {
@@ -97,7 +98,7 @@ else
                 @foreach (var cat in _categories)
                 {
                     <MudItem xs="6" sm="4" md="2">
-                        <MudPaper Elevation="1" Class="pa-4 d-flex flex-column align-center justify-center h-100" Style="cursor:pointer" @onclick="HandleComingSoon">
+                        <MudPaper Elevation="1" Class="pa-4 d-flex flex-column align-center justify-center h-100" Style="cursor:pointer" @onclick="@(() => NavigateToCategory(cat.Slug))">
                             @if (!string.IsNullOrEmpty(cat.IconUrl))
                             {
                                 <img src="@cat.IconUrl" style="width: 48px; height: 48px; object-fit: contain;" class="mb-2" alt="@cat.Name" />
@@ -198,5 +199,10 @@ else
     private void HandleComingSoon()
     {
         Snackbar.Add("Tính năng đang phát triển", Severity.Info);
+    }
+
+    private void NavigateToCategory(string slug)
+    {
+        NavigationManager.NavigateTo($"/category/{slug}");
     }
 }

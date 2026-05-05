@@ -12,6 +12,7 @@ using PBL3.Infrastructure.Repositories;
 using PBL3.Service.Auth;
 using PBL3.Service.Categories;
 using PBL3.Service.ImportReceipts;
+using PBL3.Service.Manufacturers;
 using PBL3.Service.Products;
 using PBL3.Service.ProductSerials;
 using PBL3.Service.Suppliers;
@@ -95,6 +96,7 @@ builder.Services.AddAuthentication(options =>
 // DI: Repositories
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<IManufacturerRepository, ManufacturerRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IImportReceiptRepository, ImportReceiptRepository>();
 builder.Services.AddScoped<IProductSerialRepository, ProductSerialRepository>();
@@ -111,6 +113,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 // DI: Services
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IManufacturerService, ManufacturerService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IImportReceiptService, ImportReceiptService>();
 builder.Services.AddScoped<IProductSerialService, ProductSerialService>();

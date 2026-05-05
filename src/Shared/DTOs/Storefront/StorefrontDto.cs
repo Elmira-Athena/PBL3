@@ -1,3 +1,5 @@
+using PBL3.Shared.DTOs.Common;
+
 namespace PBL3.Shared.DTOs.Storefront
 {
     public class CategoryMenuResponse
@@ -6,6 +8,26 @@ namespace PBL3.Shared.DTOs.Storefront
         public string Name { get; set; } = string.Empty;
         public string Slug { get; set; } = string.Empty;
         public string? IconUrl { get; set; } // Map from ImageUrl
+    }
+
+    /// <summary>
+    /// Thông tin chi tiết danh mục dùng cho breadcrumb và tiêu đề trang.
+    /// </summary>
+    public class CategoryDetailResponse
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public string? IconUrl { get; set; }
+    }
+
+    /// <summary>
+    /// Query parameters cho API lấy danh sách sản phẩm theo danh mục.
+    /// </summary>
+    public class CategoryProductsRequest
+    {
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 20;
     }
 
     public class ProductCardResponse

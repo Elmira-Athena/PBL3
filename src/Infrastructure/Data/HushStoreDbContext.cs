@@ -110,6 +110,13 @@ namespace PBL3.Infrastructure.Data
                       );
             });
 
+            // --- PRODUCT ---
+            // Global Query Filter: Tự động bỏ qua Manufacturer đã bị xoá mềm
+            modelBuilder.Entity<Manufacturer>(entity =>
+            {
+                entity.HasQueryFilter(m => !m.IsDeleted);
+            });
+
             // --- INVENTORY ---
             // Global Query Filter: Tự động bỏ qua Supplier đã bị xoá mềm
             modelBuilder.Entity<Supplier>(entity =>

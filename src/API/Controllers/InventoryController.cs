@@ -11,7 +11,7 @@ namespace PBL3.API.Controllers
     [ApiController]
     [Route("api/inventory")]
     [Produces("application/json")]
-    [Authorize(Roles = "Admin,WarehouseManager,WarehouseStaff")]
+    [Authorize(Roles = "Admin, Employee")]
     public class InventoryController : ControllerBase
     {
         private readonly IInventoryExportService _inventoryExportService;

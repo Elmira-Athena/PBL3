@@ -14,6 +14,7 @@ namespace PBL3.Service.ImportReceipts
         private readonly ISupplierRepository _supplierRepo;
         private readonly IProductRepository _productRepo;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IInventorySyncService _inventorySyncService;
         private readonly ILogger<ImportReceiptService> _logger;
 
         public ImportReceiptService(
@@ -22,6 +23,7 @@ namespace PBL3.Service.ImportReceipts
             ISupplierRepository supplierRepo,
             IProductRepository productRepo,
             IUnitOfWork unitOfWork,
+            IInventorySyncService inventorySyncService,
             ILogger<ImportReceiptService> logger)
         {
             _receiptRepo = receiptRepo;
@@ -29,6 +31,7 @@ namespace PBL3.Service.ImportReceipts
             _supplierRepo = supplierRepo;
             _productRepo = productRepo;
             _unitOfWork = unitOfWork;
+            _inventorySyncService = inventorySyncService;
             _logger = logger;
         }
 
@@ -143,6 +146,12 @@ namespace PBL3.Service.ImportReceipts
 
                 // Lưu tất cả (Details + Serials)
                 await _unitOfWork.SaveChangesAsync();
+
+                // ---------------------------------------------------
+                // Bước 5: Cập nhật tồn kho (StockQuantity)
+                // ---------------------------------------------------
+                var importedVariantIds = request.Details.Select(d => d.VariantId).Distinct().ToList();
+                await _inventorySyncService.SyncStockBatchAsync(importedVariantIds);
 
                 // ---------------------------------------------------
                 // Bước 6: Commit Transaction

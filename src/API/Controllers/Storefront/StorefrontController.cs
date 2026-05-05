@@ -65,5 +65,38 @@ namespace PBL3.API.Controllers.Storefront
             var result = await _storefrontService.GetRelatedProductsAsync(slug);
             return Ok(result);
         }
+
+        /// <summary>
+        /// Lấy thông tin danh mục theo slug (dùng cho breadcrumb và tiêu đề trang).
+        /// </summary>
+        [HttpGet("categories/{slug}")]
+        [ProducesResponseType(typeof(ApiResult<CategoryDetailResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetCategoryBySlug(string slug)
+        {
+            var result = await _storefrontService.GetCategoryBySlugAsync(slug);
+            if (!result.Success)
+            {
+                return NotFound(result);
+            }
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Lấy danh sách sản phẩm theo danh mục (bao gồm cả danh mục con) với phân trang.
+        /// </summary>
+        [HttpGet("categories/{slug}/products")]
+        [ProducesResponseType(typeof(ApiResult<PagedResult<ProductCardResponse>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetProductsByCategory(
+            string slug,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var result = await _storefrontService.GetProductsByCategoryAsync(slug, page, pageSize);
+            if (!result.Success)
+            {
+                return NotFound(result);
+            }
+            return Ok(result);
+        }
     }
 }
