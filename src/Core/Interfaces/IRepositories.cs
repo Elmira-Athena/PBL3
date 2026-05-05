@@ -182,6 +182,24 @@ namespace PBL3.Core.Interfaces
         Task<Dictionary<int, int>> CountAvailableByVariantIdsAsync(List<int> variantIds);
         
         Task SaveChangesAsync();
+
+        /// <summary>
+        /// Danh sách phân trang ProductSerial với bộ lọc đa điều kiện.
+        /// </summary>
+        Task<(List<ProductSerial> Items, int TotalCount)> GetPagedListAsync(
+            string? keyword, int? productId, int? variantId,
+            byte? status, DateTime? fromDate, DateTime? toDate,
+            int pageNumber, int pageSize, string? sortBy, bool sortDescending);
+
+        /// <summary>
+        /// Đếm số Serial theo trạng thái (GROUP BY Status). Có thể lọc theo productId hoặc variantId.
+        /// </summary>
+        Task<Dictionary<byte, int>> GetStatusCountsAsync(int? productId, int? variantId);
+
+        /// <summary>
+        /// Lấy chi tiết Serial kèm Variant, Product, ImportReceipt, Supplier (read-only).
+        /// </summary>
+        Task<ProductSerial?> GetByIdWithDetailsAsync(int id);
     }
 
     /// <summary>

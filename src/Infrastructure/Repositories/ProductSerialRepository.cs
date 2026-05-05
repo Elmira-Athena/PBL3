@@ -90,5 +90,65 @@ namespace PBL3.Infrastructure.Repositories
         {
             await _context.SaveChangesAsync();
         }
+
+        public async Task<(List<ProductSerial> Items, int TotalCount)> GetPagedListAsync(
+            string? keyword, int? productId, int? variantId,
+            byte? status, DateTime? fromDate, DateTime? toDate,
+            int pageNumber, int pageSize, string? sortBy, bool sortDescending)
+        {
+            var query = _context.ProductSerials
+                .AsNoTracking()
+                .Include(s => s.Variant).ThenInclude(v => v.Product)
+                .Include(s => s.ImportReceipt)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+                query = query.Where(s => s.SerialNumber.Contains(keyword.Trim()));
+            if (productId.HasValue)
+                query = query.Where(s => s.Variant.ProductId == productId.Value);
+            if (variantId.HasValue)
+                query = query.Where(s => s.VariantId == variantId.Value);
+            if (status.HasValue)
+                query = query.Where(s => s.Status == status.Value);
+            if (fromDate.HasValue)
+                query = query.Where(s => s.CreatedDate >= fromDate.Value);
+            if (toDate.HasValue)
+                query = query.Where(s => s.CreatedDate <= toDate.Value);
+
+            var totalCount = await query.CountAsync();
+
+            query = sortBy?.ToLower() switch
+            {
+                "serialnumber" => sortDescending ? query.OrderByDescending(s => s.SerialNumber) : query.OrderBy(s => s.SerialNumber),
+                "status"       => sortDescending ? query.OrderByDescending(s => s.Status)       : query.OrderBy(s => s.Status),
+                _              => sortDescending ? query.OrderByDescending(s => s.CreatedDate)  : query.OrderBy(s => s.CreatedDate)
+            };
+
+            var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+            return (items, totalCount);
+        }
+
+        public async Task<Dictionary<byte, int>> GetStatusCountsAsync(int? productId, int? variantId)
+        {
+            var query = _context.ProductSerials.AsNoTracking().AsQueryable();
+            if (productId.HasValue)
+                query = query.Where(s => s.Variant.ProductId == productId.Value);
+            if (variantId.HasValue)
+                query = query.Where(s => s.VariantId == variantId.Value);
+
+            return await query
+                .GroupBy(s => s.Status)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Status, x => x.Count);
+        }
+
+        public async Task<ProductSerial?> GetByIdWithDetailsAsync(int id)
+        {
+            return await _context.ProductSerials
+                .AsNoTracking()
+                .Include(s => s.Variant).ThenInclude(v => v.Product)
+                .Include(s => s.ImportReceipt).ThenInclude(r => r.Supplier)
+                .FirstOrDefaultAsync(s => s.Id == id);
+        }
     }
 }
