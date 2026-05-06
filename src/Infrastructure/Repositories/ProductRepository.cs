@@ -202,6 +202,16 @@ namespace PBL3.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<int>> GetCategoryIdsByVariantIdsAsync(List<int> variantIds)
+        {
+            return await _context.ProductVariants
+                .AsNoTracking()
+                .Where(v => variantIds.Contains(v.Id))
+                .Select(v => v.Product.CategoryId)
+                .Distinct()
+                .ToListAsync();
+        }
+
         public async Task<List<ProductVariant>> FilterBySpecificationAsync(string specKey, string specValue)
         {
             string jsonPath = $"$.{specKey}";

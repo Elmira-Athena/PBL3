@@ -27,15 +27,38 @@ namespace PBL3.Core.Entities
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
 
-        public int Quantity { get; set; }
+        public int? Quantity { get; set; } // null = không giới hạn số lượng
         public int UsedCount { get; set; }
 
         public bool IsActive { get; set; } = true;
 
-        /// <summary>
-        /// Lịch sử sử dụng voucher (gồm thông tin user, order, số tiền giảm).
-        /// </summary>
+        // Quản lý nâng cao
+        public int? MaxUsesPerUser { get; set; }        // null = không giới hạn lần dùng/người
+        public byte ApplyFor { get; set; }              // 0: Both, 1: Online, 2: POS
+        public bool IsStackable { get; set; }           // false = không được dùng chung voucher khác
+        [MaxLength(500)]
+        public string? Description { get; set; }
+
+        // Soft delete & audit
+        public DateTime CreatedDate { get; set; }
+        public bool IsDeleted { get; set; }
+        public DateTime? DeletedDate { get; set; }
+
         public virtual ICollection<VoucherUsage> VoucherUsages { get; set; } = new List<VoucherUsage>();
+        public virtual ICollection<VoucherCategory> VoucherCategories { get; set; } = new List<VoucherCategory>();
+    }
+
+    // 1b. VoucherCategories (danh mục sản phẩm được áp dụng voucher)
+    [Table("VoucherCategories")]
+    public class VoucherCategory
+    {
+        public int VoucherId { get; set; }
+        public int CategoryId { get; set; }
+
+        [ForeignKey("VoucherId")]
+        public virtual Voucher Voucher { get; set; } = null!;
+        [ForeignKey("CategoryId")]
+        public virtual Category Category { get; set; } = null!;
     }
 
     // 2. Orders

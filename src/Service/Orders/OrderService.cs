@@ -101,8 +101,13 @@ namespace PBL3.Service.Orders
 
             // Step 3: Voucher & Price Calculation
             decimal subTotal = checkoutItems.Sum(x => x.Price * x.Quantity);
-            
-            var (usages, totalDiscount) = await ApplyVouchersAsync(subTotal, request.VoucherCodes, userId);
+
+            var itemCategoryIds = (request.VoucherCodes != null && request.VoucherCodes.Any())
+                ? await _productRepo.GetCategoryIdsByVariantIdsAsync(variantIds)
+                : null;
+
+            var (usages, totalDiscount) = await ApplyVouchersAsync(
+                subTotal, request.VoucherCodes, userId, isOnlineOrder: true, itemCategoryIds);
             totalDiscount = Math.Min(totalDiscount, subTotal);
 
             decimal totalAmount = subTotal + request.ShippingFee - totalDiscount;
@@ -232,7 +237,13 @@ namespace PBL3.Service.Orders
             decimal shippingFee = 30000; // Hardcoded or calculated
 
             // 2. Apply Vouchers
-            var (usages, totalDiscount) = await ApplyVouchersAsync(subTotal, request.VoucherCodes, userId);
+            var placeOrderVariantIds = request.Items.Select(i => i.VariantId).Distinct().ToList();
+            var placeOrderCategoryIds = (request.VoucherCodes != null && request.VoucherCodes.Any())
+                ? await _productRepo.GetCategoryIdsByVariantIdsAsync(placeOrderVariantIds)
+                : null;
+
+            var (usages, totalDiscount) = await ApplyVouchersAsync(
+                subTotal, request.VoucherCodes, userId, isOnlineOrder: true, placeOrderCategoryIds);
 
             // 3. Ensure discount <= subtotal
             totalDiscount = Math.Min(totalDiscount, subTotal);
@@ -327,22 +338,24 @@ namespace PBL3.Service.Orders
         private async Task<(List<VoucherUsage> Usages, decimal TotalDiscount)> ApplyVouchersAsync(
             decimal subTotal,
             List<string>? voucherCodes,
-            Guid userId)
+            Guid userId,
+            bool isOnlineOrder,
+            List<int>? orderItemCategoryIds = null)
         {
             var usages = new List<VoucherUsage>();
             if (voucherCodes == null || !voucherCodes.Any())
-            {
                 return (usages, 0);
-            }
 
-            var vouchers = await _voucherRepo.GetByCodesAsync(voucherCodes);
-            
+            var vouchers = await _voucherRepo.GetByCodesWithCategoriesAsync(voucherCodes);
+
             var foundCodes = vouchers.Select(v => v.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var invalidCodes = voucherCodes.Where(c => !foundCodes.Contains(c)).ToList();
             if (invalidCodes.Any())
-            {
                 throw new Exception($"Mã giảm giá không tồn tại: {string.Join(", ", invalidCodes)}");
-            }
+
+            // IsStackable: nếu dùng nhiều voucher mà có voucher không cho phép dùng chung → reject
+            if (vouchers.Count > 1 && vouchers.Any(v => !v.IsStackable))
+                throw new Exception("Một hoặc nhiều mã giảm giá không thể được sử dụng cùng lúc với mã khác.");
 
             var now = DateTime.UtcNow;
             foreach (var voucher in vouchers)
@@ -353,53 +366,71 @@ namespace PBL3.Service.Orders
                 if (now < voucher.StartDate || now > voucher.EndDate)
                     throw new Exception($"Mã '{voucher.Code}' đã hết hạn hoặc chưa đến thời gian sử dụng.");
 
-                if (voucher.UsedCount >= voucher.Quantity)
+                if (voucher.Quantity.HasValue && voucher.UsedCount >= voucher.Quantity.Value)
                     throw new Exception($"Mã '{voucher.Code}' đã hết lượt sử dụng.");
 
                 if (subTotal < voucher.MinOrderValue)
                     throw new Exception(
                         $"Mã '{voucher.Code}' yêu cầu đơn hàng tối thiểu {voucher.MinOrderValue:#,0}đ " +
                         $"(đơn hiện tại: {subTotal:#,0}đ).");
+
+                // Kiểm tra kênh áp dụng
+                if (isOnlineOrder && voucher.ApplyFor == 2)
+                    throw new Exception($"Mã '{voucher.Code}' chỉ áp dụng tại quầy, không áp dụng cho đơn online.");
+                if (!isOnlineOrder && voucher.ApplyFor == 1)
+                    throw new Exception($"Mã '{voucher.Code}' chỉ áp dụng cho đơn online, không áp dụng tại quầy.");
+
+                // Kiểm tra danh mục sản phẩm áp dụng
+                if (voucher.VoucherCategories.Any() && orderItemCategoryIds != null && orderItemCategoryIds.Any())
+                {
+                    var voucherCategoryIds = voucher.VoucherCategories.Select(vc => vc.CategoryId).ToHashSet();
+                    if (!orderItemCategoryIds.Any(catId => voucherCategoryIds.Contains(catId)))
+                        throw new Exception($"Mã '{voucher.Code}' không áp dụng cho danh mục sản phẩm trong đơn hàng này.");
+                }
             }
 
+            // Kiểm tra MaxUsesPerUser bằng count (hỗ trợ MaxUsesPerUser > 1)
             var voucherIds = vouchers.Select(v => v.Id).ToList();
-            var alreadyUsedIds = await _voucherRepo.GetUsedVoucherIdsByUserAsync(userId, voucherIds);
-            if (alreadyUsedIds.Any())
+            var usageCounts = await _voucherRepo.GetUserVoucherUsageCountsAsync(userId, voucherIds);
+            foreach (var voucher in vouchers)
             {
-                var usedCodes = vouchers.Where(v => alreadyUsedIds.Contains(v.Id))
-                                        .Select(v => v.Code);
-                throw new Exception(
-                    $"Bạn đã sử dụng mã giảm giá: {string.Join(", ", usedCodes)}. " +
-                    "Mỗi mã chỉ được sử dụng 1 lần.");
+                var currentCount = usageCounts.GetValueOrDefault(voucher.Id, 0);
+                if (voucher.MaxUsesPerUser.HasValue && currentCount >= voucher.MaxUsesPerUser.Value)
+                    throw new Exception(
+                        $"Bạn đã sử dụng mã '{voucher.Code}' {currentCount} lần " +
+                        $"(tối đa {voucher.MaxUsesPerUser} lần/khách).");
+
+                // Tương thích ngược: nếu MaxUsesPerUser null và không stackable, giữ logic "dùng 1 lần"
+                if (!voucher.MaxUsesPerUser.HasValue && !voucher.IsStackable && currentCount >= 1)
+                    throw new Exception(
+                        $"Bạn đã sử dụng mã giảm giá '{voucher.Code}'. Mỗi mã chỉ được sử dụng 1 lần.");
             }
 
             decimal totalDiscount = 0;
 
             foreach (var voucher in vouchers)
             {
-                decimal discountApplied = 0;
+                decimal discountApplied;
 
-                if (voucher.DiscountType == 0) // Amount
+                if (voucher.DiscountType == 0) // Tiền cố định
                 {
                     discountApplied = voucher.DiscountValue;
                 }
-                else // Percentage
+                else // Phần trăm
                 {
                     discountApplied = subTotal * voucher.DiscountValue / 100;
                     if (voucher.MaxDiscountAmount.HasValue && discountApplied > voucher.MaxDiscountAmount.Value)
-                    {
                         discountApplied = voucher.MaxDiscountAmount.Value;
-                    }
                 }
 
                 totalDiscount += discountApplied;
 
                 usages.Add(new VoucherUsage
                 {
-                    VoucherId = voucher.Id,
-                    UserId = userId,
+                    VoucherId       = voucher.Id,
+                    UserId          = userId,
                     DiscountApplied = discountApplied,
-                    UsedDate = DateTime.UtcNow
+                    UsedDate        = DateTime.UtcNow
                 });
             }
 

@@ -30,6 +30,7 @@ namespace PBL3.Infrastructure.Data
 
         // Sale
         public DbSet<Voucher> Vouchers { get; set; }
+        public DbSet<VoucherCategory> VoucherCategories { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderDetail> OrderDetails { get; set; }
         public DbSet<OrderSerial> OrderSerials { get; set; }
@@ -152,15 +153,33 @@ namespace PBL3.Infrastructure.Data
             // --- SALE ---
             modelBuilder.Entity<Voucher>(entity =>
             {
+                entity.HasQueryFilter(v => !v.IsDeleted);
+
                 entity.ToTable(t =>
                 {
                     t.HasCheckConstraint("CK_Vouchers_Date", "[EndDate] >= [StartDate]");
-                    t.HasCheckConstraint("CK_Vouchers_Quantity", "[UsedCount] <= [Quantity]");
+                    // Quantity nullable: null = unlimited
+                    t.HasCheckConstraint("CK_Vouchers_Quantity", "[Quantity] IS NULL OR [UsedCount] <= [Quantity]");
                 });
                 entity.HasIndex(v => v.Code).IsUnique();
                 entity.Property(e => e.DiscountValue).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.MinOrderValue).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.MaxDiscountAmount).HasColumnType("decimal(18,2)");
+            });
+
+            modelBuilder.Entity<VoucherCategory>(entity =>
+            {
+                entity.HasKey(vc => new { vc.VoucherId, vc.CategoryId });
+
+                entity.HasOne(vc => vc.Voucher)
+                      .WithMany(v => v.VoucherCategories)
+                      .HasForeignKey(vc => vc.VoucherId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(vc => vc.Category)
+                      .WithMany()
+                      .HasForeignKey(vc => vc.CategoryId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<Order>(entity =>
@@ -187,9 +206,8 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<VoucherUsage>(entity =>
             {
-                // UNIQUE INDEX: 1 user chỉ được dùng 1 mã voucher đúng 1 lần
+                // Non-unique index: MaxUsesPerUser cho phép dùng nhiều lần; check bằng count trong service
                 entity.HasIndex(vu => new { vu.UserId, vu.VoucherId })
-                      .IsUnique()
                       .HasDatabaseName("IX_VoucherUsages_UserId_VoucherId");
 
                 // Index cho truy vấn theo OrderId

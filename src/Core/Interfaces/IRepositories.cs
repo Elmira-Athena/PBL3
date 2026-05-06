@@ -96,6 +96,12 @@ namespace PBL3.Core.Interfaces
         Task<List<int>> GetExistingVariantIdsAsync(List<int> variantIds);
 
         /// <summary>
+        /// Lấy danh sách CategoryId (distinct) của các sản phẩm chứa Variant trong danh sách.
+        /// Dùng để kiểm tra điều kiện danh mục áp dụng của voucher trong checkout.
+        /// </summary>
+        Task<List<int>> GetCategoryIdsByVariantIdsAsync(List<int> variantIds);
+
+        /// <summary>
         /// Lọc ProductVariant theo thông số kỹ thuật JSON.
         /// </summary>
         Task<List<ProductVariant>> FilterBySpecificationAsync(string specKey, string specValue);
@@ -246,16 +252,64 @@ namespace PBL3.Core.Interfaces
     /// </summary>
     public interface IVoucherRepository
     {
+        // ==================== MANAGEMENT CRUD ====================
+
         /// <summary>
-        /// Lấy danh sách Voucher theo danh sách mã Code.
-        /// Dùng 1 query duy nhất bằng WHERE IN để tránh N+1.
+        /// Lấy danh sách voucher phân trang, hỗ trợ lọc theo keyword, trạng thái, date range.
+        /// </summary>
+        Task<(List<Voucher> Items, int TotalCount)> GetPagedListAsync(
+            string? keyword,
+            bool? isActive,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int pageNumber,
+            int pageSize,
+            string? sortBy,
+            bool sortDescending);
+
+        /// <summary>
+        /// Lấy voucher theo Id, bao gồm VoucherCategories. Có tracking để update.
+        /// </summary>
+        Task<Voucher?> GetByIdWithCategoriesAsync(int id);
+
+        /// <summary>
+        /// Lấy voucher theo Id, không tracking. Dùng cho read-only operations.
+        /// </summary>
+        Task<Voucher?> GetByIdNoTrackingAsync(int id);
+
+        /// <summary>
+        /// Kiểm tra mã Code đã tồn tại chưa (excludeId bỏ qua chính nó khi update).
+        /// </summary>
+        Task<bool> IsDuplicateCodeAsync(string code, int? excludeId = null);
+
+        /// <summary>
+        /// Thêm voucher mới vào context.
+        /// </summary>
+        Task AddAsync(Voucher voucher);
+
+        // ==================== CHECKOUT USAGE ====================
+
+        /// <summary>
+        /// Lấy danh sách Voucher theo danh sách mã Code, bao gồm VoucherCategories.
+        /// Dùng cho checkout với category restriction check.
+        /// </summary>
+        Task<List<Voucher>> GetByCodesWithCategoriesAsync(List<string> codes);
+
+        /// <summary>
+        /// Lấy danh sách Voucher theo danh sách mã Code (không include categories).
         /// </summary>
         Task<List<Voucher>> GetByCodesAsync(List<string> codes);
 
         /// <summary>
+        /// Đếm số lần user đã dùng mỗi voucher trong danh sách.
+        /// Trả về Dictionary(VoucherId → số lần dùng).
+        /// Dùng thay GetUsedVoucherIdsByUserAsync để hỗ trợ MaxUsesPerUser.
+        /// </summary>
+        Task<Dictionary<int, int>> GetUserVoucherUsageCountsAsync(Guid userId, List<int> voucherIds);
+
+        /// <summary>
         /// Kiểm tra danh sách cặp (UserId, VoucherId) đã tồn tại trong VoucherUsages chưa.
         /// Trả về danh sách VoucherId mà User này đã dùng.
-        /// Batch query — 1 lần duy nhất, không loop.
         /// </summary>
         Task<List<int>> GetUsedVoucherIdsByUserAsync(Guid userId, List<int> voucherIds);
 

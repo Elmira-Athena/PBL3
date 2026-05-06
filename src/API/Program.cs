@@ -22,6 +22,7 @@ using PBL3.Service.Customers;
 using PBL3.Service.Storefront;
 using PBL3.Service.Cart;
 using PBL3.Service.Orders;
+using PBL3.Service.Vouchers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -124,6 +125,7 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IStorefrontService, StorefrontService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IVoucherService, VoucherService>();
 
 // DI: Auth
 builder.Services.AddScoped<IAuthService, AuthService>();
