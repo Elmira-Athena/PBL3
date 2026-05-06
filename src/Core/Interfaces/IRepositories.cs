@@ -318,6 +318,12 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task AddUsagesAsync(IEnumerable<VoucherUsage> usages);
 
+        /// <summary>
+        /// Lấy tất cả voucher active, trong thời hạn hiệu lực, chưa hết số lượng.
+        /// Dùng cho popup chọn voucher ở trang Checkout.
+        /// </summary>
+        Task<List<Voucher>> GetActiveVouchersForCustomerAsync();
+
         Task SaveChangesAsync();
     }
 

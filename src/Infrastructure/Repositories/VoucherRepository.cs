@@ -138,6 +138,18 @@ namespace PBL3.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<Voucher>> GetActiveVouchersForCustomerAsync()
+        {
+            var now = DateTime.UtcNow;
+            return await _dbContext.Vouchers
+                .AsNoTracking()
+                .Include(v => v.VoucherCategories)
+                .Where(v => v.IsActive
+                    && v.StartDate <= now && v.EndDate >= now
+                    && (v.Quantity == null || v.UsedCount < v.Quantity))
+                .ToListAsync();
+        }
+
         public async Task AddUsagesAsync(IEnumerable<VoucherUsage> usages)
         {
             await _dbContext.VoucherUsages.AddRangeAsync(usages);

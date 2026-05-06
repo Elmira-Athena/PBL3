@@ -131,6 +131,24 @@ namespace PBL3.API.Controllers
         /// Kiểm tra tính hợp lệ của mã voucher và preview số tiền giảm trước khi đặt hàng.
         /// Không yêu cầu đăng nhập, nhưng nếu đã đăng nhập sẽ kiểm tra MaxUsesPerUser.
         /// </summary>
+        /// <summary>
+        /// Lấy danh sách tất cả voucher kèm thông tin có thể áp dụng cho đơn hàng.
+        /// AllowAnonymous — nếu đã đăng nhập sẽ kiểm tra MaxUsesPerUser.
+        /// </summary>
+        [HttpPost("available-for-order")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(ApiResult<List<VoucherAvailabilityDto>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetAvailableForOrder([FromBody] GetAvailableVouchersRequest request)
+        {
+            Guid? userId = null;
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(claim) && Guid.TryParse(claim, out var id))
+                userId = id;
+
+            var result = await _voucherService.GetAvailableForOrderAsync(request, userId);
+            return Ok(result);
+        }
+
         [HttpPost("validate-code")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResult<ValidateVoucherResponse>), StatusCodes.Status200OK)]

@@ -115,5 +115,20 @@ namespace Client.Services.Voucher
                 return ApiResult<VoucherDto>.Fail($"Lỗi kết nối: {ex.Message}");
             }
         }
+
+        public async Task<ApiResult<List<VoucherAvailabilityDto>>> GetAvailableForOrderAsync(
+            GetAvailableVouchersRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync($"{BaseUrl}/available-for-order", request);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<List<VoucherAvailabilityDto>>>();
+                return result ?? ApiResult<List<VoucherAvailabilityDto>>.Fail("Không thể tải danh sách voucher.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<List<VoucherAvailabilityDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
     }
 }

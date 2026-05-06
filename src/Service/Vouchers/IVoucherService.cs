@@ -42,5 +42,12 @@ namespace PBL3.Service.Vouchers
         /// Dùng cho trang checkout để preview giảm giá trước khi đặt hàng.
         /// </summary>
         Task<ApiResult<ValidateVoucherResponse>> ValidateVoucherCodeAsync(ValidateVoucherRequest request, Guid? userId);
+
+        /// <summary>
+        /// Lấy tất cả voucher active kèm thông tin có thể áp dụng cho đơn hàng hiện tại.
+        /// Dùng cho popup chọn voucher ở trang Checkout.
+        /// </summary>
+        Task<ApiResult<List<VoucherAvailabilityDto>>> GetAvailableForOrderAsync(
+            GetAvailableVouchersRequest request, Guid? userId);
     }
 }

@@ -289,6 +289,66 @@ namespace PBL3.Service.Vouchers
         }
 
         // ========================================================
+        // AVAILABLE FOR ORDER
+        // ========================================================
+        public async Task<ApiResult<List<VoucherAvailabilityDto>>> GetAvailableForOrderAsync(
+            GetAvailableVouchersRequest request, Guid? userId)
+        {
+            var vouchers = await _voucherRepo.GetActiveVouchersForCustomerAsync();
+
+            Dictionary<int, int>? usageCounts = null;
+            if (userId.HasValue && vouchers.Any())
+            {
+                var ids = vouchers.Select(v => v.Id).ToList();
+                usageCounts = await _voucherRepo.GetUserVoucherUsageCountsAsync(userId.Value, ids);
+            }
+
+            var result = vouchers.Select(v =>
+            {
+                string? reason = null;
+
+                if (request.SubTotal < v.MinOrderValue)
+                    reason = $"Đơn từ {v.MinOrderValue:#,0}đ (bạn: {request.SubTotal:#,0}đ)";
+                else if (request.IsOnlineOrder && v.ApplyFor == 2)
+                    reason = "Chỉ áp dụng tại quầy";
+                else if (!request.IsOnlineOrder && v.ApplyFor == 1)
+                    reason = "Chỉ áp dụng online";
+                else if (userId.HasValue && v.MaxUsesPerUser.HasValue)
+                {
+                    var used = usageCounts?.GetValueOrDefault(v.Id, 0) ?? 0;
+                    if (used >= v.MaxUsesPerUser.Value)
+                        reason = $"Bạn đã dùng {used}/{v.MaxUsesPerUser} lần";
+                }
+
+                decimal discount = 0;
+                if (reason == null)
+                {
+                    discount = v.DiscountType == 0
+                        ? v.DiscountValue
+                        : Math.Min(
+                            request.SubTotal * v.DiscountValue / 100,
+                            v.MaxDiscountAmount ?? decimal.MaxValue);
+                }
+
+                return new VoucherAvailabilityDto
+                {
+                    Id = v.Id, Code = v.Code, Name = v.Name, Description = v.Description,
+                    DiscountType = v.DiscountType, DiscountValue = v.DiscountValue,
+                    MaxDiscountAmount = v.MaxDiscountAmount, MinOrderValue = v.MinOrderValue,
+                    StartDate = v.StartDate, EndDate = v.EndDate, IsStackable = v.IsStackable,
+                    IsApplicable = reason == null,
+                    EstimatedDiscount = discount,
+                    NotApplicableReason = reason
+                };
+            })
+            .OrderByDescending(v => v.IsApplicable)
+            .ThenByDescending(v => v.EstimatedDiscount)
+            .ToList();
+
+            return ApiResult<List<VoucherAvailabilityDto>>.Ok(result);
+        }
+
+        // ========================================================
         // PRIVATE HELPERS
         // ========================================================
 

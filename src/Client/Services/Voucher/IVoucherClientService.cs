@@ -11,5 +11,6 @@ namespace Client.Services.Voucher
         Task<ApiResult<VoucherDto>> UpdateAsync(int id, UpdateVoucherRequest request);
         Task<ApiResult<bool>> DeleteAsync(int id);
         Task<ApiResult<VoucherDto>> ToggleStatusAsync(int id);
+        Task<ApiResult<List<VoucherAvailabilityDto>>> GetAvailableForOrderAsync(GetAvailableVouchersRequest request);
     }
 }

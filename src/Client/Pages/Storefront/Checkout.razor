@@ -3,12 +3,14 @@
 @using System.ComponentModel.DataAnnotations
 @using PBL3.Shared.DTOs.Customers
 @using PBL3.Shared.DTOs.Cart
+@using PBL3.Shared.DTOs.Vouchers
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject Client.Services.Orders.IOrderClientService OrderClientService
 @inject Client.Services.Customer.IUserAddressClientService UserAddressClientService
 @inject Client.Services.Cart.ICartClientService CartClientService
+@inject Client.Services.Voucher.IVoucherClientService VoucherService
 
 <PageTitle>Thanh toán - HushStore</PageTitle>
 
@@ -159,9 +161,32 @@
                         <MudDivider Class="mb-4" />
 
                         <!-- Voucher -->
-                        <div class="d-flex mb-4">
-                            <MudTextField @bind-Value="_voucherCode" Placeholder="Nhập mã giảm giá" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mr-2 flex-grow-1" />
-                            <MudButton Variant="Variant.Filled" Color="Color.Dark" OnClick="ApplyVoucher" Disabled="@string.IsNullOrWhiteSpace(_voucherCode)">Áp dụng</MudButton>
+                        <div class="mb-4">
+                            <MudButton Variant="Variant.Outlined"
+                                       FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.LocalOffer"
+                                       Color="@(_appliedVouchers.Any() ? Color.Primary : Color.Default)"
+                                       OnClick="OpenVoucherPicker"
+                                       Style="text-transform: none; border-radius: 8px;">
+                                @(_appliedVouchers.Any()
+                                    ? $"Đã chọn {_appliedVouchers.Count} voucher (-{_appliedVouchers.Sum(v => v.DiscountAmount):N0}đ)"
+                                    : "Chọn mã giảm giá")
+                            </MudButton>
+                            @if (_appliedVouchers.Any())
+                            {
+                                <div class="mt-2 d-flex flex-wrap gap-1">
+                                    @foreach (var v in _appliedVouchers)
+                                    {
+                                        <MudChip T="string"
+                                                 Color="Color.Success"
+                                                 Variant="Variant.Outlined"
+                                                 Size="Size.Small"
+                                                 OnClose="@(() => RemoveVoucher(v.Code))">
+                                            @v.Code&nbsp;-@v.DiscountAmount.ToString("N0")đ
+                                        </MudChip>
+                                    }
+                                </div>
+                            }
                         </div>
 
                         <MudDivider Class="mb-4" />
@@ -237,14 +262,14 @@
     private bool _isSubmitting = false;
     private int _selectedAddressId = 0;
     private int _selectedPaymentMethod = 0; // 0: COD, 1: MoMo
-    private string _voucherCode = "";
-    
+
     private List<UserAddressDto> _addresses = new();
     private CartResponse _cartData = new();
+    private List<AppliedVoucherInfo> _appliedVouchers = new();
 
     private decimal SubTotal => _cartData.TotalAmount;
     private decimal ShippingFee => 30000;
-    private decimal DiscountAmount = 0;
+    private decimal DiscountAmount => _appliedVouchers.Sum(v => v.DiscountAmount);
     private decimal Total => SubTotal + ShippingFee - DiscountAmount;
     private bool CanPlaceOrder => _selectedAddressId > 0 && !_isSubmitting;
 
@@ -319,20 +344,28 @@
         }
     }
 
-    private void ApplyVoucher()
+    private async Task OpenVoucherPicker()
     {
-        // TODO: Call API to validate voucher
-        if (_voucherCode.ToUpper() == "DISCOUNT100K")
+        var parameters = new DialogParameters
         {
-            DiscountAmount = 100000;
-            Snackbar.Add("Áp dụng mã giảm giá thành công!", Severity.Success);
-        }
-        else
+            ["SubTotal"] = SubTotal,
+            ["AlreadyApplied"] = _appliedVouchers
+        };
+        var options = new DialogOptions
         {
-            DiscountAmount = 0;
-            Snackbar.Add("Mã giảm giá không hợp lệ", Severity.Error);
-        }
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+        var dialog = await DialogService.ShowAsync<VoucherPickerDialog>("Chọn mã giảm giá", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled && result.Data is List<AppliedVoucherInfo> selected)
+            _appliedVouchers = selected;
     }
+
+    private void RemoveVoucher(string code) =>
+        _appliedVouchers.RemoveAll(v => v.Code == code);
 
     private async Task PlaceOrder()
     {
@@ -346,11 +379,13 @@
 
         try
         {
-            var request = new CheckoutRequest 
-            { 
-                UserAddressId = _selectedAddressId, 
-                PaymentMethod = (byte)_selectedPaymentMethod, 
-                VoucherCodes = string.IsNullOrWhiteSpace(_voucherCode) ? null : new List<string> { _voucherCode },
+            var request = new CheckoutRequest
+            {
+                UserAddressId = _selectedAddressId,
+                PaymentMethod = (byte)_selectedPaymentMethod,
+                VoucherCodes = _appliedVouchers.Any()
+                    ? _appliedVouchers.Select(v => v.Code).ToList()
+                    : null,
                 ShippingFee = ShippingFee
             };
             

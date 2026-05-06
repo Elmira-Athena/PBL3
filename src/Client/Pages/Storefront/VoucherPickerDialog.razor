@@ -1,0 +1,269 @@
+@using PBL3.Shared.DTOs.Vouchers
+@using Client.Services.Voucher
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Chọn mã giảm giá</MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_isLoading)
+        {
+            <div class="d-flex flex-column gap-2 pt-2">
+                @for (int i = 0; i < 3; i++)
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" Class="rounded-lg" />
+                }
+            </div>
+        }
+        else if (_errorMessage != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-2">@_errorMessage</MudAlert>
+        }
+        else
+        {
+            @* Search *@
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Tìm theo mã hoặc tên voucher..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Immediate="true"
+                          Class="mb-3" />
+
+            <div style="max-height: 480px; overflow-y: auto;">
+
+                @* Applicable vouchers *@
+                @{
+                    var applicable = Filtered.Where(v => v.IsApplicable).ToList();
+                    var notApplicable = Filtered.Where(v => !v.IsApplicable).ToList();
+                }
+
+                @if (applicable.Any())
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2 d-block"
+                             Style="text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">
+                        Có thể áp dụng
+                    </MudText>
+                    <MudStack Spacing="2" Class="mb-4">
+                        @foreach (var v in applicable)
+                        {
+                            var isSelected = _selected.Any(s => s.Code == v.Code);
+                            var isDisabled = IsVoucherDisabled(v);
+                            <MudPaper Outlined="true"
+                                      Class="@GetCardClass(isSelected, isDisabled)"
+                                      Style="@GetCardStyle(isSelected, isDisabled)"
+                                      @onclick="@(() => { if (!isDisabled) ToggleVoucher(v); })">
+                                <div class="d-flex align-center pa-3 gap-3">
+                                    <MudCheckBox Value="@isSelected"
+                                                 ValueChanged="@((bool _) => { if (!isDisabled) ToggleVoucher(v); })"
+                                                 Color="Color.Primary"
+                                                 Disabled="@isDisabled"
+                                                 Class="ma-0" />
+                                    <MudIcon Icon="@Icons.Material.Outlined.LocalOffer"
+                                             Color="@(isDisabled ? Color.Default : Color.Primary)"
+                                             Size="Size.Medium" />
+                                    <div class="flex-grow-1">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-1">
+                                            <MudText Typo="Typo.body2"
+                                                     Style="font-weight: 700; font-family: monospace; letter-spacing: 0.05em;">
+                                                @v.Code
+                                            </MudText>
+                                            @if (!v.IsStackable)
+                                            {
+                                                <MudTooltip Text="Không thể dùng kèm voucher khác">
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning"
+                                                             Variant="Variant.Outlined" Style="height: 18px; font-size: 10px;">
+                                                        Độc quyền
+                                                    </MudChip>
+                                                </MudTooltip>
+                                            }
+                                        </MudStack>
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@v.Name</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            HSD: @v.EndDate.ToLocalTime().ToString("dd/MM/yyyy")
+                                        </MudText>
+                                    </div>
+                                    <div class="text-right">
+                                        <MudText Typo="Typo.subtitle2" Color="Color.Success" Style="font-weight: 700;">
+                                            -@v.EstimatedDiscount.ToString("N0")đ
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @(v.DiscountType == 1 ? $"-{v.DiscountValue:0}%" : $"-{v.DiscountValue:N0}đ")
+                                        </MudText>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+
+                @if (notApplicable.Any())
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2 d-block"
+                             Style="text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">
+                        Không thể áp dụng
+                    </MudText>
+                    <MudStack Spacing="2">
+                        @foreach (var v in notApplicable)
+                        {
+                            <MudPaper Outlined="true" Class="pa-0 rounded-lg" Style="opacity: 0.45; cursor: not-allowed;">
+                                <div class="d-flex align-center pa-3 gap-3">
+                                    <MudCheckBox Value="false" Disabled="true" Class="ma-0" />
+                                    <MudIcon Icon="@Icons.Material.Outlined.LocalOffer"
+                                             Color="Color.Default" Size="Size.Medium" />
+                                    <div class="flex-grow-1">
+                                        <MudText Typo="Typo.body2"
+                                                 Style="font-weight: 700; font-family: monospace; letter-spacing: 0.05em;">
+                                            @v.Code
+                                        </MudText>
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@v.Name</MudText>
+                                        <MudChip T="string" Color="Color.Default" Size="Size.Small"
+                                                 Variant="Variant.Outlined" Style="height: 20px; font-size: 11px; margin-top: 4px;">
+                                            @v.NotApplicableReason
+                                        </MudChip>
+                                    </div>
+                                    <div class="text-right">
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            @(v.DiscountType == 1 ? $"-{v.DiscountValue:0}%" : $"-{v.DiscountValue:N0}đ")
+                                        </MudText>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+
+                @if (!applicable.Any() && !notApplicable.Any())
+                {
+                    <div class="d-flex flex-column align-center py-6">
+                        <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Class="mud-text-disabled mb-2" />
+                        <MudText Typo="Typo.body2" Class="mud-text-disabled">Không tìm thấy voucher phù hợp.</MudText>
+                    </div>
+                }
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">Hủy</MudButton>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   OnClick="Confirm"
+                   Disabled="@_isLoading">
+            @if (_selected.Any())
+            {
+                <span>Áp dụng (@_selected.Count voucher)</span>
+            }
+            else
+            {
+                <span>Không dùng voucher</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private IVoucherClientService VoucherService { get; set; } = null!;
+
+    [Parameter] public decimal SubTotal { get; set; }
+    [Parameter] public List<AppliedVoucherInfo> AlreadyApplied { get; set; } = new();
+
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private string _search = string.Empty;
+    private List<VoucherAvailabilityDto> _vouchers = new();
+    private List<VoucherAvailabilityDto> _selected = new();
+
+    private IEnumerable<VoucherAvailabilityDto> Filtered =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _vouchers
+            : _vouchers.Where(v =>
+                v.Code.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                v.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await VoucherService.GetAvailableForOrderAsync(new GetAvailableVouchersRequest
+        {
+            SubTotal = SubTotal,
+            IsOnlineOrder = true
+        });
+
+        _isLoading = false;
+
+        if (!result.Success || result.Data == null)
+        {
+            _errorMessage = result.Message ?? "Không thể tải danh sách voucher.";
+            return;
+        }
+
+        _vouchers = result.Data;
+
+        // Pre-select vouchers that were already applied
+        foreach (var applied in AlreadyApplied)
+        {
+            var match = _vouchers.FirstOrDefault(v => v.Code == applied.Code && v.IsApplicable);
+            if (match != null) _selected.Add(match);
+        }
+    }
+
+    // Stackability rule:
+    // - Non-stackable selected → all others disabled
+    // - Any stackable selected → non-stackable disabled
+    private bool IsVoucherDisabled(VoucherAvailabilityDto v)
+    {
+        if (!v.IsApplicable) return true;
+        if (!_selected.Any()) return false;
+        if (_selected.Any(s => s.Code == v.Code)) return false; // selected item itself is not disabled
+        if (_selected.Any(s => !s.IsStackable)) return true;    // non-stackable blocks all others
+        if (!v.IsStackable) return true;                         // stackable selected → non-stackable blocked
+        return false;
+    }
+
+    private void ToggleVoucher(VoucherAvailabilityDto v)
+    {
+        var existing = _selected.FirstOrDefault(s => s.Code == v.Code);
+        if (existing != null)
+            _selected.Remove(existing);
+        else
+            _selected.Add(v);
+    }
+
+    private string GetCardClass(bool isSelected, bool isDisabled)
+    {
+        if (isDisabled) return "rounded-lg";
+        return isSelected ? "rounded-lg" : "rounded-lg voucher-card-hover";
+    }
+
+    private string GetCardStyle(bool isSelected, bool isDisabled)
+    {
+        if (isDisabled) return "opacity: 0.45; cursor: not-allowed;";
+        if (isSelected) return "border-color: var(--mud-palette-primary) !important; background-color: rgba(var(--mud-palette-primary-rgb), 0.05); cursor: pointer;";
+        return "cursor: pointer;";
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Confirm()
+    {
+        var result = _selected.Select(v => new AppliedVoucherInfo
+        {
+            Code = v.Code,
+            DiscountAmount = v.EstimatedDiscount
+        }).ToList();
+        MudDialog.Close(DialogResult.Ok(result));
+    }
+}
+
+<style>
+    .voucher-card-hover:hover {
+        border-color: var(--mud-palette-primary) !important;
+        background-color: rgba(var(--mud-palette-primary-rgb), 0.02);
+    }
+</style>
