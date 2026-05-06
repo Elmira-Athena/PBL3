@@ -82,5 +82,24 @@ namespace PBL3.API.Controllers
                 return BadRequest(ApiResult<bool>.Fail(ex.Message));
             }
         }
+
+        [HttpPut("{id}/complete")]
+        [Authorize(Roles = "Admin, Employee")]
+        public async Task<IActionResult> CompleteOrder(int id)
+        {
+            try
+            {
+                var result = await _orderService.CompleteOrderAsync(id);
+                if (!result.Success)
+                {
+                    return BadRequest(result);
+                }
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
+        }
     }
 }

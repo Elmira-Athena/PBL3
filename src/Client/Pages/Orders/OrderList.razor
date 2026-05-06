@@ -127,9 +127,7 @@
 
     private void ViewDetails(int id)
     {
-        // Điều hướng tới trang chi tiết đơn hàng (Sẽ implement sau)
-        // NavigationManager.NavigateTo($"/orders/{id}");
-        Snackbar.Add($"Tính năng xem chi tiết đơn hàng {id} đang phát triển.", Severity.Info);
+        NavigationManager.NavigateTo($"/orders/{id}");
     }
 
     private async Task ConfirmCancelOrder(int orderId)

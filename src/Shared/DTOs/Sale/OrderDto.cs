@@ -17,6 +17,14 @@ namespace PBL3.Shared.DTOs.Sale
         public string ShipName { get; set; } = string.Empty;
         public string ShipPhone { get; set; } = string.Empty;
         public string ShipAddress { get; set; } = string.Empty;
+        public string ShipCity { get; set; } = string.Empty;
+
+        // Order metadata
+        public byte PaymentMethod { get; set; }
+        public byte PaymentStatus { get; set; }
+        public byte OrderType { get; set; }
+        public string? Note { get; set; }
+        public string? CancelReason { get; set; }
 
         // Money
         public decimal SubTotal { get; set; }
@@ -50,5 +58,6 @@ namespace PBL3.Shared.DTOs.Sale
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal TotalLine { get; set; }
+        public List<string> Serials { get; set; } = new();
     }
 }

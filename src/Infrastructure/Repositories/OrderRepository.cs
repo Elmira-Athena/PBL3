@@ -29,9 +29,12 @@ namespace PBL3.Infrastructure.Repositories
 
         public async Task<Order?> GetByIdWithDetailsAsync(int id)
         {
-            return await _dbContext.Orders
+            return await _dbContext.Orders.AsNoTracking()
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Variant)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.OrderSerials)
+                        .ThenInclude(os => os.Serial)
                 .Include(o => o.VoucherUsages)
                     .ThenInclude(vu => vu.Voucher)
                 .Include(o => o.User)

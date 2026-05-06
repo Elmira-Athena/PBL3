@@ -498,6 +498,24 @@ namespace PBL3.Service.Orders
             return ApiResult<bool>.Ok(true, "Hủy đơn hàng thành công.");
         }
 
+        public async Task<ApiResult<bool>> CompleteOrderAsync(int id)
+        {
+            var order = await _orderRepo.GetByIdAsync(id);
+            if (order == null)
+            {
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+            }
+
+            if (order.Status != 2)
+            {
+                return ApiResult<bool>.Fail("Chỉ có thể xác nhận giao cho đơn hàng đang trong trạng thái 'Đang giao'.");
+            }
+
+            order.Status = 3; // Success
+            await _unitOfWork.SaveChangesAsync();
+            return ApiResult<bool>.Ok(true, "Đơn hàng đã được đánh dấu hoàn thành.");
+        }
+
         private OrderDetailDto MapToOrderDetailDto(Order order)
         {
             return new OrderDetailDto
@@ -509,6 +527,12 @@ namespace PBL3.Service.Orders
                 ShipName = order.ShipName,
                 ShipPhone = order.ShipPhone,
                 ShipAddress = order.ShipAddress,
+                ShipCity = order.ShipCity,
+                PaymentMethod = order.PaymentMethod,
+                PaymentStatus = order.PaymentStatus,
+                OrderType = order.OrderType,
+                Note = order.Note,
+                CancelReason = order.CancelReason,
                 SubTotal = order.SubTotal,
                 ShippingFee = order.ShippingFee,
                 DiscountAmount = order.DiscountAmount,
@@ -521,7 +545,8 @@ namespace PBL3.Service.Orders
                     SKU = d.Variant.SKU,
                     Quantity = d.Quantity,
                     UnitPrice = d.UnitPrice,
-                    TotalLine = d.Quantity * d.UnitPrice
+                    TotalLine = d.Quantity * d.UnitPrice,
+                    Serials = d.OrderSerials?.Select(os => os.Serial.SerialNumber).ToList() ?? new List<string>()
                 }).ToList(),
                 AppliedVouchers = order.VoucherUsages?.Select(v => new VoucherUsageDto
                 {

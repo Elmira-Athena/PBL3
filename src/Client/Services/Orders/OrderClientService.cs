@@ -57,5 +57,18 @@ namespace Client.Services.Orders
             var result = await response.Content.ReadFromJsonAsync<ApiResult<CheckoutResponse>>();
             return result ?? ApiResult<CheckoutResponse>.Fail("Không nhận được phản hồi từ máy chủ");
         }
+
+        public async Task<ApiResult<bool>> CompleteOrderAsync(int id)
+        {
+            var response = await _httpClient.PutAsJsonAsync($"/api/orders/{id}/complete", new { });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+                return result ?? ApiResult<bool>.Fail("Không nhận được phản hồi từ máy chủ");
+            }
+
+            return ApiResult<bool>.Fail($"Lỗi HTTP: {response.StatusCode}");
+        }
     }
 }

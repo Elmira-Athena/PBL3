@@ -10,5 +10,6 @@ namespace Client.Services.Orders
         Task<PagedResult<OrderSummaryResponse>> GetPagedOrdersAsync(OrderFilterRequest request);
         Task<ApiResult<bool>> CancelOrderAsync(int id, string cancelReason);
         Task<ApiResult<CheckoutResponse>> CheckoutAsync(CheckoutRequest request);
+        Task<ApiResult<bool>> CompleteOrderAsync(int id);
     }
 }
