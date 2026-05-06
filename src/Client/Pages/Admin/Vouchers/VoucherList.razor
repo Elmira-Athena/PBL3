@@ -1,0 +1,365 @@
+@page "/admin/vouchers"
+@using PBL3.Shared.DTOs.Vouchers
+@using Client.Services.Voucher
+
+<PageTitle>Mã giảm giá - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+
+    @* ===== HEADER ===== *@
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Color="Color.Primary" Size="Size.Large" />
+                <div>
+                    <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                        Mã giảm giá
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Quản lý voucher khuyến mãi
+                    </MudText>
+                </div>
+            </MudStack>
+        </div>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => Nav.NavigateTo("/admin/vouchers/create"))"
+                   Style="text-transform: none; border-radius: 8px; font-weight: 500;">
+            Thêm voucher mới
+        </MudButton>
+    </MudPaper>
+
+    @* ===== FILTER BAR ===== *@
+    <MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="_keyword"
+                              Placeholder="Tìm theo mã hoặc tên voucher..."
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Immediate="true"
+                              DebounceInterval="400"
+                              OnDebounceIntervalElapsed="OnSearchChanged"
+                              Style="border-radius: 8px;" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="bool?"
+                           Value="_statusFilter"
+                           ValueChanged="OnStatusChanged"
+                           Label="Trạng thái"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Style="border-radius: 8px;">
+                    <MudSelectItem T="bool?" Value="@((bool?)null)">Tất cả</MudSelectItem>
+                    <MudSelectItem T="bool?" Value="@((bool?)true)">Đang hoạt động</MudSelectItem>
+                    <MudSelectItem T="bool?" Value="@((bool?)false)">Tạm dừng</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="12" md="5" Class="d-flex align-center justify-end gap-2">
+                <MudChip T="string" Icon="@Icons.Material.Filled.Info" Color="Color.Info" Variant="Variant.Outlined" Size="Size.Small">
+                    @_totalCount voucher
+                </MudChip>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Default"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="@(() => { if (_table != null) _table.ReloadServerData(); })"
+                           Size="Size.Small"
+                           Style="text-transform: none;">
+                    Làm mới
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ===== DATA TABLE ===== *@
+    <MudPaper Elevation="1" Class="rounded-lg">
+        <MudTable @ref="_table"
+                  T="VoucherDto"
+                  ServerData="LoadServerData"
+                  Dense="false"
+                  Hover="true"
+                  Striped="false"
+                  Bordered="false"
+                  Loading="_isLoading"
+                  LoadingProgressColor="Color.Primary"
+                  RowsPerPage="10"
+                  Class="rounded-lg">
+
+            <HeaderContent>
+                <MudTh><MudTableSortLabel SortLabel="Code" T="VoucherDto">Mã voucher</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortLabel="Name" T="VoucherDto">Tên</MudTableSortLabel></MudTh>
+                <MudTh>Loại & Giá trị</MudTh>
+                <MudTh>Hiệu lực</MudTh>
+                <MudTh Style="text-align: center;">Sử dụng</MudTh>
+                <MudTh Style="text-align: center;">Trạng thái</MudTh>
+                <MudTh Style="width: 130px; text-align: center;">Thao tác</MudTh>
+            </HeaderContent>
+
+            <RowTemplate>
+                @* Mã *@
+                <MudTd DataLabel="Mã voucher">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudText Typo="Typo.body2" Style="font-weight: 700; font-family: monospace; letter-spacing: 0.05em;">
+                            @context.Code
+                        </MudText>
+                        <MudTooltip Text="Sao chép mã">
+                            <MudIconButton Icon="@Icons.Material.Outlined.ContentCopy"
+                                           Size="Size.Small"
+                                           Color="Color.Default"
+                                           OnClick="@(() => CopyCode(context.Code))" />
+                        </MudTooltip>
+                    </MudStack>
+                </MudTd>
+
+                @* Tên *@
+                <MudTd DataLabel="Tên">
+                    <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.Name</MudText>
+                    @if (!string.IsNullOrWhiteSpace(context.Description))
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @(context.Description.Length > 50 ? context.Description[..50] + "..." : context.Description)
+                        </MudText>
+                    }
+                </MudTd>
+
+                @* Loại & Giá trị *@
+                <MudTd DataLabel="Loại & Giá trị">
+                    <MudStack Spacing="1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudChip T="string"
+                                     Color="@(context.DiscountType == 1 ? Color.Secondary : Color.Primary)"
+                                     Size="Size.Small"
+                                     Variant="Variant.Outlined">
+                                @(context.DiscountType == 1 ? "Giảm %" : "Giảm tiền")
+                            </MudChip>
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                                @(context.DiscountType == 1
+                                    ? $"-{context.DiscountValue:0}%"
+                                    : $"-{context.DiscountValue:N0}đ")
+                            </MudText>
+                        </MudStack>
+                        @if (context.DiscountType == 1 && context.MaxDiscountAmount.HasValue)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                tối đa @context.MaxDiscountAmount.Value.ToString("N0")đ
+                            </MudText>
+                        }
+                        @if (context.MinOrderValue > 0)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                đơn từ @context.MinOrderValue.ToString("N0")đ
+                            </MudText>
+                        }
+                    </MudStack>
+                </MudTd>
+
+                @* Hiệu lực *@
+                <MudTd DataLabel="Hiệu lực">
+                    <MudText Typo="Typo.body2">
+                        @context.StartDate.ToLocalTime().ToString("dd/MM/yyyy")
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        → @context.EndDate.ToLocalTime().ToString("dd/MM/yyyy")
+                    </MudText>
+                </MudTd>
+
+                @* Sử dụng *@
+                <MudTd DataLabel="Sử dụng" Style="text-align: center;">
+                    <MudText Typo="Typo.body2">
+                        @context.UsedCount / @(context.Quantity.HasValue ? context.Quantity.Value.ToString() : "∞")
+                    </MudText>
+                </MudTd>
+
+                @* Trạng thái *@
+                <MudTd DataLabel="Trạng thái" Style="text-align: center;">
+                    @{
+                        var now = DateTime.UtcNow;
+                        string chipText;
+                        Color chipColor;
+                        if (!context.IsActive)
+                        {
+                            chipText = "Tạm dừng";
+                            chipColor = Color.Default;
+                        }
+                        else if (now < context.StartDate)
+                        {
+                            chipText = "Sắp diễn ra";
+                            chipColor = Color.Info;
+                        }
+                        else if (now > context.EndDate)
+                        {
+                            chipText = "Hết hạn";
+                            chipColor = Color.Error;
+                        }
+                        else
+                        {
+                            chipText = "Đang hoạt động";
+                            chipColor = Color.Success;
+                        }
+                    }
+                    <MudChip T="string" Color="chipColor" Size="Size.Small" Variant="Variant.Filled">
+                        @chipText
+                    </MudChip>
+                </MudTd>
+
+                @* Thao tác *@
+                <MudTd DataLabel="Thao tác" Style="text-align: center;">
+                    <MudStack Row="true" Spacing="0" Justify="Justify.Center">
+                        <MudTooltip Text="Chỉnh sửa" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Size="Size.Small"
+                                           Color="Color.Primary"
+                                           OnClick="@(() => Nav.NavigateTo($"/admin/vouchers/edit/{context.Id}"))" />
+                        </MudTooltip>
+                        <MudTooltip Text="@(context.IsActive ? "Tạm dừng" : "Kích hoạt")" Placement="Placement.Top">
+                            <MudIconButton Icon="@(context.IsActive ? Icons.Material.Filled.PauseCircle : Icons.Material.Filled.PlayCircle)"
+                                           Size="Size.Small"
+                                           Color="@(context.IsActive ? Color.Warning : Color.Success)"
+                                           OnClick="@(() => ToggleStatus(context))" />
+                        </MudTooltip>
+                        <MudTooltip Text="Xóa" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
+                                           Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="@(() => ConfirmDelete(context))" />
+                        </MudTooltip>
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
+
+            <NoRecordsContent>
+                <div class="d-flex flex-column align-center py-8">
+                    <MudIcon Icon="@Icons.Material.Outlined.LocalOffer" Size="Size.Large" Class="mud-text-disabled mb-2" />
+                    <MudText Typo="Typo.body1" Class="mud-text-disabled">Không tìm thấy voucher nào.</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-disabled">Thử thay đổi bộ lọc hoặc thêm voucher mới.</MudText>
+                </div>
+            </NoRecordsContent>
+
+            <LoadingContent>
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="pa-4">
+                    Đang tải dữ liệu...
+                </MudText>
+            </LoadingContent>
+
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 5, 10, 25, 50 }"
+                               InfoFormat="{first_item}-{last_item} / {all_items} voucher"
+                               RowsPerPageString="Hiển thị:" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Inject] private IVoucherClientService VoucherService { get; set; } = null!;
+    [Inject] private IDialogService DialogService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+    [Inject] private NavigationManager Nav { get; set; } = null!;
+    [Inject] private IJSRuntime JS { get; set; } = null!;
+
+    private MudTable<VoucherDto>? _table;
+    private bool _isLoading;
+    private string _keyword = string.Empty;
+    private bool? _statusFilter;
+    private int _totalCount;
+
+    private async Task<TableData<VoucherDto>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        var request = new VoucherFilterRequest
+        {
+            Keyword        = _keyword,
+            IsActive       = _statusFilter,
+            PageNumber     = state.Page + 1,
+            PageSize       = state.PageSize,
+            SortBy         = state.SortLabel,
+            SortDescending = state.SortDirection == SortDirection.Descending
+        };
+
+        var result = await VoucherService.GetListAsync(request);
+        _isLoading = false;
+
+        if (result.Success && result.Data != null)
+        {
+            _totalCount = result.Data.TotalCount;
+            return new TableData<VoucherDto>
+            {
+                Items      = result.Data.Items,
+                TotalItems = result.Data.TotalCount
+            };
+        }
+
+        Snackbar.Add(result.Message, Severity.Error);
+        return new TableData<VoucherDto> { Items = [], TotalItems = 0 };
+    }
+
+    private void OnSearchChanged(string value)
+    {
+        _keyword = value;
+        _table?.ReloadServerData();
+    }
+
+    private Task OnStatusChanged(bool? value)
+    {
+        _statusFilter = value;
+        _table?.ReloadServerData();
+        return Task.CompletedTask;
+    }
+
+    private async Task ToggleStatus(VoucherDto voucher)
+    {
+        var result = await VoucherService.ToggleStatusAsync(voucher.Id);
+        if (result.Success)
+        {
+            var msg = result.Data?.IsActive == true ? "Đã kích hoạt voucher." : "Đã tạm dừng voucher.";
+            Snackbar.Add(msg, Severity.Success);
+            await _table!.ReloadServerData();
+        }
+        else
+        {
+            Snackbar.Add(result.Message, Severity.Error);
+        }
+    }
+
+    private async Task ConfirmDelete(VoucherDto voucher)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Xác nhận xóa",
+            $"Bạn có chắc chắn muốn xóa voucher \"{voucher.Code} - {voucher.Name}\" không?",
+            yesText: "Xóa",
+            cancelText: "Hủy"
+        );
+
+        if (confirm == true)
+        {
+            var result = await VoucherService.DeleteAsync(voucher.Id);
+            if (result.Success)
+            {
+                Snackbar.Add("Đã xóa voucher thành công!", Severity.Success);
+                await _table!.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add(result.Message, Severity.Error);
+            }
+        }
+    }
+
+    private async Task CopyCode(string code)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", code);
+            Snackbar.Add($"Đã sao chép mã \"{code}\"", Severity.Info);
+        }
+        catch
+        {
+            Snackbar.Add("Không thể sao chép mã.", Severity.Warning);
+        }
+    }
+}
