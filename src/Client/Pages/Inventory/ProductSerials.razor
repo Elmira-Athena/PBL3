@@ -1,0 +1,268 @@
+@page "/inventory/serials"
+@using Client.Services.Inventory
+@using PBL3.Shared.DTOs.Inventory
+@using Client.Pages.Inventory.Components
+@inject IProductSerialClientService SerialService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Quản lý Serial - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Quản lý Serial
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Theo dõi và quản lý tình trạng sản phẩm vật lý
+            </MudText>
+        </div>
+    </MudPaper>
+
+    @* ===== STATISTICS CARDS ===== *@
+    <MudGrid Spacing="2" Class="mb-4">
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold">@_stats.TotalCount</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Tổng cộng</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-success);">@_stats.AvailableCount</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Trong kho</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-warning);">@_stats.ReservedCount</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Đã đặt</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-info);">@_stats.SoldCount</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Đã bán</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-error);">@_stats.DefectiveCount</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Hàng lỗi</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-secondary);">@_stats.ReturnedCount</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Đã trả</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* ===== FILTER BAR ===== *@
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg">
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="6" md="3">
+                <MudTextField @bind-Value="_filter.Keyword" Label="Tìm mã Serial..." Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" OnKeyUp="OnSearchKeyPress" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudSelect T="int?" @bind-Value="_statusFilter" Label="Trạng thái" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="int?" Value="@null">Tất cả</MudSelectItem>
+                    <MudSelectItem T="int?" Value="0">Trong kho</MudSelectItem>
+                    <MudSelectItem T="int?" Value="1">Đã đặt hàng</MudSelectItem>
+                    <MudSelectItem T="int?" Value="2">Đã bán</MudSelectItem>
+                    <MudSelectItem T="int?" Value="3">Hàng lỗi</MudSelectItem>
+                    <MudSelectItem T="int?" Value="4">Đã trả lại</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker @bind-Date="_fromDate" Label="Từ ngày" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker @bind-Date="_toDate" Label="Đến ngày" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" md="3" Class="d-flex gap-2 justify-end align-center">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadDataAsync" Class="flex-grow-1">
+                    Lọc kết quả
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ===== DATA TABLE ===== *@
+    <MudPaper Elevation="1" Class="rounded-lg">
+        <MudTable @ref="_table" T="ProductSerialListDto" ServerData="ServerReload" Dense="false" Hover="true"
+                  Striped="false" Bordered="false" RowsPerPage="10" Class="rounded-lg">
+            <HeaderContent>
+                <MudTh>Mã Serial</MudTh>
+                <MudTh>Sản phẩm</MudTh>
+                <MudTh>Biến thể</MudTh>
+                <MudTh>SKU</MudTh>
+                <MudTh>Phiếu nhập</MudTh>
+                <MudTh>Ngày nhập</MudTh>
+                <MudTh>Trạng thái</MudTh>
+                <MudTh Style="text-align: right;">Hành động</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Mã Serial">
+                    <MudText Typo="Typo.body2" Style="font-weight: 600; font-family: monospace;">@context.SerialNumber</MudText>
+                </MudTd>
+                <MudTd DataLabel="Sản phẩm">
+                    <MudText Typo="Typo.body2">@context.ProductName</MudText>
+                </MudTd>
+                <MudTd DataLabel="Biến thể">
+                    <MudText Typo="Typo.body2">@context.VariantName</MudText>
+                </MudTd>
+                <MudTd DataLabel="SKU">
+                    <MudText Typo="Typo.body2">@context.SKU</MudText>
+                </MudTd>
+                <MudTd DataLabel="Phiếu nhập">
+                    <MudText Typo="Typo.body2">@context.ReceiptCode</MudText>
+                </MudTd>
+                <MudTd DataLabel="Ngày nhập">
+                    <MudText Typo="Typo.body2">@context.CreatedDate.ToString("dd/MM/yyyy")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Trạng thái">
+                    <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)" Variant="Variant.Filled">
+                        @GetStatusLabel(context.Status)
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Hành động" Style="text-align: right;">
+                    <MudTooltip Text="Xem chi tiết">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small"
+                                       OnClick="@(() => ViewDetail(context.Id))" />
+                    </MudTooltip>
+                    @if (context.Status != 2) @* Hide edit button for Sold serials *@
+                    {
+                        <MudTooltip Text="Đổi trạng thái">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Warning" Size="Size.Small"
+                                           OnClick="@(() => ChangeStatus(context))" />
+                        </MudTooltip>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText>Không tìm thấy Serial nào.</MudText>
+            </NoRecordsContent>
+            <LoadingContent>
+                <MudText>Đang tải dữ liệu...</MudText>
+            </LoadingContent>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [SupplyParameterFromQuery(Name = "productId")]
+    public int? ProductIdQuery { get; set; }
+
+    private MudTable<ProductSerialListDto>? _table;
+    private ProductSerialFilterRequest _filter = new ProductSerialFilterRequest();
+    private ProductSerialStatisticsDto _stats = new ProductSerialStatisticsDto();
+    private int? _statusFilter;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (ProductIdQuery.HasValue)
+            _filter.ProductId = ProductIdQuery;
+        await LoadStatisticsAsync();
+    }
+
+    private async Task<TableData<ProductSerialListDto>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        _filter.PageNumber = state.Page + 1;
+        _filter.PageSize = state.PageSize;
+        _filter.Status = (byte?)_statusFilter;
+        _filter.FromDate = _fromDate;
+        _filter.ToDate = _toDate;
+
+        var result = await SerialService.GetPagedListAsync(_filter);
+        if (result.Success && result.Data != null)
+        {
+            return new TableData<ProductSerialListDto>
+            {
+                Items = result.Data.Items,
+                TotalItems = result.Data.TotalCount
+            };
+        }
+
+        if (!result.Success)
+            Snackbar.Add(result.Message ?? "Lỗi khi tải danh sách Serial.", Severity.Error);
+
+        return new TableData<ProductSerialListDto>
+        {
+            Items = Enumerable.Empty<ProductSerialListDto>(),
+            TotalItems = 0
+        };
+    }
+
+    private async Task LoadDataAsync()
+    {
+        if (_table != null)
+            await _table.ReloadServerData();
+    }
+
+    private async Task LoadStatisticsAsync()
+    {
+        var result = await SerialService.GetStatisticsAsync(productId: _filter.ProductId);
+        if (result.Success && result.Data != null)
+            _stats = result.Data;
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await LoadDataAsync();
+    }
+
+    private async Task ViewDetail(int id)
+    {
+        var parameters = new DialogParameters { { nameof(ProductSerialDetailDialog.SerialId), id } };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        await DialogService.ShowAsync<ProductSerialDetailDialog>("Chi tiết Serial", parameters, options);
+    }
+
+    private async Task ChangeStatus(ProductSerialListDto serial)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(UpdateSerialStatusDialog.SerialId), serial.Id },
+            { nameof(UpdateSerialStatusDialog.CurrentStatus), serial.Status },
+            { nameof(UpdateSerialStatusDialog.SerialNumber), serial.SerialNumber }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<UpdateSerialStatusDialog>("Đổi trạng thái", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            await LoadStatisticsAsync();
+            await _table?.ReloadServerData()!;
+        }
+    }
+
+    private Color GetStatusColor(byte status) => status switch
+    {
+        0 => Color.Success,
+        1 => Color.Warning,
+        2 => Color.Info,
+        3 => Color.Error,
+        4 => Color.Secondary,
+        _ => Color.Default
+    };
+
+    private string GetStatusLabel(byte status) => status switch
+    {
+        0 => "Trong kho",
+        1 => "Đã đặt hàng",
+        2 => "Đã bán",
+        3 => "Hàng lỗi",
+        4 => "Đã trả lại",
+        _ => "?"
+    };
+}

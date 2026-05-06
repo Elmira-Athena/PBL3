@@ -1,0 +1,166 @@
+@using Client.Services.Inventory
+@using PBL3.Shared.DTOs.Inventory
+@inject IProductSerialClientService SerialService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_dto == null)
+        {
+            <MudText>Đang tải dữ liệu...</MudText>
+        }
+        else
+        {
+            <MudGrid Spacing="3">
+                @* Serial Info *@
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Thông tin Serial</MudText>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Mã Serial:</MudText>
+                        <MudText Typo="Typo.body2" Style="font-weight: 600; font-family: monospace;">@_dto.SerialNumber</MudText>
+                    </div>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Trạng thái:</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_dto.Status)" Variant="Variant.Filled">
+                            @GetStatusLabel(_dto.Status)
+                        </MudChip>
+                    </div>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Ngày nhập:</MudText>
+                        <MudText Typo="Typo.body2">@_dto.CreatedDate.ToString("dd/MM/yyyy HH:mm")</MudText>
+                    </div>
+                    @if (_dto.SoldDate.HasValue)
+                    {
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Ngày bán:</MudText>
+                            <MudText Typo="Typo.body2">@_dto.SoldDate.Value.ToString("dd/MM/yyyy HH:mm")</MudText>
+                        </div>
+                    }
+                </MudItem>
+
+                @* Product & Variant Info *@
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Sản phẩm & Biến thể</MudText>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Sản phẩm:</MudText>
+                        <MudText Typo="Typo.body2">@_dto.ProductName</MudText>
+                    </div>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Biến thể:</MudText>
+                        <MudText Typo="Typo.body2">@_dto.VariantName</MudText>
+                    </div>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">SKU:</MudText>
+                        <MudText Typo="Typo.body2" Style="font-weight: 600;">@_dto.SKU</MudText>
+                    </div>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Giá:</MudText>
+                        <MudText Typo="Typo.body2" Style="font-weight: 600;">@_dto.Price.ToString("N0") đ</MudText>
+                    </div>
+                    <div class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Bảo hành:</MudText>
+                        <MudText Typo="Typo.body2">@_dto.WarrantyMonth tháng</MudText>
+                    </div>
+                </MudItem>
+
+                @* Import Receipt Info *@
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Phiếu nhập</MudText>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Mã phiếu:</MudText>
+                        <MudText Typo="Typo.body2">@_dto.ReceiptCode</MudText>
+                    </div>
+                    <div class="d-flex justify-space-between mb-2">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Ngày nhập:</MudText>
+                        <MudText Typo="Typo.body2">@_dto.ImportDate.ToString("dd/MM/yyyy")</MudText>
+                    </div>
+                    <div class="d-flex justify-space-between">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Nhà cung cấp:</MudText>
+                        <MudText Typo="Typo.body2">@_dto.SupplierName</MudText>
+                    </div>
+                </MudItem>
+
+                @* Order Info (if exists) *@
+                @if (_dto.OrderId.HasValue)
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Thông tin đơn hàng</MudText>
+                        <div class="d-flex justify-space-between mb-2">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Mã đơn:</MudText>
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">@_dto.OrderCode</MudText>
+                        </div>
+                        <div class="d-flex justify-space-between mb-2">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Ngày đặt:</MudText>
+                            <MudText Typo="Typo.body2">@_dto.OrderDate?.ToString("dd/MM/yyyy HH:mm")</MudText>
+                        </div>
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Trạng thái:</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">
+                                @GetOrderStatusLabel(_dto.OrderStatus)
+                            </MudChip>
+                        </div>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Đóng</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    public IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public int SerialId { get; set; }
+
+    private ProductSerialDetailDto? _dto;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await SerialService.GetByIdAsync(SerialId);
+        if (result.Success && result.Data != null)
+        {
+            _dto = result.Data;
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Không thể tải chi tiết Serial.", Severity.Error);
+            MudDialog.Cancel();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private Color GetStatusColor(byte status) => status switch
+    {
+        0 => Color.Success,
+        1 => Color.Warning,
+        2 => Color.Info,
+        3 => Color.Error,
+        4 => Color.Secondary,
+        _ => Color.Default
+    };
+
+    private string GetStatusLabel(byte status) => status switch
+    {
+        0 => "Trong kho",
+        1 => "Đã đặt hàng",
+        2 => "Đã bán",
+        3 => "Hàng lỗi",
+        4 => "Đã trả lại",
+        _ => "?"
+    };
+
+    private string GetOrderStatusLabel(byte? status) => status switch
+    {
+        0 => "Chờ duyệt",
+        1 => "Chờ xuất kho",
+        2 => "Đang giao",
+        3 => "Thành công",
+        4 => "Đã hủy",
+        _ => "?"
+    };
+}

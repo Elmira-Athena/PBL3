@@ -147,6 +147,12 @@
                                            Color="Color.Primary"
                                            Href="@($"/admin/products/edit/{context.Id}")" />
                         </MudTooltip>
+                        <MudTooltip Text="Xem kho Serial" Placement="Placement.Top">
+                            <MudIconButton Icon="@Icons.Material.Outlined.Inventory2"
+                                           Size="Size.Small"
+                                           Color="Color.Secondary"
+                                           Href="@($"/inventory/serials?productId={context.Id}")" />
+                        </MudTooltip>
                         <MudTooltip Text="Xóa" Placement="Placement.Top">
                             <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
                                            Size="Size.Small"

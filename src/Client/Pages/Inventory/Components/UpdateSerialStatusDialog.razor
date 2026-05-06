@@ -1,0 +1,132 @@
+@using Client.Services.Inventory
+@using PBL3.Shared.DTOs.Inventory
+@inject IProductSerialClientService SerialService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <div class="mb-4">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-1">Mã Serial</MudText>
+            <MudText Typo="Typo.body2" Style="font-weight: 600; font-family: monospace;">@SerialNumber</MudText>
+        </div>
+
+        <div class="mb-4">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-1">Trạng thái hiện tại</MudText>
+            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(CurrentStatus)" Variant="Variant.Filled">
+                @GetStatusLabel(CurrentStatus)
+            </MudChip>
+        </div>
+
+        @if (_allowedStatuses.Count > 0)
+        {
+            <div class="mb-4">
+                <MudSelect T="byte" @bind-Value="_newStatus" Label="Trạng thái mới" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var (value, label) in _allowedStatuses)
+                    {
+                        <MudSelectItem T="byte" Value="@value">@label</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+
+            <div>
+                <MudTextField @bind-Value="_note" Label="Ghi chú lý do (tùy chọn)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Lines="3" Placeholder="Nhập lý do thay đổi trạng thái..." />
+            </div>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Warning">Không thể thay đổi trạng thái từ '@GetStatusLabel(CurrentStatus)'. Trạng thái này không hỗ trợ chuyển đổi.</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Hủy</MudButton>
+        @if (_allowedStatuses.Count > 0)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@_isSubmitting">
+                @if (_isSubmitting)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Đang xử lý...</MudText>
+                }
+                else
+                {
+                    <MudText>Xác nhận</MudText>
+                }
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    public IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public int SerialId { get; set; }
+
+    [Parameter]
+    public byte CurrentStatus { get; set; }
+
+    [Parameter]
+    public string SerialNumber { get; set; } = string.Empty;
+
+    private byte _newStatus;
+    private string? _note;
+    private bool _isSubmitting;
+    private List<(byte Value, string Label)> _allowedStatuses = new();
+
+    protected override void OnInitialized()
+    {
+        _allowedStatuses = GetAllowedStatuses();
+        if (_allowedStatuses.Count > 0)
+            _newStatus = _allowedStatuses[0].Value;
+    }
+
+    private List<(byte Value, string Label)> GetAllowedStatuses() => CurrentStatus switch
+    {
+        0 or 1 => [(3, "Hàng lỗi")],
+        3 => [(4, "Đã trả lại"), (0, "Trong kho")],
+        4 => [(0, "Trong kho")],
+        _ => []
+    };
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _isSubmitting = true;
+        var request = new UpdateSerialStatusRequest { NewStatus = _newStatus, Note = _note };
+        var result = await SerialService.UpdateStatusAsync(SerialId, request);
+
+        if (result.Success)
+        {
+            Snackbar.Add("Cập nhật trạng thái thành công.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi khi cập nhật trạng thái.", Severity.Error);
+        }
+        _isSubmitting = false;
+    }
+
+    private Color GetStatusColor(byte status) => status switch
+    {
+        0 => Color.Success,
+        1 => Color.Warning,
+        2 => Color.Info,
+        3 => Color.Error,
+        4 => Color.Secondary,
+        _ => Color.Default
+    };
+
+    private string GetStatusLabel(byte status) => status switch
+    {
+        0 => "Trong kho",
+        1 => "Đã đặt hàng",
+        2 => "Đã bán",
+        3 => "Hàng lỗi",
+        4 => "Đã trả lại",
+        _ => "?"
+    };
+}
