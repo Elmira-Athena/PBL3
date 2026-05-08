@@ -9,7 +9,7 @@ namespace PBL3.Service.BuildPc
     {
         public Task<byte[]> ExportToExcelAsync(ExportBuildPcRequest request)
         {
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            ExcelPackage.License.SetNonCommercialPersonal("dangbathinh0901@gmail.com");
 
             using var package = new ExcelPackage();
             var ws = package.Workbook.Worksheets.Add("Cấu hình PC");
