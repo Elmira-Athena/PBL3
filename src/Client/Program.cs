@@ -64,5 +64,6 @@ builder.Services.AddScoped<IInventoryExportClientService, InventoryExportClientS
 builder.Services.AddScoped<Client.Services.Storefront.IStorefrontClientService, Client.Services.Storefront.StorefrontClientService>();
 builder.Services.AddScoped<Client.Services.Cart.ICartClientService, Client.Services.Cart.CartClientService>();
 builder.Services.AddScoped<IVoucherClientService, VoucherClientService>();
+builder.Services.AddScoped<Client.Services.BuildPc.IBuildPcClientService, Client.Services.BuildPc.BuildPcClientService>();
 
 await builder.Build().RunAsync();

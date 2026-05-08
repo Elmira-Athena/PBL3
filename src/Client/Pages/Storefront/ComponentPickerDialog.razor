@@ -1,0 +1,395 @@
+@using PBL3.Shared.DTOs.Storefront
+@using PBL3.Shared.DTOs.BuildPc
+@using Client.Services.Storefront
+
+<MudDialog Style="height: 90vh;">
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.Memory" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Chọn @SlotName</MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_isLoading)
+        {
+            <div class="d-flex flex-column gap-3 pt-2">
+                @for (int i = 0; i < 5; i++)
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="90px" Class="rounded-lg" />
+                }
+            </div>
+        }
+        else if (_errorMessage != null)
+        {
+            <MudAlert Severity="Severity.Error">@_errorMessage</MudAlert>
+        }
+        else
+        {
+            <MudGrid Spacing="2" Style="height: 100%;">
+
+                @* ── Left sidebar: filters ── *@
+                <MudItem xs="12" sm="3">
+                    <MudPaper Elevation="1" Class="pa-3 rounded-lg">
+                        <MudText Typo="Typo.subtitle2" Class="mb-3" Style="font-weight:700; text-transform:uppercase; letter-spacing:.05em;">
+                            Lọc sản phẩm theo
+                        </MudText>
+
+                        @* Search *@
+                        <MudTextField @bind-Value="_search"
+                                      Placeholder="Tìm kiếm..."
+                                      Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Immediate="true"
+                                      Class="mb-4"
+                                      @oninput="OnFilterChanged" />
+
+                        @* Brand filter *@
+                        @if (_availableBrands.Any())
+                        {
+                            <MudText Typo="Typo.caption" Class="mb-2 d-block"
+                                     Style="font-weight:600; text-transform:uppercase; letter-spacing:.05em;">
+                                Hãng sản xuất
+                            </MudText>
+                            @foreach (var brand in _availableBrands)
+                            {
+                                <MudCheckBox T="bool"
+                                             Value="@_selectedBrands.Contains(brand)"
+                                             ValueChanged="@((v) => ToggleBrand(brand, v))"
+                                             Label="@brand"
+                                             Size="Size.Small"
+                                             Class="mb-1 d-block" />
+                            }
+                            <MudDivider Class="my-3" />
+                        }
+
+                        @* Price range filter *@
+                        <MudText Typo="Typo.caption" Class="mb-2 d-block"
+                                 Style="font-weight:600; text-transform:uppercase; letter-spacing:.05em;">
+                            Khoảng giá
+                        </MudText>
+                        <MudRadioGroup T="int" @bind-Value="_priceRange">
+                            <MudRadio Value="0" Size="Size.Small" Class="d-block mb-1">Tất cả</MudRadio>
+                            <MudRadio Value="1" Size="Size.Small" Class="d-block mb-1">&lt; 2.000.000đ</MudRadio>
+                            <MudRadio Value="2" Size="Size.Small" Class="d-block mb-1">2.000.000 – 10.000.000đ</MudRadio>
+                            <MudRadio Value="3" Size="Size.Small" Class="d-block mb-1">&gt; 10.000.000đ</MudRadio>
+                        </MudRadioGroup>
+
+                        <MudDivider Class="my-3" />
+
+                        @* Sort *@
+                        <MudText Typo="Typo.caption" Class="mb-2 d-block"
+                                 Style="font-weight:600; text-transform:uppercase; letter-spacing:.05em;">
+                            Sắp xếp
+                        </MudText>
+                        <MudSelect T="int" @bind-Value="_sortBy" Variant="Variant.Outlined" Margin="Margin.Dense">
+                            <MudSelectItem Value="0">Mặc định</MudSelectItem>
+                            <MudSelectItem Value="1">Giá tăng dần</MudSelectItem>
+                            <MudSelectItem Value="2">Giá giảm dần</MudSelectItem>
+                            <MudSelectItem Value="3">Tên A–Z</MudSelectItem>
+                        </MudSelect>
+                    </MudPaper>
+                </MudItem>
+
+                @* ── Right: product list ── *@
+                <MudItem xs="12" sm="9">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2 d-block">
+                        @Filtered.Count() sản phẩm
+                    </MudText>
+
+                    @if (!Filtered.Any())
+                    {
+                        <div class="d-flex flex-column align-center py-10">
+                            <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Class="mud-text-disabled mb-2" />
+                            <MudText Typo="Typo.body2" Class="mud-text-disabled">Không tìm thấy sản phẩm phù hợp.</MudText>
+                        </div>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="2">
+                            @foreach (var product in PagedFiltered)
+                            {
+                                var isPending = _pendingProduct?.Id == product.Id;
+                                <MudPaper Outlined="true" Class="rounded-lg pa-0 picker-product-row">
+                                    <div class="d-flex align-center pa-3 gap-3">
+                                        @* Thumbnail *@
+                                        <div style="width:72px; height:72px; flex-shrink:0;">
+                                            @if (!string.IsNullOrEmpty(product.ThumbnailUrl))
+                                            {
+                                                <img src="@product.ThumbnailUrl"
+                                                     style="width:100%; height:100%; object-fit:contain;" />
+                                            }
+                                            else
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.ImageNotSupported"
+                                                         Size="Size.Large" Color="Color.Surface"
+                                                         Style="width:100%; height:100%;" />
+                                            }
+                                        </div>
+
+                                        @* Info *@
+                                        <div class="flex-grow-1">
+                                            <MudText Typo="Typo.body2" Style="font-weight:600;">@product.Name</MudText>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                Kho hàng: <span style="color:#27ae60; font-weight:600;">Còn hàng</span>
+                                            </MudText>
+                                        </div>
+
+                                        @* Price + Action *@
+                                        <div class="d-flex flex-column align-end gap-2" style="flex-shrink:0; min-width:180px;">
+                                            <div class="text-right">
+                                                @if (product.DiscountPercent > 0)
+                                                {
+                                                    <MudText Typo="Typo.caption" Style="text-decoration:line-through;" Color="Color.Default">
+                                                        @product.OldPrice.ToString("N0")đ
+                                                    </MudText>
+                                                }
+                                                <MudText Typo="Typo.subtitle1" Color="Color.Error" Style="font-weight:700;">
+                                                    @product.CurrentPrice.ToString("N0")đ
+                                                </MudText>
+                                            </div>
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Primary"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => OnSelectProduct(product))"
+                                                       Disabled="@(_loadingVariants && isPending)">
+                                                @if (_loadingVariants && isPending)
+                                                {
+                                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                                                }
+                                                THÊM VÀO CẤU HÌNH &gt;
+                                            </MudButton>
+                                        </div>
+                                    </div>
+
+                                    @* ── Inline variant selector (shown after clicking THÊM) ── *@
+                                    @if (isPending && _pendingProduct != null)
+                                    {
+                                        <MudDivider />
+                                        <div class="pa-3" style="background:#f9f9f9;">
+                                            <MudText Typo="Typo.body2" Class="mb-2" Style="font-weight:600;">
+                                                Chọn phiên bản:
+                                            </MudText>
+                                            <MudGrid Spacing="1">
+                                                @foreach (var v in _pendingProduct.Variants)
+                                                {
+                                                    var isSelected = _selectedVariantId == v.Id;
+                                                    <MudItem xs="12" sm="6">
+                                                        <MudPaper Outlined="true"
+                                                                  Class="pa-2 rounded cursor-pointer"
+                                                                  Style="@(isSelected ? "border-color: var(--mud-palette-primary); background: rgba(var(--mud-palette-primary-rgb),.06);" : "")"
+                                                                  @onclick="@(() => _selectedVariantId = v.Id)">
+                                                            <MudText Typo="Typo.body2" Style="font-weight:600;">@v.VariantName</MudText>
+                                                            <MudText Typo="Typo.caption" Color="Color.Error">
+                                                                @v.Price.ToString("N0")đ
+                                                            </MudText>
+                                                            @if (!v.IsAvailable)
+                                                            {
+                                                                <MudChip T="string" Size="Size.Small" Color="Color.Error"
+                                                                         Variant="Variant.Outlined" Style="height:18px; font-size:10px;">
+                                                                    Hết hàng
+                                                                </MudChip>
+                                                            }
+                                                        </MudPaper>
+                                                    </MudItem>
+                                                }
+                                            </MudGrid>
+                                            <div class="d-flex gap-2 mt-3">
+                                                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                                           Disabled="@(_selectedVariantId == null)"
+                                                           OnClick="ConfirmVariant">
+                                                    Xác nhận
+                                                </MudButton>
+                                                <MudButton Variant="Variant.Text" OnClick="CancelVariant">Hủy</MudButton>
+                                            </div>
+                                        </div>
+                                    }
+                                </MudPaper>
+                            }
+                        </MudStack>
+
+                        @* Pagination *@
+                        @if (_totalPages > 1)
+                        {
+                            <div class="d-flex justify-center mt-4">
+                                <MudPagination Count="_totalPages"
+                                               @bind-Selected="_currentPage"
+                                               Color="Color.Primary"
+                                               ShowFirstButton="true"
+                                               ShowLastButton="true" />
+                            </div>
+                        }
+                    }
+                </MudItem>
+            </MudGrid>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@(() => MudDialog.Cancel())">Đóng</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private IStorefrontClientService StorefrontService { get; set; } = null!;
+
+    [Parameter] public string SlotName { get; set; } = string.Empty;
+    [Parameter] public string CategorySlug { get; set; } = string.Empty;
+
+    private bool _isLoading = true;
+    private bool _loadingVariants = false;
+    private string? _errorMessage;
+
+    private List<ProductCardResponse> _allProducts = new();
+    private string _search = string.Empty;
+    private HashSet<string> _selectedBrands = new();
+    private int _priceRange = 0;    // 0=All 1=<2M 2=2-10M 3=>10M
+    private int _sortBy = 0;        // 0=Default 1=PriceAsc 2=PriceDesc 3=NameAsc
+
+    private int _currentPage = 1;
+    private const int PageSize = 10;
+
+    private ProductDetailResponse? _pendingProduct;
+    private int? _selectedVariantId;
+
+    private IEnumerable<string> _availableBrands => _allProducts
+        .Select(p => p.ManufacturerName)
+        .Where(b => !string.IsNullOrEmpty(b))
+        .Distinct()
+        .OrderBy(b => b);
+
+    private IEnumerable<ProductCardResponse> Filtered
+    {
+        get
+        {
+            var q = _allProducts.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(_search))
+                q = q.Where(p => p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+            if (_selectedBrands.Any())
+                q = q.Where(p => _selectedBrands.Contains(p.ManufacturerName));
+
+            q = _priceRange switch
+            {
+                1 => q.Where(p => p.CurrentPrice < 2_000_000),
+                2 => q.Where(p => p.CurrentPrice >= 2_000_000 && p.CurrentPrice <= 10_000_000),
+                3 => q.Where(p => p.CurrentPrice > 10_000_000),
+                _ => q
+            };
+
+            q = _sortBy switch
+            {
+                1 => q.OrderBy(p => p.CurrentPrice),
+                2 => q.OrderByDescending(p => p.CurrentPrice),
+                3 => q.OrderBy(p => p.Name),
+                _ => q
+            };
+
+            return q;
+        }
+    }
+
+    private IEnumerable<ProductCardResponse> PagedFiltered =>
+        Filtered.Skip((_currentPage - 1) * PageSize).Take(PageSize);
+
+    private int _totalPages => (int)Math.Ceiling(Filtered.Count() / (double)PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await StorefrontService.GetProductsByCategoryAsync(CategorySlug, 1, 200);
+        _isLoading = false;
+
+        if (!result.Success || result.Data == null)
+        {
+            _errorMessage = result.Message ?? "Không thể tải danh sách sản phẩm.";
+            return;
+        }
+
+        _allProducts = result.Data.Items;
+    }
+
+    private void OnFilterChanged(ChangeEventArgs _)
+    {
+        _currentPage = 1;
+        _pendingProduct = null;
+        _selectedVariantId = null;
+    }
+
+    private void ToggleBrand(string brand, bool selected)
+    {
+        if (selected) _selectedBrands.Add(brand);
+        else _selectedBrands.Remove(brand);
+        _currentPage = 1;
+        _pendingProduct = null;
+        _selectedVariantId = null;
+    }
+
+    private async Task OnSelectProduct(ProductCardResponse product)
+    {
+        _loadingVariants = true;
+        _pendingProduct = null;
+        _selectedVariantId = null;
+
+        var result = await StorefrontService.GetProductDetailAsync(product.Slug);
+        _loadingVariants = false;
+
+        if (!result.Success || result.Data == null) return;
+
+        var detail = result.Data;
+        var available = detail.Variants.Where(v => v.IsAvailable).ToList();
+
+        if (available.Count == 1)
+        {
+            // Auto-confirm single variant
+            ConfirmWithVariant(product, detail, available[0]);
+            return;
+        }
+
+        _pendingProduct = detail;
+        // Pre-select first available variant
+        _selectedVariantId = available.FirstOrDefault()?.Id ?? detail.Variants.FirstOrDefault()?.Id;
+    }
+
+    private void ConfirmVariant()
+    {
+        if (_pendingProduct == null || _selectedVariantId == null) return;
+
+        var variant = _pendingProduct.Variants.FirstOrDefault(v => v.Id == _selectedVariantId);
+        if (variant == null) return;
+
+        var sourceProduct = _allProducts.First(p => p.Slug == _pendingProduct.Slug);
+        ConfirmWithVariant(sourceProduct, _pendingProduct, variant);
+    }
+
+    private void ConfirmWithVariant(ProductCardResponse product, ProductDetailResponse detail, StorefrontVariantResponse variant)
+    {
+        var item = new BuildPcItemDto
+        {
+            VariantId = variant.Id,
+            ProductName = detail.Name,
+            VariantName = variant.VariantName,
+            ImageUrl = product.ThumbnailUrl,
+            Sku = string.Empty,
+            WarrantyMonth = 0,
+            UnitPrice = variant.Price,
+            Quantity = 1
+        };
+        MudDialog.Close(DialogResult.Ok(item));
+    }
+
+    private void CancelVariant()
+    {
+        _pendingProduct = null;
+        _selectedVariantId = null;
+    }
+}
+
+<style>
+    .picker-product-row:hover {
+        border-color: var(--mud-palette-primary) !important;
+    }
+</style>

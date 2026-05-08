@@ -313,6 +313,7 @@ namespace PBL3.Service.Storefront
                     p.Id,
                     p.Name,
                     p.Slug,
+                    ManufacturerName = p.Manufacturer != null ? p.Manufacturer.Name : string.Empty,
                     ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
                     MainImage = p.Variants.Where(v => !v.IsDeleted)
                         .SelectMany(v => v.Images)
@@ -347,6 +348,7 @@ namespace PBL3.Service.Storefront
                     Name = p.Name,
                     Slug = p.Slug,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
+                    ManufacturerName = p.ManufacturerName,
                     CurrentPrice = currentPrice,
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,

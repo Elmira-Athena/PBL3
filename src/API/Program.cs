@@ -126,6 +126,7 @@ builder.Services.AddScoped<IStorefrontService, StorefrontService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
+builder.Services.AddScoped<PBL3.Service.BuildPc.IBuildPcService, PBL3.Service.BuildPc.BuildPcService>();
 
 // DI: Auth
 builder.Services.AddScoped<IAuthService, AuthService>();

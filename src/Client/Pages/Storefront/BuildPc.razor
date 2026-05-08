@@ -1,0 +1,392 @@
+@page "/build-pc"
+@layout StorefrontLayout
+@using PBL3.Shared.DTOs.BuildPc
+@using Client.Services.BuildPc
+@using Client.Services.Cart
+@inject IBuildPcClientService BuildPcService
+@inject ICartClientService CartService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Xây dựng PC - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-10">
+
+    @* ── Header ── *@
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.h5" Style="font-weight:700;">
+            Build PC - Chọn linh kiện xây dựng cấu hình
+        </MudText>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Default"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="ResetAll">
+            LÀM MỚI
+        </MudButton>
+    </MudStack>
+
+    @* ── Cost estimate (top) ── *@
+    <div class="d-flex justify-end mb-3">
+        <MudText Typo="Typo.subtitle1">
+            Chi phí dự tính:
+            <strong style="color:#c0392b; font-size:1.2rem;">@TotalCost.ToString("N0")đ</strong>
+        </MudText>
+    </div>
+
+    @* ── Component table ── *@
+    <MudPaper Elevation="2" Class="rounded-lg overflow-hidden">
+        @foreach (var slot in _slots)
+        {
+            <div class="build-pc-row @(slot.SelectedItem != null ? "has-item" : "")">
+                @* Left: slot name *@
+                <div class="slot-label">
+                    <MudText Typo="Typo.body1" Style="font-weight:600;">
+                        @slot.Index. @slot.Name
+                    </MudText>
+                </div>
+
+                @* Right: content *@
+                <div class="slot-content">
+                    @if (slot.SelectedItem == null)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="@(() => OpenPicker(slot))">
+                            Chọn @slot.Name
+                        </MudButton>
+                    }
+                    else
+                    {
+                        var item = slot.SelectedItem;
+                        <div class="d-flex align-center gap-3 w-100">
+                            @* Thumbnail *@
+                            <div style="width:60px; height:60px; flex-shrink:0;">
+                                @if (!string.IsNullOrEmpty(item.ImageUrl))
+                                {
+                                    <img src="@item.ImageUrl" style="width:100%; height:100%; object-fit:contain;" />
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Memory"
+                                             Size="Size.Large" Color="Color.Default" />
+                                }
+                            </div>
+
+                            @* Product info *@
+                            <div class="flex-grow-1">
+                                <MudText Typo="Typo.body2" Style="font-weight:600;">@item.ProductName</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@item.VariantName</MudText>
+                                @if (item.WarrantyMonth > 0)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                        Bảo hành: @item.WarrantyMonth tháng
+                                    </MudText>
+                                }
+                            </div>
+
+                            @* Unit price *@
+                            <MudText Typo="Typo.body2" Style="min-width:120px; text-align:right;">
+                                @item.UnitPrice.ToString("N0")
+                            </MudText>
+
+                            @* × sign *@
+                            <MudText Typo="Typo.body2" Class="mx-1">×</MudText>
+
+                            @* Quantity *@
+                            <MudNumericField T="int"
+                                            Value="@item.Quantity"
+                                            ValueChanged="@(q => UpdateQuantity(slot, q))"
+                                            Min="1" Max="10"
+                                            Variant="Variant.Outlined"
+                                            Margin="Margin.Dense"
+                                            Style="width:80px;" />
+
+                            @* = sign *@
+                            <MudText Typo="Typo.body2" Class="mx-1">=</MudText>
+
+                            @* Subtotal *@
+                            <MudText Typo="Typo.body2" Color="Color.Error"
+                                     Style="font-weight:700; min-width:130px; text-align:right;">
+                                @((item.UnitPrice * item.Quantity).ToString("N0"))đ
+                            </MudText>
+
+                            @* Edit button *@
+                            <MudTooltip Text="Thay đổi linh kiện">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                               Size="Size.Small"
+                                               Color="Color.Primary"
+                                               OnClick="@(() => OpenPicker(slot))" />
+                            </MudTooltip>
+
+                            @* Remove button *@
+                            <MudTooltip Text="Xóa">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               OnClick="@(() => RemoveItem(slot))" />
+                            </MudTooltip>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <MudDivider />
+        }
+    </MudPaper>
+
+    @* ── Cost estimate (bottom) ── *@
+    <div class="d-flex justify-end mt-3 mb-5">
+        <MudText Typo="Typo.subtitle1">
+            Chi phí dự tính:
+            <strong style="color:#c0392b; font-size:1.2rem;">@TotalCost.ToString("N0")đ</strong>
+        </MudText>
+    </div>
+
+    @* ── Action buttons ── *@
+    <MudStack Row="true" Spacing="2" Class="mb-10">
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Default"
+                   StartIcon="@Icons.Material.Filled.SaveAlt"
+                   OnClick="ExportExcel"
+                   Disabled="@(_isExporting || !HasAnyItem)">
+            @if (_isExporting)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            LƯU CẤU HÌNH
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.ShoppingCart"
+                   OnClick="AddAllToCart"
+                   Disabled="@(_isAddingToCart || !HasAnyItem)">
+            @if (_isAddingToCart)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            THÊM VÀO GIỎ HÀNG
+        </MudButton>
+    </MudStack>
+
+    @* ── Reference configs ── *@
+    <MudDivider Class="mb-6" />
+    <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight:700; text-align:center;">
+        CẤU HÌNH PC THAM KHẢO
+    </MudText>
+    <MudGrid Spacing="3">
+        @foreach (var preset in _presets)
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2" Class="rounded-lg">
+                    <MudCardContent Class="pb-0">
+                        <MudText Typo="Typo.subtitle2" Color="Color.Primary"
+                                 Style="font-weight:700; text-transform:uppercase; letter-spacing:.05em;">
+                            @preset.Title
+                        </MudText>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Outlined"
+                                   Size="Size.Small"
+                                   Href="@preset.Href"
+                                   FullWidth="true">
+                            Xem tất cả sản phẩm
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+
+</MudContainer>
+
+@code {
+    // ─── Slot model ───────────────────────────────────────────────────────────
+    private class PcSlot
+    {
+        public int Index { get; init; }
+        public string Name { get; init; } = string.Empty;
+        public string CategorySlug { get; init; } = string.Empty;
+        public BuildPcItemDto? SelectedItem { get; set; }
+    }
+
+    private class PresetConfig
+    {
+        public string Title { get; init; } = string.Empty;
+        public string Href { get; init; } = string.Empty;
+    }
+
+    // ─── State ────────────────────────────────────────────────────────────────
+    private List<PcSlot> _slots = new()
+    {
+        new() { Index = 1,  Name = "Bộ vi xử lý",        CategorySlug = "cpu" },
+        new() { Index = 2,  Name = "Bo mạch chủ",         CategorySlug = "bo-mach-chu" },
+        new() { Index = 3,  Name = "RAM",                  CategorySlug = "ram" },
+        new() { Index = 4,  Name = "HDD",                  CategorySlug = "hdd" },
+        new() { Index = 5,  Name = "SSD",                  CategorySlug = "ssd" },
+        new() { Index = 6,  Name = "VGA",                  CategorySlug = "vga" },
+        new() { Index = 7,  Name = "Nguồn",                CategorySlug = "nguon" },
+        new() { Index = 8,  Name = "Vỏ Case",              CategorySlug = "vo-case" },
+        new() { Index = 9,  Name = "Fan Case",             CategorySlug = "fan-case" },
+        new() { Index = 10, Name = "Màn hình",             CategorySlug = "man-hinh" },
+        new() { Index = 11, Name = "Chuột",                CategorySlug = "chuot" },
+        new() { Index = 12, Name = "Bàn phím",             CategorySlug = "ban-phim" },
+        new() { Index = 13, Name = "Tản nhiệt khí",        CategorySlug = "tan-nhiet-khi" },
+        new() { Index = 14, Name = "Tản nhiệt nước AIO",   CategorySlug = "tan-nhiet-nuoc-aio" },
+        new() { Index = 15, Name = "Tai nghe",             CategorySlug = "tai-nghe" },
+        new() { Index = 16, Name = "Phần mềm",             CategorySlug = "phan-mem" },
+    };
+
+    private static readonly List<PresetConfig> _presets = new()
+    {
+        new() { Title = "Cấu hình PC CPU Intel", Href = "/category/cpu" },
+        new() { Title = "Cấu hình PC CPU AMD",   Href = "/category/cpu" },
+        new() { Title = "Cấu hình PC Gaming",    Href = "/category/vga" },
+        new() { Title = "Cấu hình PC Văn phòng", Href = "/category/man-hinh" },
+    };
+
+    private bool _isExporting = false;
+    private bool _isAddingToCart = false;
+
+    private decimal TotalCost =>
+        _slots.Where(s => s.SelectedItem != null)
+              .Sum(s => s.SelectedItem!.UnitPrice * s.SelectedItem.Quantity);
+
+    private bool HasAnyItem => _slots.Any(s => s.SelectedItem != null);
+
+    // ─── Actions ──────────────────────────────────────────────────────────────
+    private async Task OpenPicker(PcSlot slot)
+    {
+        var parameters = new DialogParameters
+        {
+            [nameof(ComponentPickerDialog.SlotName)] = slot.Name,
+            [nameof(ComponentPickerDialog.CategorySlug)] = slot.CategorySlug
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true,
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+
+        var dialog = await DialogService.ShowAsync<ComponentPickerDialog>(
+            $"Chọn {slot.Name}", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is BuildPcItemDto item)
+        {
+            item.SlotIndex = slot.Index;
+            item.SlotName = slot.Name;
+            slot.SelectedItem = item;
+            StateHasChanged();
+        }
+    }
+
+    private void RemoveItem(PcSlot slot)
+    {
+        slot.SelectedItem = null;
+    }
+
+    private void UpdateQuantity(PcSlot slot, int qty)
+    {
+        if (slot.SelectedItem == null) return;
+        slot.SelectedItem.Quantity = Math.Clamp(qty, 1, 10);
+    }
+
+    private void ResetAll()
+    {
+        foreach (var slot in _slots)
+            slot.SelectedItem = null;
+    }
+
+    private async Task ExportExcel()
+    {
+        _isExporting = true;
+        try
+        {
+            var request = new ExportBuildPcRequest
+            {
+                Items = _slots
+                    .Where(s => s.SelectedItem != null)
+                    .Select(s => s.SelectedItem!)
+                    .ToList()
+            };
+            await BuildPcService.ExportBuildPcAsync(request);
+        }
+        catch
+        {
+            Snackbar.Add("Không thể xuất file Excel.", Severity.Error);
+        }
+        finally
+        {
+            _isExporting = false;
+        }
+    }
+
+    private async Task AddAllToCart()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/login?returnUrl=/build-pc");
+            return;
+        }
+
+        _isAddingToCart = true;
+        int added = 0;
+        int failed = 0;
+
+        foreach (var slot in _slots.Where(s => s.SelectedItem != null))
+        {
+            var item = slot.SelectedItem!;
+            var result = await CartService.AddToCartAsync(item.VariantId, item.Quantity);
+
+            if (result.Success) added++;
+            else failed++;
+        }
+
+        _isAddingToCart = false;
+
+        if (failed == 0)
+        {
+            Snackbar.Add($"Đã thêm {added} linh kiện vào giỏ hàng.", Severity.Success);
+            Navigation.NavigateTo("/cart");
+        }
+        else
+        {
+            Snackbar.Add($"Thêm thành công {added}, thất bại {failed} linh kiện.", Severity.Warning);
+        }
+    }
+}
+
+<style>
+    .build-pc-row {
+        display: flex;
+        align-items: center;
+        min-height: 64px;
+        transition: background .15s;
+    }
+
+    .build-pc-row:hover {
+        background: rgba(0, 0, 0, .02);
+    }
+
+    .slot-label {
+        width: 220px;
+        flex-shrink: 0;
+        padding: 12px 16px;
+        border-right: 1px solid rgba(0, 0, 0, .08);
+        background: rgba(0, 0, 0, .02);
+    }
+
+    .slot-content {
+        flex: 1;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+    }
+</style>
