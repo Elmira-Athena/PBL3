@@ -1,5 +1,6 @@
 @page "/admin/products/create"
 @page "/admin/products/edit/{Id:int}"
+@inject IImageClientService ImageService
 
 <PageTitle>@(_isEditMode ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới") - HushStore</PageTitle>
 
@@ -87,25 +88,54 @@
                                       Lines="5" />
                     </MudPaper>
 
-                    @* -- Hình ảnh (Placeholder) -- *@
+                    @* -- Hình ảnh -- *@
                     <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
                         <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
                             <MudIcon Icon="@Icons.Material.Filled.Image" Class="me-1" Size="Size.Small" />
                             Hình ảnh
                         </MudText>
 
-                        <MudPaper Outlined="true"
-                                  Class="d-flex flex-column align-center justify-center pa-6 rounded-lg"
-                                  Style="border-style: dashed; border-width: 2px; min-height: 150px; cursor: pointer; background: var(--mud-palette-background-grey);"
-                                  @onclick="() => { }">
-                            <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" Color="Color.Default" />
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
-                                Kéo thả hình ảnh vào đây hoặc click để chọn
-                            </MudText>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                (Chức năng upload sẽ được tích hợp sau)
-                            </MudText>
-                        </MudPaper>
+                        @if (_productImages.Count > 0)
+                        {
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                @for (int i = 0; i < _productImages.Count; i++)
+                                {
+                                    var imgUrl = _productImages[i];
+                                    var imgIndex = i;
+                                    <div style="position: relative; width: 90px; height: 90px; flex-shrink: 0;">
+                                        <MudImage Src="@imgUrl" Width="90" Height="90" ObjectFit="ObjectFit.Cover" Class="rounded" Style="display:block;" />
+                                        @if (imgIndex == 0)
+                                        {
+                                            <span style="position:absolute; bottom:2px; left:2px; background:#1976d2; color:white; font-size:9px; border-radius:3px; padding:0 4px; line-height:16px;">Main</span>
+                                        }
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Size="Size.Small"
+                                                       Color="Color.Error"
+                                                       Style="position:absolute; top:-8px; right:-8px; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.2); padding:2px; min-width:0; width:20px; height:20px;"
+                                                       OnClick="() => RemoveProductImage(imgUrl)" />
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <InputFile id="productImageInput" OnChange="HandleImageUpload" accept="image/*" multiple style="display:none" disabled="@_isUploadingImage" />
+                        <label for="productImageInput" style="cursor: @(_isUploadingImage ? "not-allowed" : "pointer"); display: block;">
+                            <MudPaper Outlined="true"
+                                      Class="d-flex flex-column align-center justify-center pa-6 rounded-lg"
+                                      Style="border-style: dashed; border-width: 2px; min-height: 120px; background: var(--mud-palette-background-grey);">
+                                @if (_isUploadingImage)
+                                {
+                                    <MudProgressCircular Indeterminate="true" Size="Size.Medium" />
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Đang upload ảnh...</MudText>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" Color="Color.Default" />
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Click để chọn ảnh (tối đa 5 ảnh)</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">JPEG, PNG, WebP, GIF – tối đa 5MB/ảnh</MudText>
+                                }
+                            </MudPaper>
+                        </label>
                     </MudPaper>
 
                     @* -- Thông số kỹ thuật (Dynamic Key-Value) -- *@
@@ -408,6 +438,10 @@
     // Thông số kỹ thuật (Dynamic Key-Value)
     private List<SpecEntry> _specifications = new();
 
+    // Hình ảnh sản phẩm (dùng chung cho tất cả biến thể)
+    private List<string> _productImages = new();
+    private bool _isUploadingImage;
+
     protected override async Task OnInitializedAsync()
     {
         // Load categories và manufacturers song song
@@ -489,6 +523,31 @@
         StateHasChanged();
     }
 
+    // ===== IMAGES =====
+
+    private async Task HandleImageUpload(InputFileChangeEventArgs e)
+    {
+        _isUploadingImage = true;
+        StateHasChanged();
+
+        foreach (var file in e.GetMultipleFiles(5))
+        {
+            var url = await ImageService.UploadAsync(file, "products");
+            if (url != null)
+                _productImages.Add(url);
+            else
+                Snackbar.Add($"Upload ảnh \"{file.Name}\" thất bại.", Severity.Error);
+        }
+
+        _isUploadingImage = false;
+        StateHasChanged();
+    }
+
+    private void RemoveProductImage(string url)
+    {
+        _productImages.Remove(url);
+    }
+
     // ===== VARIANTS =====
 
     private void AddVariant()
@@ -564,16 +623,22 @@
                 ? new Dictionary<string, string>(specsDict)
                 : null;
 
-            // Hardcode ảnh dummy (chờ tích hợp upload)
-            if (variant.Images.Count == 0)
-            {
-                variant.Images.Add(new SaveImageRequest
-                {
-                    ImageUrl = "https://placehold.co/400x400?text=Product",
-                    IsMain = true,
-                    SortOrder = 0
-                });
-            }
+            variant.Images = _productImages.Count > 0
+                ? _productImages.Select((url, idx) => new SaveImageRequest
+                    {
+                        ImageUrl = url,
+                        IsMain = idx == 0,
+                        SortOrder = idx
+                    }).ToList()
+                : new List<SaveImageRequest>
+                    {
+                        new SaveImageRequest
+                        {
+                            ImageUrl = "https://placehold.co/400x400?text=No+Image",
+                            IsMain = true,
+                            SortOrder = 0
+                        }
+                    };
         }
 
         _isSaving = true;

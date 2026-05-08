@@ -1,5 +1,8 @@
 using System.Text;
 using System.Threading.RateLimiting;
+using Amazon;
+using Amazon.Runtime;
+using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Identity;
@@ -19,6 +22,7 @@ using PBL3.Service.Suppliers;
 using PBL3.Service.Inventory;
 using PBL3.Service.Pos;
 using PBL3.Service.Customers;
+using PBL3.Service.Storage;
 using PBL3.Service.Storefront;
 using PBL3.Service.Cart;
 using PBL3.Service.Orders;
@@ -127,6 +131,16 @@ builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<PBL3.Service.BuildPc.IBuildPcService, PBL3.Service.BuildPc.BuildPcService>();
+
+// DI: AWS S3 Storage
+var awsCfg = builder.Configuration.GetSection("AwsSettings");
+builder.Services.AddSingleton<IAmazonS3>(_ =>
+{
+    var credentials = new BasicAWSCredentials(awsCfg["AccessKeyId"], awsCfg["SecretAccessKey"]);
+    var region = RegionEndpoint.GetBySystemName(awsCfg["Region"] ?? "ap-southeast-1");
+    return new AmazonS3Client(credentials, region);
+});
+builder.Services.AddScoped<IStorageService, PBL3.Service.Storage.S3StorageService>();
 
 // DI: Auth
 builder.Services.AddScoped<IAuthService, AuthService>();

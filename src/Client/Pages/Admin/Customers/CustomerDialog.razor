@@ -2,6 +2,7 @@
 @using PBL3.Shared.DTOs.Common
 @using MudBlazor
 @inject ICustomerClientService CustomerService
+@inject IImageClientService ImageService
 @inject ISnackbar Snackbar
 
 <MudDialog>
@@ -58,6 +59,44 @@
                 <MudItem xs="12">
                     <MudTextField @bind-Value="_model.City" For="@(() => _model.City)" Label="Thành phố" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 </MudItem>
+
+                @if (IsEditMode)
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2" Class="mb-1" Style="font-weight: 500;">Avatar</MudText>
+                        <div class="d-flex align-center gap-3">
+                            @if (!string.IsNullOrWhiteSpace(_model.AvatarUrl))
+                            {
+                                <MudAvatar Size="Size.Large" Style="width:56px; height:56px;">
+                                    <MudImage Src="@_model.AvatarUrl" />
+                                </MudAvatar>
+                                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
+                                           OnClick="() => _model.AvatarUrl = null" StartIcon="@Icons.Material.Filled.Delete">
+                                    Xóa
+                                </MudButton>
+                            }
+                        </div>
+                        <InputFile id="customerAvatarInput" OnChange="HandleAvatarUpload" accept="image/*" style="display:none" disabled="@_isUploadingAvatar" />
+                        <label for="customerAvatarInput" style="cursor: @(_isUploadingAvatar ? "not-allowed" : "pointer"); display: block; margin-top: 8px;">
+                            <MudPaper Outlined="true"
+                                      Class="d-flex align-center justify-center pa-2 rounded-lg gap-2"
+                                      Style="border-style: dashed; min-height: 44px; background: var(--mud-palette-background-grey);">
+                                @if (_isUploadingAvatar)
+                                {
+                                    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Đang upload...</MudText>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Small" Color="Color.Default" />
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                        @(string.IsNullOrWhiteSpace(_model.AvatarUrl) ? "Chọn ảnh đại diện (tùy chọn)" : "Thay ảnh đại diện")
+                                    </MudText>
+                                }
+                            </MudPaper>
+                        </label>
+                    </MudItem>
+                }
             </MudGrid>
 
             <div class="d-flex justify-end mt-4">
@@ -94,6 +133,7 @@
         public string PhoneNumber { get; set; } = string.Empty;
         public byte Gender { get; set; }
         public DateTime? DateOfBirth { get; set; }
+        public string? AvatarUrl { get; set; }
         public string? Address { get; set; }
         public string? City { get; set; }
     }
@@ -106,6 +146,7 @@
 
     private bool IsEditMode => InitialId.HasValue && InitialId.Value != Guid.Empty;
     private bool _isSaving = false;
+    private bool _isUploadingAvatar = false;
 
     // Method to pass existing data into dialog
     public void LoadData(CustomerDto customer)
@@ -113,11 +154,27 @@
         _model.FullName = customer.FullName;
         _model.Gender = customer.Gender;
         _model.DateOfBirth = customer.DateOfBirth;
+        _model.AvatarUrl = customer.AvatarUrl;
         _model.Address = customer.Address;
         _model.City = customer.City;
 
         Email = customer.Email;
         PhoneNumber = customer.PhoneNumber;
+    }
+
+    private async Task HandleAvatarUpload(InputFileChangeEventArgs e)
+    {
+        _isUploadingAvatar = true;
+        StateHasChanged();
+
+        var url = await ImageService.UploadAsync(e.File, "avatars");
+        if (url != null)
+            _model.AvatarUrl = url;
+        else
+            Snackbar.Add("Upload ảnh đại diện thất bại. Vui lòng thử lại.", Severity.Error);
+
+        _isUploadingAvatar = false;
+        StateHasChanged();
     }
 
     private async Task HandleSubmit()
@@ -134,6 +191,7 @@
                     FullName = _model.FullName,
                     Gender = _model.Gender,
                     DateOfBirth = _model.DateOfBirth,
+                    AvatarUrl = _model.AvatarUrl,
                     Address = _model.Address,
                     City = _model.City
                 };

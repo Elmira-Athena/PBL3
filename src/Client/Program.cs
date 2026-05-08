@@ -17,6 +17,7 @@ using Client.Services.Product;
 using Client.Services.Supplier;
 using Client.Services.Inventory;
 using Client.Services.Voucher;
+using Client.Services.Image;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -65,5 +66,6 @@ builder.Services.AddScoped<Client.Services.Storefront.IStorefrontClientService, 
 builder.Services.AddScoped<Client.Services.Cart.ICartClientService, Client.Services.Cart.CartClientService>();
 builder.Services.AddScoped<IVoucherClientService, VoucherClientService>();
 builder.Services.AddScoped<Client.Services.BuildPc.IBuildPcClientService, Client.Services.BuildPc.BuildPcClientService>();
+builder.Services.AddScoped<IImageClientService, ImageClientService>();
 
 await builder.Build().RunAsync();

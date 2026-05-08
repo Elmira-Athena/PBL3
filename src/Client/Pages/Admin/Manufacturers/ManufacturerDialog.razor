@@ -1,4 +1,5 @@
 @using PBL3.Shared.DTOs.Manufacturers
+@inject IImageClientService ImageService
 
 <MudDialog>
     <TitleContent>
@@ -51,15 +52,35 @@
                                   Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Outlined.Business" />
 
-                    @* URL Logo *@
-                    <MudTextField @bind-Value="_model.LogoUrl"
-                                  Label="URL Logo"
-                                  Placeholder="https://example.com/logo.png"
-                                  MaxLength="500"
-                                  Variant="Variant.Outlined"
-                                  Adornment="Adornment.Start"
-                                  AdornmentIcon="@Icons.Material.Outlined.Image"
-                                  HelperText="URL hình ảnh logo của hãng (không bắt buộc)" />
+                    @* Logo Upload *@
+                    <div>
+                        <InputFile id="manufacturerLogoInput" OnChange="HandleLogoUpload" accept="image/*" style="display:none" disabled="@_isUploadingImage" />
+                        <label for="manufacturerLogoInput" style="cursor: @(_isUploadingImage ? "not-allowed" : "pointer"); display: block;">
+                            <MudPaper Outlined="true"
+                                      Class="d-flex align-center justify-center pa-3 rounded-lg gap-2"
+                                      Style="border-style: dashed; min-height: 52px; background: var(--mud-palette-background-grey);">
+                                @if (_isUploadingImage)
+                                {
+                                    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Đang upload...</MudText>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Small" Color="Color.Default" />
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                        @(string.IsNullOrWhiteSpace(_model.LogoUrl) ? "Chọn logo hãng sản xuất (tùy chọn)" : "Thay logo khác")
+                                    </MudText>
+                                }
+                            </MudPaper>
+                        </label>
+                        @if (!string.IsNullOrWhiteSpace(_model.LogoUrl))
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="mt-1"
+                                       OnClick="() => _model.LogoUrl = null" StartIcon="@Icons.Material.Filled.Delete">
+                                Xóa logo
+                            </MudButton>
+                        }
+                    </div>
 
                     @* Website *@
                     <MudTextField @bind-Value="_model.Website"
@@ -125,6 +146,7 @@
     private ManufacturerFormModel _model = new();
     private bool _isSaving;
     private bool _isLoadingDetail;
+    private bool _isUploadingImage;
     private string? _errorMessage;
 
     protected override async Task OnInitializedAsync()
@@ -152,6 +174,23 @@
 
             _isLoadingDetail = false;
         }
+    }
+
+    // ===== IMAGE UPLOAD =====
+
+    private async Task HandleLogoUpload(InputFileChangeEventArgs e)
+    {
+        _isUploadingImage = true;
+        StateHasChanged();
+
+        var url = await ImageService.UploadAsync(e.File, "manufacturers");
+        if (url != null)
+            _model.LogoUrl = url;
+        else
+            Snackbar.Add("Upload logo thất bại. Vui lòng thử lại.", Severity.Error);
+
+        _isUploadingImage = false;
+        StateHasChanged();
     }
 
     // ===== VALIDATION =====

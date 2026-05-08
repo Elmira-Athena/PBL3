@@ -1,4 +1,5 @@
 @using System.Text.RegularExpressions
+@inject IImageClientService ImageService
 
 <MudDialog>
     <TitleContent>
@@ -72,11 +73,36 @@
                                      Min="0"
                                      Variant="Variant.Outlined" />
 
-                    @* URL Ảnh *@
-                    <MudTextField @bind-Value="_model.ImageUrl"
-                                  Label="URL Ảnh (tùy chọn)"
-                                  Placeholder="https://example.com/image.png"
-                                  Variant="Variant.Outlined" />
+                    @* Ảnh danh mục *@
+                    @if (!string.IsNullOrWhiteSpace(_model.ImageUrl))
+                    {
+                        <div class="d-flex align-center gap-3 mb-2">
+                            <MudImage Src="@_model.ImageUrl" Width="64" Height="64" ObjectFit="ObjectFit.Cover" Class="rounded" />
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
+                                       OnClick="() => _model.ImageUrl = null" StartIcon="@Icons.Material.Filled.Delete">
+                                Xóa ảnh
+                            </MudButton>
+                        </div>
+                    }
+                    <InputFile id="categoryImageInput" OnChange="HandleCategoryImageUpload" accept="image/*" style="display:none" disabled="@_isUploadingImage" />
+                    <label for="categoryImageInput" style="cursor: @(_isUploadingImage ? "not-allowed" : "pointer"); display: block;">
+                        <MudPaper Outlined="true"
+                                  Class="d-flex align-center justify-center pa-3 rounded-lg gap-2"
+                                  Style="border-style: dashed; min-height: 52px; background: var(--mud-palette-background-grey);">
+                            @if (_isUploadingImage)
+                            {
+                                <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Đang upload...</MudText>
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Color="Color.Default" />
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    @(string.IsNullOrWhiteSpace(_model.ImageUrl) ? "Chọn ảnh danh mục (tùy chọn)" : "Thay ảnh khác")
+                                </MudText>
+                            }
+                        </MudPaper>
+                    </label>
 
                     @* Hiển thị *@
                     <MudSwitch @bind-Value="_model.IsVisible"
@@ -131,6 +157,7 @@
     private CategoryFormModel _model = new();
     private bool _isSaving = false;
     private bool _isLoadingDetail = false;
+    private bool _isUploadingImage = false;
     private string? _errorMessage;
 
     protected override async Task OnInitializedAsync()
@@ -196,6 +223,24 @@
     {
         if (cat.Id == editId) return true;
         return cat.Children.Any(c => IsDescendantOrSelf(c, editId));
+    }
+
+    // ===== IMAGE UPLOAD =====
+
+    private async Task HandleCategoryImageUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        _isUploadingImage = true;
+        StateHasChanged();
+
+        var url = await ImageService.UploadAsync(file, "categories");
+        if (url != null)
+            _model.ImageUrl = url;
+        else
+            Snackbar.Add("Upload ảnh thất bại. Vui lòng thử lại.", Severity.Error);
+
+        _isUploadingImage = false;
+        StateHasChanged();
     }
 
     // ===== SLUG AUTO-GENERATE =====
