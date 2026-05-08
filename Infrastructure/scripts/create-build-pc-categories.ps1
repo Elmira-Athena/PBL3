@@ -1,90 +1,117 @@
 # Creates the 16 Build PC categories via the HushStore API
-# Usage (PowerShell 5+): .\scripts\create-build-pc-categories.ps1
-# On Windows 10/11: right-click > "Run with PowerShell" or run from terminal
+# Usage: .\scripts\create-build-pc-categories.ps1
+# Requires PowerShell 5+ (Windows) or PowerShell 7+ (cross-platform)
+# NOTE: All Vietnamese strings are built from Unicode code points to avoid
+#       encoding issues when the file is read on different Windows locales.
 
 $API = "https://localhost:7010"
 
-# Bỏ qua lỗi certificate tự ký (localhost)
+# ------------------------------------------------------------------
+# Skip self-signed certificate validation (localhost dev only)
+# ------------------------------------------------------------------
 if ($PSVersionTable.PSVersion.Major -ge 6) {
     $PSDefaultParameterValues['Invoke-RestMethod:SkipCertificateCheck'] = $true
-    $PSDefaultParameterValues['Invoke-WebRequest:SkipCertificateCheck'] = $true
 } else {
     Add-Type @"
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
-public class TrustAll : ICertificatePolicy {
-    public bool CheckValidationResult(ServicePoint sp, X509Certificate cert, WebRequest req, int problem) { return true; }
+public class TrustAllCerts : ICertificatePolicy {
+    public bool CheckValidationResult(ServicePoint sp, X509Certificate cert,
+        WebRequest req, int problem) { return true; }
 }
 "@
-    [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAll
+    [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCerts
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 }
 
-Write-Host ">> Đăng nhập..."
+# ------------------------------------------------------------------
+# Helper: build a string from an array of Unicode code points
+# ------------------------------------------------------------------
+function From-Codepoints([int[]] $pts) {
+    ($pts | ForEach-Object { [char]$_ }) -join ""
+}
 
-$loginBody = @{ email = "admin@hushstore.com"; password = "Admin@123" } | ConvertTo-Json
+# ------------------------------------------------------------------
+# Category data (names encoded as code-point arrays; slugs are ASCII)
+# ------------------------------------------------------------------
+$categories = @(
+    @{ name = (From-Codepoints 66,7897,32,118,105,32,120,7917,32,108,253)       ; slug = "cpu"                ; sort = 1  }
+    @{ name = (From-Codepoints 66,111,32,109,7841,99,104,32,99,104,7911)         ; slug = "bo-mach-chu"        ; sort = 2  }
+    @{ name = "RAM"                                                               ; slug = "ram"                ; sort = 3  }
+    @{ name = "HDD"                                                               ; slug = "hdd"                ; sort = 4  }
+    @{ name = "SSD"                                                               ; slug = "ssd"                ; sort = 5  }
+    @{ name = "VGA"                                                               ; slug = "vga"                ; sort = 6  }
+    @{ name = (From-Codepoints 78,103,117,7891,110)                              ; slug = "nguon"              ; sort = 7  }
+    @{ name = (From-Codepoints 86,7887,32,67,97,115,101)                        ; slug = "vo-case"            ; sort = 8  }
+    @{ name = "Fan Case"                                                          ; slug = "fan-case"           ; sort = 9  }
+    @{ name = (From-Codepoints 77,224,110,32,104,236,110,104)                   ; slug = "man-hinh"           ; sort = 10 }
+    @{ name = (From-Codepoints 67,104,117,7897,116)                             ; slug = "chuot"              ; sort = 11 }
+    @{ name = (From-Codepoints 66,224,110,32,112,104,237,109)                   ; slug = "ban-phim"           ; sort = 12 }
+    @{ name = (From-Codepoints 84,7843,110,32,110,104,105,7879,116,32,107,104,237) ; slug = "tan-nhiet-khi"   ; sort = 13 }
+    @{ name = (From-Codepoints 84,7843,110,32,110,104,105,7879,116,32,110,432,7899,99,32,65,73,79) ; slug = "tan-nhiet-nuoc-aio" ; sort = 14 }
+    @{ name = "Tai nghe"                                                          ; slug = "tai-nghe"          ; sort = 15 }
+    @{ name = (From-Codepoints 80,104,7847,110,32,109,7873,109)                 ; slug = "phan-mem"          ; sort = 16 }
+)
+
+# ------------------------------------------------------------------
+# Login
+# ------------------------------------------------------------------
+Write-Host ">> Logging in..."
+$loginBody = '{"email":"admin@hushstore.com","password":"Admin@123"}'
+
 try {
     $loginResp = Invoke-RestMethod -Uri "$API/api/auth/login" -Method POST `
-        -Body $loginBody -ContentType "application/json; charset=utf-8"
+        -Body $loginBody -ContentType "application/json"
 } catch {
-    Write-Host "Lỗi: Không kết nối được tới API. Đảm bảo API đang chạy tại $API" -ForegroundColor Red
+    Write-Host "ERROR: Cannot reach API at $API. Make sure the API is running." -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
     exit 1
 }
 
 $token = $loginResp.data.accessToken
 if (-not $token) {
-    Write-Host "Lỗi: Không lấy được access token." -ForegroundColor Red
+    Write-Host "ERROR: Login failed. Check credentials." -ForegroundColor Red
     exit 1
 }
 
-Write-Host ">> Đăng nhập thành công." -ForegroundColor Green
-Write-Host ""
-
+Write-Host ">> Login OK." -ForegroundColor Green
 $headers = @{ Authorization = "Bearer $token" }
 
-function Create-Category($name, $slug, $sortOrder) {
-    $body = @{
-        name      = $name
-        slug      = $slug
-        sortOrder = $sortOrder
+# ------------------------------------------------------------------
+# Create categories
+# ------------------------------------------------------------------
+Write-Host ">> Creating categories..."
+$ok = 0
+$skip = 0
+
+foreach ($cat in $categories) {
+    $bodyObj = @{
+        name      = $cat.name
+        slug      = $cat.slug
+        sortOrder = $cat.sort
         isVisible = $true
-    } | ConvertTo-Json
+    }
+    $body = $bodyObj | ConvertTo-Json -Compress
+    $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
 
     try {
         $resp = Invoke-RestMethod -Uri "$API/api/categories" -Method POST `
-            -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) `
-            -ContentType "application/json; charset=utf-8" `
+            -Body $bodyBytes -ContentType "application/json; charset=utf-8" `
             -Headers $headers
 
         if ($resp.success) {
-            Write-Host "  [OK] $name ($slug)" -ForegroundColor Green
+            Write-Host ("  [OK]   " + $cat.name + " (" + $cat.slug + ")") -ForegroundColor Green
+            $ok++
         } else {
-            Write-Host "  [SKIP/ERR] $name ($slug) — $($resp.message)" -ForegroundColor Yellow
+            Write-Host ("  [SKIP] " + $cat.name + " (" + $cat.slug + ") - " + $resp.message) -ForegroundColor Yellow
+            $skip++
         }
     } catch {
-        $msg = $_.Exception.Message
-        Write-Host "  [ERR] $name ($slug) — $msg" -ForegroundColor Red
+        $errMsg = $_.Exception.Message
+        Write-Host ("  [ERR]  " + $cat.name + " (" + $cat.slug + ") - " + $errMsg) -ForegroundColor Red
+        $skip++
     }
 }
 
-Write-Host ">> Tạo danh mục linh kiện PC..."
-
-Create-Category "Bộ vi xử lý"        "cpu"                  1
-Create-Category "Bo mạch chủ"         "bo-mach-chu"          2
-Create-Category "RAM"                  "ram"                  3
-Create-Category "HDD"                  "hdd"                  4
-Create-Category "SSD"                  "ssd"                  5
-Create-Category "VGA"                  "vga"                  6
-Create-Category "Nguồn"                "nguon"                7
-Create-Category "Vỏ Case"              "vo-case"              8
-Create-Category "Fan Case"             "fan-case"             9
-Create-Category "Màn hình"             "man-hinh"             10
-Create-Category "Chuột"                "chuot"                11
-Create-Category "Bàn phím"             "ban-phim"             12
-Create-Category "Tản nhiệt khí"        "tan-nhiet-khi"        13
-Create-Category "Tản nhiệt nước AIO"   "tan-nhiet-nuoc-aio"   14
-Create-Category "Tai nghe"             "tai-nghe"             15
-Create-Category "Phần mềm"             "phan-mem"             16
-
 Write-Host ""
-Write-Host ">> Hoàn tất!" -ForegroundColor Green
+Write-Host (">> Done: " + $ok + " created, " + $skip + " skipped/failed.") -ForegroundColor Cyan
