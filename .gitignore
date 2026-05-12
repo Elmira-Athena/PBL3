@@ -78,4 +78,6 @@ nunit-*.xml
 ._*
 
 .vscode/
+src/API/appsettings.Development.json
+
 
