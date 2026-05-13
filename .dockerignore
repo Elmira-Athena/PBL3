@@ -1,0 +1,25 @@
+# Build output
+**/bin/
+**/obj/
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# Secrets
+.env
+*.env
+
+# Docs and tooling (not needed in image)
+docs/
+AI_context/
+scratch/
+Infrastructure/
+
+# Git
+.git/
+.gitignore
+
+# Client (not built in API image)
+src/Client/
