@@ -33,9 +33,12 @@ builder.Services.AddScoped<AuthenticationStateProvider, JwtAuthenticationStatePr
 builder.Services.AddTransient<AuthHeaderHandler>();
 
 // ===== HttpClient trỏ về API Backend (có gắn AuthHeaderHandler) =====
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"]
+    ?? throw new InvalidOperationException("ApiBaseUrl chưa được cấu hình trong wwwroot/appsettings.json.");
+
 builder.Services.AddHttpClient("HushStoreAPI", client =>
 {
-    client.BaseAddress = new Uri("https://localhost:7010");
+    client.BaseAddress = new Uri(apiBaseUrl);
 }).AddHttpMessageHandler<AuthHeaderHandler>();
 
 // HttpClient cho Provinces API (public, không cần auth)
