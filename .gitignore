@@ -70,6 +70,7 @@ nunit-*.xml
 /httpRequests/
 
 .idea*
+.kiro*
 
 .DS_Store
 .AppleDouble
@@ -77,3 +78,16 @@ nunit-*.xml
 ._*
 
 .vscode/
+src/API/appsettings.Development.json
+
+# Secrets — không bao giờ commit
+.env
+*.env
+Infrastructure/db/.env
+src/API/appsettings.Production.json
+
+# Claude Code tooling
+skills-lock.json
+scratch/
+infra/resources*.env
+infra/config.json
