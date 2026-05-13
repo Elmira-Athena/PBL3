@@ -1,0 +1,8 @@
+{
+  "project":      "hushstore",
+  "region":       "ap-southeast-1",
+  "keyPairName":  "hushstore-key",
+  "dbUsername":   "dbadmin",
+  "dbPassword":   "REPLACE_ME_min8chars_Upper1_Special1!",
+  "alertEmail":   "dacvinh2322006@gmail.com"
+}
