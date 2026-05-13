@@ -19,6 +19,7 @@ using Client.Services.Inventory;
 using Client.Services.Voucher;
 using Client.Services.Image;
 using Client.Services.ServiceTickets;
+using Client.Services.Analytics;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -70,5 +71,6 @@ builder.Services.AddScoped<Client.Services.BuildPc.IBuildPcClientService, Client
 builder.Services.AddScoped<IImageClientService, ImageClientService>();
 builder.Services.AddScoped<IServiceTicketClientService, ServiceTicketClientService>();
 builder.Services.AddScoped<IServiceInvoiceClientService, ServiceInvoiceClientService>();
+builder.Services.AddScoped<IAnalyticsClientService, AnalyticsClientService>();
 
 await builder.Build().RunAsync();

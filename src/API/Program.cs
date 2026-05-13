@@ -29,6 +29,7 @@ using PBL3.Service.Orders;
 using PBL3.Service.Vouchers;
 using PBL3.Service.ServiceTickets;
 using PBL3.Service.ServiceInvoices;
+using PBL3.Service.Analytics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -140,6 +141,7 @@ builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<PBL3.Service.BuildPc.IBuildPcService, PBL3.Service.BuildPc.BuildPcService>();
 builder.Services.AddScoped<IServiceTicketService, ServiceTicketService>();
 builder.Services.AddScoped<IServiceInvoiceService, ServiceInvoiceService>();
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 
 // DI: AWS S3 Storage
 var awsCfg = builder.Configuration.GetSection("AwsSettings");

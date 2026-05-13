@@ -1,0 +1,487 @@
+@page "/admin/reports"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Thống kê kinh doanh — HushStore Admin</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+
+    @* ===== HEADER ===== *@
+    <MudText Typo="Typo.h5" Class="mb-4" Style="font-weight:700;">
+        <MudIcon Icon="@Icons.Material.Outlined.BarChart" Class="mr-2" Style="vertical-align:middle;" />
+        Tổng quan kinh doanh
+    </MudText>
+
+    @* ===== FILTER BAR ===== *@
+    <MudPaper Elevation="1" Class="pa-4 mb-5 rounded-lg">
+        <MudGrid Spacing="2" AlignItems="Center">
+            <MudItem>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-1">Khoảng thời gian</MudText>
+                <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                    <MudButton Color="@(_activePreset == PresetPeriod.Today ? Color.Primary : Color.Default)"
+                               OnClick="@(() => ApplyPreset(PresetPeriod.Today))">Hôm nay</MudButton>
+                    <MudButton Color="@(_activePreset == PresetPeriod.ThisWeek ? Color.Primary : Color.Default)"
+                               OnClick="@(() => ApplyPreset(PresetPeriod.ThisWeek))">Tuần này</MudButton>
+                    <MudButton Color="@(_activePreset == PresetPeriod.ThisMonth ? Color.Primary : Color.Default)"
+                               OnClick="@(() => ApplyPreset(PresetPeriod.ThisMonth))">Tháng này</MudButton>
+                    <MudButton Color="@(_activePreset == PresetPeriod.ThisYear ? Color.Primary : Color.Default)"
+                               OnClick="@(() => ApplyPreset(PresetPeriod.ThisYear))">Năm nay</MudButton>
+                </MudButtonGroup>
+            </MudItem>
+            <MudItem xs="12" sm="5" md="4">
+                <MudDateRangePicker DateRange="_dateRange"
+                                    DateRangeChanged="OnCustomRangeChanged"
+                                    Label="Tùy chọn khoảng thời gian"
+                                    Variant="Variant.Outlined"
+                                    Margin="Margin.Dense"
+                                    MaxDate="DateTime.Today" />
+            </MudItem>
+            <MudItem Class="d-flex align-center">
+                @if (_loading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @_from.ToString("dd/MM/yyyy") – @_to.ToString("dd/MM/yyyy")
+                    </MudText>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* ===== ROW 1: KPI CARDS ===== *@
+    <MudGrid Spacing="3" Class="mb-5">
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            @KpiCard("Doanh thu", FormatCurrency(_summary?.TotalRevenue ?? 0) + " ₫", Icons.Material.Outlined.AttachMoney, Color.Success)
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            @KpiCard("Lợi nhuận gộp", FormatCurrency(_summary?.GrossProfit ?? 0) + " ₫", Icons.Material.Outlined.TrendingUp,
+                (_summary?.GrossProfit ?? 0) >= 0 ? Color.Success : Color.Error)
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            @KpiCard("Tổng đơn hàng", (_summary?.TotalOrders ?? 0).ToString("N0") + " đơn", Icons.Material.Outlined.ShoppingBag, Color.Info)
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            @KpiCard("Đơn đã hủy", (_summary?.CancelledOrders ?? 0).ToString("N0") + " (" + (_summary?.CancelRate ?? 0).ToString("F1") + "%)",
+                Icons.Material.Outlined.Cancel, Color.Warning)
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            @KpiCard("Giá trị TB đơn", FormatCurrency(_summary?.AverageOrderValue ?? 0) + " ₫", Icons.Material.Outlined.Receipt, Color.Primary)
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4" lg="2">
+            @KpiCard("Khách hàng mới", (_summary?.NewCustomers ?? 0).ToString("N0") + " người", Icons.Material.Outlined.PersonAdd, Color.Secondary)
+        </MudItem>
+    </MudGrid>
+
+    @* ===== ROW 2: REVENUE TREND + CHANNEL SPLIT ===== *@
+    <MudGrid Spacing="3" Class="mb-5">
+        <MudItem xs="12" md="8">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height:380px;">
+                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight:600;">
+                    <MudIcon Icon="@Icons.Material.Outlined.ShowChart" Size="Size.Small" Class="mr-1" />
+                    Xu hướng doanh thu & lợi nhuận
+                </MudText>
+                @if (_loading)
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="280px" />
+                }
+                else if (_revenueSeries.Count > 0)
+                {
+                    <MudChart ChartType="ChartType.Line"
+                              ChartSeries="@_revenueSeries"
+                              XAxisLabels="@_trendLabels"
+                              Width="100%"
+                              Height="280px"
+                              ChartOptions="@_lineChartOptions" />
+                }
+                else
+                {
+                    <div class="d-flex justify-center align-center" style="height:280px;">
+                        <MudText Class="mud-text-secondary">Không có dữ liệu trong khoảng thời gian này</MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height:380px;">
+                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight:600;">
+                    <MudIcon Icon="@Icons.Material.Outlined.Storefront" Size="Size.Small" Class="mr-1" />
+                    Kênh bán hàng
+                </MudText>
+                @if (_loading)
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Circle" Height="200px" Width="200px" Class="mx-auto" />
+                }
+                else if (_channelData.Length > 0 && _channelData.Sum() > 0)
+                {
+                    <MudChart ChartType="ChartType.Donut"
+                              InputData="@_channelData"
+                              InputLabels="@_channelLabels"
+                              Width="100%"
+                              Height="250px" />
+                }
+                else
+                {
+                    <div class="d-flex justify-center align-center" style="height:250px;">
+                        <MudText Class="mud-text-secondary">Không có dữ liệu</MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* ===== ROW 3: TOP PRODUCTS + PAYMENT METHODS ===== *@
+    <MudGrid Spacing="3" Class="mb-5">
+        <MudItem xs="12" md="8">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height:380px;">
+                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight:600;">
+                    <MudIcon Icon="@Icons.Material.Outlined.EmojiEvents" Size="Size.Small" Class="mr-1" />
+                    Top 10 sản phẩm bán chạy
+                </MudText>
+                @if (_loading)
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="280px" />
+                }
+                else if (_productSeries.Count > 0)
+                {
+                    <MudChart ChartType="ChartType.Bar"
+                              ChartSeries="@_productSeries"
+                              XAxisLabels="@_productLabels"
+                              Width="100%"
+                              Height="280px"
+                              ChartOptions="@_barChartOptions" />
+                }
+                else
+                {
+                    <div class="d-flex justify-center align-center" style="height:280px;">
+                        <MudText Class="mud-text-secondary">Không có dữ liệu trong khoảng thời gian này</MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="height:380px;">
+                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight:600;">
+                    <MudIcon Icon="@Icons.Material.Outlined.Payment" Size="Size.Small" Class="mr-1" />
+                    Phương thức thanh toán
+                </MudText>
+                @if (_loading)
+                {
+                    <MudSkeleton SkeletonType="SkeletonType.Circle" Height="200px" Width="200px" Class="mx-auto" />
+                }
+                else if (_paymentData.Length > 0 && _paymentData.Sum() > 0)
+                {
+                    <MudChart ChartType="ChartType.Donut"
+                              InputData="@_paymentData"
+                              InputLabels="@_paymentLabels"
+                              Width="100%"
+                              Height="250px" />
+                }
+                else
+                {
+                    <div class="d-flex justify-center align-center" style="height:250px;">
+                        <MudText Class="mud-text-secondary">Không có dữ liệu</MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* ===== ROW 4: TOP CATEGORIES + INVENTORY ===== *@
+    <MudGrid Spacing="3" Class="mb-5">
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg">
+                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight:600;">
+                    <MudIcon Icon="@Icons.Material.Outlined.Category" Size="Size.Small" Class="mr-1" />
+                    Top 5 danh mục bán chạy
+                </MudText>
+                @if (_loading)
+                {
+                    <MudSkeleton Height="36px" Class="mb-1" />
+                    <MudSkeleton Height="36px" Class="mb-1" />
+                    <MudSkeleton Height="36px" Class="mb-1" />
+                    <MudSkeleton Height="36px" Class="mb-1" />
+                    <MudSkeleton Height="36px" />
+                }
+                else if (_categoryRevenue?.Count > 0)
+                {
+                    <MudSimpleTable Dense="true" Hover="true" Style="overflow-x:auto;">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Danh mục</th>
+                                <th style="text-align:right">Đơn</th>
+                                <th style="text-align:right">SL bán</th>
+                                <th style="text-align:right">Doanh thu</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                                @foreach (var (cat, rank) in _categoryRevenue.Select((c, i) => (c, i + 1)))
+                            {
+                                <tr>
+                                    <td><MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">@rank</MudChip></td>
+                                    <td>@cat.CategoryName</td>
+                                    <td style="text-align:right">@cat.OrderCount.ToString("N0")</td>
+                                    <td style="text-align:right">@cat.UnitsSold.ToString("N0")</td>
+                                    <td style="text-align:right">@FormatCurrency(cat.Revenue) ₫</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+                else
+                {
+                    <MudText Class="mud-text-secondary">Không có dữ liệu trong khoảng thời gian này</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="1" Class="pa-4 rounded-lg">
+                <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight:600;">
+                    <MudIcon Icon="@Icons.Material.Outlined.Warehouse" Size="Size.Small" Class="mr-1" />
+                    Tổng quan kho hàng
+                </MudText>
+                @if (_loading)
+                {
+                    <MudSkeleton Height="40px" Class="mb-2" />
+                    <MudSkeleton Height="40px" Class="mb-2" />
+                    <MudSkeleton Height="40px" Class="mb-2" />
+                    <MudSkeleton Height="40px" Class="mb-2" />
+                    <MudSkeleton Height="40px" Class="mb-2" />
+                    <MudSkeleton Height="40px" />
+                }
+                else if (_inventory != null)
+                {
+                    <MudGrid Spacing="2">
+                        @InventoryStatItem("Tổng SKU", _inventory.TotalSkus, Icons.Material.Outlined.Inventory, Color.Default)
+                        @InventoryStatItem("Có sẵn", _inventory.TotalAvailable, Icons.Material.Outlined.CheckCircle, Color.Success)
+                        @InventoryStatItem("Đang giữ / chờ giao", _inventory.TotalReserved, Icons.Material.Outlined.LocalShipping, Color.Info)
+                        @InventoryStatItem("Đã bán", _inventory.TotalSold, Icons.Material.Outlined.ShoppingCart, Color.Primary)
+                        @InventoryStatItem("Hàng lỗi / hỏng", _inventory.TotalDefective, Icons.Material.Outlined.Report, Color.Error)
+                        @InventoryStatItem("SKU sắp hết hàng (≤3)", _inventory.LowStockSkus, Icons.Material.Outlined.Warning, Color.Warning)
+                    </MudGrid>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+</MudContainer>
+
+@code {
+    [Inject] private IAnalyticsClientService AnalyticsService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    private enum PresetPeriod { Today, ThisWeek, ThisMonth, ThisYear, Custom }
+
+    private DateTime _from = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+    private DateTime _to = DateTime.Now.Date;
+    private PresetPeriod _activePreset = PresetPeriod.ThisMonth;
+    private DateRange _dateRange = new DateRange(
+        new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1), DateTime.Now.Date);
+
+    private bool _loading;
+
+    private AnalyticsSummaryDto? _summary;
+    private RevenueTrendDto? _trend;
+    private OrderChannelDto? _channels;
+    private List<TopProductDto>? _topProducts;
+    private List<CategoryRevenueDto>? _categoryRevenue;
+    private InventorySummaryDto? _inventory;
+
+    // Chart data (pre-built in BuildChartData)
+    private List<ChartSeries> _revenueSeries = new();
+    private string[] _trendLabels = Array.Empty<string>();
+    private List<ChartSeries> _productSeries = new();
+    private string[] _productLabels = Array.Empty<string>();
+    private double[] _channelData = Array.Empty<double>();
+    private string[] _channelLabels = Array.Empty<string>();
+    private double[] _paymentData = Array.Empty<double>();
+    private string[] _paymentLabels = Array.Empty<string>();
+
+    private readonly ChartOptions _lineChartOptions = new() { LineStrokeWidth = 2, YAxisFormat = "N0" };
+    private readonly ChartOptions _barChartOptions = new() { YAxisFormat = "N0" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ApplyFilterAsync();
+    }
+
+    private void ApplyPreset(PresetPeriod preset)
+    {
+        var now = DateTime.Now;
+        _activePreset = preset;
+        (_from, _to) = preset switch
+        {
+            PresetPeriod.Today => (now.Date, now.Date),
+            PresetPeriod.ThisWeek => (now.Date.AddDays(-(int)now.DayOfWeek + 1), now.Date),
+            PresetPeriod.ThisMonth => (new DateTime(now.Year, now.Month, 1), now.Date),
+            PresetPeriod.ThisYear => (new DateTime(now.Year, 1, 1), now.Date),
+            _ => (_from, _to)
+        };
+        _dateRange = new DateRange(_from, _to);
+        _ = ApplyFilterAsync();
+    }
+
+    private async Task OnCustomRangeChanged(DateRange range)
+    {
+        _dateRange = range;
+        if (range.Start.HasValue && range.End.HasValue)
+        {
+            _activePreset = PresetPeriod.Custom;
+            _from = range.Start.Value.Date;
+            _to = range.End.Value.Date;
+            await ApplyFilterAsync();
+        }
+    }
+
+    private async Task ApplyFilterAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var t1 = AnalyticsService.GetSummaryAsync(_from, _to);
+        var t2 = AnalyticsService.GetRevenueTrendAsync(_from, _to);
+        var t3 = AnalyticsService.GetOrderChannelsAsync(_from, _to);
+        var t4 = AnalyticsService.GetTopProductsAsync(_from, _to, 10);
+        var t5 = AnalyticsService.GetCategoryRevenueAsync(_from, _to, 5);
+        var t6 = AnalyticsService.GetInventorySummaryAsync();
+
+        await Task.WhenAll(t1, t2, t3, t4, t5, t6);
+
+        var r1 = t1.Result;
+        var r2 = t2.Result;
+        var r3 = t3.Result;
+        var r4 = t4.Result;
+        var r5 = t5.Result;
+        var r6 = t6.Result;
+
+        if (r1.Success) _summary = r1.Data;
+        else Snackbar.Add(r1.Message, Severity.Warning);
+
+        if (r2.Success) _trend = r2.Data;
+        if (r3.Success) _channels = r3.Data;
+        if (r4.Success) _topProducts = r4.Data;
+        if (r5.Success) _categoryRevenue = r5.Data;
+
+        if (r6.Success) _inventory = r6.Data;
+        else Snackbar.Add(r6.Message, Severity.Warning);
+
+        BuildChartData();
+
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void BuildChartData()
+    {
+        // Revenue trend line chart
+        if (_trend?.Points?.Count > 0)
+        {
+            _trendLabels = _trend.Points.Select(p => p.Label).ToArray();
+            _revenueSeries = new List<ChartSeries>
+            {
+                new ChartSeries { Name = "Doanh thu (₫)", Data = _trend.Points.Select(p => (double)p.Revenue).ToArray() },
+                new ChartSeries { Name = "Lợi nhuận (₫)", Data = _trend.Points.Select(p => (double)p.Profit).ToArray() }
+            };
+        }
+        else
+        {
+            _revenueSeries = new List<ChartSeries>();
+            _trendLabels = Array.Empty<string>();
+        }
+
+        // Top products bar chart
+        if (_topProducts?.Count > 0)
+        {
+            _productLabels = _topProducts.Select(p =>
+                p.VariantName.Length > 15 ? p.VariantName[..15] + "…" : p.VariantName).ToArray();
+            _productSeries = new List<ChartSeries>
+            {
+                new ChartSeries { Name = "Doanh thu (₫)", Data = _topProducts.Select(p => (double)p.Revenue).ToArray() }
+            };
+        }
+        else
+        {
+            _productSeries = new List<ChartSeries>();
+            _productLabels = Array.Empty<string>();
+        }
+
+        // Channel donut
+        if (_channels != null)
+        {
+            _channelData = new double[] { _channels.OnlineCount, _channels.PosCount };
+            _channelLabels = new[]
+            {
+                "Online (" + _channels.OnlineCount + ")",
+                "POS (" + _channels.PosCount + ")"
+            };
+        }
+
+        // Payment donut
+        if (_summary != null)
+        {
+            _paymentData = new double[] { _summary.PayCod, _summary.PayBanking, _summary.PayVnPay };
+            _paymentLabels = new[]
+            {
+                "COD (" + _summary.PayCod + ")",
+                "Banking (" + _summary.PayBanking + ")",
+                "VNPay (" + _summary.PayVnPay + ")"
+            };
+        }
+    }
+
+    private static string FormatCurrency(decimal amount)
+    {
+        if (amount >= 1_000_000_000)
+            return (amount / 1_000_000_000).ToString("F1") + "T";
+        if (amount >= 1_000_000)
+            return (amount / 1_000_000).ToString("F1") + "Tr";
+        if (amount >= 1_000)
+            return (amount / 1_000).ToString("F0") + "K";
+        return amount.ToString("N0");
+    }
+
+    private RenderFragment KpiCard(string title, string value, string icon, Color color) => __builder =>
+    {
+        <MudPaper Elevation="1" Class="pa-4 rounded-lg" Style="min-height:110px;">
+            <div class="d-flex align-start justify-space-between">
+                <div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary"
+                             Style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em;">
+                        @title
+                    </MudText>
+                    @if (_loading)
+                    {
+                        <MudSkeleton Width="100px" Height="28px" Class="mt-1" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.h6" Style="font-weight:700; line-height:1.2;" Class="mt-1">
+                            @value
+                        </MudText>
+                    }
+                </div>
+                <MudIcon Icon="@icon" Color="@color" Size="Size.Medium" />
+            </div>
+        </MudPaper>
+    };
+
+    private RenderFragment InventoryStatItem(string label, int count, string icon, Color color) => __builder =>
+    {
+        <MudItem xs="12" sm="6">
+            <MudPaper Elevation="0" Class="pa-3 rounded" Style="background-color:var(--mud-palette-background-grey);">
+                <div class="d-flex align-center justify-space-between">
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@icon" Color="@color" Size="Size.Small" Class="mr-2" />
+                        <MudText Typo="Typo.body2">@label</MudText>
+                    </div>
+                    <MudChip T="string" Size="Size.Small" Color="@color" Variant="Variant.Filled">
+                        @count.ToString("N0")
+                    </MudChip>
+                </div>
+            </MudPaper>
+        </MudItem>
+    };
+}
