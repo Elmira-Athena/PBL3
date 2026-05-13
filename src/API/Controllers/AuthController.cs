@@ -5,6 +5,7 @@ using PBL3.Service.Auth;
 using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
+using System.Security.Claims;
 
 namespace PBL3.API.Controllers
 {
@@ -48,6 +49,35 @@ namespace PBL3.API.Controllers
         {
             var result = await _authService.RefreshTokenAsync(request);
 
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Đổi mật khẩu cho người dùng đang đăng nhập.
+        /// </summary>
+        [HttpPut("change-password")]
+        [Authorize]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out var userId))
+            {
+                return Unauthorized(ApiResult<bool>.Fail("Người dùng chưa đăng nhập."));
+            }
+
+            if (request.NewPassword != request.ConfirmPassword)
+            {
+                return BadRequest(ApiResult<bool>.Fail("Mật khẩu xác nhận không khớp."));
+            }
+
+            var result = await _authService.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword);
             if (!result.Success)
             {
                 return BadRequest(result);

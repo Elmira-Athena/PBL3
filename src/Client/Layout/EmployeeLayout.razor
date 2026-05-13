@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject IAuthClientService AuthService
 @inject NavigationManager Navigation
+@inject IDialogService DialogService
 
 <MudLayout>
     @* ===== TOP APP BAR (Colorful like Storefront) ===== *@
@@ -51,7 +52,7 @@
                     </ActivatorContent>
                     <ChildContent>
                         <MudMenuItem Icon="@Icons.Material.Filled.Person">@context.User.Identity?.Name</MudMenuItem>
-                        <MudMenuItem Icon="@Icons.Material.Filled.Settings">Cài đặt</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.ManageAccounts" OnClick="OpenProfileDialog">Hồ sơ cá nhân</MudMenuItem>
                         <MudDivider />
                         <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="Logout">Đăng xuất</MudMenuItem>
                     </ChildContent>
@@ -86,5 +87,11 @@
     private async Task Logout()
     {
         await AuthService.LogoutAsync();
+    }
+
+    private async Task OpenProfileDialog()
+    {
+        await DialogService.ShowAsync<UserProfileDialog>(string.Empty,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
     }
 }

@@ -22,5 +22,10 @@ namespace PBL3.Service.Auth
         /// Tạo tài khoản mới, yêu cầu đăng nhập lại (không trả JWT).
         /// </summary>
         Task<ApiResult<bool>> RegisterAsync(RegisterCustomerRequest request);
+
+        /// <summary>
+        /// Đổi mật khẩu cho người dùng hiện tại.
+        /// </summary>
+        Task<ApiResult<bool>> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword);
     }
 }

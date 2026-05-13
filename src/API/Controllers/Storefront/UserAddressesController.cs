@@ -64,6 +64,11 @@ namespace PBL3.API.Controllers.Storefront
                 return Unauthorized(ApiResult<int>.Fail("Người dùng chưa đăng nhập."));
             }
 
+            if (request.IsDefault)
+            {
+                await _repository.ClearUserDefaultsAsync(userId);
+            }
+
             var entity = new PBL3.Core.Entities.UserAddress
             {
                 UserId = userId,

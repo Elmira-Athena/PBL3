@@ -42,6 +42,8 @@ namespace PBL3.Shared.DTOs.Storefront
         public decimal CurrentPrice { get; set; }
         public int DiscountPercent { get; set; }
 
+        public bool IsAvailable { get; set; }
+
         public double Rating { get; set; } = 5.0; // Mock
         public int ReviewCount { get; set; } = 0; // Mock
     }

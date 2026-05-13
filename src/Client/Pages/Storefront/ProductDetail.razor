@@ -52,7 +52,7 @@
                         var isSelected = _mainImage == img;
                         <MudImage Src="@img" Alt="Thumbnail" ObjectFit="ObjectFit.Cover" Width="80" Height="80" 
                                   Class="@($"rounded cursor-pointer border {(isSelected ? "border-primary border-2" : "")}")" 
-                                  onclick="@(() => ChangeMainImage(img))" />
+                                  @onclick="@(() => ChangeMainImage(img))" />
                     }
                 </div>
             </MudItem>

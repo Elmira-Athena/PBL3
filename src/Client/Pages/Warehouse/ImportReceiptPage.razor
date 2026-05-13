@@ -21,13 +21,19 @@
 
     <MudGrid Spacing="4">
         @* ================================================================ *@
-        @* CỘT TRÁI (8 cột): Phiếu nhập + Bảng sản phẩm                  *@
+        @* CỘT TRÁI: Phiếu nhập + Bảng sản phẩm                          *@
         @* ================================================================ *@
-        <MudItem xs="12" md="8">
+        <MudItem xs="12" md="@(_showScanPanel ? 8 : 12)">
             <MudPaper Elevation="1" Class="pa-5 rounded-lg">
-                <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 700;">
-                    Sản phẩm
-                </MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+                    <MudText Typo="Typo.h6" Style="font-weight: 700;">Sản phẩm</MudText>
+                    <MudTooltip Text="@(_showScanPanel ? "Ẩn bảng quét mã" : "Hiện bảng quét mã")">
+                        <MudIconButton Icon="@(_showScanPanel ? Icons.Material.Filled.ChevronRight : Icons.Material.Filled.QrCodeScanner)"
+                                       Size="Size.Small"
+                                       Color="Color.Primary"
+                                       OnClick="@(() => _showScanPanel = !_showScanPanel)" />
+                    </MudTooltip>
+                </MudStack>
 
                 @* --- Receipt Header --- *@
                 <MudGrid Class="mb-4">
@@ -194,8 +200,10 @@
         </MudItem>
 
         @* ================================================================ *@
-        @* CỘT PHẢI (4 cột): Khu vực Quét Serial                          *@
+        @* CỘT PHẢI (4 cột): Khu vực Quét Serial (ẩn/hiện)               *@
         @* ================================================================ *@
+        @if (_showScanPanel)
+        {
         <MudItem xs="12" md="4">
             <MudPaper Elevation="1" Class="pa-5 rounded-lg" Style="position: sticky; top: 16px;">
                 <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">
@@ -278,6 +286,7 @@
                 }
             </MudPaper>
         </MudItem>
+        }
     </MudGrid>
 </MudContainer>
 
@@ -357,6 +366,7 @@
     private bool _isScanning;
     private string _today = DateTime.Now.ToString("dd/MM/yyyy");
     private bool _isSaving;
+    private bool _showScanPanel = true;
     private MudTextField<string>? _serialInput;
 
     // Add Product Dialog

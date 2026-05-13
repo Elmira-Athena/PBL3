@@ -88,14 +88,15 @@ namespace PBL3.Service.Storefront
                 {
                     Id = p.Id,
                     Name = p.Name,
-                    // Re-generate slug or just use a simple one for now. 
-                    // Wait, Product doesn't have Slug, Variant has Slug. 
+                    // Re-generate slug or just use a simple one for now.
+                    // Wait, Product doesn't have Slug, Variant has Slug.
                     // We'll generate a basic slug from Product Name.
-                    Slug = p.Slug, 
+                    Slug = p.Slug,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
                     CurrentPrice = currentPrice,
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,
+                    IsAvailable = variants.Any(v => v.StockQuantity > 0),
                     Rating = 5.0,
                     ReviewCount = 0
                 };
@@ -226,6 +227,7 @@ namespace PBL3.Service.Storefront
                     CurrentPrice = currentPrice,
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,
+                    IsAvailable = variants.Any(v => v.StockQuantity > 0),
                     Rating = 5.0,
                     ReviewCount = 0
                 };
@@ -352,6 +354,7 @@ namespace PBL3.Service.Storefront
                     CurrentPrice = currentPrice,
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,
+                    IsAvailable = variants.Any(v => v.StockQuantity > 0),
                     Rating = 5.0,
                     ReviewCount = 0
                 };

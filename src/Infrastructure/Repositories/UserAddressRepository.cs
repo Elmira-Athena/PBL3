@@ -37,6 +37,13 @@ namespace PBL3.Infrastructure.Repositories
             await _context.UserAddresses.AddAsync(address);
         }
 
+        public async Task ClearUserDefaultsAsync(Guid userId)
+        {
+            await _context.UserAddresses
+                .Where(ua => ua.UserId == userId && ua.IsDefault)
+                .ExecuteUpdateAsync(s => s.SetProperty(ua => ua.IsDefault, false));
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

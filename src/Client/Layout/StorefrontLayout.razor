@@ -3,6 +3,7 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IDialogService DialogService
 
 <MudLayout>
     @* ===== TOP APP BAR ===== *@
@@ -13,7 +14,8 @@
         <MudImage Src="images/logo.png" Alt="HushStore"
                   Width="120" Height="40"
                   ObjectFit="ObjectFit.Contain"
-                  Class="mr-4" Style="cursor: pointer;" />
+                  Class="mr-4" Style="cursor: pointer;"
+                  @onclick='() => Navigation.NavigateTo("/")' />
 
         @* -- DANH MỤC Button -- *@
         <MudButton Variant="Variant.Filled"
@@ -65,6 +67,7 @@
                     </ActivatorContent>
                     <ChildContent>
                         <MudMenuItem Icon="@Icons.Material.Filled.Person">@context.User.Identity?.Name</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.ManageAccounts" OnClick="OpenProfileDialog">Xem hồ sơ</MudMenuItem>
                         <MudMenuItem Icon="@Icons.Material.Filled.ReceiptLong" Href="/orders">Đơn hàng của tôi</MudMenuItem>
                         <MudMenuItem Icon="@Icons.Material.Filled.Build" Href="/my/service-tickets">Phiếu sửa chữa của tôi</MudMenuItem>
                         <MudDivider />
@@ -111,5 +114,11 @@
     private async Task Logout()
     {
         await AuthService.LogoutAsync();
+    }
+
+    private async Task OpenProfileDialog()
+    {
+        await DialogService.ShowAsync<UserProfileDialog>(string.Empty,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
     }
 }

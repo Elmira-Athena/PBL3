@@ -1,0 +1,137 @@
+@using Client.Services.Auth
+@using PBL3.Shared.DTOs.Auth
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IAuthClientService AuthService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 700;">Hồ sơ cá nhân</MudText>
+    </TitleContent>
+    <DialogContent>
+        @* ===== Profile Info ===== *@
+        <MudPaper Elevation="0" Class="pa-4 mb-4 rounded-lg" Style="background: var(--mud-palette-background-grey);">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-3">
+                <MudAvatar Color="Color.Primary" Size="Size.Large" Style="width: 56px; height: 56px; font-size: 1.5rem;">
+                    @(_displayName?.FirstOrDefault())
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h6" Style="font-weight: 700;">@_displayName</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@_email</MudText>
+                </div>
+            </MudStack>
+            <MudChip T="string" Size="Size.Small" Color="@_roleColor" Variant="Variant.Filled" Style="pointer-events: none; font-weight: 600;">
+                @_roleLabel
+            </MudChip>
+        </MudPaper>
+
+        @* ===== Change Password ===== *@
+        <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-3">Đổi mật khẩu</MudText>
+        <MudTextField @bind-Value="_model.CurrentPassword"
+                      Label="Mật khẩu hiện tại"
+                      Variant="Variant.Outlined"
+                      InputType="InputType.Password"
+                      Margin="Margin.Dense"
+                      Class="mb-3" />
+        <MudTextField @bind-Value="_model.NewPassword"
+                      Label="Mật khẩu mới"
+                      Variant="Variant.Outlined"
+                      InputType="InputType.Password"
+                      Margin="Margin.Dense"
+                      Class="mb-3" />
+        <MudTextField @bind-Value="_model.ConfirmPassword"
+                      Label="Xác nhận mật khẩu mới"
+                      Variant="Variant.Outlined"
+                      InputType="InputType.Password"
+                      Margin="Margin.Dense"
+                      Error="@_confirmError"
+                      ErrorText="Mật khẩu xác nhận không khớp." />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Style="text-transform: none;">Đóng</MudButton>
+        <MudButton OnClick="SubmitChangePassword"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Disabled="@_isBusy"
+                   Style="text-transform: none;">
+            @if (_isBusy)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Đổi mật khẩu
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private string? _displayName;
+    private string? _email;
+    private string _roleLabel = string.Empty;
+    private Color _roleColor = Color.Default;
+    private ChangePasswordRequest _model = new();
+    private bool _isBusy;
+    private bool _confirmError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _displayName = user.Identity?.Name;
+        _email = user.FindFirst(c => c.Type == System.Security.Claims.ClaimTypes.Email)?.Value;
+
+        if (user.IsInRole("Admin"))
+        {
+            _roleLabel = "Quản trị viên";
+            _roleColor = Color.Error;
+        }
+        else if (user.IsInRole("Employee"))
+        {
+            _roleLabel = "Nhân viên";
+            _roleColor = Color.Info;
+        }
+        else
+        {
+            _roleLabel = "Khách hàng";
+            _roleColor = Color.Success;
+        }
+    }
+
+    private async Task SubmitChangePassword()
+    {
+        _confirmError = false;
+
+        if (string.IsNullOrWhiteSpace(_model.CurrentPassword) ||
+            string.IsNullOrWhiteSpace(_model.NewPassword) ||
+            string.IsNullOrWhiteSpace(_model.ConfirmPassword))
+        {
+            Snackbar.Add("Vui lòng điền đầy đủ thông tin.", Severity.Warning);
+            return;
+        }
+
+        if (_model.NewPassword != _model.ConfirmPassword)
+        {
+            _confirmError = true;
+            return;
+        }
+
+        _isBusy = true;
+        var result = await AuthService.ChangePasswordAsync(_model);
+        _isBusy = false;
+
+        if (result.Success)
+        {
+            Snackbar.Add("Đổi mật khẩu thành công!", Severity.Success);
+            _model = new();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Đổi mật khẩu thất bại.", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

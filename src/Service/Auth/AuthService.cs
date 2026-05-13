@@ -257,6 +257,27 @@ namespace PBL3.Service.Auth
         }
 
         // =====================================================================
+        // CHANGE PASSWORD
+        // =====================================================================
+        public async Task<ApiResult<bool>> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword)
+        {
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+            {
+                return ApiResult<bool>.Fail("Không tìm thấy người dùng.");
+            }
+
+            var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+            if (!result.Succeeded)
+            {
+                var error = result.Errors.FirstOrDefault()?.Description ?? "Đổi mật khẩu thất bại.";
+                return ApiResult<bool>.Fail("Mật khẩu hiện tại không đúng hoặc mật khẩu mới không hợp lệ.");
+            }
+
+            return ApiResult<bool>.Ok(true, "Đổi mật khẩu thành công.");
+        }
+
+        // =====================================================================
         // REGISTER (UC001: Khách hàng tự đăng ký)
         // =====================================================================
         public async Task<ApiResult<bool>> RegisterAsync(RegisterCustomerRequest request)

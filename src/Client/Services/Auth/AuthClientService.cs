@@ -83,5 +83,20 @@ namespace Client.Services.Auth
                 return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
             }
         }
+
+        public async Task<ApiResult<bool>> ChangePasswordAsync(ChangePasswordRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync($"{BaseUrl}/change-password", request);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+
+                return result ?? ApiResult<bool>.Fail("Đổi mật khẩu thất bại.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
     }
 }

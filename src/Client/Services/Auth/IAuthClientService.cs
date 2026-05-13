@@ -9,5 +9,6 @@ namespace Client.Services.Auth
         Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest request);
         Task LogoutAsync();
         Task<ApiResult<bool>> RegisterAsync(RegisterCustomerRequest request);
+        Task<ApiResult<bool>> ChangePasswordAsync(ChangePasswordRequest request);
     }
 }
