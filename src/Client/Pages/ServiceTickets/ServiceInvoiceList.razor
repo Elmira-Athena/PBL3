@@ -1,0 +1,142 @@
+@page "/admin/service-invoices"
+@using Client.Services.ServiceTickets
+@using PBL3.Shared.DTOs.ServiceTickets
+@using MudBlazor
+@inject IServiceInvoiceClientService ServiceInvoiceService
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Hóa đơn dịch vụ - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Hóa Đơn Dịch Vụ
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Quản lý hóa đơn dịch vụ sửa chữa máy
+            </MudText>
+        </div>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-4 align-center">
+        <MudTextField @bind-Value="keyword" Label="Tìm Mã Hóa Đơn" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Style="max-width: 250px;"
+                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
+                      OnKeyUp="OnSearchKeyPress" />
+
+        <MudSelect T="byte?" @bind-Value="paymentStatusFilter" Label="Trạng thái thanh toán"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 200px;">
+            <MudSelectItem T="byte?" Value="@null">Tất cả</MudSelectItem>
+            <MudSelectItem T="byte?" Value="0">Chưa Thanh Toán</MudSelectItem>
+            <MudSelectItem T="byte?" Value="1">Đã Thanh Toán</MudSelectItem>
+        </MudSelect>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RefreshList" Class="ml-auto">
+            Lọc kết quả
+        </MudButton>
+    </MudPaper>
+
+    <MudTable T="ServiceInvoiceListDto" ServerData="ServerReload"
+              Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1"
+              Class="rounded-lg" @ref="table">
+        <HeaderContent>
+            <MudTh>Mã Hóa Đơn</MudTh>
+            <MudTh>Phiếu Sửa</MudTh>
+            <MudTh>Ngày Phát Hành</MudTh>
+            <MudTh Align="Align.Right">Tổng Tiền</MudTh>
+            <MudTh>Trạng Thái Thanh Toán</MudTh>
+            <MudTh Style="text-align: right;">Hành động</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã Hóa Đơn">
+                <MudText Typo="Typo.body2" Style="font-weight: 500; font-family: monospace;">@context.InvoiceCode</MudText>
+            </MudTd>
+            <MudTd DataLabel="Phiếu Sửa">
+                <MudText Typo="Typo.body2">#@context.TicketId</MudText>
+            </MudTd>
+            <MudTd DataLabel="Ngày Phát Hành">
+                <MudText Typo="Typo.body2">@context.IssuedDate.ToString("dd/MM/yyyy")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Tổng Tiền" Align="Align.Right">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.GrandTotal.ToString("N0") đ</MudText>
+            </MudTd>
+            <MudTd DataLabel="Trạng Thái Thanh Toán">
+                @if (context.PaymentStatus == 0)
+                {
+                    <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" Size="Size.Small">
+                        Chưa Thanh Toán
+                    </MudChip>
+                }
+                else if (context.PaymentStatus == 1)
+                {
+                    <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small">
+                        Đã Thanh Toán
+                    </MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Hành động" Style="text-align: right;">
+                <MudTooltip Text="Xem chi tiết">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small"
+                                   OnClick="@(() => GoToDetail(context.Id))" />
+                </MudTooltip>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="pa-4">Không có hóa đơn dịch vụ nào.</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText Class="pa-4">Đang tải dữ liệu...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private string? keyword;
+    private byte? paymentStatusFilter;
+    private MudTable<ServiceInvoiceListDto>? table;
+
+    private async Task<TableData<ServiceInvoiceListDto>> ServerReload(TableState state, CancellationToken token = default)
+    {
+        try
+        {
+            var result = await ServiceInvoiceService.GetPagedListAsync(
+                keyword, state.Page + 1, state.PageSize, "IssuedDate", true);
+
+            if (!result.Success || result.Data?.Items == null)
+            {
+                Snackbar.Add("Lỗi tải danh sách hóa đơn.", Severity.Error);
+                return new TableData<ServiceInvoiceListDto> { Items = new List<ServiceInvoiceListDto>(), TotalItems = 0 };
+            }
+
+            return new TableData<ServiceInvoiceListDto>
+            {
+                Items = result.Data.Items,
+                TotalItems = result.Data.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            return new TableData<ServiceInvoiceListDto> { Items = new List<ServiceInvoiceListDto>(), TotalItems = 0 };
+        }
+    }
+
+    private async Task RefreshList()
+    {
+        if (table != null)
+            await table.ReloadServerData();
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await RefreshList();
+    }
+
+    private void GoToDetail(int invoiceId) => NavManager.NavigateTo($"/admin/service-invoices/{invoiceId}");
+}

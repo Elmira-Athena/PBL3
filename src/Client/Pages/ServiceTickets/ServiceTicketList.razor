@@ -1,0 +1,144 @@
+@page "/admin/service-tickets"
+@using Client.Services.ServiceTickets
+@using PBL3.Shared.DTOs.ServiceTickets
+@using Client.Shared.Components.ServiceTickets
+@using MudBlazor
+@inject IServiceTicketClientService ServiceTicketService
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Quản lý phiếu sửa chữa - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Phiếu Sửa Chữa
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Quản lý quy trình tiếp nhận, sửa chữa và bàn giao máy
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="GoToIntake">
+            Tiếp nhận máy
+        </MudButton>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-4 align-center">
+        <MudTextField @bind-Value="keyword" Label="Tìm Serial / Phiếu" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Style="max-width: 250px;"
+                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
+                      OnKeyUp="OnSearchKeyPress" />
+
+        <MudSelect T="byte?" @bind-Value="statusFilter" Label="Trạng thái" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Style="max-width: 200px;">
+            <MudSelectItem T="byte?" Value="@null">Tất cả</MudSelectItem>
+            <MudSelectItem T="byte?" Value="0">Đã tiếp nhận</MudSelectItem>
+            <MudSelectItem T="byte?" Value="1">Đang chẩn đoán</MudSelectItem>
+            <MudSelectItem T="byte?" Value="2">Đã gửi báo giá</MudSelectItem>
+            <MudSelectItem T="byte?" Value="5">Đang sửa chữa</MudSelectItem>
+            <MudSelectItem T="byte?" Value="9">Hoàn tất</MudSelectItem>
+        </MudSelect>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RefreshList" Class="ml-auto">
+            Lọc kết quả
+        </MudButton>
+    </MudPaper>
+
+    <MudTable T="ServiceTicketListDto" ServerData="ServerReload"
+              Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1"
+              Class="rounded-lg" @ref="table">
+        <HeaderContent>
+            <MudTh>Mã Phiếu</MudTh>
+            <MudTh>Serial</MudTh>
+            <MudTh>Khách Hàng</MudTh>
+            <MudTh>Trạng Thái</MudTh>
+            <MudTh>Loại Sửa</MudTh>
+            <MudTh>Ngày Tiếp Nhận</MudTh>
+            <MudTh Style="text-align: right;">Hành động</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã Phiếu">
+                <MudText Typo="Typo.body2" Style="font-weight: 500; font-family: monospace;">@context.TicketCode</MudText>
+            </MudTd>
+            <MudTd DataLabel="Serial">
+                <MudText Typo="Typo.body2">@context.SerialNumber</MudText>
+            </MudTd>
+            <MudTd DataLabel="Khách Hàng">
+                <MudText Typo="Typo.body2">@context.CustomerName</MudText>
+            </MudTd>
+            <MudTd DataLabel="Trạng Thái">
+                <ServiceTicketStatusChip Status="@context.Status" />
+            </MudTd>
+            <MudTd DataLabel="Loại Sửa">
+                <MudText Typo="Typo.body2">@ServiceTicketStatusHelper.GetResolutionLabel(context.ResolutionType)</MudText>
+            </MudTd>
+            <MudTd DataLabel="Ngày Tiếp Nhận">
+                <MudText Typo="Typo.body2">@context.IntakeDate.ToString("dd/MM/yyyy")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Hành động" Style="text-align: right;">
+                <MudTooltip Text="Xem chi tiết">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small"
+                                   OnClick="@(() => GoToDetail(context.Id))" />
+                </MudTooltip>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="pa-4">Không có phiếu sửa chữa nào.</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText Class="pa-4">Đang tải dữ liệu...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private string? keyword;
+    private byte? statusFilter;
+    private MudTable<ServiceTicketListDto>? table;
+
+    private async Task<TableData<ServiceTicketListDto>> ServerReload(TableState state, CancellationToken token = default)
+    {
+        try
+        {
+            var result = await ServiceTicketService.GetPagedListAsync(
+                keyword, state.Page + 1, state.PageSize, "IntakeDate", true);
+
+            if (!result.Success || result.Data?.Items == null)
+            {
+                Snackbar.Add("Lỗi tải danh sách phiếu.", Severity.Error);
+                return new TableData<ServiceTicketListDto> { Items = new List<ServiceTicketListDto>(), TotalItems = 0 };
+            }
+
+            return new TableData<ServiceTicketListDto>
+            {
+                Items = result.Data.Items,
+                TotalItems = result.Data.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            return new TableData<ServiceTicketListDto> { Items = new List<ServiceTicketListDto>(), TotalItems = 0 };
+        }
+    }
+
+    private async Task RefreshList()
+    {
+        if (table != null)
+            await table.ReloadServerData();
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await RefreshList();
+    }
+
+    private void GoToIntake() => NavManager.NavigateTo("/admin/service-tickets/intake");
+    private void GoToDetail(int ticketId) => NavManager.NavigateTo($"/admin/service-tickets/{ticketId}");
+}

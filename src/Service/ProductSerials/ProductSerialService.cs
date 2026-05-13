@@ -176,6 +176,11 @@ namespace PBL3.Service.ProductSerials
             if (current == SerialStatus.Sold)
                 return "Không thể thay đổi trạng thái Serial đã bán.";
 
+            // NOTE: The 1-for-1 swap path in ServiceTicketService.Perform1For1SwapAsync
+            // bypasses this validator entirely, mutating ProductSerial.Status directly within
+            // a transaction. This is intentional to enforce atomicity across multiple entities
+            // (old serial → Returned, new serial → Sold, Warranty rows, OrderSerial.SerialId, etc.).
+
             var allowed = (current, next) switch
             {
                 (SerialStatus.Available, SerialStatus.Defective) => true,

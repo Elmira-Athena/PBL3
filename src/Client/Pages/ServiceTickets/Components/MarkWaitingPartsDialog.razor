@@ -1,0 +1,32 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Chuyển Sang "Chờ Phụ Tùng"</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Phiếu sẽ chuyển sang trạng thái "Chờ phụ tùng". Khi phụ tùng đã về, bạn có thể quay lại trạng thái "Đang sửa chữa" để tiếp tục.
+        </MudText>
+        <MudAlert Severity="Severity.Info" Dense="true">
+            Bạn có thể quay lại trạng thái "Đang sửa chữa" bất cứ lúc nào.
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Hủy</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Warning" Variant="Variant.Filled">Xác Nhận</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

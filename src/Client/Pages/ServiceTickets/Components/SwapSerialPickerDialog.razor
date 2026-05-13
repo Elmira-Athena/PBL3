@@ -1,0 +1,94 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+@using PBL3.Shared.DTOs.Inventory
+@using System.Net.Http.Json
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Chọn Serial Thay Thế</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Chọn Serial trong kho (trạng thái "Sẵn sàng") cùng biến thể để thay thế serial hỏng.
+        </MudText>
+
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+            Chỉ hiển thị các Serial sẵn sàng cùng loại sản phẩm. Bảo hành sẽ kế thừa từ serial gốc.
+        </MudAlert>
+
+        @if (_isLoading)
+        {
+            <MudProgressCircular Indeterminate="true" Class="ma-auto d-flex" />
+        }
+        else if (_serials == null || _serials.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning">Không có Serial phù hợp trong kho.</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="@_serials" Dense="true" Hover="true" Striped="false" Bordered="false" Class="mb-3">
+                <HeaderContent>
+                    <MudTh>Serial</MudTh>
+                    <MudTh>Sản Phẩm</MudTh>
+                    <MudTh>Ngày Nhập</MudTh>
+                    <MudTh>Tình Trạng</MudTh>
+                    <MudTh Style="text-align: center;">Chọn</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Serial">@context.SerialNumber</MudTd>
+                    <MudTd DataLabel="Sản Phẩm">@context.ProductName</MudTd>
+                    <MudTd DataLabel="Ngày Nhập">@context.CreatedDate.ToString("dd/MM/yyyy")</MudTd>
+                    <MudTd DataLabel="Tình Trạng">Sẵn sàng</MudTd>
+                    <MudTd Style="text-align: center;">
+                        <MudIconButton Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small"
+                                       OnClick="@(() => SelectSerial(context.Id, context.SerialNumber))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Đóng</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int VariantId { get; set; }
+    @inject HttpClient Http
+
+    private List<ProductSerialListDto>? _serials;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAvailableSerialsAsync();
+    }
+
+    private async Task LoadAvailableSerialsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            // TODO: Call API to get available serials for this variant
+            // For now, just simulate empty list
+            _serials = new();
+        }
+        catch
+        {
+            _serials = new();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void SelectSerial(int serialId, string serialNumber)
+    {
+        MudDialog.Close(DialogResult.Ok(new { Id = serialId, SerialNumber = serialNumber }));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+}

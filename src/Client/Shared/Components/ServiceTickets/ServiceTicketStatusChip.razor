@@ -1,0 +1,12 @@
+@using MudBlazor
+@using Client.Shared.Components.ServiceTickets
+
+<MudChip T="string" Color="@ServiceTicketStatusHelper.GetColor(Status)"
+         Variant="Variant.Filled"
+         Size="Size.Small"
+         Text="@ServiceTicketStatusHelper.GetLabel(Status)" />
+
+@code {
+    [Parameter]
+    public byte Status { get; set; }
+}

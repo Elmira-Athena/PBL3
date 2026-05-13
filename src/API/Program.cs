@@ -27,6 +27,8 @@ using PBL3.Service.Storefront;
 using PBL3.Service.Cart;
 using PBL3.Service.Orders;
 using PBL3.Service.Vouchers;
+using PBL3.Service.ServiceTickets;
+using PBL3.Service.ServiceInvoices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -111,6 +113,11 @@ builder.Services.AddScoped<IVoucherRepository, VoucherRepository>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<ICartRepository, CartRepository>();
 builder.Services.AddScoped<IUserAddressRepository, UserAddressRepository>();
+builder.Services.AddScoped<IServiceTicketRepository, ServiceTicketRepository>();
+builder.Services.AddScoped<IQuotationRepository, QuotationRepository>();
+builder.Services.AddScoped<IRmaShipmentRepository, RmaShipmentRepository>();
+builder.Services.AddScoped<IServiceInvoiceRepository, ServiceInvoiceRepository>();
+builder.Services.AddScoped<ISerialRepairLogRepository, SerialRepairLogRepository>();
 
 // DI: Unit of Work
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -131,6 +138,8 @@ builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<PBL3.Service.BuildPc.IBuildPcService, PBL3.Service.BuildPc.BuildPcService>();
+builder.Services.AddScoped<IServiceTicketService, ServiceTicketService>();
+builder.Services.AddScoped<IServiceInvoiceService, ServiceInvoiceService>();
 
 // DI: AWS S3 Storage
 var awsCfg = builder.Configuration.GetSection("AwsSettings");

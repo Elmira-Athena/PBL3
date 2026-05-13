@@ -1,0 +1,40 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Hủy Phiếu Sửa Chữa</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Hủy phiếu này. Vui lòng nhập lý do hủy. Thao tác này không thể hoàn tác.
+        </MudText>
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+            Chỉ Admin mới có thể hủy phiếu.
+        </MudAlert>
+        <MudTextField @bind-Value="CancelReason" Label="Lý do hủy" Variant="Variant.Outlined" Lines="3"
+                      MaxLength="500" /><MudText Typo="Typo.caption" Class="mud-text-secondary">Tối đa 500 ký tự</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Đóng</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Error" Variant="Variant.Filled"
+                   Disabled="@(string.IsNullOrWhiteSpace(CancelReason))">Xác Nhận Hủy</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    public string CancelReason { get; set; } = string.Empty;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(CancelReason))
+        {
+            MudDialog.Close(DialogResult.Ok(CancelReason));
+        }
+    }
+}

@@ -1,0 +1,184 @@
+@page "/admin/service-tickets/{TicketId:int}/quotation"
+@using Client.Services.ServiceTickets
+@using PBL3.Shared.DTOs.ServiceTickets
+@using Client.Shared.Components.ServiceTickets
+@using Client.Pages.ServiceTickets.Components
+@using MudBlazor
+@inject IServiceTicketClientService ServiceTicketService
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Tạo báo giá - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    @if (ticket == null)
+    {
+        <MudProgressCircular Indeterminate="true" Class="ma-auto d-flex mt-4" />
+    }
+    else
+    {
+        <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+            <div>
+                <MudText Typo="Typo.h5" Class="fw-bold">@ticket.TicketCode - Tạo Báo Giá</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@ticket.ProductName (@ticket.SerialNumber)</MudText>
+            </div>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="GoBack">
+                Quay Lại
+            </MudButton>
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-6 rounded-lg">
+            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-4">Chi Tiết Báo Giá</MudText>
+
+            <!-- Items Section -->
+            <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Linh Kiện & Dịch Vụ</MudText>
+
+            @if (items == null || items.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Class="mb-4">
+                    Chưa có mục nào. Hãy thêm linh kiện hoặc dịch vụ.
+                </MudAlert>
+            }
+            else
+            {
+                <MudTable Items="@items" Dense="true" Hover="true" Class="mb-4">
+                    <HeaderContent>
+                        <MudTh>Mô Tả</MudTh>
+                        <MudTh Align="Align.Right">Số Lượng</MudTh>
+                        <MudTh Align="Align.Right">Đơn Giá</MudTh>
+                        <MudTh Align="Align.Right">Thành Tiền</MudTh>
+                        <MudTh Style="text-align: center;">Xóa</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Mô Tả">@context.Description</MudTd>
+                        <MudTd DataLabel="Số Lượng" Align="Align.Right">@context.Quantity</MudTd>
+                        <MudTd DataLabel="Đơn Giá" Align="Align.Right">@context.UnitPrice.ToString("N0") đ</MudTd>
+                        <MudTd DataLabel="Thành Tiền" Align="Align.Right">@(context.Quantity * context.UnitPrice).ToString("N0") đ</MudTd>
+                        <MudTd Style="text-align: center;">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                           OnClick="@(() => RemoveItem(context))" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddItem" Class="mb-4">
+                Thêm Linh Kiện/Dịch Vụ
+            </MudButton>
+
+            <!-- Labor Cost -->
+            <MudText Typo="Typo.subtitle2" Class="fw-bold mt-4 mb-3">Công Lao Động</MudText>
+            <MudTextField @bind-Value="laborCost" Label="Công lao động (đ)" Variant="Variant.Outlined"
+                          InputType="InputType.Number" Class="mb-4" />
+
+            <!-- Totals -->
+            <MudPaper Elevation="0" Class="pa-4 rounded-lg mb-4" Style="background-color: rgba(0,0,0,0.02);">
+                <MudGrid Spacing="0">
+                    <MudItem xs="12" Class="d-flex justify-space-between mb-2">
+                        <MudText>Linh Kiện:</MudText>
+                        <MudText>@GetPartsTotal().ToString("N0") đ</MudText>
+                    </MudItem>
+                    <MudItem xs="12" Class="d-flex justify-space-between mb-2">
+                        <MudText>Công Lao Động:</MudText>
+                        <MudText>@laborCost.ToString("N0") đ</MudText>
+                    </MudItem>
+                    <MudDivider Class="my-2" />
+                    <MudItem xs="12" Class="d-flex justify-space-between">
+                        <MudText Typo="Typo.subtitle2" Class="fw-bold">Tổng Cộng:</MudText>
+                        <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: var(--mud-palette-primary);">
+                            @GetGrandTotal().ToString("N0") đ
+                        </MudText>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            <!-- Actions -->
+            <div Class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitQuotation"
+                           StartIcon="@Icons.Material.Filled.Save" Class="flex-grow-1">
+                    Lưu Báo Giá
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="GoBack">
+                    Hủy
+                </MudButton>
+            </div>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public int TicketId { get; set; }
+
+    private ServiceTicketDetailDto? ticket;
+    private List<QuotationItem> items = new();
+    private decimal laborCost = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTicket();
+    }
+
+    private async Task LoadTicket()
+    {
+        var result = await ServiceTicketService.GetByIdAsync(TicketId);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Message ?? "Lỗi tải phiếu.", Severity.Error);
+            NavManager.NavigateTo("/admin/service-tickets");
+            return;
+        }
+        ticket = result.Data;
+    }
+
+    private void AddItem()
+    {
+        items.Add(new QuotationItem
+        {
+            Description = string.Empty,
+            Quantity = 1,
+            UnitPrice = 0
+        });
+    }
+
+    private void RemoveItem(QuotationItem item)
+    {
+        items.Remove(item);
+    }
+
+    private decimal GetPartsTotal()
+    {
+        return items.Sum(i => i.Quantity * i.UnitPrice);
+    }
+
+    private decimal GetGrandTotal()
+    {
+        return GetPartsTotal() + laborCost;
+    }
+
+    private async Task SubmitQuotation()
+    {
+        if (items.All(i => string.IsNullOrEmpty(i.Description)))
+        {
+            Snackbar.Add("Vui lòng thêm ít nhất một mục.", Severity.Warning);
+            return;
+        }
+
+        Snackbar.Add("Báo giá sẽ được lưu sau khi API được hoàn thiện.", Severity.Info);
+        // TODO: Implement API call once CreateQuotationRequest DTO is defined in Shared
+        // var result = await ServiceTicketService.CreateQuotationAsync(TicketId, request);
+        // if (result.Success) NavManager.NavigateTo($"/admin/service-tickets/{TicketId}");
+    }
+
+    private void GoBack() => NavManager.NavigateTo($"/admin/service-tickets/{TicketId}");
+
+    public class QuotationItem
+    {
+        public int? VariantId { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public int Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+    }
+}

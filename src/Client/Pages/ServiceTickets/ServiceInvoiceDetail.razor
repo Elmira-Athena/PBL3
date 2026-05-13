@@ -1,0 +1,146 @@
+@page "/admin/service-invoices/{Id:int}"
+@using Client.Services.ServiceTickets
+@using PBL3.Shared.DTOs.ServiceTickets
+@using MudBlazor
+@inject IServiceInvoiceClientService ServiceInvoiceService
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Hóa đơn dịch vụ - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+    @if (invoice == null)
+    {
+        <MudProgressCircular Indeterminate="true" Class="ma-auto d-flex mt-4" />
+    }
+    else
+    {
+        <MudPaper Elevation="0" Class="d-flex justify-space-between align-center mb-4 pa-0">
+            <MudText Typo="Typo.h5" Class="fw-bold">@invoice.InvoiceCode</MudText>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="GoBack">
+                Quay Lại
+            </MudButton>
+        </MudPaper>
+
+        <MudPaper Elevation="1" Class="pa-6 rounded-lg">
+            <!-- Header -->
+            <div Class="text-center mb-6">
+                <MudText Typo="Typo.h6" Class="fw-bold">HÓA ĐƠN DỊCH VỤ</MudText>
+                <MudText Typo="Typo.body1" Class="fw-bold mt-2">@invoice.InvoiceCode</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
+                    Phát hành: @invoice.IssuedDate.ToString("dd/MM/yyyy")
+                </MudText>
+            </div>
+
+            <MudDivider Class="my-4" />
+
+            <!-- Items Table -->
+            <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Chi Tiết Dịch Vụ</MudText>
+            <MudTable Items="@invoice.Items" Dense="true" Hover="true" Bordered="false" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Mô Tả</MudTh>
+                    <MudTh Align="Align.Right">Số Lượng</MudTh>
+                    <MudTh Align="Align.Right">Đơn Giá</MudTh>
+                    <MudTh Align="Align.Right">Thành Tiền</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Mô Tả">@context.Description</MudTd>
+                    <MudTd DataLabel="Số Lượng" Align="Align.Right">@context.Quantity</MudTd>
+                    <MudTd DataLabel="Đơn Giá" Align="Align.Right">@context.UnitPrice.ToString("N0") đ</MudTd>
+                    <MudTd DataLabel="Thành Tiền" Align="Align.Right">@context.LineTotal.ToString("N0") đ</MudTd>
+                </RowTemplate>
+            </MudTable>
+
+            <!-- Totals -->
+            <MudPaper Elevation="0" Class="mt-4 pa-4 rounded-lg" Style="background-color: rgba(0,0,0,0.02);">
+                <MudGrid Spacing="0">
+                    <MudItem xs="12" Class="d-flex justify-space-between">
+                        <MudText><strong>Công Lao Động:</strong></MudText>
+                        <MudText><strong>@invoice.LaborCost.ToString("N0") đ</strong></MudText>
+                    </MudItem>
+                    <MudItem xs="12" Class="mt-2 d-flex justify-space-between">
+                        <MudText><strong>Linh Kiện:</strong></MudText>
+                        <MudText><strong>@invoice.PartsTotal.ToString("N0") đ</strong></MudText>
+                    </MudItem>
+                    <MudDivider Class="my-2" />
+                    <MudItem xs="12" Class="d-flex justify-space-between">
+                        <MudText Typo="Typo.h6" Class="fw-bold"><strong>Tổng Cộng:</strong></MudText>
+                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: var(--mud-palette-primary);">
+                            <strong>@invoice.GrandTotal.ToString("N0") đ</strong>
+                        </MudText>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            <MudDivider Class="my-4" />
+
+            <!-- Payment Status -->
+            <MudGrid Spacing="3">
+                <MudItem xs="12">
+                    <MudText Class="d-flex align-center gap-2">
+                        <strong>Trạng Thái Thanh Toán:</strong>
+                        @if (invoice.PaymentStatus == 0)
+                        {
+                            <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" Size="Size.Small">
+                                Chưa Thanh Toán
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small">
+                                Đã Thanh Toán
+                            </MudChip>
+                        }
+                    </MudText>
+                </MudItem>
+                @if (!string.IsNullOrEmpty(invoice.Note))
+                {
+                    <MudItem xs="12">
+                        <MudText><strong>Ghi Chú:</strong></MudText>
+                        <MudText Class="mt-2">@invoice.Note</MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+
+            <!-- Actions -->
+            <div Class="mt-6 d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PrintInvoice"
+                           StartIcon="@Icons.Material.Filled.Print" Class="flex-grow-1">
+                    In Hóa Đơn
+                </MudButton>
+            </div>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private ServiceInvoiceDetailDto? invoice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInvoice();
+    }
+
+    private async Task LoadInvoice()
+    {
+        var result = await ServiceInvoiceService.GetByIdAsync(Id);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Message ?? "Lỗi tải hóa đơn.", Severity.Error);
+            NavManager.NavigateTo("/admin/service-invoices");
+            return;
+        }
+        invoice = result.Data;
+    }
+
+    private void PrintInvoice()
+    {
+        Snackbar.Add("Tính năng in sẽ được thêm sau.", Severity.Info);
+    }
+
+    private void GoBack() => NavManager.NavigateTo("/admin/service-invoices");
+}

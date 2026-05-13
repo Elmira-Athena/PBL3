@@ -1,0 +1,325 @@
+@page "/my/service-tickets/{Id:int}"
+@using Client.Services.ServiceTickets
+@using PBL3.Shared.DTOs.ServiceTickets
+@using Client.Shared.Components.ServiceTickets
+@using MudBlazor
+@inject IServiceTicketClientService ServiceTicketService
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Chi tiết phiếu sửa chữa - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    @if (ticket == null)
+    {
+        <MudProgressCircular Indeterminate="true" Class="ma-auto d-flex mt-4" />
+    }
+    else
+    {
+        <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+            <div>
+                <MudText Typo="Typo.h5" Class="fw-bold">@ticket.TicketCode</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Serial: @ticket.SerialNumber</MudText>
+            </div>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack"
+                       Href="/my/service-tickets">
+                Quay Lại
+            </MudButton>
+        </MudPaper>
+
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" md="8">
+                <MudTabs>
+                    <!-- Tab: Thông Tin -->
+                    <MudTabPanel Text="Thông Tin">
+                        <MudPaper Class="pa-4 mt-4" Elevation="0">
+                            <MudGrid Spacing="3">
+                                <MudItem xs="12" sm="6">
+                                    <MudText Typo="Typo.body2"><strong>Mã Phiếu:</strong></MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.TicketCode</MudText>
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudText Typo="Typo.body2"><strong>Ngày Tiếp Nhận:</strong></MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.IntakeDate.ToString("dd/MM/yyyy HH:mm")</MudText>
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudText Typo="Typo.body2"><strong>Sản Phẩm:</strong></MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.ProductName</MudText>
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudText Typo="Typo.body2"><strong>Serial:</strong></MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.SerialNumber</MudText>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.body2"><strong>Vấn Đề Báo Cáo:</strong></MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.CustomerReportedIssue</MudText>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.body2"><strong>Tình Trạng Ngoại Quan:</strong></MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-1">@(GetCosmeticDescription())</MudText>
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudText Typo="Typo.body2" Class="d-flex align-center gap-2">
+                                        <strong>Bảo Hành:</strong>
+                                        @if (ticket.WasInWarrantyAtIntake)
+                                        {
+                                            <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small">
+                                                Còn hạn đến @ticket.WarrantyEndDateAtIntake?.ToString("dd/MM/yyyy")
+                                            </MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">
+                                                Hết hạn
+                                            </MudChip>
+                                        }
+                                    </MudText>
+                                </MudItem>
+                            </MudGrid>
+                        </MudPaper>
+                    </MudTabPanel>
+
+                    <!-- Tab: Chẩn Đoán -->
+                    <MudTabPanel Text="Chẩn Đoán">
+                        <MudPaper Class="pa-4 mt-4" Elevation="0">
+                            @if (!string.IsNullOrEmpty(ticket.DiagnosisFindings))
+                            {
+                                <MudText>@ticket.DiagnosisFindings</MudText>
+                            }
+                            else
+                            {
+                                <MudText Class="mud-text-secondary">Chưa có kết luận chẩn đoán.</MudText>
+                            }
+                        </MudPaper>
+                    </MudTabPanel>
+
+                    <!-- Tab: Báo Giá -->
+                    @if (ticket.Quotations?.Any() == true)
+                    {
+                        <MudTabPanel Text="Báo Giá">
+                            <MudPaper Class="pa-4 mt-4" Elevation="0">
+                                @foreach (var quotation in ticket.Quotations)
+                                {
+                                    <MudPaper Class="pa-3 mb-3" Elevation="1" Outlined="false">
+                                        <MudGrid Spacing="2">
+                                            <MudItem xs="12">
+                                                <MudText><strong>Ngày Tạo:</strong> @quotation.IssuedDate.ToString("dd/MM/yyyy")</MudText>
+                                            </MudItem>
+                                            <MudItem xs="12">
+                                                <MudTable Items="@quotation.Items" Dense="true" Hover="true">
+                                                    <HeaderContent>
+                                                        <MudTh>Mô Tả</MudTh>
+                                                        <MudTh Align="Align.Right">Số Lượng</MudTh>
+                                                        <MudTh Align="Align.Right">Đơn Giá</MudTh>
+                                                        <MudTh Align="Align.Right">Thành Tiền</MudTh>
+                                                    </HeaderContent>
+                                                    <RowTemplate>
+                                                        <MudTd DataLabel="Mô Tả">@context.Description</MudTd>
+                                                        <MudTd DataLabel="Số Lượng" Align="Align.Right">@context.Quantity</MudTd>
+                                                        <MudTd DataLabel="Đơn Giá" Align="Align.Right">@context.UnitPrice.ToString("N0") đ</MudTd>
+                                                        <MudTd DataLabel="Thành Tiền" Align="Align.Right">@context.LineTotal.ToString("N0") đ</MudTd>
+                                                    </RowTemplate>
+                                                </MudTable>
+                                            </MudItem>
+                                            <MudItem xs="12" Class="d-flex justify-space-between">
+                                                <MudText><strong>Công Lao Động:</strong></MudText>
+                                                <MudText><strong>@quotation.LaborCost.ToString("N0") đ</strong></MudText>
+                                            </MudItem>
+                                            <MudItem xs="12" Class="d-flex justify-space-between">
+                                                <MudText><strong>Linh Kiện:</strong></MudText>
+                                                <MudText><strong>@quotation.PartsTotal.ToString("N0") đ</strong></MudText>
+                                            </MudItem>
+                                            <MudDivider Class="my-2" />
+                                            <MudItem xs="12" Class="d-flex justify-space-between">
+                                                <MudText Typo="Typo.h6" Class="fw-bold"><strong>Tổng Cộng:</strong></MudText>
+                                                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: var(--mud-palette-primary);">
+                                                    @quotation.GrandTotal.ToString("N0") đ
+                                                </MudText>
+                                            </MudItem>
+                                            @if (ticket.Status == 2 && quotation.Status == 0) // QuoteSent and Pending
+                                            {
+                                                <MudItem xs="12" Class="d-flex gap-2 justify-end">
+                                                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                               OnClick="@(() => AcceptQuotation(quotation.Id))">
+                                                        Đồng Ý
+                                                    </MudButton>
+                                                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                               OnClick="@(() => RejectQuotation(quotation.Id))">
+                                                        Từ Chối
+                                                    </MudButton>
+                                                </MudItem>
+                                            }
+                                        </MudGrid>
+                                    </MudPaper>
+                                }
+                            </MudPaper>
+                        </MudTabPanel>
+                    }
+
+                    <!-- Tab: RMA -->
+                    @if (ticket.RmaShipment != null)
+                    {
+                        <MudTabPanel Text="RMA">
+                            <MudPaper Class="pa-4 mt-4" Elevation="0">
+                                <MudGrid Spacing="2">
+                                    <MudItem xs="12">
+                                        <MudText><strong>Hãng Vận Chuyển:</strong> @ticket.RmaShipment.CarrierName</MudText>
+                                    </MudItem>
+                                    <MudItem xs="12">
+                                        <MudText><strong>Mã Vận Đơn:</strong> @ticket.RmaShipment.TrackingCode</MudText>
+                                    </MudItem>
+                                    <MudItem xs="12">
+                                        <MudText><strong>Ngày Gửi:</strong> @ticket.RmaShipment.ShippedDate?.ToString("dd/MM/yyyy")</MudText>
+                                    </MudItem>
+                                    @if (ticket.RmaShipment.ReceivedBackDate.HasValue)
+                                    {
+                                        <MudItem xs="12">
+                                            <MudText><strong>Ngày Nhận Lại:</strong> @ticket.RmaShipment.ReceivedBackDate.Value.ToString("dd/MM/yyyy")</MudText>
+                                        </MudItem>
+                                    }
+                                </MudGrid>
+                            </MudPaper>
+                        </MudTabPanel>
+                    }
+
+                    <!-- Tab: Hóa Đơn -->
+                    @if (ticket.Invoice != null)
+                    {
+                        <MudTabPanel Text="Hóa Đơn">
+                            <MudPaper Class="pa-4 mt-4" Elevation="0">
+                                <MudGrid Spacing="2">
+                                    <MudItem xs="12">
+                                        <MudText><strong>Mã Hóa Đơn:</strong> @ticket.Invoice.InvoiceCode</MudText>
+                                    </MudItem>
+                                    <MudItem xs="12">
+                                        <MudText><strong>Ngày Phát Hành:</strong> @ticket.Invoice.IssuedDate.ToString("dd/MM/yyyy")</MudText>
+                                    </MudItem>
+                                    <MudItem xs="12">
+                                        <MudText><strong>Tổng Cộng:</strong> @ticket.Invoice.GrandTotal.ToString("N0") đ</MudText>
+                                    </MudItem>
+                                </MudGrid>
+                            </MudPaper>
+                        </MudTabPanel>
+                    }
+                </MudTabs>
+            </MudItem>
+
+            <!-- Sidebar: Status -->
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4 rounded-lg" Elevation="1">
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Trạng Thái</MudText>
+                    <ServiceTicketStatusChip Status="@ticket.Status" />
+
+                    <MudDivider Class="my-4" />
+
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Lịch Sử Trạng Thái</MudText>
+                    <MudTimeline TimelineAlign="TimelineAlign.Start">
+                        @foreach (var history in ticket.StatusHistory ?? new List<ServiceTicketStatusHistoryDto>())
+                        {
+                            <MudTimelineItem Color="@ServiceTicketStatusHelper.GetColor(history.ToStatus)" Variant="Variant.Filled">
+                                <MudText Typo="Typo.body2" Style="color: white;">
+                                    <strong>@ServiceTicketStatusHelper.GetLabel(history.ToStatus)</strong>
+                                </MudText>
+                                <MudText Typo="Typo.caption" Style="color: white; opacity: 0.8;">
+                                    @history.ChangedAt.ToString("HH:mm dd/MM/yyyy")
+                                </MudText>
+                            </MudTimelineItem>
+                        }
+                    </MudTimeline>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private ServiceTicketDetailDto? ticket;
+    private bool isProcessing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTicket();
+    }
+
+    private async Task LoadTicket()
+    {
+        var result = await ServiceTicketService.GetByIdAsync(Id);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Message ?? "Lỗi tải phiếu.", Severity.Error);
+            NavManager.NavigateTo("/my/service-tickets");
+            return;
+        }
+        ticket = result.Data;
+    }
+
+    private string GetCosmeticDescription()
+    {
+        var parts = new List<string>();
+        if (ticket?.HasScratches == true) parts.Add("Trầy xước");
+        if (ticket?.HasDents == true) parts.Add("Móp méo");
+        if (ticket?.HasBurnMarks == true) parts.Add("Cháy nổ");
+        if (ticket?.HasMissingAccessories == true) parts.Add("Thiếu phụ kiện");
+
+        var description = string.Join(", ", parts);
+        if (!string.IsNullOrEmpty(ticket?.CosmeticNotes))
+            description += (string.IsNullOrEmpty(description) ? "" : "; ") + ticket.CosmeticNotes;
+
+        return string.IsNullOrEmpty(description) ? "Không có" : description;
+    }
+
+    private async Task AcceptQuotation(int quotationId)
+    {
+        if (isProcessing) return;
+        isProcessing = true;
+
+        try
+        {
+            var request = new AcceptQuotationRequest { NextStatus = 5 }; // InRepair
+            var result = await ServiceTicketService.AcceptQuotationAsync(Id, quotationId, request);
+
+            if (result.Success)
+            {
+                Snackbar.Add("Bạn đã đồng ý báo giá. Cửa hàng sẽ bắt đầu sửa chữa.", Severity.Success);
+                await LoadTicket();
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Lỗi đồng ý báo giá.", Severity.Error);
+            }
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task RejectQuotation(int quotationId)
+    {
+        if (isProcessing) return;
+        isProcessing = true;
+
+        try
+        {
+            var request = new RejectQuotationRequest { Reason = "Khách hàng từ chối" };
+            var result = await ServiceTicketService.RejectQuotationAsync(Id, quotationId, request);
+
+            if (result.Success)
+            {
+                Snackbar.Add("Bạn đã từ chối báo giá. Vui lòng liên hệ cửa hàng để thảo luận.", Severity.Info);
+                await LoadTicket();
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Lỗi từ chối báo giá.", Severity.Error);
+            }
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

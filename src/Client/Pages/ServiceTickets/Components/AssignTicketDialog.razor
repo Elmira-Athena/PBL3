@@ -1,0 +1,72 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using PBL3.Shared.DTOs.Common
+@using System.Net.Http.Json
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Gán Kỹ Thuật Viên</MudText>
+        <MudText Typo="Typo.body2" Class="mb-4">Chọn kỹ thuật viên để tiếp nhận phiếu sửa chữa này.</MudText>
+
+        @if (_employees == null)
+        {
+            <MudProgressCircular Indeterminate="true" Class="ma-auto d-flex" />
+        }
+        else if (_employees.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning">Không có kỹ thuật viên nào trong hệ thống.</MudAlert>
+        }
+        else
+        {
+            <MudSelect T="Guid" @bind-Value="_selectedEmployeeId" Label="Kỹ thuật viên" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" Required="true" RequiredError="Vui lòng chọn kỹ thuật viên">
+                @foreach (var emp in _employees)
+                {
+                    <MudSelectItem T="Guid" Value="emp.Id">@emp.FullName</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Đóng</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="@(_selectedEmployeeId == Guid.Empty || _employees?.Count == 0)">Gán Kỹ Thuật Viên</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    @inject HttpClient Http
+
+    private List<EmployeeDto>? _employees;
+    private Guid _selectedEmployeeId = Guid.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEmployeesAsync();
+    }
+
+    private async Task LoadEmployeesAsync()
+    {
+        try
+        {
+            _employees = await Http.GetFromJsonAsync<List<EmployeeDto>>("api/employees") ?? new();
+        }
+        catch
+        {
+            _employees = new();
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        if (_selectedEmployeeId != Guid.Empty)
+        {
+            MudDialog.Close(DialogResult.Ok(_selectedEmployeeId));
+        }
+    }
+}

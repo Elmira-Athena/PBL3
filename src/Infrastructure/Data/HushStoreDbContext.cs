@@ -39,6 +39,16 @@ namespace PBL3.Infrastructure.Data
         public DbSet<Warranty> Warranties { get; set; }
         public DbSet<UserAddress> UserAddresses { get; set; }
 
+        // Service & Warranty
+        public DbSet<ServiceTicket> ServiceTickets { get; set; }
+        public DbSet<ServiceTicketStatusHistory> ServiceTicketStatusHistories { get; set; }
+        public DbSet<Quotation> Quotations { get; set; }
+        public DbSet<QuotationItem> QuotationItems { get; set; }
+        public DbSet<RmaShipment> RmaShipments { get; set; }
+        public DbSet<ServiceInvoice> ServiceInvoices { get; set; }
+        public DbSet<ServiceInvoiceItem> ServiceInvoiceItems { get; set; }
+        public DbSet<SerialRepairLog> SerialRepairLogs { get; set; }
+
         // Auth
         public DbSet<UserProfile> UserProfiles { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
@@ -275,6 +285,148 @@ namespace PBL3.Infrastructure.Data
                 entity.HasIndex(w => w.SerialId);
                 entity.HasIndex(w => w.CustomerId);
                 entity.HasIndex(w => w.OrderId);
+            });
+
+            // --- SERVICE TICKETS ---
+            modelBuilder.Entity<ServiceTicket>(entity =>
+            {
+                entity.HasQueryFilter(t => !t.IsDeleted);
+                entity.HasIndex(t => t.TicketCode).IsUnique();
+                entity.HasIndex(t => t.SerialId);
+                entity.HasIndex(t => t.Status);
+                entity.HasIndex(t => t.CustomerId);
+                entity.HasIndex(t => t.AssignedEmployeeId);
+                entity.HasIndex(t => t.IntakeDate);
+
+                // Relationship: ServiceTicket -> ProductSerial
+                entity.HasOne(t => t.Serial)
+                    .WithMany()
+                    .HasForeignKey(t => t.SerialId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                // Relationship: ServiceTicket -> Order
+                entity.HasOne(t => t.OriginalOrder)
+                    .WithMany()
+                    .HasForeignKey(t => t.OriginalOrderId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                // Relationship: ServiceTicket -> Customer (AppUser)
+                entity.HasOne(t => t.Customer)
+                    .WithMany()
+                    .HasForeignKey(t => t.CustomerId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                // Relationship: ServiceTicket -> ReplacementSerial
+                entity.HasOne(t => t.ReplacementSerial)
+                    .WithMany()
+                    .HasForeignKey(t => t.ReplacementSerialId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                // Navigation properties
+                entity.HasMany(t => t.StatusHistory)
+                    .WithOne(h => h.Ticket)
+                    .HasForeignKey(h => h.TicketId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(t => t.Quotations)
+                    .WithOne(q => q.Ticket)
+                    .HasForeignKey(q => q.TicketId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(t => t.RmaShipment)
+                    .WithOne(r => r.Ticket)
+                    .HasForeignKey<RmaShipment>(r => r.TicketId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(t => t.Invoice)
+                    .WithOne(i => i.Ticket)
+                    .HasForeignKey<ServiceInvoice>(i => i.TicketId)
+                    .OnDelete(DeleteBehavior.NoAction); // Invoice survives ticket soft-delete
+            });
+
+            modelBuilder.Entity<ServiceTicketStatusHistory>(entity =>
+            {
+                entity.HasIndex(h => new { h.TicketId, h.ChangedAt });
+            });
+
+            modelBuilder.Entity<Quotation>(entity =>
+            {
+                entity.HasMany(q => q.Items)
+                    .WithOne(i => i.Quotation)
+                    .HasForeignKey(i => i.QuotationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.Property(e => e.LaborCost).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.PartsTotal).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.GrandTotal).HasColumnType("decimal(18,2)");
+            });
+
+            modelBuilder.Entity<QuotationItem>(entity =>
+            {
+                entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.LineTotal)
+                    .HasColumnType("decimal(18,2)")
+                    .HasComputedColumnSql("([Quantity] * [UnitPrice])");
+            });
+
+            modelBuilder.Entity<RmaShipment>(entity =>
+            {
+                entity.HasIndex(r => r.TicketId).IsUnique();
+            });
+
+            modelBuilder.Entity<ServiceInvoice>(entity =>
+            {
+                // CRITICAL: ServiceInvoice does NOT use HasQueryFilter.
+                // Financial records must survive ticket soft-delete.
+                entity.HasIndex(i => i.InvoiceCode).IsUnique();
+                entity.HasIndex(i => i.TicketId).IsUnique();
+
+                entity.Property(e => e.LaborCost).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.PartsTotal).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.GrandTotal).HasColumnType("decimal(18,2)");
+
+                // Relationship: ServiceInvoice -> Quotation (optional)
+                entity.HasOne(i => i.Quotation)
+                    .WithMany()
+                    .HasForeignKey(i => i.QuotationId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                // Navigation: ServiceInvoice -> Items
+                entity.HasMany(i => i.Items)
+                    .WithOne(ii => ii.Invoice)
+                    .HasForeignKey(ii => ii.InvoiceId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<ServiceInvoiceItem>(entity =>
+            {
+                entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
+                entity.Property(e => e.LineTotal)
+                    .HasColumnType("decimal(18,2)")
+                    .HasComputedColumnSql("([Quantity] * [UnitPrice])");
+            });
+
+            modelBuilder.Entity<SerialRepairLog>(entity =>
+            {
+                entity.HasIndex(l => l.SerialId);
+
+                // Relationship: SerialRepairLog -> ProductSerial (required)
+                entity.HasOne(l => l.Serial)
+                    .WithMany()
+                    .HasForeignKey(l => l.SerialId)
+                    .OnDelete(DeleteBehavior.NoAction);
+
+                // Relationship: SerialRepairLog -> ServiceTicket (optional, SetNull on delete)
+                entity.HasOne(l => l.Ticket)
+                    .WithMany()
+                    .HasForeignKey(l => l.TicketId)
+                    .OnDelete(DeleteBehavior.SetNull); // Log survives ticket deletion
+
+                // Relationship: SerialRepairLog -> ReplacedBySerial (optional)
+                entity.HasOne(l => l.ReplacedBySerial)
+                    .WithMany()
+                    .HasForeignKey(l => l.ReplacedBySerialId)
+                    .OnDelete(DeleteBehavior.NoAction);
             });
         }
     }

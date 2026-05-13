@@ -1,0 +1,35 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Ghi Nhận Kết Luận Chẩn Đoán</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">Nhập chi tiết kết luận chẩn đoán sản phẩm.</MudText>
+        <MudTextField @bind-Value="DiagnosisFindings" Label="Kết luận chẩn đoán" Variant="Variant.Outlined"
+                      Lines="5" MaxLength="2000" /><MudText Typo="Typo.caption" Class="mud-text-secondary">Tối đa 2000 ký tự</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Đóng</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="@(string.IsNullOrWhiteSpace(DiagnosisFindings))">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    public string DiagnosisFindings { get; set; } = string.Empty;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(DiagnosisFindings))
+        {
+            MudDialog.Close(DialogResult.Ok(DiagnosisFindings));
+        }
+    }
+}

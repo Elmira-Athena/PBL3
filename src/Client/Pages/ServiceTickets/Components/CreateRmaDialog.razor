@@ -1,0 +1,53 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Tạo Phiếu RMA (Gửi Hãng)</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Nhập thông tin hãng vận chuyển và mã vận đơn để gửi sản phẩm lên nhà hãng.
+        </MudText>
+
+        <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudTextField @bind-Value="CarrierName" Label="Tên hãng vận chuyển" Variant="Variant.Outlined"
+                              Placeholder="VD: Viettel, DHL, FedEx" Required="true"
+                              RequiredError="Tên hãng không được để trống"
+                              MaxLength="100" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="TrackingCode" Label="Mã vận đơn" Variant="Variant.Outlined"
+                              Placeholder="VD: 123456789"
+                              Required="true" RequiredError="Mã vận đơn không được để trống"
+                              MaxLength="100" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Đóng</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="@(string.IsNullOrWhiteSpace(CarrierName) || string.IsNullOrWhiteSpace(TrackingCode))">
+            Tạo RMA
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    public string CarrierName { get; set; } = string.Empty;
+    public string TrackingCode { get; set; } = string.Empty;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(CarrierName) && !string.IsNullOrWhiteSpace(TrackingCode))
+        {
+            MudDialog.Close(DialogResult.Ok(new { CarrierName, TrackingCode }));
+        }
+    }
+}

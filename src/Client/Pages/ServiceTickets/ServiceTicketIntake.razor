@@ -1,0 +1,190 @@
+@page "/admin/service-tickets/intake"
+@using Client.Services.ServiceTickets
+@using PBL3.Shared.DTOs.ServiceTickets
+@using MudBlazor
+@inject IServiceTicketClientService ServiceTicketService
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Tiếp nhận máy - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-4">
+    <MudPaper Elevation="0" Class="mb-6 pa-0">
+        <MudText Typo="Typo.h5" Class="fw-bold mb-2">Tiếp Nhận Máy</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Quét mã Serial và ghi nhận tình trạng máy
+        </MudText>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-6 rounded-lg">
+        <!-- Step 1: Evaluate Serial -->
+        @if (evaluation == null || string.IsNullOrEmpty(evaluation.SerialNumber))
+        {
+            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-4">1. Quét Mã Serial</MudText>
+
+            <MudTextField @bind-Value="serialNumber"
+                Label="Mã Serial"
+                Variant="Variant.Outlined"
+                Placeholder="VD: MBMS-2024-9JQK"
+                HelperText="Nhập mã Serial để kiểm tra tình trạng máy"
+                Class="mb-4" />
+
+            <div Class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="EvaluateSerial"
+                           StartIcon="@Icons.Material.Filled.Search" Class="flex-grow-1">
+                    Kiểm Tra
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Href="/admin/service-tickets">
+                    Hủy
+                </MudButton>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(evaluation.BlockingReason))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">
+                <MudText>@evaluation.BlockingReason</MudText>
+            </MudAlert>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="ResetForm">
+                Quét Serial Khác
+            </MudButton>
+        }
+        else
+        {
+            <!-- Step 2: Confirm Serial Info -->
+            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">1. Thông Tin Máy</MudText>
+
+            <MudPaper Elevation="0" Class="pa-4 mb-4 rounded-lg" Style="background-color: rgba(0,0,0,0.02);">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2">
+                            <strong>Serial:</strong> @evaluation.SerialNumber
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2">
+                            <strong>Sản Phẩm:</strong> @evaluation.ProductName
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2">
+                            <strong>Khách Hàng:</strong> @evaluation.CustomerName
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2">
+                            <strong>Ngày Bán:</strong> @evaluation.SoldDate?.ToString("dd/MM/yyyy")
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2">
+                            <strong>Bảo Hành:</strong>
+                            @if (evaluation.IsInWarranty)
+                            {
+                                <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small" Class="ml-2">
+                                    Còn hạn đến @evaluation.WarrantyEndDate?.ToString("dd/MM/yyyy")
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small" Class="ml-2">
+                                    Hết hạn
+                                </MudChip>
+                            }
+                        </MudText>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            <!-- Step 3: Record Cosmetic Damage -->
+            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">2. Tình Trạng Ngoại Quan</MudText>
+
+            <MudPaper Elevation="0" Class="pa-4 mb-4 rounded-lg" Style="background-color: rgba(0,0,0,0.02);">
+                <MudCheckBox T="bool" @bind-Checked="request.HasScratches" Label="Trầy xước" Class="mb-2" />
+                <MudCheckBox T="bool" @bind-Checked="request.HasDents" Label="Móp méo" Class="mb-2" />
+                <MudCheckBox T="bool" @bind-Checked="request.HasBurnMarks" Label="Cháy nổ" Class="mb-2" />
+                <MudCheckBox T="bool" @bind-Checked="request.HasMissingAccessories" Label="Thiếu phụ kiện" Class="mb-3" />
+
+                <MudTextField @bind-Value="request.CosmeticNotes"
+                    Label="Ghi chú tình trạng ngoại quan (không bắt buộc)"
+                    Variant="Variant.Outlined"
+                    Lines="2"
+                    Placeholder="VD: Góc màn hình có xước nhỏ, cạnh máy bị móp"
+                    Class="mt-3" />
+            </MudPaper>
+
+            <!-- Step 4: Customer Reported Issue -->
+            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">3. Vấn Đề Khách Báo Cáo</MudText>
+
+            <MudTextField @bind-Value="request.CustomerReportedIssue"
+                Label="Mô tả vấn đề máy gặp phải"
+                Variant="Variant.Outlined"
+                Lines="3"
+                Placeholder="VD: Máy bị chậm, hay restart đột ngột, không nhận phím..."
+                HelperText="Bắt buộc"
+                Class="mb-6" />
+
+            <!-- Actions -->
+            <div Class="d-flex gap-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitIntake"
+                           StartIcon="@Icons.Material.Filled.Save" Class="flex-grow-1">
+                    Hoàn Tất Tiếp Nhận
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="ResetForm">
+                    Quét Serial Khác
+                </MudButton>
+            </div>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private string serialNumber = string.Empty;
+    private ServiceTicketIntakeEvaluationDto? evaluation;
+    private CreateServiceTicketRequest request = new();
+
+    private async Task EvaluateSerial()
+    {
+        if (string.IsNullOrEmpty(serialNumber))
+        {
+            Snackbar.Add("Vui lòng nhập mã Serial.", Severity.Warning);
+            return;
+        }
+
+        var result = await ServiceTicketService.EvaluateIntakeAsync(serialNumber);
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Message ?? "Lỗi kiểm tra Serial.", Severity.Error);
+            return;
+        }
+
+        evaluation = result.Data;
+    }
+
+    private void ResetForm()
+    {
+        serialNumber = string.Empty;
+        evaluation = null;
+        request = new CreateServiceTicketRequest();
+    }
+
+    private async Task SubmitIntake()
+    {
+        if (string.IsNullOrEmpty(request.CustomerReportedIssue))
+        {
+            Snackbar.Add("Vui lòng nhập vấn đề khách báo cáo.", Severity.Warning);
+            return;
+        }
+
+        request.SerialNumber = serialNumber;
+        var result = await ServiceTicketService.CreateTicketAsync(request);
+
+        if (!result.Success)
+        {
+            Snackbar.Add(result.Message ?? "Lỗi tạo phiếu sửa chữa.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Tiếp nhận máy thành công!", Severity.Success);
+        NavManager.NavigateTo($"/admin/service-tickets/{result.Data?.Id}");
+    }
+}

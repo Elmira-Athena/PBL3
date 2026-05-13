@@ -1,0 +1,37 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Từ Chối Báo Giá</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Từ chối báo giá này. Phiếu sẽ chuyển sang trạng thái "Khách từ chối báo giá" và không thể tiếp tục xử lý.
+        </MudText>
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+            Thao tác này không thể hoàn tác. Khách hàng cần liên hệ để tạo báo giá mới.
+        </MudAlert>
+        <MudTextField @bind-Value="Reason" Label="Ghi chú (tùy chọn)" Variant="Variant.Outlined"
+                      Lines="3" MaxLength="1000" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Tối đa 1000 ký tự</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Hủy</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Error" Variant="Variant.Filled">Xác Nhận Từ Chối</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    public string Reason { get; set; } = string.Empty;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(new { Reason }));
+    }
+}

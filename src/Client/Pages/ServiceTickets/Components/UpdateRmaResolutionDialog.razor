@@ -1,0 +1,86 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Cập Nhật Kết Quả RMA từ Hãng</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Nhập kết quả nhà hãng trả về. Nếu hãng đã thay thế sản phẩm, hãy chọn Serial mới.
+        </MudText>
+
+        <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudSelect T="byte" @bind-Value="ManufacturerResolution" Label="Kết quả từ hãng" Variant="Variant.Outlined"
+                           Required="true" RequiredError="Vui lòng chọn kết quả">
+                    <MudSelectItem T="byte" Value="1">Đã Sửa Chữa</MudSelectItem>
+                    <MudSelectItem T="byte" Value="2">Đã Thay Thế</MudSelectItem>
+                    <MudSelectItem T="byte" Value="3">Từ Chối</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            @if (ManufacturerResolution == 2)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.body2" Class="mb-2 mud-text-secondary">
+                        Hãng đã thay thế sản phẩm. Vui lòng chọn Serial mới:
+                    </MudText>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="OpenSwapDialog">
+                        Chọn Serial Thay Thế
+                    </MudButton>
+                    @if (!string.IsNullOrEmpty(SelectedSerialNumber))
+                    {
+                        <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Class="mt-2">
+                            @SelectedSerialNumber
+                        </MudChip>
+                    }
+                </MudItem>
+            }
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="ManufacturerNotes" Label="Ghi chú từ hãng (tùy chọn)" Variant="Variant.Outlined"
+                              Lines="3" MaxLength="1000" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Tối đa 1000 ký tự</MudText>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Đóng</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="@(ManufacturerResolution == 0 || (ManufacturerResolution == 2 && SelectedSerialId == 0))">
+            Lưu
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int TicketId { get; set; }
+
+    public byte ManufacturerResolution { get; set; } = 0;
+    public string ManufacturerNotes { get; set; } = string.Empty;
+    public int SelectedSerialId { get; set; } = 0;
+    public string SelectedSerialNumber { get; set; } = string.Empty;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        if (ManufacturerResolution > 0)
+        {
+            MudDialog.Close(DialogResult.Ok(new
+            {
+                ManufacturerResolution,
+                ManufacturerNotes,
+                SelectedSerialId
+            }));
+        }
+    }
+
+    private void OpenSwapDialog()
+    {
+        // TODO: Open SwapSerialPickerDialog here
+    }
+}

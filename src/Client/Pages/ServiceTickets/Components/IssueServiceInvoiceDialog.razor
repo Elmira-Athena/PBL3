@@ -1,0 +1,55 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Phát Hành Hóa Đơn Dịch Vụ</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Hóa đơn sẽ tự động copy các mục từ báo giá đã được khách duyệt. Nhập phương thức thanh toán và ghi chú (nếu có).
+        </MudText>
+
+        <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudSelect T="byte" @bind-Value="PaymentMethod" Label="Phương thức thanh toán" Variant="Variant.Outlined"
+                           Required="true" RequiredError="Vui lòng chọn phương thức">
+                    <MudSelectItem T="byte" Value="0">Tiền Mặt</MudSelectItem>
+                    <MudSelectItem T="byte" Value="1">Chuyển Khoản</MudSelectItem>
+                    <MudSelectItem T="byte" Value="2">VNPay</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="Note" Label="Ghi chú (tùy chọn)" Variant="Variant.Outlined"
+                              Lines="3" MaxLength="500" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Tối đa 500 ký tự</MudText>
+            </MudItem>
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Các mục từ báo giá sẽ tự động được copy vào hóa đơn này.
+                </MudAlert>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Đóng</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled">
+            Tạo Hóa Đơn
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    public byte PaymentMethod { get; set; } = 0;
+    public string Note { get; set; } = string.Empty;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(new { PaymentMethod, Note }));
+    }
+}

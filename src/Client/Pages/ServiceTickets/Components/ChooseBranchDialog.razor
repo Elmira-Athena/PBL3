@@ -1,0 +1,107 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Chọn Loại Sửa</MudText>
+        <MudText Typo="Typo.body2" Class="mb-4">
+            Lựa chọn phương thức xử lý phù hợp với tình trạng máy
+        </MudText>
+
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+            @if (IsInWarranty)
+            {
+                <MudText Typo="Typo.body2">
+                    Máy đang <strong>còn bảo hành</strong>. Bạn có thể chọn sửa nội bộ, gửi hãng hoặc đổi 1-1.
+                </MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2">
+                    Máy đã <strong>hết bảo hành</strong>. Chỉ có thể sửa tính phí.
+                </MudText>
+            }
+        </MudAlert>
+
+        <MudGrid Spacing="2">
+            @if (IsInWarranty)
+            {
+                <MudItem xs="12">
+                    <MudButton Variant="@(SelectedResolution == 1 ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Primary" FullWidth="true"
+                               OnClick="@(() => SelectedResolution = 1)" Class="text-left">
+                        <div Class="w-100">
+                            <MudText Typo="Typo.body2" Class="fw-bold">Sửa Nội Bộ</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Shop sửa chữa, thay linh kiện
+                            </MudText>
+                        </div>
+                    </MudButton>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudButton Variant="@(SelectedResolution == 2 ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Primary" FullWidth="true"
+                               OnClick="@(() => SelectedResolution = 2)" Class="text-left">
+                        <div Class="w-100">
+                            <MudText Typo="Typo.body2" Class="fw-bold">Gửi Hãng (RMA)</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Gửi lên trung tâm bảo hành của NSX
+                            </MudText>
+                        </div>
+                    </MudButton>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudButton Variant="@(SelectedResolution == 3 ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Primary" FullWidth="true"
+                               OnClick="@(() => SelectedResolution = 3)" Class="text-left">
+                        <div Class="w-100">
+                            <MudText Typo="Typo.body2" Class="fw-bold">Đổi 1-1</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Xuất máy mới cùng biến thể, thu hồi máy hỏng
+                            </MudText>
+                        </div>
+                    </MudButton>
+                </MudItem>
+            }
+
+            <MudItem xs="12">
+                <MudButton Variant="@(SelectedResolution == 4 ? Variant.Filled : Variant.Outlined)"
+                           Color="Color.Primary" FullWidth="true"
+                           OnClick="@(() => SelectedResolution = 4)" Class="text-left">
+                    <div Class="w-100">
+                        <MudText Typo="Typo.body2" Class="fw-bold">Sửa Tính Phí</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Khách tự trả tiền sửa chữa
+                        </MudText>
+                    </div>
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Hủy</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
+                   Disabled="@(SelectedResolution == 0)">
+            Xác Nhận
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public bool IsInWarranty { get; set; }
+
+    public byte SelectedResolution { get; set; } = 0;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(SelectedResolution));
+    }
+}

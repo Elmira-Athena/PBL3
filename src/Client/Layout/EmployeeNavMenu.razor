@@ -45,5 +45,28 @@
                 IconColor="Color.Default">
         Quản lý Serial
     </MudNavLink>
+
+    <MudText Typo="Typo.caption" Class="px-4 py-2 mt-3 mud-text-secondary"
+             Style="text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">
+        Dịch vụ & Bảo hành
+    </MudText>
+
+    <MudNavLink Href="/admin/service-tickets" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.Build"
+                IconColor="Color.Default">
+        Phiếu sửa chữa
+    </MudNavLink>
+
+    <MudNavLink Href="/admin/service-tickets/intake" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.PersonAdd"
+                IconColor="Color.Default">
+        Tiếp nhận máy
+    </MudNavLink>
+
+    <MudNavLink Href="/admin/service-invoices" Match="NavLinkMatch.Prefix"
+                Icon="@Icons.Material.Outlined.Receipt"
+                IconColor="Color.Default">
+        Hóa đơn dịch vụ
+    </MudNavLink>
 </AuthorizeView>
 </MudNavMenu>

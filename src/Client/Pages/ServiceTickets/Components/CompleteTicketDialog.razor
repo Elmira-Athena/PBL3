@@ -1,0 +1,32 @@
+@namespace Client.Pages.ServiceTickets.Components
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Hoàn Tất Phiếu Sửa Chữa</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">
+            Bạn có chắc chắn muốn hoàn tất phiếu này? Phiếu sẽ chuyển sang trạng thái "Hoàn tất" và sẽ được tạo hóa đơn nếu là sửa tính phí.
+        </MudText>
+        <MudAlert Severity="Severity.Info" Dense="true">
+            Thao tác này sẽ tạo bản ghi lịch sử sửa chữa cho Serial này.
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Default">Hủy</MudButton>
+        <MudButton OnClick="Submit" Color="Color.Success" Variant="Variant.Filled">Xác Nhận Hoàn Tất</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}
