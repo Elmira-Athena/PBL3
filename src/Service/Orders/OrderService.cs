@@ -146,7 +146,7 @@ namespace PBL3.Service.Orders
                     ShipAddress = address.AddressLine,
                     ShipCity = address.City,
                     PaymentMethod = request.PaymentMethod,
-                    PaymentStatus = 0,
+                    PaymentStatus = (byte)(request.PaymentMethod == 0 ? 0 : 1),
                     OrderType = 0, // Online
                     Note = request.Note
                 };
@@ -282,7 +282,7 @@ namespace PBL3.Service.Orders
                     ShipAddress = request.ShipAddress,
                     ShipCity = request.ShipCity,
                     PaymentMethod = request.PaymentMethod,
-                    PaymentStatus = 0, // Unpaid
+                    PaymentStatus = (byte)(request.PaymentMethod == 0 ? 0 : 1),
                     Note = request.Note
                 };
                 
