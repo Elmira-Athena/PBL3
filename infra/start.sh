@@ -71,5 +71,5 @@ else
   echo "  IP không đổi: $NEW_IP"
 fi
 echo ""
-echo "  SSH: ssh -i $KEY_FILE ubuntu@$NEW_IP"
+echo "  SSH: ssh -i ${KEY_FILE:-~/.ssh/hushstore-key.pem} ubuntu@$NEW_IP"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
