@@ -66,7 +66,7 @@
                     <MudText Typo="Typo.h2" Class="fw-bold" Color="Color.Warning">
                         @_averageRating.ToString("0.0")
                     </MudText>
-                    <MudRating SelectedValue="(int)Math.Round(_averageRating)" MaxValue="5" ReadOnly="true" Size="Size.Medium" />
+                    <MudRating Value="(int)Math.Round(_averageRating)" MaxValue="5" ReadOnly="true" Size="Size.Medium" />
                     <MudText Typo="Typo.caption" Class="text-muted mt-1">@_totalCount đánh giá</MudText>
 
                     <div class="mt-3">
@@ -119,7 +119,7 @@
                                         }
                                     </div>
                                 </div>
-                                <MudRating SelectedValue="review.Rating" MaxValue="5" ReadOnly="true" Size="Size.Small" />
+                                <MudRating Value="review.Rating" MaxValue="5" ReadOnly="true" Size="Size.Small" />
                                 @if (!string.IsNullOrEmpty(review.Title))
                                 {
                                     <MudText Typo="Typo.body2" Class="fw-bold mt-1">@review.Title</MudText>
