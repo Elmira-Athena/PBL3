@@ -82,6 +82,23 @@ namespace PBL3.API.Controllers.Storefront
         }
 
         /// <summary>
+        /// Tìm kiếm sản phẩm theo từ khóa, danh mục và khoảng giá với phân trang.
+        /// </summary>
+        [HttpGet("products/search")]
+        [ProducesResponseType(typeof(ApiResult<PagedResult<ProductCardResponse>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> SearchProducts(
+            [FromQuery] string? keyword,
+            [FromQuery] int? categoryId,
+            [FromQuery] decimal? priceMin,
+            [FromQuery] decimal? priceMax,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            var result = await _storefrontService.SearchProductsAsync(keyword, categoryId, priceMin, priceMax, page, pageSize);
+            return Ok(result);
+        }
+
+        /// <summary>
         /// Lấy danh sách sản phẩm theo danh mục (bao gồm cả danh mục con) với phân trang.
         /// </summary>
         [HttpGet("categories/{slug}/products")]

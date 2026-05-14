@@ -258,6 +258,96 @@ namespace PBL3.Service.Storefront
             return ApiResult<CategoryDetailResponse>.Ok(category);
         }
 
+        public async Task<ApiResult<PagedResult<ProductCardResponse>>> SearchProductsAsync(
+            string? keyword, int? categoryId, decimal? priceMin, decimal? priceMax,
+            int page, int pageSize)
+        {
+            var query = _context.Products
+                .AsNoTracking()
+                .Where(p => p.Status == 1 && !p.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                var kw = keyword.Trim().ToLower();
+                query = query.Where(p =>
+                    p.Name.ToLower().Contains(kw) ||
+                    (p.ShortDescription != null && p.ShortDescription.ToLower().Contains(kw)));
+            }
+
+            if (categoryId.HasValue)
+                query = query.Where(p => p.CategoryId == categoryId.Value);
+
+            if (priceMin.HasValue)
+                query = query.Where(p => p.Variants.Any(v => !v.IsDeleted && v.Price >= priceMin.Value));
+
+            if (priceMax.HasValue)
+                query = query.Where(p => p.Variants.Any(v => !v.IsDeleted && v.Price <= priceMax.Value));
+
+            var totalCount = await query.CountAsync();
+
+            var products = await query
+                .OrderByDescending(p => p.CreatedDate)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Name,
+                    p.Slug,
+                    ManufacturerName = p.Manufacturer != null ? p.Manufacturer.Name : string.Empty,
+                    ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
+                    MainImage = p.Variants.Where(v => !v.IsDeleted)
+                        .SelectMany(v => v.Images)
+                        .OrderByDescending(i => i.IsMain)
+                        .ThenBy(i => i.SortOrder)
+                        .FirstOrDefault()
+                })
+                .ToListAsync();
+
+            var result = products.Select(p =>
+            {
+                var variants = p.ActiveVariants.ToList();
+                decimal currentPrice = 0;
+                decimal oldPrice = 0;
+
+                if (variants.Any())
+                {
+                    currentPrice = variants.Min(v => v.Price);
+                    oldPrice = variants.Max(v => v.OriginalPrice ?? v.Price);
+                    if (oldPrice < currentPrice) oldPrice = currentPrice;
+                }
+
+                int discountPercent = 0;
+                if (oldPrice > 0 && currentPrice < oldPrice)
+                    discountPercent = (int)Math.Round((oldPrice - currentPrice) / oldPrice * 100);
+
+                return new ProductCardResponse
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Slug = p.Slug,
+                    ThumbnailUrl = p.MainImage?.ImageUrl,
+                    ManufacturerName = p.ManufacturerName,
+                    CurrentPrice = currentPrice,
+                    OldPrice = oldPrice,
+                    DiscountPercent = discountPercent,
+                    IsAvailable = variants.Any(v => v.StockQuantity > 0),
+                    Rating = 5.0,
+                    ReviewCount = 0
+                };
+            }).ToList();
+
+            var pagedResult = new PagedResult<ProductCardResponse>
+            {
+                Items = result,
+                TotalCount = totalCount,
+                PageNumber = page,
+                PageSize = pageSize
+            };
+
+            return ApiResult<PagedResult<ProductCardResponse>>.Ok(pagedResult);
+        }
+
         public async Task<ApiResult<PagedResult<ProductCardResponse>>> GetProductsByCategoryAsync(
             string categorySlug, int page, int pageSize)
         {

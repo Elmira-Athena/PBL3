@@ -5,8 +5,58 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<MudLayout Style="background-color: #f5f5f5;">
-    <MudMainContent>
+<div style="display: flex; height: 100vh; overflow: hidden;">
+
+    @* ===== LEFT PANEL: Branding (ẩn trên mobile) ===== *@
+    <div class="auth-brand-panel d-none d-md-flex flex-column align-center justify-center px-8"
+         style="width: 42%; min-width: 320px;
+                background: linear-gradient(135deg, #1a1a2e 0%, #c0392b 100%);
+                color: white; gap: 24px;">
+
+        <MudImage Src="images/logo.png" Alt="HushStore" Width="180" Height="60"
+                  ObjectFit="ObjectFit.Contain" />
+
+        <div class="text-center">
+            <MudText Typo="Typo.h4" Style="font-weight: 800; letter-spacing: 0.04em; color: white;">
+                HUSH STORE
+            </MudText>
+            <MudText Typo="Typo.subtitle1" Style="color: rgba(255,255,255,0.75); margin-top: 8px;">
+                Công nghệ đỉnh cao, giá tốt nhất
+            </MudText>
+        </div>
+
+        <MudDivider Style="border-color: rgba(255,255,255,0.2); width: 60%;" />
+
+        <div class="d-flex flex-column gap-3" style="width: 100%; max-width: 280px;">
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.Verified" Style="color: rgba(255,255,255,0.85); font-size: 1.3rem;" />
+                <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.85);">Sản phẩm chính hãng 100%</MudText>
+            </div>
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Style="color: rgba(255,255,255,0.85); font-size: 1.3rem;" />
+                <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.85);">Giao hàng toàn quốc</MudText>
+            </div>
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Style="color: rgba(255,255,255,0.85); font-size: 1.3rem;" />
+                <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.85);">Hỗ trợ kỹ thuật 24/7</MudText>
+            </div>
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.Shield" Style="color: rgba(255,255,255,0.85); font-size: 1.3rem;" />
+                <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.85);">Bảo hành chính sách rõ ràng</MudText>
+            </div>
+        </div>
+
+        <div style="position: absolute; bottom: 24px; left: 0; right: 42%; text-align: center;">
+            <MudLink Href="/" Style="color: rgba(255,255,255,0.55); font-size: 0.8rem;">
+                ← Quay về trang chủ
+            </MudLink>
+        </div>
+    </div>
+
+    @* ===== RIGHT PANEL: Form ===== *@
+    <div class="d-flex flex-column align-center justify-center"
+         style="flex: 1; overflow-y: auto; background-color: #ffffff; padding: 32px 24px;">
         @Body
-    </MudMainContent>
-</MudLayout>
+    </div>
+
+</div>

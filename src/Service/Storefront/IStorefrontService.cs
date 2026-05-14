@@ -19,5 +19,12 @@ namespace PBL3.Service.Storefront
         /// Lấy danh sách sản phẩm theo danh mục (bao gồm cả danh mục con) với phân trang.
         /// </summary>
         Task<ApiResult<PagedResult<ProductCardResponse>>> GetProductsByCategoryAsync(string categorySlug, int page, int pageSize);
+
+        /// <summary>
+        /// Tìm kiếm sản phẩm theo từ khóa, danh mục và khoảng giá với phân trang.
+        /// </summary>
+        Task<ApiResult<PagedResult<ProductCardResponse>>> SearchProductsAsync(
+            string? keyword, int? categoryId, decimal? priceMin, decimal? priceMax,
+            int page, int pageSize);
     }
 }

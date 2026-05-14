@@ -57,5 +57,29 @@ namespace Client.Services.Storefront
             var result = await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ProductCardResponse>>>();
             return result ?? ApiResult<PagedResult<ProductCardResponse>>.Fail("Lỗi kết nối server.");
         }
+
+        public async Task<ApiResult<PagedResult<ProductCardResponse>>> SearchProductsAsync(
+            string? keyword, int? categoryId, decimal? priceMin, decimal? priceMax,
+            int page = 1, int pageSize = 20)
+        {
+            var queryParams = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+                queryParams.Add($"keyword={Uri.EscapeDataString(keyword)}");
+            if (categoryId.HasValue)
+                queryParams.Add($"categoryId={categoryId.Value}");
+            if (priceMin.HasValue)
+                queryParams.Add($"priceMin={priceMin.Value}");
+            if (priceMax.HasValue)
+                queryParams.Add($"priceMax={priceMax.Value}");
+
+            queryParams.Add($"page={page}");
+            queryParams.Add($"pageSize={pageSize}");
+
+            var url = $"/api/storefront/products/search?{string.Join("&", queryParams)}";
+            var response = await _httpClient.GetAsync(url);
+            var result = await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ProductCardResponse>>>();
+            return result ?? ApiResult<PagedResult<ProductCardResponse>>.Fail("Lỗi kết nối server.");
+        }
     }
 }

@@ -8,63 +8,65 @@
 
 <PageTitle>Đăng ký - HushStore</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center pa-4" Style="min-height: 100vh;">
-    <MudCard Elevation="4" Class="pa-6" Style="width: 100%; border-radius: 12px;">
-         <MudCardHeader className="d-flex justify-center flex-column align-center">
-             <MudText Typo="Typo.h5" Align="Align.Center" Style="font-weight: 700; color: var(--mud-palette-primary); text-transform: uppercase;">
-                HUSH STORE
-            </MudText>
-             <MudText Typo="Typo.h6" Align="Align.Center" Class="mt-2">Thông tin khách hàng đăng ký tài khoản</MudText>
-        </MudCardHeader>
+<div style="width: 100%; max-width: 480px;">
 
-        <MudCardContent>
-            <MudGrid>
-                <MudItem xs="12" sm="8">
-                    @* Form Đăng Ký *@
-                    <EditForm Model="@_model" OnValidSubmit="HandleRegister">
-                        <FluentValidationValidator />
-                        <MudTextField @bind-Value="_model.Email" For="@(() => _model.Email)" Label="Email đăng nhập" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                        <MudTextField @bind-Value="_model.FullName" For="@(() => _model.FullName)" Label="Họ tên" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                        <MudTextField @bind-Value="_model.PhoneNumber" For="@(() => _model.PhoneNumber)" Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                        
-                        <MudTextField @bind-Value="_model.Password" For="@(() => _model.Password)" Label="Mật khẩu" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                        <MudTextField @bind-Value="_model.ConfirmPassword" For="@(() => _model.ConfirmPassword)" Label="Nhập lại mật khẩu" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
-                        
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" ButtonType="ButtonType.Submit" Class="mt-2" Disabled="@_isLoading">
-                            @if (_isLoading)
-                            {
-                                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>
-                                <MudText Class="ms-2">Đang xử lý...</MudText>
-                            }
-                            else
-                            {
-                                <MudText>Đăng ký</MudText>
-                            }
-                        </MudButton>
-                    </EditForm>
-                </MudItem>
+    @* Logo chỉ hiện trên mobile khi left panel bị ẩn *@
+    <div class="d-flex d-md-none justify-center mb-6">
+        <MudImage Src="images/logo.png" Alt="HushStore" Height="48" ObjectFit="ObjectFit.Contain" />
+    </div>
 
-                <MudItem xs="12" sm="4" Class="d-flex flex-column align-center justify-center">
-                    @* Phần chuyển sang đăng nhập *@
-                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">Bạn đã có tài khoản ?</MudText>
-                    <MudButton Variant="Variant.Filled" Color="Color.Error" Href="/login" Class="mt-2">
-                        Đăng nhập
-                    </MudButton>
-                </MudItem>
-            </MudGrid>
-        </MudCardContent>
-        
-        <MudCardActions Class="d-flex flex-column align-start px-6 pb-6">
-             <MudText Typo="Typo.subtitle2" Style="font-weight: 700;">Hỗ trợ khách hàng</MudText>
-             <MudList T="string" Dense="true" DisablePadding="true">
-                 <MudListItem><MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách bảo mật</MudLink></MudListItem>
-                 <MudListItem><MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách bảo hành</MudLink></MudListItem>
-                 <MudListItem><MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách thanh toán</MudLink></MudListItem>
-                 <MudListItem><MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách vận chuyển</MudLink></MudListItem>
-            </MudList>
-        </MudCardActions>
-    </MudCard>
-</MudContainer>
+    <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight: 700; color: #1a1a2e;">Tạo tài khoản</MudText>
+    <MudText Typo="Typo.body2" Class="mb-6" Style="color: #666666;">Đăng ký để mua sắm tại HushStore</MudText>
+
+    <EditForm Model="@_model" OnValidSubmit="HandleRegister">
+        <FluentValidationValidator />
+
+        <MudTextField @bind-Value="_model.Email" For="@(() => _model.Email)"
+                      Label="Email đăng nhập" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudTextField @bind-Value="_model.FullName" For="@(() => _model.FullName)"
+                      Label="Họ tên" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudTextField @bind-Value="_model.PhoneNumber" For="@(() => _model.PhoneNumber)"
+                      Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudTextField @bind-Value="_model.Password" For="@(() => _model.Password)"
+                      Label="Mật khẩu" InputType="InputType.Password"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        <MudTextField @bind-Value="_model.ConfirmPassword" For="@(() => _model.ConfirmPassword)"
+                      Label="Nhập lại mật khẩu" InputType="InputType.Password"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-6" />
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                   ButtonType="ButtonType.Submit" FullWidth="true" Disabled="@_isLoading"
+                   Style="border-radius: 8px; font-weight: 600; letter-spacing: 0.03em;">
+            @if (_isLoading)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Đang xử lý...</MudText>
+            }
+            else
+            {
+                <MudText>Đăng ký tài khoản</MudText>
+            }
+        </MudButton>
+    </EditForm>
+
+    <div class="d-flex justify-center mt-4">
+        <MudText Typo="Typo.body2">Đã có tài khoản?</MudText>
+        <MudLink Href="/login" Class="ml-1" Color="Color.Primary" Underline="Underline.Always">
+            Đăng nhập ngay
+        </MudLink>
+    </div>
+
+    <MudDivider Class="my-6" />
+
+    <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-2">Hỗ trợ khách hàng</MudText>
+    <div class="d-flex flex-wrap gap-3">
+        <MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách bảo mật</MudLink>
+        <MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách bảo hành</MudLink>
+        <MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách thanh toán</MudLink>
+        <MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách vận chuyển</MudLink>
+    </div>
+
+</div>
 
 @code {
     private RegisterCustomerRequest _model = new();

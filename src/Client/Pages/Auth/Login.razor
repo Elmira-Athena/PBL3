@@ -7,52 +7,51 @@
 
 <PageTitle>Đăng nhập - HushStore</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="d-flex align-center justify-center pa-4" Style="height: 100vh;">
-    <MudCard Elevation="4" Class="pa-4" Style="width: 100%; border-radius: 12px;">
-        <MudCardHeader className="d-flex justify-center">
-            <CardHeaderContent>
-                 <MudText Typo="Typo.h5" Align="Align.Center" Style="font-weight: 700; color: var(--mud-palette-primary);">
-                    HUSH STORE
-                </MudText>
-                <MudText Typo="Typo.h6" Align="Align.Center">Đăng nhập</MudText>
-            </CardHeaderContent>
-        </MudCardHeader>
-        <MudCardContent>
-            <EditForm Model="@_loginRequest" OnValidSubmit="HandleLogin">
-                <FluentValidationValidator />
-                
-                <MudTextField T="string" Label="Email" @bind-Value="_loginRequest.Email"
-                              For="@(() => _loginRequest.Email)"
-                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
-                
-                <MudTextField T="string" Label="Mật khẩu" @bind-Value="_loginRequest.Password"
-                              For="@(() => _loginRequest.Password)"
-                              InputType="InputType.Password"
-                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+<div style="width: 100%; max-width: 400px;">
 
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
-                           Disabled="@_isLoading" Class="mt-2">
-                    @if (_isLoading)
-                    {
-                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                        <MudText Class="ms-2">Đang xử lý...</MudText>
-                    }
-                    else
-                    {
-                        <MudText>Đăng nhập</MudText>
-                    }
-                </MudButton>
-            </EditForm>
-            
-            <div class="d-flex justify-center mt-4">
-                <MudText Typo="Typo.body2">Chưa có tài khoản?</MudText>
-                <MudLink Href="/register" Class="ml-1" Color="Color.Primary" Underline="Underline.Always">
-                    Đăng ký ngay
-                </MudLink>
-            </div>
-        </MudCardContent>
-    </MudCard>
-</MudContainer>
+    @* Logo chỉ hiện trên mobile khi left panel bị ẩn *@
+    <div class="d-flex d-md-none justify-center mb-6">
+        <MudImage Src="images/logo.png" Alt="HushStore" Height="48" ObjectFit="ObjectFit.Contain" />
+    </div>
+
+    <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight: 700; color: #1a1a2e;">Đăng nhập</MudText>
+    <MudText Typo="Typo.body2" Class="mb-6" Style="color: #666666;">Chào mừng bạn trở lại HushStore</MudText>
+
+    <EditForm Model="@_loginRequest" OnValidSubmit="HandleLogin">
+        <FluentValidationValidator />
+
+        <MudTextField T="string" Label="Email" @bind-Value="_loginRequest.Email"
+                      For="@(() => _loginRequest.Email)"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" />
+
+        <MudTextField T="string" Label="Mật khẩu" @bind-Value="_loginRequest.Password"
+                      For="@(() => _loginRequest.Password)"
+                      InputType="InputType.Password"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-6" />
+
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                   Size="Size.Large" FullWidth="true" Disabled="@_isLoading"
+                   Style="border-radius: 8px; font-weight: 600; letter-spacing: 0.03em;">
+            @if (_isLoading)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Đang xử lý...</MudText>
+            }
+            else
+            {
+                <MudText>Đăng nhập</MudText>
+            }
+        </MudButton>
+    </EditForm>
+
+    <div class="d-flex justify-center mt-4">
+        <MudText Typo="Typo.body2">Chưa có tài khoản?</MudText>
+        <MudLink Href="/register" Class="ml-1" Color="Color.Primary" Underline="Underline.Always">
+            Đăng ký ngay
+        </MudLink>
+    </div>
+
+</div>
 
 @code {
     private LoginRequest _loginRequest = new();
@@ -61,14 +60,13 @@
     private async Task HandleLogin()
     {
         _isLoading = true;
-        
-        // Gọi API login
+
         var result = await AuthService.LoginAsync(_loginRequest);
 
         if (result.Success)
         {
             Snackbar.Add("Đăng nhập thành công!", Severity.Success);
-            
+
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var user = authState.User;
 

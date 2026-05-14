@@ -15,5 +15,10 @@ namespace Client.Services.Storefront
 
         /// <summary>Lấy danh sách sản phẩm theo danh mục (cả danh mục con) với phân trang.</summary>
         Task<ApiResult<PagedResult<ProductCardResponse>>> GetProductsByCategoryAsync(string slug, int page = 1, int pageSize = 20);
+
+        /// <summary>Tìm kiếm sản phẩm theo từ khóa, danh mục và khoảng giá với phân trang.</summary>
+        Task<ApiResult<PagedResult<ProductCardResponse>>> SearchProductsAsync(
+            string? keyword, int? categoryId, decimal? priceMin, decimal? priceMax,
+            int page = 1, int pageSize = 20);
     }
 }

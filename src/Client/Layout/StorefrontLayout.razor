@@ -30,13 +30,16 @@
         <MudPaper Elevation="0" Class="d-flex align-center rounded-lg px-3 flex-grow-1"
                   Style="background-color: white; max-width: 600px;">
             <MudTextField T="string" Placeholder="Nhập từ khóa tìm kiếm..."
+                          @bind-Value="_searchKeyword"
                           Variant="Variant.Text"
                           Class="flex-grow-1"
                           Style="font-size: 0.9rem;"
                           Margin="Margin.Dense"
                           Adornment="Adornment.End"
                           AdornmentIcon="@Icons.Material.Filled.Search"
-                          AdornmentColor="Color.Error" />
+                          AdornmentColor="Color.Error"
+                          OnAdornmentClick="PerformSearch"
+                          OnKeyDown="OnSearchKeyDown" />
         </MudPaper>
         <MudSpacer />
 
@@ -93,6 +96,8 @@
 </MudLayout>
 
 @code {
+    private string _searchKeyword = string.Empty;
+
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -109,6 +114,18 @@
                 Navigation.NavigateTo("/pos");
             }
         }
+    }
+
+    private void OnSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            PerformSearch();
+    }
+
+    private void PerformSearch()
+    {
+        if (!string.IsNullOrWhiteSpace(_searchKeyword))
+            Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(_searchKeyword.Trim())}");
     }
 
     private async Task Logout()
