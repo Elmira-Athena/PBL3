@@ -1,5 +1,7 @@
 using System.Text;
+using System.Text.Json;
 using System.Threading.RateLimiting;
+using PBL3.Shared.DTOs.Common;
 using Amazon;
 using Amazon.Runtime;
 using Amazon.S3;
@@ -200,6 +202,19 @@ if (app.Environment.IsDevelopment())
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "HushStore API v1");
     });
 }
+
+app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
+{
+    ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+    ctx.Response.ContentType = "application/json";
+    var feature = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+    var message = app.Environment.IsDevelopment()
+        ? feature?.Error?.Message ?? "Lỗi máy chủ nội bộ."
+        : "Lỗi máy chủ nội bộ.";
+    var result = ApiResult<object>.Fail(message);
+    await ctx.Response.WriteAsync(JsonSerializer.Serialize(result,
+        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+}));
 
 app.UseHttpsRedirection();
 

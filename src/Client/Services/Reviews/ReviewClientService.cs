@@ -30,14 +30,16 @@ namespace Client.Services.Reviews
 
         public async Task<ApiResult<ReviewDto>?> CreateAsync(CreateReviewRequest request)
         {
+            var response = await _httpClient.PostAsJsonAsync(BaseUrl, request);
             try
             {
-                var response = await _httpClient.PostAsJsonAsync(BaseUrl, request);
                 return await response.Content.ReadFromJsonAsync<ApiResult<ReviewDto>>();
             }
             catch
             {
-                return ApiResult<ReviewDto>.Fail("Không thể gửi đánh giá.");
+                var body = await response.Content.ReadAsStringAsync();
+                var hint = body.Length > 0 ? body[..Math.Min(body.Length, 300)] : $"HTTP {(int)response.StatusCode}";
+                return ApiResult<ReviewDto>.Fail(hint);
             }
         }
 
