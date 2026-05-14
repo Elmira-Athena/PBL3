@@ -7,25 +7,35 @@ USE [HushStoreDb];
 GO
 
 -- ============================================
--- 0. XÓA DỮ LIỆU CŨ (theo thứ tự FK)
+-- 0. XÓA DỮ LIỆU CŨ (theo slug, không phụ thuộc ID)
 -- ============================================
-DELETE FROM [ProductVariants] WHERE ProductId IN (
-    SELECT Id FROM [Products] WHERE CategoryId IN (
-        SELECT Id FROM [Categories] WHERE Id IN (
-            100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,200
-        )
-        OR ParentId IN (100,200)
-    )
-);
-DELETE FROM [Products] WHERE CategoryId IN (
+DECLARE @RootCatIds TABLE (Id INT);
+INSERT INTO @RootCatIds
     SELECT Id FROM [Categories]
-    WHERE Id IN (100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,200)
-    OR ParentId IN (100,200)
+    WHERE Slug IN (N'linh-kien-may-tinh', N'pc-build-san');
+
+DECLARE @AllCatIds TABLE (Id INT);
+INSERT INTO @AllCatIds
+    SELECT Id FROM [Categories]
+    WHERE Id IN (SELECT Id FROM @RootCatIds)
+       OR ParentId IN (SELECT Id FROM @RootCatIds);
+
+DELETE FROM [ProductVariants]
+WHERE ProductId IN (
+    SELECT Id FROM [Products]
+    WHERE CategoryId IN (SELECT Id FROM @AllCatIds)
 );
+DELETE FROM [Products]
+WHERE CategoryId IN (SELECT Id FROM @AllCatIds);
 DELETE FROM [Categories]
-WHERE Id IN (100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,200)
-   OR ParentId IN (100,200);
-DELETE FROM [Manufacturers] WHERE Id BETWEEN 1 AND 21;
+WHERE Id IN (SELECT Id FROM @AllCatIds);
+DELETE FROM [Manufacturers]
+WHERE Name IN (
+    N'Intel', N'AMD', N'NVIDIA', N'Samsung', N'Kingston', N'Corsair',
+    N'ASUS', N'Gigabyte', N'MSI', N'Seagate', N'Western Digital',
+    N'Cooler Master', N'Noctua', N'be quiet!', N'Seasonic', N'LG',
+    N'Logitech', N'Razer', N'DeepCool', N'Microsoft', N'HushStore Custom'
+);
 
 -- ============================================
 -- 1. MANUFACTURERS
