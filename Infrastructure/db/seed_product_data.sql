@@ -12,7 +12,8 @@ GO
 DECLARE @RootCatIds TABLE (Id INT);
 INSERT INTO @RootCatIds
     SELECT Id FROM [Categories]
-    WHERE Slug IN (N'linh-kien-may-tinh', N'pc-build-san');
+    WHERE Slug IN (N'linh-kien-may-tinh', N'pc-build-san',
+                   N'man-hinh', N'ban-phim', N'tai-nghe', N'phan-mem');
 
 DECLARE @AllCatIds TABLE (Id INT);
 INSERT INTO @AllCatIds
@@ -76,28 +77,28 @@ SET IDENTITY_INSERT [Categories] ON;
 INSERT INTO [Categories] (Id, Name, Slug, ParentId, Level, SortOrder, IsVisible, CreatedDate, IsDeleted) VALUES
 (100, N'Linh kiện máy tính', N'linh-kien-may-tinh', NULL, 0, 1, 1, GETUTCDATE(), 0);
 
--- Sub-categories — slugs PHẢI khớp CategorySlug trong BuildPc.razor
+-- Sub-categories linh kiện — slugs PHẢI khớp CategorySlug trong BuildPc.razor
 INSERT INTO [Categories] (Id, Name, Slug, ParentId, Level, SortOrder, IsVisible, CreatedDate, IsDeleted) VALUES
-(101, N'CPU - Bộ vi xử lý',        N'cpu',                100, 1,  1, 1, GETUTCDATE(), 0),
-(102, N'Bo mạch chủ (Mainboard)',   N'bo-mach-chu',        100, 1,  2, 1, GETUTCDATE(), 0),
-(103, N'RAM - Bộ nhớ trong',       N'ram',                100, 1,  3, 1, GETUTCDATE(), 0),
-(104, N'Ổ cứng HDD',               N'hdd',                100, 1,  4, 1, GETUTCDATE(), 0),
-(105, N'Ổ cứng SSD',               N'ssd',                100, 1,  5, 1, GETUTCDATE(), 0),
-(106, N'Card màn hình (VGA)',       N'vga',                100, 1,  6, 1, GETUTCDATE(), 0),
-(107, N'Nguồn máy tính (PSU)',      N'nguon',              100, 1,  7, 1, GETUTCDATE(), 0),
-(108, N'Vỏ Case máy tính',         N'vo-case',            100, 1,  8, 1, GETUTCDATE(), 0),
-(109, N'Fan Case',                 N'fan-case',           100, 1,  9, 1, GETUTCDATE(), 0),
-(110, N'Màn hình máy tính',        N'man-hinh',           100, 1, 10, 1, GETUTCDATE(), 0),
-(111, N'Chuột máy tính',           N'chuot',              100, 1, 11, 1, GETUTCDATE(), 0),
-(112, N'Bàn phím máy tính',        N'ban-phim',           100, 1, 12, 1, GETUTCDATE(), 0),
-(113, N'Tản nhiệt khí',            N'tan-nhiet-khi',      100, 1, 13, 1, GETUTCDATE(), 0),
-(114, N'Tản nhiệt nước AIO',       N'tan-nhiet-nuoc-aio', 100, 1, 14, 1, GETUTCDATE(), 0),
-(115, N'Tai nghe gaming',          N'tai-nghe',           100, 1, 15, 1, GETUTCDATE(), 0),
-(116, N'Phần mềm',                 N'phan-mem',           100, 1, 16, 1, GETUTCDATE(), 0);
+(101, N'CPU - Bộ vi xử lý',       N'cpu',                100, 1,  1, 1, GETUTCDATE(), 0),
+(102, N'Bo mạch chủ (Mainboard)', N'bo-mach-chu',        100, 1,  2, 1, GETUTCDATE(), 0),
+(103, N'RAM - Bộ nhớ trong',      N'ram',                100, 1,  3, 1, GETUTCDATE(), 0),
+(104, N'Ổ cứng HDD',              N'hdd',                100, 1,  4, 1, GETUTCDATE(), 0),
+(105, N'Ổ cứng SSD',              N'ssd',                100, 1,  5, 1, GETUTCDATE(), 0),
+(106, N'Card màn hình (VGA)',      N'vga',                100, 1,  6, 1, GETUTCDATE(), 0),
+(107, N'Nguồn máy tính (PSU)',     N'nguon',              100, 1,  7, 1, GETUTCDATE(), 0),
+(108, N'Vỏ Case máy tính',        N'vo-case',            100, 1,  8, 1, GETUTCDATE(), 0),
+(109, N'Fan Case',                N'fan-case',           100, 1,  9, 1, GETUTCDATE(), 0),
+(111, N'Chuột máy tính',          N'chuot',              100, 1, 10, 1, GETUTCDATE(), 0),
+(113, N'Tản nhiệt khí',           N'tan-nhiet-khi',      100, 1, 11, 1, GETUTCDATE(), 0),
+(114, N'Tản nhiệt nước AIO',      N'tan-nhiet-nuoc-aio', 100, 1, 12, 1, GETUTCDATE(), 0);
 
--- Root: PC Build sẵn (danh mục riêng, không thuộc linh kiện)
+-- Root categories độc lập
 INSERT INTO [Categories] (Id, Name, Slug, ParentId, Level, SortOrder, IsVisible, CreatedDate, IsDeleted) VALUES
-(200, N'PC Build sẵn', N'pc-build-san', NULL, 0, 2, 1, GETUTCDATE(), 0);
+(110, N'Màn hình máy tính', N'man-hinh',   NULL, 0, 3, 1, GETUTCDATE(), 0),
+(112, N'Bàn phím máy tính', N'ban-phim',   NULL, 0, 4, 1, GETUTCDATE(), 0),
+(115, N'Tai nghe',          N'tai-nghe',   NULL, 0, 5, 1, GETUTCDATE(), 0),
+(116, N'Phần mềm',          N'phan-mem',   NULL, 0, 6, 1, GETUTCDATE(), 0),
+(200, N'PC Build sẵn',      N'pc-build-san',NULL, 0, 7, 1, GETUTCDATE(), 0);
 
 SET IDENTITY_INSERT [Categories] OFF;
 
