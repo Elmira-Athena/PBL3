@@ -24,7 +24,9 @@ namespace PBL3.Service.Storefront
                     Id = c.Id,
                     Name = c.Name,
                     Slug = c.Slug,
-                    IconUrl = c.ImageUrl
+                    IconUrl = c.ImageUrl,
+                    Level = c.Level,
+                    ParentId = c.ParentId
                 })
                 .ToListAsync();
 

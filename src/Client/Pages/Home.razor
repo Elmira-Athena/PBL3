@@ -27,15 +27,18 @@
 else
 {
     <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-8">
-        
+
         <!-- Khối 1: Hero Section -->
         <MudGrid>
             <MudItem xs="12" md="3">
-                <MudPaper Elevation="2" Class="pa-0 h-100 overflow-hidden">
+                <MudPaper Elevation="2" Class="pa-0 h-100" Style="overflow-y: auto; max-height: 400px;">
                     <MudList T="CategoryMenuResponse" Dense="true" Class="py-2">
-                        @foreach (var cat in _categories)
+                        @foreach (var cat in _categories.Where(c => c.Level == 0).OrderBy(c => c.Name))
                         {
-                            <MudListItem T="CategoryMenuResponse" OnClick="@(() => NavigateToCategory(cat.Slug))">
+                            var hasChildren = _categories.Any(c => c.ParentId == cat.Id);
+                            var isExpanded = _expandedCategoryId == cat.Id;
+
+                            <MudListItem T="CategoryMenuResponse" OnClick="@(() => ToggleCategory(cat))">
                                 <div class="d-flex align-center">
                                     @if (!string.IsNullOrEmpty(cat.IconUrl))
                                     {
@@ -47,9 +50,24 @@ else
                                     }
                                     <MudText Typo="Typo.body2">@cat.Name</MudText>
                                     <MudSpacer />
-                                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+                                    <MudIcon Icon="@(isExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ChevronRight)"
+                                             Size="Size.Small" />
                                 </div>
                             </MudListItem>
+
+                            @if (isExpanded && hasChildren)
+                            {
+                                @foreach (var child in _categories.Where(c => c.ParentId == cat.Id).OrderBy(c => c.Name))
+                                {
+                                    <MudListItem T="CategoryMenuResponse" Dense="true" OnClick="@(() => NavigateToCategory(child.Slug))">
+                                        <div class="d-flex align-center" style="padding-left: 12px;">
+                                            <MudIcon Icon="@Icons.Material.Filled.SubdirectoryArrowRight"
+                                                     Size="Size.Small" Class="mr-2 mud-text-secondary" />
+                                            <MudText Typo="Typo.caption">@child.Name</MudText>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            }
                         }
                     </MudList>
                 </MudPaper>
@@ -59,43 +77,34 @@ else
             </MudItem>
         </MudGrid>
 
-        <!-- Khối 2: PC bán chạy -->
-        <div class="mt-8">
-            <div class="d-flex align-center justify-space-between mb-4">
-                <MudText Typo="Typo.h5" Class="fw-bold">PC bán chạy</MudText>
-                <MudButton Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward" OnClick="HandleComingSoon">Xem tất cả</MudButton>
+        <!-- Khối 2+: Sản phẩm nổi bật theo danh mục cấp 0 -->
+        @foreach (var featSection in _featuredSections.Where(fs => fs.Products.Any()))
+        {
+            <div class="mt-8">
+                <div class="d-flex align-center justify-space-between mb-4">
+                    <MudText Typo="Typo.h5" Class="fw-bold">@featSection.Category.Name nổi bật</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary"
+                               EndIcon="@Icons.Material.Filled.ArrowForward"
+                               OnClick="@(() => NavigateToCategory(featSection.Category.Slug))">
+                        Xem tất cả
+                    </MudButton>
+                </div>
+                <MudGrid>
+                    @foreach (var product in featSection.Products)
+                    {
+                        <MudItem xs="12" sm="6" md="4" lg="2">
+                            <ProductCard Product="product" />
+                        </MudItem>
+                    }
+                </MudGrid>
             </div>
-            <MudGrid>
-                @foreach (var pc in _featuredPCs)
-                {
-                    <MudItem xs="12" sm="6" md="4" lg="2">
-                        <ProductCard Product="pc" />
-                    </MudItem>
-                }
-            </MudGrid>
-        </div>
+        }
 
-        <!-- Khối 3: Laptop bán chạy -->
-        <div class="mt-8">
-            <div class="d-flex align-center justify-space-between mb-4">
-                <MudText Typo="Typo.h5" Class="fw-bold">Laptop bán chạy</MudText>
-                <MudButton Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward" OnClick="HandleComingSoon">Xem tất cả</MudButton>
-            </div>
-            <MudGrid>
-                @foreach (var laptop in _featuredLaptops)
-                {
-                    <MudItem xs="12" sm="6" md="4" lg="2">
-                        <ProductCard Product="laptop" />
-                    </MudItem>
-                }
-            </MudGrid>
-        </div>
-
-        <!-- Khối 4: Danh mục sản phẩm Grid -->
+        <!-- Danh mục sản phẩm Grid (level-0 only) -->
         <div class="mt-8">
             <MudText Typo="Typo.h5" Class="fw-bold mb-4">Danh mục sản phẩm</MudText>
             <MudGrid>
-                @foreach (var cat in _categories)
+                @foreach (var cat in _categories.Where(c => c.Level == 0).OrderBy(c => c.Name))
                 {
                     <MudItem xs="6" sm="4" md="2">
                         <MudPaper Elevation="1" Class="pa-4 d-flex flex-column align-center justify-center h-100" Style="cursor:pointer" @onclick="@(() => NavigateToCategory(cat.Slug))">
@@ -116,7 +125,7 @@ else
 
     </MudContainer>
 
-    <!-- Khối 5: Footer -->
+    <!-- Footer -->
     <MudPaper Elevation="0" Class="pa-8 mt-16" Style="background-color: #f5f5f5;">
         <MudContainer MaxWidth="MaxWidth.Large">
             <MudGrid>
@@ -149,10 +158,12 @@ else
 @code {
     private static readonly string BannerUrl = "https://placehold.co/1200x400?text=HushStore+Banner";
 
+    private record CategorySection(CategoryMenuResponse Category, List<ProductCardResponse> Products);
+
     private bool _isLoading = true;
     private List<CategoryMenuResponse> _categories = new();
-    private List<ProductCardResponse> _featuredPCs = new();
-    private List<ProductCardResponse> _featuredLaptops = new();
+    private List<CategorySection> _featuredSections = new();
+    private int? _expandedCategoryId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -162,31 +173,22 @@ else
 
             var catResult = await StorefrontService.GetActiveCategoriesAsync();
             if (catResult.Success && catResult.Data != null)
-            {
                 _categories = catResult.Data;
-            }
 
-            var pcId = _categories.FirstOrDefault(x => x.Slug.ToLower().Contains("pc") || x.Name.ToLower().Contains("pc") || x.Name.Contains("Linh kiện"))?.Id;
-            if (pcId.HasValue)
-            {
-                var pcResult = await StorefrontService.GetFeaturedProductsAsync(pcId.Value, 6);
-                if (pcResult.Success && pcResult.Data != null)
-                {
-                    _featuredPCs = pcResult.Data;
-                }
-            }
+            var level0Cats = _categories.Where(c => c.Level == 0).OrderBy(c => c.Name).ToList();
 
-            var laptopId = _categories.FirstOrDefault(x => x.Slug.ToLower().Contains("laptop") || x.Name.ToLower().Contains("laptop"))?.Id;
-            if (laptopId.HasValue)
+            var sectionTasks = level0Cats.Select(async cat =>
             {
-                var laptopResult = await StorefrontService.GetFeaturedProductsAsync(laptopId.Value, 6);
-                if (laptopResult.Success && laptopResult.Data != null)
-                {
-                    _featuredLaptops = laptopResult.Data;
-                }
-            }
+                var result = await StorefrontService.GetProductsByCategoryAsync(cat.Slug, 1, 6);
+                var products = result.Success && result.Data?.Items != null
+                    ? result.Data.Items.ToList()
+                    : new List<ProductCardResponse>();
+                return new CategorySection(cat, products);
+            });
+
+            _featuredSections = (await Task.WhenAll(sectionTasks)).ToList();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             Snackbar.Add("Có lỗi xảy ra khi tải dữ liệu", Severity.Error);
         }
@@ -196,13 +198,20 @@ else
         }
     }
 
-    private void HandleComingSoon()
+    private void ToggleCategory(CategoryMenuResponse cat)
     {
-        Snackbar.Add("Tính năng đang phát triển", Severity.Info);
+        var hasChildren = _categories.Any(c => c.ParentId == cat.Id);
+        if (!hasChildren)
+        {
+            NavigateToCategory(cat.Slug);
+            return;
+        }
+        _expandedCategoryId = _expandedCategoryId == cat.Id ? (int?)null : cat.Id;
     }
 
-    private void NavigateToCategory(string slug)
-    {
+    private void HandleComingSoon() =>
+        Snackbar.Add("Tính năng đang phát triển", Severity.Info);
+
+    private void NavigateToCategory(string slug) =>
         NavigationManager.NavigateTo($"/category/{slug}");
-    }
 }

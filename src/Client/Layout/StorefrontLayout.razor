@@ -1,9 +1,12 @@
 @inherits LayoutComponentBase
+@using Client.Services.Storefront
+@using PBL3.Shared.DTOs.Storefront
 @inject IAuthClientService AuthService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IDialogService DialogService
+@inject IStorefrontClientService StorefrontService
 
 <MudLayout>
     @* ===== TOP APP BAR ===== *@
@@ -17,14 +20,36 @@
                   Class="mr-4" Style="cursor: pointer;"
                   @onclick='() => Navigation.NavigateTo("/")' />
 
-        @* -- DANH MỤC Button -- *@
-        <MudButton Variant="Variant.Filled"
-                   StartIcon="@Icons.Material.Filled.Menu"
-                   Style="background-color: rgba(255,255,255,0.15); color: white; font-weight: 700; letter-spacing: 0.05em; border-radius: 4px;"
-                   Class="mr-4"
-                   OnClick="@(() => Snackbar.Add("Tính năng đang phát triển", Severity.Info))">
-            DANH MỤC
-        </MudButton>
+        @* -- DANH MỤC Button with dropdown -- *@
+        <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Class="mr-4">
+            <ActivatorContent>
+                <MudButton Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Menu"
+                           Style="background-color: rgba(255,255,255,0.15); color: white; font-weight: 700; letter-spacing: 0.05em; border-radius: 4px;">
+                    DANH MỤC
+                </MudButton>
+            </ActivatorContent>
+            <ChildContent>
+                <div style="max-height: 420px; overflow-y: auto; min-width: 220px;">
+                    @foreach (var cat in _menuCategories.OrderBy(c => c.Name))
+                    {
+                        <MudMenuItem OnClick="@(() => Navigation.NavigateTo($"/category/{cat.Slug}"))">
+                            <div class="d-flex align-center">
+                                @if (!string.IsNullOrEmpty(cat.IconUrl))
+                                {
+                                    <img src="@cat.IconUrl" style="width:20px;height:20px;object-fit:contain;" class="mr-2" alt="" />
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Class="mr-2" Style="opacity:0.4;" />
+                                }
+                                <MudText Typo="Typo.body2">@cat.Name</MudText>
+                            </div>
+                        </MudMenuItem>
+                    }
+                </div>
+            </ChildContent>
+        </MudMenu>
 
         @* -- Search Bar -- *@
         <MudPaper Elevation="0" Class="d-flex align-center rounded-lg px-3 flex-grow-1"
@@ -97,22 +122,36 @@
 
 @code {
     private string _searchKeyword = string.Empty;
+    private List<CategoryMenuResponse> _menuCategories = new();
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-
-        if (user.Identity?.IsAuthenticated == true)
+        try
         {
-            if (user.IsInRole("Admin"))
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated == true)
             {
-                Navigation.NavigateTo("/admin/reports");
+                if (user.IsInRole("Admin"))
+                {
+                    Navigation.NavigateTo("/admin/reports");
+                    return;
+                }
+                else if (user.IsInRole("Employee"))
+                {
+                    Navigation.NavigateTo("/pos");
+                    return;
+                }
             }
-            else if (user.IsInRole("Employee"))
-            {
-                Navigation.NavigateTo("/pos");
-            }
+
+            var catResult = await StorefrontService.GetActiveCategoriesAsync();
+            if (catResult.Success && catResult.Data != null)
+                _menuCategories = catResult.Data;
+        }
+        catch
+        {
+            // Silently handle — don't break the layout
         }
     }
 

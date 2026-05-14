@@ -62,72 +62,62 @@
                     {
                         var item = slot.SelectedItem;
                         <div class="d-flex align-center gap-3 w-100">
-                            @* Thumbnail *@
-                            <div style="width:60px; height:60px; flex-shrink:0;">
-                                @if (!string.IsNullOrEmpty(item.ImageUrl))
-                                {
-                                    <img src="@item.ImageUrl" style="width:100%; height:100%; object-fit:contain;" />
-                                }
-                                else
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.Memory"
-                                             Size="Size.Large" Color="Color.Default" />
-                                }
+                            @* Left: thumbnail + product info *@
+                            <div class="d-flex align-center gap-3" style="flex: 1; min-width: 0;">
+                                <div style="width:50px; height:50px; flex-shrink:0;">
+                                    @if (!string.IsNullOrEmpty(item.ImageUrl))
+                                    {
+                                        <img src="@item.ImageUrl" style="width:100%; height:100%; object-fit:contain;" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Memory"
+                                                 Size="Size.Large" Color="Color.Default" />
+                                    }
+                                </div>
+                                <div style="min-width:0;">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">@item.ProductName</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@item.VariantName</MudText>
+                                    @if (item.WarrantyMonth > 0)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            Bảo hành: @item.WarrantyMonth tháng
+                                        </MudText>
+                                    }
+                                </div>
                             </div>
 
-                            @* Product info *@
-                            <div class="flex-grow-1">
-                                <MudText Typo="Typo.body2" Style="font-weight:600;">@item.ProductName</MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@item.VariantName</MudText>
-                                @if (item.WarrantyMonth > 0)
-                                {
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                        Bảo hành: @item.WarrantyMonth tháng
-                                    </MudText>
-                                }
+                            @* Right: pricing + actions *@
+                            <div class="d-flex align-center gap-1" style="flex-shrink:0;">
+                                <MudText Typo="Typo.body2" Style="min-width:110px; text-align:right; white-space:nowrap;">
+                                    @item.UnitPrice.ToString("N0")đ
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="mx-1">×</MudText>
+                                <MudNumericField T="int"
+                                                Value="@item.Quantity"
+                                                ValueChanged="@(q => UpdateQuantity(slot, q))"
+                                                Min="1" Max="10"
+                                                Variant="Variant.Outlined"
+                                                Margin="Margin.Dense"
+                                                Style="width:72px;" />
+                                <MudText Typo="Typo.body2" Class="mx-1">=</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Error"
+                                         Style="font-weight:700; min-width:120px; text-align:right; white-space:nowrap;">
+                                    @((item.UnitPrice * item.Quantity).ToString("N0"))đ
+                                </MudText>
+                                <MudTooltip Text="Thay đổi linh kiện">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                                   Size="Size.Small"
+                                                   Color="Color.Primary"
+                                                   OnClick="@(() => OpenPicker(slot))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Xóa">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   OnClick="@(() => RemoveItem(slot))" />
+                                </MudTooltip>
                             </div>
-
-                            @* Unit price *@
-                            <MudText Typo="Typo.body2" Style="min-width:120px; text-align:right;">
-                                @item.UnitPrice.ToString("N0")
-                            </MudText>
-
-                            @* × sign *@
-                            <MudText Typo="Typo.body2" Class="mx-1">×</MudText>
-
-                            @* Quantity *@
-                            <MudNumericField T="int"
-                                            Value="@item.Quantity"
-                                            ValueChanged="@(q => UpdateQuantity(slot, q))"
-                                            Min="1" Max="10"
-                                            Variant="Variant.Outlined"
-                                            Margin="Margin.Dense"
-                                            Style="width:80px;" />
-
-                            @* = sign *@
-                            <MudText Typo="Typo.body2" Class="mx-1">=</MudText>
-
-                            @* Subtotal *@
-                            <MudText Typo="Typo.body2" Color="Color.Error"
-                                     Style="font-weight:700; min-width:130px; text-align:right;">
-                                @((item.UnitPrice * item.Quantity).ToString("N0"))đ
-                            </MudText>
-
-                            @* Edit button *@
-                            <MudTooltip Text="Thay đổi linh kiện">
-                                <MudIconButton Icon="@Icons.Material.Outlined.Edit"
-                                               Size="Size.Small"
-                                               Color="Color.Primary"
-                                               OnClick="@(() => OpenPicker(slot))" />
-                            </MudTooltip>
-
-                            @* Remove button *@
-                            <MudTooltip Text="Xóa">
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                               Size="Size.Small"
-                                               Color="Color.Error"
-                                               OnClick="@(() => RemoveItem(slot))" />
-                            </MudTooltip>
                         </div>
                     }
                 </div>

@@ -7,7 +7,9 @@ namespace PBL3.Shared.DTOs.Storefront
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string Slug { get; set; } = string.Empty;
-        public string? IconUrl { get; set; } // Map from ImageUrl
+        public string? IconUrl { get; set; }
+        public int Level { get; set; }
+        public int? ParentId { get; set; }
     }
 
     /// <summary>
