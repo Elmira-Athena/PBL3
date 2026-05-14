@@ -19,8 +19,7 @@ namespace PBL3.Shared.Validators
 
             RuleFor(x => x.PhoneNumber)
                 .NotEmpty().WithMessage("Số điện thoại không được để trống.")
-                .Matches(@"^[0-9]+$").WithMessage("Số điện thoại chỉ được chứa chữ số.")
-                .MaximumLength(20).WithMessage("Số điện thoại không được vượt quá 20 ký tự.");
+                .Matches(@"^0[3-9][0-9]{8}$").WithMessage("Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam gồm 10 chữ số (bắt đầu bằng 03x, 05x, 07x, 08x, 09x).");
 
             RuleFor(x => x.Address)
                 .MaximumLength(255).WithMessage("Địa chỉ không được vượt quá 255 ký tự.");
@@ -72,8 +71,7 @@ namespace PBL3.Shared.Validators
 
             RuleFor(x => x.PhoneNumber)
                 .NotEmpty().WithMessage("Số điện thoại không được để trống.")
-                .Matches(@"^[0-9]+$").WithMessage("Số điện thoại chỉ được chứa chữ số.")
-                .MaximumLength(20).WithMessage("Số điện thoại không được vượt quá 20 ký tự.");
+                .Matches(@"^0[3-9][0-9]{8}$").WithMessage("Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam gồm 10 chữ số (bắt đầu bằng 03x, 05x, 07x, 08x, 09x).");
 
             RuleFor(x => x.Password)
                 .NotEmpty().WithMessage("Mật khẩu không được để trống.")

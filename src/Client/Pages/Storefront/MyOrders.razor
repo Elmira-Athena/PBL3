@@ -1,0 +1,140 @@
+@page "/my/orders"
+@attribute [Authorize(Roles = "Customer")]
+@using Client.Services.Orders
+@using PBL3.Shared.DTOs.Sale
+@using MudBlazor
+@inject IOrderClientService OrderService
+@inject NavigationManager NavManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Đơn hàng của tôi - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Đơn Hàng Của Tôi
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Theo dõi trạng thái các đơn hàng của bạn
+            </MudText>
+        </div>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-4 align-center">
+        <MudSelect T="int?" @bind-Value="_statusFilter" Label="Trạng thái" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Style="max-width: 200px;">
+            <MudSelectItem T="int?" Value="@null">Tất cả</MudSelectItem>
+            <MudSelectItem T="int?" Value="0">Chờ duyệt</MudSelectItem>
+            <MudSelectItem T="int?" Value="1">Chờ xuất kho</MudSelectItem>
+            <MudSelectItem T="int?" Value="2">Đang giao</MudSelectItem>
+            <MudSelectItem T="int?" Value="3">Thành công</MudSelectItem>
+            <MudSelectItem T="int?" Value="4">Đã hủy</MudSelectItem>
+        </MudSelect>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RefreshList" Class="ml-auto">
+            Lọc kết quả
+        </MudButton>
+    </MudPaper>
+
+    <MudTable T="OrderSummaryResponse" ServerData="ServerReload"
+              Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1"
+              Class="rounded-lg" @ref="_table">
+        <HeaderContent>
+            <MudTh>Mã đơn</MudTh>
+            <MudTh>Ngày đặt</MudTh>
+            <MudTh>Tổng tiền</MudTh>
+            <MudTh>Trạng thái</MudTh>
+            <MudTh>Thanh toán</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã đơn">
+                <MudText Typo="Typo.body2" Style="font-weight: 500; font-family: monospace;">@context.OrderCode</MudText>
+            </MudTd>
+            <MudTd DataLabel="Ngày đặt">
+                <MudText Typo="Typo.body2">@context.CreatedDate.ToString("dd/MM/yyyy")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Tổng tiền">
+                <MudText Typo="Typo.body2">@context.TotalAmount.ToString("N0") ₫</MudText>
+            </MudTd>
+            <MudTd DataLabel="Trạng thái">
+                @{
+                    var (statusText, statusColor) = GetOrderStatus(context.Status);
+                }
+                <MudChip T="string" Color="@statusColor" Size="Size.Small" Variant="Variant.Filled">@statusText</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Thanh toán">
+                <MudText Typo="Typo.body2">@GetPaymentStatus(context.PaymentStatus)</MudText>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="pa-4">Bạn chưa có đơn hàng nào.</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText Class="pa-4">Đang tải dữ liệu...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private int? _statusFilter;
+    private MudTable<OrderSummaryResponse>? _table;
+
+    private async Task<TableData<OrderSummaryResponse>> ServerReload(TableState state, CancellationToken token = default)
+    {
+        try
+        {
+            var request = new OrderFilterRequest
+            {
+                PageIndex = state.Page + 1,
+                PageSize = state.PageSize,
+                Status = _statusFilter
+            };
+
+            var result = await OrderService.GetMyOrdersAsync(request);
+
+            if (!result.Success || result.Data?.Items == null)
+            {
+                Snackbar.Add("Lỗi tải danh sách đơn hàng.", Severity.Error);
+                return new TableData<OrderSummaryResponse> { Items = new List<OrderSummaryResponse>(), TotalItems = 0 };
+            }
+
+            return new TableData<OrderSummaryResponse>
+            {
+                Items = result.Data.Items,
+                TotalItems = result.Data.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            return new TableData<OrderSummaryResponse> { Items = new List<OrderSummaryResponse>(), TotalItems = 0 };
+        }
+    }
+
+    private async Task RefreshList()
+    {
+        if (_table != null)
+            await _table.ReloadServerData();
+    }
+
+    private static (string text, Color color) GetOrderStatus(int status) => status switch
+    {
+        0 => ("Chờ duyệt", Color.Warning),
+        1 => ("Chờ xuất kho", Color.Info),
+        2 => ("Đang giao", Color.Primary),
+        3 => ("Thành công", Color.Success),
+        4 => ("Đã hủy", Color.Error),
+        _ => ("Không xác định", Color.Default)
+    };
+
+    private static string GetPaymentStatus(int status) => status switch
+    {
+        0 => "Chưa thanh toán",
+        1 => "Đã thanh toán",
+        _ => "Không xác định"
+    };
+}

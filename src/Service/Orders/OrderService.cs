@@ -504,6 +504,44 @@ namespace PBL3.Service.Orders
             return ApiResult<PagedResult<OrderSummaryResponse>>.Ok(result);
         }
 
+        public async Task<ApiResult<PagedResult<OrderSummaryResponse>>> GetMyOrdersAsync(Guid userId, OrderFilterRequest request)
+        {
+            var query = _orderRepo.GetQueryable().AsNoTracking()
+                .Where(o => o.UserId == userId);
+
+            if (request.Status.HasValue)
+                query = query.Where(o => o.Status == request.Status.Value);
+
+            int totalCount = await query.CountAsync();
+
+            var items = await query
+                .OrderByDescending(o => o.OrderDate)
+                .Skip((request.PageIndex - 1) * request.PageSize)
+                .Take(request.PageSize)
+                .Select(o => new OrderSummaryResponse
+                {
+                    Id = o.Id,
+                    OrderCode = o.OrderCode,
+                    CustomerName = o.ShipName,
+                    CustomerPhone = o.ShipPhone,
+                    TotalAmount = o.TotalAmount,
+                    CreatedDate = o.OrderDate,
+                    Status = o.Status,
+                    PaymentStatus = o.PaymentStatus
+                })
+                .ToListAsync();
+
+            var result = new PagedResult<OrderSummaryResponse>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageSize = request.PageSize,
+                PageNumber = request.PageIndex
+            };
+
+            return ApiResult<PagedResult<OrderSummaryResponse>>.Ok(result);
+        }
+
         public async Task<ApiResult<bool>> CancelOrderAsync(int id, CancelOrderRequest request)
         {
             var order = await _orderRepo.GetByIdAsync(id);

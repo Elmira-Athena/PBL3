@@ -1,4 +1,5 @@
 using System;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -40,6 +41,18 @@ namespace PBL3.API.Controllers
             {
                 return BadRequest(ApiResult<CheckoutResponse>.Fail(ex.Message));
             }
+        }
+
+        [HttpGet("my")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> GetMyOrders([FromQuery] OrderFilterRequest request)
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdStr, out var userId))
+                return Unauthorized(ApiResult<PagedResult<OrderSummaryResponse>>.Fail("Không thể xác thực thông tin người dùng."));
+            var result = await _orderService.GetMyOrdersAsync(userId, request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

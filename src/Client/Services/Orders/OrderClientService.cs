@@ -37,6 +37,16 @@ namespace Client.Services.Orders
             return response?.Data ?? new PagedResult<OrderSummaryResponse>();
         }
 
+        public async Task<ApiResult<PagedResult<OrderSummaryResponse>>> GetMyOrdersAsync(OrderFilterRequest request)
+        {
+            var queryString = $"?pageIndex={request.PageIndex}&pageSize={request.PageSize}";
+            if (request.Status.HasValue)
+                queryString += $"&status={request.Status.Value}";
+
+            return await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<OrderSummaryResponse>>>($"/api/orders/my{queryString}")
+                   ?? ApiResult<PagedResult<OrderSummaryResponse>>.Fail("Không nhận được phản hồi từ máy chủ");
+        }
+
         public async Task<ApiResult<bool>> CancelOrderAsync(int id, string cancelReason)
         {
             var request = new CancelOrderRequest { CancelReason = cancelReason };
