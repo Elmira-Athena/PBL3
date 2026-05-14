@@ -163,6 +163,9 @@
                     <MudText Class="text-muted text-center py-8">Không có thông số kỹ thuật cho phiên bản này.</MudText>
                 }
             </MudTabPanel>
+            <MudTabPanel Text="ĐÁNH GIÁ" Icon="@Icons.Material.Filled.StarRate">
+                <ReviewSection ProductId="@_product.Id" />
+            </MudTabPanel>
         </MudTabs>
 
         <!-- Related Products -->

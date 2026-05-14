@@ -75,5 +75,6 @@ builder.Services.AddScoped<IImageClientService, ImageClientService>();
 builder.Services.AddScoped<IServiceTicketClientService, ServiceTicketClientService>();
 builder.Services.AddScoped<IServiceInvoiceClientService, ServiceInvoiceClientService>();
 builder.Services.AddScoped<IAnalyticsClientService, AnalyticsClientService>();
+builder.Services.AddScoped<Client.Services.Reviews.IReviewClientService, Client.Services.Reviews.ReviewClientService>();
 
 await builder.Build().RunAsync();

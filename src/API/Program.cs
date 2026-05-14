@@ -30,6 +30,10 @@ using PBL3.Service.Vouchers;
 using PBL3.Service.ServiceTickets;
 using PBL3.Service.ServiceInvoices;
 using PBL3.Service.Analytics;
+using PBL3.Service.Reviews;
+using PBL3.Shared.DTOs.Reviews;
+using FluentValidation;
+using PBL3.Shared.Validators;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -117,6 +121,7 @@ builder.Services.AddScoped<IVoucherRepository, VoucherRepository>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<ICartRepository, CartRepository>();
 builder.Services.AddScoped<IUserAddressRepository, UserAddressRepository>();
+builder.Services.AddScoped<IProductReviewRepository, ProductReviewRepository>();
 builder.Services.AddScoped<IServiceTicketRepository, ServiceTicketRepository>();
 builder.Services.AddScoped<IQuotationRepository, QuotationRepository>();
 builder.Services.AddScoped<IRmaShipmentRepository, RmaShipmentRepository>();
@@ -145,6 +150,8 @@ builder.Services.AddScoped<PBL3.Service.BuildPc.IBuildPcService, PBL3.Service.Bu
 builder.Services.AddScoped<IServiceTicketService, ServiceTicketService>();
 builder.Services.AddScoped<IServiceInvoiceService, ServiceInvoiceService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
+builder.Services.AddScoped<IProductReviewService, ProductReviewService>();
+builder.Services.AddScoped<IValidator<CreateReviewRequest>, CreateReviewRequestValidator>();
 
 // DI: AWS S3 Storage
 var awsCfg = builder.Configuration.GetSection("AwsSettings");

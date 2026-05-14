@@ -38,6 +38,7 @@ namespace PBL3.Infrastructure.Data
         public DbSet<VoucherUsage> VoucherUsages { get; set; }
         public DbSet<Warranty> Warranties { get; set; }
         public DbSet<UserAddress> UserAddresses { get; set; }
+        public DbSet<ProductReview> ProductReviews { get; set; }
 
         // Service & Warranty
         public DbSet<ServiceTicket> ServiceTickets { get; set; }
@@ -285,6 +286,31 @@ namespace PBL3.Infrastructure.Data
                 entity.HasIndex(w => w.SerialId);
                 entity.HasIndex(w => w.CustomerId);
                 entity.HasIndex(w => w.OrderId);
+            });
+
+            modelBuilder.Entity<ProductReview>(entity =>
+            {
+                entity.HasQueryFilter(r => !r.IsDeleted);
+
+                entity.HasIndex(r => new { r.ProductId, r.UserId })
+                      .IsUnique()
+                      .HasDatabaseName("UQ_ProductReviews_ProductId_UserId");
+
+                entity.HasIndex(r => r.ProductId)
+                      .HasDatabaseName("IX_ProductReviews_ProductId");
+
+                entity.ToTable(t =>
+                    t.HasCheckConstraint("CK_ProductReviews_Rating", "[Rating] BETWEEN 1 AND 5"));
+
+                entity.HasOne(r => r.Product)
+                      .WithMany()
+                      .HasForeignKey(r => r.ProductId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(r => r.User)
+                      .WithMany()
+                      .HasForeignKey(r => r.UserId)
+                      .OnDelete(DeleteBehavior.NoAction); // Tránh multiple cascade paths
             });
 
             // --- SERVICE TICKETS ---

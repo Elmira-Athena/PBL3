@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Storefront;
@@ -8,10 +9,23 @@ namespace PBL3.Service.Storefront
     public class StorefrontService : IStorefrontService
     {
         private readonly HushStoreDbContext _context;
+        private readonly IProductReviewRepository _reviewRepo;
 
-        public StorefrontService(HushStoreDbContext context)
+        public StorefrontService(HushStoreDbContext context, IProductReviewRepository reviewRepo)
         {
             _context = context;
+            _reviewRepo = reviewRepo;
+        }
+
+        private async Task<Dictionary<int, (double Avg, int Count)>> GetRatingMapAsync(List<int> productIds)
+        {
+            if (productIds.Count == 0) return new();
+            return await _context.ProductReviews
+                .AsNoTracking()
+                .Where(r => productIds.Contains(r.ProductId))
+                .GroupBy(r => r.ProductId)
+                .Select(g => new { ProductId = g.Key, Avg = g.Average(r => (double)r.Rating), Count = g.Count() })
+                .ToDictionaryAsync(x => x.ProductId, x => (x.Avg, x.Count));
         }
 
         public async Task<ApiResult<List<CategoryMenuResponse>>> GetActiveCategoriesAsync()
@@ -64,7 +78,9 @@ namespace PBL3.Service.Storefront
                 .Take(take)
                 .ToListAsync();
 
-            var result = products.Select(p => 
+            var ratingMapFeatured = await GetRatingMapAsync(products.Select(p => p.Id).ToList());
+
+            var result = products.Select(p =>
             {
                 var variants = p.ActiveVariants.ToList();
                 decimal currentPrice = 0;
@@ -72,10 +88,7 @@ namespace PBL3.Service.Storefront
 
                 if (variants.Any())
                 {
-                    // CurrentPrice = lowest price among variants
                     currentPrice = variants.Min(v => v.Price);
-                    
-                    // OldPrice = max of OriginalPrice or currentPrice
                     oldPrice = variants.Max(v => v.OriginalPrice ?? v.Price);
                     if (oldPrice < currentPrice) oldPrice = currentPrice;
                 }
@@ -86,21 +99,19 @@ namespace PBL3.Service.Storefront
                     discountPercent = (int)Math.Round((oldPrice - currentPrice) / oldPrice * 100);
                 }
 
+                var ratings = ratingMapFeatured.GetValueOrDefault(p.Id, (0.0, 0));
                 return new ProductCardResponse
                 {
                     Id = p.Id,
                     Name = p.Name,
-                    // Re-generate slug or just use a simple one for now.
-                    // Wait, Product doesn't have Slug, Variant has Slug.
-                    // We'll generate a basic slug from Product Name.
                     Slug = p.Slug,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
                     CurrentPrice = currentPrice,
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,
                     IsAvailable = variants.Any(v => v.StockQuantity > 0),
-                    Rating = 5.0,
-                    ReviewCount = 0
+                    Rating = ratings.Item1,
+                    ReviewCount = ratings.Item2
                 };
             }).ToList();
 
@@ -151,6 +162,13 @@ namespace PBL3.Service.Storefront
                 shortFeatures = defaultVariant.Specifications.Select(kvp => $"{kvp.Key}: {kvp.Value}").ToList();
             }
 
+            var reviewStats = await _context.ProductReviews
+                .AsNoTracking()
+                .Where(r => r.ProductId == product.Id)
+                .GroupBy(r => r.ProductId)
+                .Select(g => new { Avg = g.Average(r => (double)r.Rating), Count = g.Count() })
+                .FirstOrDefaultAsync();
+
             var response = new ProductDetailResponse
             {
                 Id = product.Id,
@@ -162,8 +180,8 @@ namespace PBL3.Service.Storefront
                 Images = images,
                 Variants = variantResponses,
                 ShortFeatures = shortFeatures,
-                Rating = 5.0,
-                ReviewCount = 13
+                Rating = reviewStats?.Avg ?? 0.0,
+                ReviewCount = reviewStats?.Count ?? 0
             };
 
             return ApiResult<ProductDetailResponse>.Ok(response);
@@ -201,6 +219,8 @@ namespace PBL3.Service.Storefront
 
             var products = await relatedProductsQuery.ToListAsync();
 
+            var ratingMapRelated = await GetRatingMapAsync(products.Select(p => p.Id).ToList());
+
             var result = products.Select(p =>
             {
                 var variants = p.ActiveVariants.ToList();
@@ -220,6 +240,7 @@ namespace PBL3.Service.Storefront
                     discountPercent = (int)Math.Round((oldPrice - currentPrice) / oldPrice * 100);
                 }
 
+                var ratings = ratingMapRelated.GetValueOrDefault(p.Id, (0.0, 0));
                 return new ProductCardResponse
                 {
                     Id = p.Id,
@@ -230,8 +251,8 @@ namespace PBL3.Service.Storefront
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,
                     IsAvailable = variants.Any(v => v.StockQuantity > 0),
-                    Rating = 5.0,
-                    ReviewCount = 0
+                    Rating = ratings.Item1,
+                    ReviewCount = ratings.Item2
                 };
             }).ToList();
 
@@ -306,6 +327,8 @@ namespace PBL3.Service.Storefront
                 })
                 .ToListAsync();
 
+            var ratingMapSearch = await GetRatingMapAsync(products.Select(p => p.Id).ToList());
+
             var result = products.Select(p =>
             {
                 var variants = p.ActiveVariants.ToList();
@@ -323,6 +346,7 @@ namespace PBL3.Service.Storefront
                 if (oldPrice > 0 && currentPrice < oldPrice)
                     discountPercent = (int)Math.Round((oldPrice - currentPrice) / oldPrice * 100);
 
+                var ratings = ratingMapSearch.GetValueOrDefault(p.Id, (0.0, 0));
                 return new ProductCardResponse
                 {
                     Id = p.Id,
@@ -334,8 +358,8 @@ namespace PBL3.Service.Storefront
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,
                     IsAvailable = variants.Any(v => v.StockQuantity > 0),
-                    Rating = 5.0,
-                    ReviewCount = 0
+                    Rating = ratings.Item1,
+                    ReviewCount = ratings.Item2
                 };
             }).ToList();
 
@@ -417,6 +441,8 @@ namespace PBL3.Service.Storefront
                 })
                 .ToListAsync();
 
+            var ratingMapCategory = await GetRatingMapAsync(products.Select(p => p.Id).ToList());
+
             var result = products.Select(p =>
             {
                 var variants = p.ActiveVariants.ToList();
@@ -436,6 +462,7 @@ namespace PBL3.Service.Storefront
                     discountPercent = (int)Math.Round((oldPrice - currentPrice) / oldPrice * 100);
                 }
 
+                var ratings = ratingMapCategory.GetValueOrDefault(p.Id, (0.0, 0));
                 return new ProductCardResponse
                 {
                     Id = p.Id,
@@ -447,8 +474,8 @@ namespace PBL3.Service.Storefront
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,
                     IsAvailable = variants.Any(v => v.StockQuantity > 0),
-                    Rating = 5.0,
-                    ReviewCount = 0
+                    Rating = ratings.Item1,
+                    ReviewCount = ratings.Item2
                 };
             }).ToList();
 

@@ -1,0 +1,91 @@
+@using Client.Services.Reviews
+@using PBL3.Shared.DTOs.Reviews
+@inject IReviewClientService ReviewClientService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@_errorMessage</MudAlert>
+        }
+
+        <MudForm @ref="_form">
+            <div class="d-flex align-center gap-2 mb-4">
+                <MudText Typo="Typo.body1" Class="fw-bold">Đánh giá của bạn:</MudText>
+                <MudRating @bind-SelectedValue="_rating" MaxValue="5" />
+                @if (_rating == 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error">Vui lòng chọn số sao</MudText>
+                }
+            </div>
+
+            <MudTextField @bind-Value="_title"
+                          Label="Tiêu đề (tùy chọn)"
+                          Variant="Variant.Outlined"
+                          MaxLength="200"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="_content"
+                          Label="Nội dung đánh giá (tùy chọn)"
+                          Variant="Variant.Outlined"
+                          Lines="4"
+                          MaxLength="2000"
+                          Class="mb-2" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_isSaving">Hủy</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="SubmitAsync" Disabled="_isSaving || _rating == 0">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Gửi đánh giá
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public int ProductId { get; set; }
+
+    private MudForm _form = null!;
+    private int _rating = 0;
+    private string? _title;
+    private string? _content;
+    private string? _errorMessage;
+    private bool _isSaving;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SubmitAsync()
+    {
+        if (_rating == 0) return;
+
+        _isSaving = true;
+        _errorMessage = null;
+
+        var request = new CreateReviewRequest
+        {
+            ProductId = ProductId,
+            Rating    = (byte)_rating,
+            Title     = string.IsNullOrWhiteSpace(_title) ? null : _title.Trim(),
+            Content   = string.IsNullOrWhiteSpace(_content) ? null : _content.Trim()
+        };
+
+        var result = await ReviewClientService.CreateAsync(request);
+
+        _isSaving = false;
+
+        if (result == null || !result.Success)
+        {
+            _errorMessage = result?.Message ?? "Có lỗi xảy ra, vui lòng thử lại.";
+            return;
+        }
+
+        Snackbar.Add("Cảm ơn bạn đã đánh giá sản phẩm!", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(result.Data));
+    }
+}
