@@ -1,7 +1,7 @@
 # HushStore — Quy trình Deploy & CI/CD
 
 > **Hạ tầng:** EC2 t3.micro (Singapore) + RDS SQL Server Express
-> **Domain:** `athena232.io.vn` (Frontend) · `api.athena232.io.vn` (API)
+> **Domain:** `hushstore.io.vn` (Frontend) · `api.hushstore.io.vn` (API)
 > **SSH key:** `~/.ssh/hushstore-key.pem`
 
 ---
@@ -30,7 +30,7 @@ Khi có thay đổi trong `src/API/`, `src/Service/`, `src/Infrastructure/`, `sr
 git push origin main
 
 # Bước 2: SSH vào EC2
-ssh -i ~/.ssh/hushstore-key.pem ubuntu@18.141.237.217
+ssh -i ~/.ssh/hushstore-key.pem ubuntu@47.130.131.199
 
 # Bước 3: Pull + build + restart (chạy trên EC2)
 cd /opt/hushstore
@@ -66,7 +66,7 @@ dotnet publish src/Client/Client.csproj \
 rsync -a --delete \
   -e "ssh -i ~/.ssh/hushstore-key.pem" \
   /tmp/blazor-publish/wwwroot/ \
-  ubuntu@18.141.237.217:/var/www/hushstore/wwwroot/
+  ubuntu@47.130.131.199:/var/www/hushstore/wwwroot/
 
 # Bước 4: Dọn dẹp local
 rm -rf /tmp/blazor-publish
@@ -85,7 +85,7 @@ Chạy tuần tự hai lệnh trên, hoặc dùng script tiện lợi:
 # Chạy từ thư mục gốc project
 set -euo pipefail
 
-EC2="ubuntu@18.141.237.217"
+EC2="ubuntu@47.130.131.199"
 KEY="~/.ssh/hushstore-key.pem"
 
 echo "[1/4] Push code..."
@@ -113,7 +113,7 @@ Khi có migration EF Core mới (file trong `src/Infrastructure/Migrations/`):
 ```bash
 # Migration tự động chạy khi API container khởi động
 # Kiểm tra trong logs:
-ssh -i ~/.ssh/hushstore-key.pem ubuntu@18.141.237.217 \
+ssh -i ~/.ssh/hushstore-key.pem ubuntu@47.130.131.199 \
   "sudo docker compose -f /opt/hushstore/docker-compose.yml logs api | grep -i migration"
 ```
 
@@ -140,7 +140,7 @@ bash infra/start.sh
 `start.sh` tự phát hiện IP mới. Nếu IP đổi, cần:
 
 **a) Update Cloudflare DNS:**
-- Vào Cloudflare → `athena232.io.vn` → DNS
+- Vào Cloudflare → `hushstore.io.vn` → DNS
 - Sửa record `A @` và `A api` sang IP mới
 
 **b) Update SSH Security Group (nếu IP máy local đổi):**
@@ -162,7 +162,7 @@ echo "SSH rule updated: $NEW_IP"
 ## 7. Xem logs & debug
 
 ```bash
-SSH="ssh -i ~/.ssh/hushstore-key.pem ubuntu@18.141.237.217"
+SSH="ssh -i ~/.ssh/hushstore-key.pem ubuntu@47.130.131.199"
 
 # API logs realtime
 $SSH "sudo docker compose -f /opt/hushstore/docker-compose.yml logs api -f"
@@ -188,8 +188,8 @@ $SSH "sudo docker compose -f /opt/hushstore/docker-compose.yml restart api"
 - [ ] `dotnet build PBL3.sln` không có lỗi
 - [ ] Không commit file `.env`, `appsettings.Development.json`, `config.json`
 - [ ] `git push origin main` thành công
-- [ ] Sau deploy: `curl https://api.athena232.io.vn/health` trả về `{"status":"healthy"}`
-- [ ] Mở `https://athena232.io.vn` trên browser, login thử
+- [ ] Sau deploy: `curl https://api.hushstore.io.vn/health` trả về `{"status":"healthy"}`
+- [ ] Mở `https://hushstore.io.vn` trên browser, login thử
 
 ---
 
@@ -198,7 +198,7 @@ $SSH "sudo docker compose -f /opt/hushstore/docker-compose.yml restart api"
 | Tài nguyên | ID / Giá trị |
 |---|---|
 | EC2 Instance | `i-01fa96072d16e846a` |
-| EC2 Public IP | `18.141.237.217` (dynamic — đổi khi stop/start) |
+| EC2 Public IP | `47.130.131.199` (dynamic — đổi khi stop/start) |
 | RDS Endpoint | `hushstore-db.c3oiawo2etcf.ap-southeast-1.rds.amazonaws.com` |
 | EC2 Security Group | `sg-04c2ac92924081a5d` |
 | VPC | `vpc-018d5e85ad2c84984` |
