@@ -6,11 +6,26 @@
 USE [HushStoreDb];
 GO
 
-IF EXISTS (SELECT 1 FROM Categories WHERE Slug = 'linh-kien-may-tinh')
-BEGIN
-    PRINT 'Seed data linh kien may tinh da ton tai. Bo qua.';
-    RETURN;
-END
+-- ============================================
+-- 0. XÓA DỮ LIỆU CŨ (theo thứ tự FK)
+-- ============================================
+DELETE FROM [ProductVariants] WHERE ProductId IN (
+    SELECT Id FROM [Products] WHERE CategoryId IN (
+        SELECT Id FROM [Categories] WHERE Id IN (
+            100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,200
+        )
+        OR ParentId IN (100,200)
+    )
+);
+DELETE FROM [Products] WHERE CategoryId IN (
+    SELECT Id FROM [Categories]
+    WHERE Id IN (100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,200)
+    OR ParentId IN (100,200)
+);
+DELETE FROM [Categories]
+WHERE Id IN (100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,200)
+   OR ParentId IN (100,200);
+DELETE FROM [Manufacturers] WHERE Id BETWEEN 1 AND 21;
 
 -- ============================================
 -- 1. MANUFACTURERS
