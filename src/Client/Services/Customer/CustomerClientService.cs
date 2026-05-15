@@ -100,5 +100,32 @@ namespace Client.Services.Customer
                 return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
             }
         }
+
+        public async Task<ApiResult<CustomerDto>> GetMyProfileAsync()
+        {
+            try
+            {
+                var result = await _httpClient.GetFromJsonAsync<ApiResult<CustomerDto>>("api/storefront/profile/me");
+                return result ?? ApiResult<CustomerDto>.Fail("Không thể tải thông tin cá nhân.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<CustomerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResult<CustomerDto>> UpdateMyProfileAsync(UpdateCustomerRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync("api/storefront/profile/me", request);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<CustomerDto>>();
+                return result ?? ApiResult<CustomerDto>.Fail("Không thể cập nhật thông tin cá nhân.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<CustomerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
     }
 }

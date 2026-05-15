@@ -1,0 +1,212 @@
+@page "/profile"
+@attribute [Authorize(Roles = "Customer")]
+@using Microsoft.AspNetCore.Authorization
+@using PBL3.Shared.DTOs.Customers
+@using Client.Services.Customer
+@using Client.Services.Image
+@inject ICustomerClientService CustomerService
+@inject IImageClientService ImageService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Thông tin cá nhân - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8 mb-16">
+    <MudText Typo="Typo.h5" Class="fw-bold mb-6">Thông tin cá nhân</MudText>
+
+    @if (_isLoading)
+    {
+        <MudCard Elevation="2" Class="rounded-lg pa-6">
+            <div class="d-flex flex-column align-center mb-6">
+                <MudSkeleton SkeletonType="SkeletonType.Circle" Width="100px" Height="100px" Class="mb-3" />
+                <MudSkeleton Width="120px" Height="20px" />
+            </div>
+            <MudSkeleton Height="56px" Class="mb-4" />
+            <MudSkeleton Height="56px" Class="mb-4" />
+            <MudSkeleton Height="56px" Class="mb-4" />
+            <MudSkeleton Height="56px" Class="mb-4" />
+            <MudSkeleton Height="56px" />
+        </MudCard>
+    }
+    else if (_profile != null)
+    {
+        <MudCard Elevation="2" Class="rounded-lg">
+            <MudCardContent Class="pa-6">
+
+                <!-- Avatar -->
+                <div class="d-flex flex-column align-center mb-8">
+                    <div class="avatar-wrapper mb-3" style="position: relative; display: inline-block;">
+                        <MudAvatar Style="width: 100px; height: 100px;">
+                            @if (!string.IsNullOrWhiteSpace(_model.AvatarUrl))
+                            {
+                                <MudImage Src="@_model.AvatarUrl" Alt="Avatar" Style="width:100%;height:100%;object-fit:cover;" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Style="font-size: 60px;" />
+                            }
+                        </MudAvatar>
+                        @if (!string.IsNullOrWhiteSpace(_model.AvatarUrl))
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                           Size="Size.Small" Color="Color.Error"
+                                           Style="position:absolute;top:-8px;right:-8px;background:white;padding:2px;"
+                                           OnClick="RemoveAvatar" />
+                        }
+                    </div>
+
+                    <InputFile id="avatarInput" OnChange="HandleAvatarUpload" accept="image/*" style="display:none" disabled="@_isUploadingAvatar" />
+                    <label for="avatarInput" style="cursor: @(_isUploadingAvatar ? "not-allowed" : "pointer");">
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.CameraAlt"
+                                   Disabled="@_isUploadingAvatar" Component="span" HtmlTag="span">
+                            @if (_isUploadingAvatar)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>Đang tải lên...</span>
+                            }
+                            else
+                            {
+                                <span>Thay ảnh đại diện</span>
+                            }
+                        </MudButton>
+                    </label>
+                    <MudText Typo="Typo.caption" Class="text-muted mt-1">JPG, PNG, WebP — tối đa 5MB</MudText>
+                </div>
+
+                <!-- Form -->
+                <MudGrid Spacing="3">
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.FullName" Label="Họ và tên" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" Required="true" />
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudSelect @bind-Value="_model.Gender" Label="Giới tính" Variant="Variant.Outlined" Margin="Margin.Dense">
+                            <MudSelectItem Value="@((byte)0)">Nam</MudSelectItem>
+                            <MudSelectItem Value="@((byte)1)">Nữ</MudSelectItem>
+                            <MudSelectItem Value="@((byte)2)">Khác</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudDatePicker @bind-Date="_dateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined"
+                                       Margin="Margin.Dense" DateFormat="dd/MM/yyyy" MaxDate="DateTime.Today" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.City" Label="Thành phố" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+
+                    <!-- Read-only info -->
+                    <MudItem xs="12">
+                        <MudTextField Value="@_profile.Email" Label="Email" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" ReadOnly="true" Disabled="true" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField Value="@_profile.PhoneNumber" Label="Số điện thoại" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" ReadOnly="true" Disabled="true" />
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+
+            <MudCardActions Class="pa-6 pt-0 d-flex justify-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                           Class="px-8 fw-bold" OnClick="SaveAsync" Disabled="@_isSaving">
+                    @if (_isSaving)
+                    {
+                        <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
+                        <span>Đang lưu...</span>
+                    }
+                    else
+                    {
+                        <span>Lưu thay đổi</span>
+                    }
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+</MudContainer>
+
+<style>
+    .fw-bold { font-weight: 600; }
+    .text-muted { color: var(--mud-palette-text-secondary); }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private bool _isSaving = false;
+    private bool _isUploadingAvatar = false;
+
+    private CustomerDto? _profile;
+    private UpdateCustomerRequest _model = new();
+    private DateTime? _dateOfBirth;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await CustomerService.GetMyProfileAsync();
+        if (result.Success && result.Data != null)
+        {
+            _profile = result.Data;
+            _model = new UpdateCustomerRequest
+            {
+                FullName = _profile.FullName,
+                Gender = _profile.Gender,
+                DateOfBirth = _profile.DateOfBirth,
+                AvatarUrl = _profile.AvatarUrl,
+                Address = _profile.Address,
+                City = _profile.City
+            };
+            _dateOfBirth = _profile.DateOfBirth;
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Không thể tải thông tin cá nhân.", Severity.Error);
+        }
+        _isLoading = false;
+    }
+
+    private async Task HandleAvatarUpload(InputFileChangeEventArgs e)
+    {
+        _isUploadingAvatar = true;
+        var url = await ImageService.UploadAsync(e.File, "avatars");
+        if (url != null)
+            _model.AvatarUrl = url;
+        else
+            Snackbar.Add("Tải ảnh lên thất bại. Vui lòng thử lại.", Severity.Error);
+        _isUploadingAvatar = false;
+    }
+
+    private void RemoveAvatar() => _model.AvatarUrl = null;
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.FullName))
+        {
+            Snackbar.Add("Họ và tên không được để trống.", Severity.Warning);
+            return;
+        }
+
+        _model.DateOfBirth = _dateOfBirth;
+        _isSaving = true;
+
+        var result = await CustomerService.UpdateMyProfileAsync(_model);
+        if (result.Success && result.Data != null)
+        {
+            _profile = result.Data;
+            Snackbar.Add("Cập nhật thông tin thành công!", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Cập nhật thất bại.", Severity.Error);
+        }
+
+        _isSaving = false;
+    }
+}

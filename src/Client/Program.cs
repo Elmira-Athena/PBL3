@@ -29,7 +29,9 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddValidatorsFromAssemblyContaining<PBL3.Shared.DTOs.Auth.LoginRequestValidator>();
 builder.Services.AddAuthorizationCore();
-builder.Services.AddScoped<AuthenticationStateProvider, JwtAuthenticationStateProvider>();
+builder.Services.AddScoped<JwtAuthenticationStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
+    sp.GetRequiredService<JwtAuthenticationStateProvider>());
 builder.Services.AddTransient<AuthHeaderHandler>();
 
 // ===== HttpClient trỏ về API Backend (có gắn AuthHeaderHandler) =====

@@ -11,5 +11,7 @@ namespace Client.Services.Customer
         Task<ApiResult<CustomerDto>> CreateAsync(CreateCustomerRequest request);
         Task<ApiResult<CustomerDto>> UpdateAsync(Guid id, UpdateCustomerRequest request);
         Task<ApiResult<bool>> DeactivateAsync(Guid id);
+        Task<ApiResult<CustomerDto>> GetMyProfileAsync();
+        Task<ApiResult<CustomerDto>> UpdateMyProfileAsync(UpdateCustomerRequest request);
     }
 }

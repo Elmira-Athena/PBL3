@@ -57,6 +57,14 @@
     private LoginRequest _loginRequest = new();
     private bool _isLoading = false;
 
+    protected override void OnInitialized()
+    {
+        if (new Uri(Navigation.Uri).Query.Contains("expired=true"))
+        {
+            Snackbar.Add("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", Severity.Warning);
+        }
+    }
+
     private async Task HandleLogin()
     {
         _isLoading = true;
