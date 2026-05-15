@@ -70,6 +70,12 @@
                 <MudTooltip Text="Xem chi tiết">
                     <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small" OnClick="@(() => ViewDetails(context.Id))" />
                 </MudTooltip>
+                @if (context.Status == 0)
+                {
+                    <MudTooltip Text="Duyệt đơn">
+                        <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" OnClick="@(() => ConfirmOrder(context.Id))" />
+                    </MudTooltip>
+                }
                 @if (context.Status == 0 || context.Status == 1) // Pending or Confirmed
                 {
                     <MudTooltip Text="Hủy đơn">
@@ -134,7 +140,7 @@
     {
         var parameters = new DialogParameters();
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-        
+
         var dialog = await DialogService.ShowAsync<CancelOrderDialog>("Hủy Đơn Hàng", parameters, options);
         var result = await dialog.Result;
 
@@ -150,6 +156,20 @@
             {
                 Snackbar.Add(apiResult.Message ?? "Lỗi khi hủy đơn hàng.", Severity.Error);
             }
+        }
+    }
+
+    private async Task ConfirmOrder(int orderId)
+    {
+        var apiResult = await OrderService.ConfirmOrderAsync(orderId);
+        if (apiResult.Success)
+        {
+            Snackbar.Add("Đã duyệt đơn hàng thành công.", Severity.Success);
+            await LoadDataAsync();
+        }
+        else
+        {
+            Snackbar.Add(apiResult.Message ?? "Lỗi khi duyệt đơn hàng.", Severity.Error);
         }
     }
 
