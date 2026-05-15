@@ -76,7 +76,19 @@
                         <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" OnClick="@(() => ConfirmOrder(context.Id))" />
                     </MudTooltip>
                 }
-                @if (context.Status == 0 || context.Status == 1) // Pending or Confirmed
+                @if (context.Status == 1)
+                {
+                    <MudTooltip Text="Tiến hành xuất kho">
+                        <MudIconButton Icon="@Icons.Material.Filled.RocketLaunch" Color="Color.Primary" Size="Size.Small" OnClick="@(() => NavigateToExport(context.Id))" />
+                    </MudTooltip>
+                }
+                @if (context.Status == 2)
+                {
+                    <MudTooltip Text="Xác nhận đã giao">
+                        <MudIconButton Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Success" Size="Size.Small" OnClick="@(() => CompleteOrder(context.Id))" />
+                    </MudTooltip>
+                }
+                @if (context.Status == 0 || context.Status == 1)
                 {
                     <MudTooltip Text="Hủy đơn">
                         <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small" OnClick="@(() => ConfirmCancelOrder(context.Id))" />
@@ -134,6 +146,32 @@
     private void ViewDetails(int id)
     {
         NavigationManager.NavigateTo($"/orders/{id}");
+    }
+
+    private void NavigateToExport(int orderId)
+    {
+        NavigationManager.NavigateTo($"/inventory/export/{orderId}");
+    }
+
+    private async Task CompleteOrder(int orderId)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Xác nhận giao hàng",
+            "Bạn xác nhận đơn hàng này đã được giao thành công?",
+            yesText: "Xác nhận",
+            cancelText: "Hủy");
+        if (confirmed != true) return;
+
+        var apiResult = await OrderService.CompleteOrderAsync(orderId);
+        if (apiResult.Success)
+        {
+            Snackbar.Add("Đã xác nhận giao hàng thành công.", Severity.Success);
+            await LoadDataAsync();
+        }
+        else
+        {
+            Snackbar.Add(apiResult.Message ?? "Lỗi khi xác nhận giao hàng.", Severity.Error);
+        }
     }
 
     private async Task ConfirmCancelOrder(int orderId)
