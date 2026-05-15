@@ -47,7 +47,7 @@
     {
         if (!string.IsNullOrWhiteSpace(CarrierName) && !string.IsNullOrWhiteSpace(TrackingCode))
         {
-            MudDialog.Close(DialogResult.Ok(new { CarrierName, TrackingCode }));
+            MudDialog.Close(DialogResult.Ok((CarrierName, TrackingCode)));
         }
     }
 }

@@ -30,6 +30,17 @@ namespace PBL3.Shared.Validators.Employees
             RuleFor(x => x.DateOfBirth)
                 .LessThan(DateTime.Today).WithMessage("Ngày sinh phải nhỏ hơn ngày hiện tại.")
                 .When(x => x.DateOfBirth.HasValue);
+
+            RuleFor(x => x.Password)
+                .NotEmpty().WithMessage("Mật khẩu không được để trống.")
+                .MinimumLength(8).WithMessage("Mật khẩu phải có ít nhất 8 ký tự.")
+                .Matches("[A-Z]").WithMessage("Mật khẩu phải có ít nhất 1 chữ hoa.")
+                .Matches("[a-z]").WithMessage("Mật khẩu phải có ít nhất 1 chữ thường.")
+                .Matches("[0-9]").WithMessage("Mật khẩu phải có ít nhất 1 chữ số.");
+
+            RuleFor(x => x.ConfirmPassword)
+                .NotEmpty().WithMessage("Xác nhận mật khẩu không được để trống.")
+                .Equal(x => x.Password).WithMessage("Xác nhận mật khẩu không khớp.");
         }
     }
 
