@@ -15,5 +15,6 @@ namespace PBL3.Service.Orders
         Task<ApiResult<PagedResult<OrderSummaryResponse>>> GetMyOrdersAsync(Guid userId, OrderFilterRequest request);
         Task<ApiResult<bool>> CancelOrderAsync(int id, CancelOrderRequest request);
         Task<ApiResult<bool>> CompleteOrderAsync(int id);
+        Task<ApiResult<bool>> ConfirmOrderAsync(int id);
     }
 }

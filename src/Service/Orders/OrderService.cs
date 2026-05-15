@@ -585,6 +585,20 @@ namespace PBL3.Service.Orders
             return ApiResult<bool>.Ok(true, "Đơn hàng đã được đánh dấu hoàn thành.");
         }
 
+        public async Task<ApiResult<bool>> ConfirmOrderAsync(int id)
+        {
+            var order = await _orderRepo.GetByIdAsync(id);
+            if (order == null)
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+
+            if (order.Status != 0)
+                return ApiResult<bool>.Fail("Chỉ có thể duyệt đơn hàng đang ở trạng thái 'Chờ duyệt'.");
+
+            order.Status = 1; // Confirmed
+            await _unitOfWork.SaveChangesAsync();
+            return ApiResult<bool>.Ok(true, "Đã duyệt đơn hàng thành công.");
+        }
+
         private OrderDetailDto MapToOrderDetailDto(Order order)
         {
             return new OrderDetailDto
