@@ -13,14 +13,25 @@ namespace Client.Services.Cart
             var client = _httpClientFactory.CreateClient("HushStoreAPI");
             var request = new AddToCartRequest { VariantId = variantId, Quantity = quantity };
             var response = await client.PostAsJsonAsync("/api/cart", request);
-            
-            if (response.IsSuccessStatusCode)
-            {
-                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>() 
-                       ?? new ApiResult<bool> { Success = true, Data = true };
-            }
 
-            return new ApiResult<bool> { Success = false, Message = "Failed to add to cart" };
+            try
+            {
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<CartResponse>>();
+                return new ApiResult<bool>
+                {
+                    Success = result?.Success ?? response.IsSuccessStatusCode,
+                    Message = result?.Message,
+                    Data    = response.IsSuccessStatusCode
+                };
+            }
+            catch
+            {
+                return new ApiResult<bool>
+                {
+                    Success = false,
+                    Message = "Không thể thêm vào giỏ hàng. Vui lòng thử lại."
+                };
+            }
         }
 
         public async Task<ApiResult<CartResponse>> GetMyCartAsync()

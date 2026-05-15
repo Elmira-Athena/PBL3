@@ -27,6 +27,8 @@ namespace Client.Services.ServiceTickets
                     url += $"&sortBy={Uri.EscapeDataString(sortBy)}&sortDescending={sortDescending}";
 
                 var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
                 return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceInvoiceListDto>>>()
                     ?? new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi lấy danh sách hóa đơn." };
             }
@@ -41,6 +43,8 @@ namespace Client.Services.ServiceTickets
             try
             {
                 var response = await _httpClient.GetAsync($"api/service-invoices/{id}");
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<ServiceInvoiceDetailDto> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
                 return await response.Content.ReadFromJsonAsync<ApiResult<ServiceInvoiceDetailDto>>()
                     ?? new ApiResult<ServiceInvoiceDetailDto> { Message = "Không tìm thấy hóa đơn." };
             }

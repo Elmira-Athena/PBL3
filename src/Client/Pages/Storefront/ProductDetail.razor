@@ -67,7 +67,9 @@
                     </MudText>
                     <MudDivider Vertical="true" FlexItem="true" />
                     <div class="d-flex align-center">
-                        <MudRating SelectedValue="(int)_product.Rating" Max="5" ReadOnly="true" Size="Size.Small" />
+                        <div style="pointer-events: none;">
+                            <MudRating SelectedValue="(int)_product.Rating" Max="5" ReadOnly="true" Size="Size.Small" />
+                        </div>
                         <MudText Typo="Typo.caption" Class="ml-2 text-muted">(@_product.ReviewCount đánh giá)</MudText>
                     </div>
                 </div>

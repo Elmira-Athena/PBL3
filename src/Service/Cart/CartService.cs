@@ -73,24 +73,31 @@ namespace PBL3.Service.Cart
             // 2. Check if already in cart
             var existingCart = await _cartRepo.FindByUserAndVariantAsync(userId, request.VariantId);
 
+            var currentQty = existingCart?.Quantity ?? 0;
+            var newTotal = currentQty + request.Quantity;
+
+            // 3. Check stock limit
+            if (newTotal > variant.StockQuantity)
+            {
+                var remaining = variant.StockQuantity - currentQty;
+                return ApiResult<CartResponse>.Fail(remaining <= 0
+                    ? "Sản phẩm đã đạt giới hạn tồn kho trong giỏ hàng."
+                    : $"Chỉ có thể thêm tối đa {remaining} sản phẩm nữa.");
+            }
+
             if (existingCart != null)
             {
                 // Accumulate quantity
-                existingCart.Quantity += request.Quantity;
-                if (existingCart.Quantity > 99)
-                {
-                    existingCart.Quantity = 99; // Hard limit
-                }
+                existingCart.Quantity = newTotal;
             }
             else
             {
                 // Create new
-                var quantity = request.Quantity > 99 ? 99 : request.Quantity;
                 var newCart = new PBL3.Core.Entities.Cart
                 {
                     UserId = userId,
                     VariantId = request.VariantId,
-                    Quantity = quantity,
+                    Quantity = request.Quantity,
                     CreatedDate = DateTime.UtcNow
                 };
                 await _cartRepo.AddAsync(newCart);
@@ -117,7 +124,16 @@ namespace PBL3.Service.Cart
             }
             else
             {
-                cart.Quantity = request.Quantity > 99 ? 99 : request.Quantity;
+                // Check stock limit
+                var variant = await _productRepo.GetVariantByIdAsync(cart.VariantId);
+                var stockLimit = variant?.StockQuantity ?? 99;
+
+                if (request.Quantity > stockLimit)
+                {
+                    return ApiResult<CartResponse>.Fail($"Số lượng vượt tồn kho. Chỉ còn {stockLimit} sản phẩm.");
+                }
+
+                cart.Quantity = request.Quantity;
             }
 
             await _unitOfWork.SaveChangesAsync();

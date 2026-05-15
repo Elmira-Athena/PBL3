@@ -339,9 +339,9 @@
                                 <MudDivider Class="my-2" />
                                 <MudGrid>
                                     <MudItem xs="6">
-                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Đơn giản thiểu</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Đơn tối thiểu</MudText>
                                         <MudText Typo="Typo.body2" Style="font-weight: 600;">
-                                            @(_minOrderValue > 0 ? $"{_minOrderValue:N0}đ" : "Không giới hạn")
+                                            @($"{_minOrderValue:N0}đ")
                                         </MudText>
                                     </MudItem>
                                     <MudItem xs="6">

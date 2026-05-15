@@ -36,7 +36,7 @@ namespace PBL3.Service.Inventory
         public async Task<ApiResult<bool>> ExportOrderAsync(ExportOrderRequest request)
         {
             // 1. Xác thực Đơn hàng (Order Validation)
-            var order = await _orderRepo.GetByIdWithDetailsAsync(request.OrderId);
+            var order = await _orderRepo.GetByIdWithDetailsTrackedAsync(request.OrderId);
             if (order == null)
             {
                 return ApiResult<bool>.Fail("Đơn hàng không tồn tại.");
@@ -116,7 +116,7 @@ namespace PBL3.Service.Inventory
                 }
 
                 // 5. Cập nhật Trạng thái Đơn hàng
-                order.Status = (byte)OrderStatus.Shipping;
+                order.Status = (byte)OrderStatus.Exported;
 
                 // 6. Commit Transaction
                 await _unitOfWork.SaveChangesAsync();
@@ -130,7 +130,7 @@ namespace PBL3.Service.Inventory
 
                 _logger.LogInformation("Xuất kho thành công cho đơn hàng {OrderId} ({OrderCode})", order.Id, order.OrderCode);
 
-                return ApiResult<bool>.Ok(true, "Xuất kho thành công. Đơn hàng chuyển sang trạng thái Đang giao hàng.");
+                return ApiResult<bool>.Ok(true, "Xuất kho thành công. Đơn hàng chuyển sang trạng thái Đã xuất kho.");
             }
             catch (Exception ex)
             {

@@ -27,7 +27,7 @@
             <MudSelectItem T="int?" Value="@null">Tất cả</MudSelectItem>
             <MudSelectItem T="int?" Value="0">Chờ duyệt</MudSelectItem>
             <MudSelectItem T="int?" Value="1">Chờ xuất kho</MudSelectItem>
-            <MudSelectItem T="int?" Value="2">Đang giao</MudSelectItem>
+            <MudSelectItem T="int?" Value="2">Đã xuất kho</MudSelectItem>
             <MudSelectItem T="int?" Value="3">Thành công</MudSelectItem>
             <MudSelectItem T="int?" Value="4">Đã hủy</MudSelectItem>
         </MudSelect>
@@ -125,7 +125,7 @@
     {
         0 => ("Chờ duyệt", Color.Warning),
         1 => ("Chờ xuất kho", Color.Info),
-        2 => ("Đang giao", Color.Primary),
+        2 => ("Đã xuất kho", Color.Success),
         3 => ("Thành công", Color.Success),
         4 => ("Đã hủy", Color.Error),
         _ => ("Không xác định", Color.Default)
