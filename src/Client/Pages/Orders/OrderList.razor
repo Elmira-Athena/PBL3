@@ -2,6 +2,7 @@
 @using Client.Services.Orders
 @using PBL3.Shared.DTOs.Sale
 @using Client.Pages.Orders.Components
+@implements IDisposable
 @inject IOrderClientService OrderService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -112,6 +113,25 @@
     private MudTable<OrderSummaryResponse>? _table;
     private OrderFilterRequest _filter = new OrderFilterRequest();
 
+    protected override void OnInitialized()
+    {
+        // Đăng ký sự kiện LocationChanged để reload table khi navigate về trang này
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Chỉ reload khi đang ở trang /orders
+        if (e.Location.EndsWith("/orders", StringComparison.OrdinalIgnoreCase))
+        {
+            await InvokeAsync(LoadDataAsync);
+        }
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
     private async Task<TableData<OrderSummaryResponse>> ServerReload(TableState state, CancellationToken cancellationToken)
     {
         _filter.PageIndex = state.Page + 1;

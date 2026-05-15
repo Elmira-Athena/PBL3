@@ -450,10 +450,11 @@
                 Snackbar.Add("Xuất kho thành công! Đơn hàng chuyển sang trạng thái Đã xuất kho.", Severity.Success);
                 _isExported = true;
                 _activeDetail = null;
-                // Tải lại đơn hàng để hiển thị trạng thái mới (Đang giao)
+                // Tải lại đơn hàng để hiển thị trạng thái mới (Đã xuất kho)
                 var reloaded = await OrderService.GetByIdAsync(_currentOrder.Id);
                 if (reloaded.Success && reloaded.Data != null)
                     _currentOrder = reloaded.Data;
+                StateHasChanged(); // Ép re-render ngay sau khi cập nhật _currentOrder
             }
             else
             {
@@ -498,7 +499,7 @@
     {
         0 => Color.Default,
         1 => Color.Warning,
-        2 => Color.Info,
+        2 => Color.Success,
         3 => Color.Success,
         4 => Color.Error,
         5 => Color.Dark,
