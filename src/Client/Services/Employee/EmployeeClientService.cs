@@ -106,5 +106,18 @@ namespace Client.Services.Employee
                 return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
             }
         }
+
+        public async Task<ApiResult<List<EmployeeDto>>> GetTechniciansAsync()
+        {
+            try
+            {
+                var result = await _httpClient.GetFromJsonAsync<ApiResult<List<EmployeeDto>>>($"{BaseUrl}/technicians");
+                return result ?? ApiResult<List<EmployeeDto>>.Fail("Không thể tải danh sách kỹ thuật viên.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<List<EmployeeDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
     }
 }

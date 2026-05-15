@@ -168,12 +168,13 @@
 
     private async Task OpenUpdateDialog(EmployeeListDto employee)
     {
-        var parameters = new DialogParameters { ["InitialId"] = employee.Id };
+        var parameters = new DialogParameters
+        {
+            ["InitialId"] = employee.Id,
+            ["InitialData"] = employee
+        };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = DialogService.Show<EmployeeDialog>("Cập nhật nhân viên", parameters, options);
-
-        if (dialog.Dialog is EmployeeDialog dlg)
-            dlg.LoadData(employee);
 
         var result = await dialog.Result;
         if (!result.Canceled) await _table.ReloadServerData();

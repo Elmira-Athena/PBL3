@@ -4,6 +4,7 @@ using PBL3.Service.Employees;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Employees;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace PBL3.API.Controllers.Admin
@@ -87,6 +88,15 @@ namespace PBL3.API.Controllers.Admin
             if (!result.Success)
                 return result.Message.Contains("Không tìm thấy") ? NotFound(result) : BadRequest(result);
 
+            return Ok(result);
+        }
+
+        [AllowAnonymous]
+        [HttpGet("technicians")]
+        [ProducesResponseType(typeof(ApiResult<List<EmployeeDto>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetTechnicians()
+        {
+            var result = await _employeeService.GetTechniciansSimpleAsync();
             return Ok(result);
         }
     }

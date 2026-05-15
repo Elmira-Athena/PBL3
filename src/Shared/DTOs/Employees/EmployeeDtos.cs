@@ -15,6 +15,7 @@ namespace PBL3.Shared.DTOs.Employees
         public string? City { get; set; }
         public bool IsActive { get; set; }
         public DateTime CreatedDate { get; set; }
+        public bool IsTechnician { get; set; }
     }
 
     public class CreateEmployeeRequest
@@ -26,6 +27,7 @@ namespace PBL3.Shared.DTOs.Employees
         public DateTime? DateOfBirth { get; set; }
         public string? Address { get; set; }
         public string? City { get; set; }
+        public bool IsTechnician { get; set; }
     }
 
     public class UpdateEmployeeRequest
@@ -36,6 +38,7 @@ namespace PBL3.Shared.DTOs.Employees
         public string? AvatarUrl { get; set; }
         public string? Address { get; set; }
         public string? City { get; set; }
+        public bool IsTechnician { get; set; }
     }
 
     public class EmployeeFilterRequest

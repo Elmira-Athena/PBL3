@@ -71,16 +71,9 @@
     <RowTemplate>
         <MudTd DataLabel="Khách hàng">
             <div class="d-flex align-center">
-                @if (!string.IsNullOrEmpty(context.AvatarUrl))
-                {
-                    <MudAvatar Image="@context.AvatarUrl" Class="mr-3" />
-                }
-                else
-                {
-                    <MudAvatar Color="Color.Primary" Class="mr-3">
-                        @(string.IsNullOrEmpty(context.FullName) ? "?" : context.FullName[0].ToString().ToUpper())
-                    </MudAvatar>
-                }
+                <MudAvatar Image="@context.AvatarUrl" Color="Color.Primary" Class="mr-3">
+                    @(string.IsNullOrEmpty(context.FullName) ? "?" : context.FullName[0].ToString().ToUpper())
+                </MudAvatar>
                 <MudText Typo="Typo.body2">@context.FullName</MudText>
             </div>
         </MudTd>

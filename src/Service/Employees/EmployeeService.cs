@@ -6,6 +6,7 @@ using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Employees;
 using PBL3.Shared.DTOs.Products;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -15,15 +16,18 @@ namespace PBL3.Service.Employees
     {
         private readonly IEmployeeRepository _employeeRepo;
         private readonly UserManager<AppUser> _userManager;
+        private readonly RoleManager<AppRole> _roleManager;
         private readonly ILogger<EmployeeService> _logger;
 
         public EmployeeService(
             IEmployeeRepository employeeRepo,
             UserManager<AppUser> userManager,
+            RoleManager<AppRole> roleManager,
             ILogger<EmployeeService> logger)
         {
             _employeeRepo = employeeRepo;
             _userManager = userManager;
+            _roleManager = roleManager;
             _logger = logger;
         }
 
@@ -38,9 +42,13 @@ namespace PBL3.Service.Employees
                 filter.SortBy,
                 filter.SortDescending);
 
+            var techRole = await _roleManager.FindByNameAsync("Technician");
+            var techUserIds = techRole == null ? new HashSet<Guid>() :
+                (await _userManager.GetUsersInRoleAsync("Technician")).Select(u => u.Id).ToHashSet();
+
             var result = new PagedResult<EmployeeListDto>
             {
-                Items = items.Select(MapToDto).ToList(),
+                Items = items.Select(u => MapToDto(u, techUserIds.Contains(u.Id))).ToList(),
                 TotalCount = totalCount,
                 PageNumber = filter.PageNumber,
                 PageSize = filter.PageSize
@@ -55,7 +63,8 @@ namespace PBL3.Service.Employees
             if (user == null)
                 return ApiResult<EmployeeListDto>.Fail("Không tìm thấy nhân viên yêu cầu.");
 
-            return ApiResult<EmployeeListDto>.Ok(MapToDto(user));
+            var isTechnician = await _userManager.IsInRoleAsync(user, "Technician");
+            return ApiResult<EmployeeListDto>.Ok(MapToDto(user, isTechnician));
         }
 
         public async Task<ApiResult<EmployeeListDto>> CreateAsync(CreateEmployeeRequest request)
@@ -94,9 +103,12 @@ namespace PBL3.Service.Employees
             }
 
             await _userManager.AddToRoleAsync(user, "Employee");
+            if (request.IsTechnician)
+                await _userManager.AddToRoleAsync(user, "Technician");
+
             _logger.LogInformation("Tạo tài khoản nhân viên thành công: {Email} (Id: {UserId})", user.Email, user.Id);
 
-            return ApiResult<EmployeeListDto>.Ok(MapToDto(user), "Tạo tài khoản nhân viên thành công.");
+            return ApiResult<EmployeeListDto>.Ok(MapToDto(user, request.IsTechnician), "Tạo tài khoản nhân viên thành công.");
         }
 
         public async Task<ApiResult<EmployeeListDto>> UpdateAsync(Guid id, UpdateEmployeeRequest request)
@@ -115,6 +127,12 @@ namespace PBL3.Service.Employees
             user.Profile.Address = request.Address?.Trim();
             user.Profile.City = request.City?.Trim();
 
+            var currentlyTechnician = await _userManager.IsInRoleAsync(user, "Technician");
+            if (request.IsTechnician && !currentlyTechnician)
+                await _userManager.AddToRoleAsync(user, "Technician");
+            else if (!request.IsTechnician && currentlyTechnician)
+                await _userManager.RemoveFromRoleAsync(user, "Technician");
+
             var updateResult = await _userManager.UpdateAsync(user);
             if (!updateResult.Succeeded)
             {
@@ -123,7 +141,7 @@ namespace PBL3.Service.Employees
             }
 
             _logger.LogInformation("Cập nhật thông tin nhân viên: {Email} (Id: {UserId})", user.Email, user.Id);
-            return ApiResult<EmployeeListDto>.Ok(MapToDto(user), "Cập nhật tài khoản thành công.");
+            return ApiResult<EmployeeListDto>.Ok(MapToDto(user, request.IsTechnician), "Cập nhật tài khoản thành công.");
         }
 
         public async Task<ApiResult<bool>> DeactivateAsync(Guid id)
@@ -162,7 +180,18 @@ namespace PBL3.Service.Employees
             return ApiResult<bool>.Ok(true, "Mở khóa tài khoản thành công.");
         }
 
-        private static EmployeeListDto MapToDto(AppUser user) => new()
+        public async Task<ApiResult<List<EmployeeDto>>> GetTechniciansSimpleAsync()
+        {
+            var (items, _) = await _employeeRepo.GetPagedListAsync(null, true, null, 1, 500, null, false);
+            var techUsers = await _userManager.GetUsersInRoleAsync("Technician");
+            var techIds = techUsers.Select(u => u.Id).ToHashSet();
+            var result = items.Where(u => techIds.Contains(u.Id))
+                .Select(u => new EmployeeDto { Id = u.Id, FullName = u.Profile?.FullName ?? u.Email ?? "" })
+                .ToList();
+            return ApiResult<List<EmployeeDto>>.Ok(result);
+        }
+
+        private static EmployeeListDto MapToDto(AppUser user, bool isTechnician = false) => new()
         {
             Id = user.Id,
             Email = user.Email ?? string.Empty,
@@ -174,7 +203,8 @@ namespace PBL3.Service.Employees
             Address = user.Profile?.Address,
             City = user.Profile?.City,
             IsActive = user.IsActive,
-            CreatedDate = user.CreatedDate
+            CreatedDate = user.CreatedDate,
+            IsTechnician = isTechnician
         };
 
         private static string GenerateRandomPassword(int length)
