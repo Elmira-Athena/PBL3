@@ -76,6 +76,9 @@ namespace PBL3.Infrastructure.Repositories
             };
 
             var items = await query
+                .Include(t => t.Serial)
+                    .ThenInclude(s => s.Variant)
+                        .ThenInclude(v => v.Product)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -98,6 +101,7 @@ namespace PBL3.Infrastructure.Repositories
                         .ThenInclude(v => v.Product)
                 .Include(t => t.OriginalOrder)
                 .Include(t => t.Customer)
+                    .ThenInclude(c => c!.Profile)
                 .Include(t => t.StatusHistory.OrderByDescending(h => h.ChangedAt))
                 .Include(t => t.Quotations)
                     .ThenInclude(q => q.Items)
@@ -170,6 +174,9 @@ namespace PBL3.Infrastructure.Repositories
             };
 
             var items = await query
+                .Include(t => t.Serial)
+                    .ThenInclude(s => s.Variant)
+                        .ThenInclude(v => v.Product)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
