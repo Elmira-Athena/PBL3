@@ -15,6 +15,7 @@ Hệ thống thương mại điện tử và quản lý phần cứng IT, xây d
 
 ---
 
+
 ## Deploy lên AWS EC2 (lần đầu)
 
 ### 1. Chuẩn bị EC2
