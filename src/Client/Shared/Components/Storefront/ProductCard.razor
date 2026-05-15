@@ -44,7 +44,9 @@
             </MudText>
 
             <div class="d-flex align-center mt-1">
-                <MudRating SelectedValue="(int)Product.Rating" Max="5" Size="Size.Small" ReadOnly="true" />
+                <div style="pointer-events: none;">
+                    <MudRating SelectedValue="(int)Product.Rating" Max="5" Size="Size.Small" ReadOnly="true" />
+                </div>
                 <MudText Typo="Typo.caption" Class="ml-1">(@Product.ReviewCount đánh giá)</MudText>
             </div>
         </div>

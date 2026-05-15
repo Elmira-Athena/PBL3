@@ -93,9 +93,9 @@
                                                 @if (_isUpdating) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="my-1"/> } 
                                                 else { @item.Quantity }
                                             </div>
-                                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" 
-                                                         OnClick="() => UpdateQuantity(item, 1)" 
-                                                         Disabled="@(_isUpdating)" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                                         OnClick="() => UpdateQuantity(item, 1)"
+                                                         Disabled="@(_isUpdating || item.Quantity >= item.StockQuantity)" />
                                         </div>
                                     </MudItem>
                                     

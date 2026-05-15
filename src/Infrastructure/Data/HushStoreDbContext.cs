@@ -54,6 +54,9 @@ namespace PBL3.Infrastructure.Data
         public DbSet<UserProfile> UserProfiles { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
+        // Storefront
+        public DbSet<Banner> Banners { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder); // Identity mappings
@@ -127,6 +130,13 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<Manufacturer>(entity =>
             {
                 entity.HasQueryFilter(m => !m.IsDeleted);
+            });
+
+            // --- STOREFRONT: BANNER ---
+            modelBuilder.Entity<Banner>(entity =>
+            {
+                entity.HasQueryFilter(b => !b.IsDeleted);
+                entity.HasIndex(b => new { b.IsActive, b.SortOrder });
             });
 
             // --- INVENTORY ---

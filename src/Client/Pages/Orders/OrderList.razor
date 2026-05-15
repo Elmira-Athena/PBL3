@@ -2,6 +2,7 @@
 @using Client.Services.Orders
 @using PBL3.Shared.DTOs.Sale
 @using Client.Pages.Orders.Components
+@implements IDisposable
 @inject IOrderClientService OrderService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -23,7 +24,7 @@
             <MudSelectItem T="int?" Value="@null">Tất cả</MudSelectItem>
             <MudSelectItem T="int?" Value="0">Chờ duyệt</MudSelectItem>
             <MudSelectItem T="int?" Value="1">Chờ xuất kho</MudSelectItem>
-            <MudSelectItem T="int?" Value="2">Đang giao</MudSelectItem>
+            <MudSelectItem T="int?" Value="2">Đã xuất kho</MudSelectItem>
             <MudSelectItem T="int?" Value="3">Thành công</MudSelectItem>
             <MudSelectItem T="int?" Value="4">Đã hủy</MudSelectItem>
         </MudSelect>
@@ -76,7 +77,19 @@
                         <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" OnClick="@(() => ConfirmOrder(context.Id))" />
                     </MudTooltip>
                 }
-                @if (context.Status == 0 || context.Status == 1) // Pending or Confirmed
+                @if (context.Status == 1)
+                {
+                    <MudTooltip Text="Tiến hành xuất kho">
+                        <MudIconButton Icon="@Icons.Material.Filled.RocketLaunch" Color="Color.Primary" Size="Size.Small" OnClick="@(() => NavigateToExport(context.Id))" />
+                    </MudTooltip>
+                }
+                @if (context.Status == 2)
+                {
+                    <MudTooltip Text="Xác nhận đã giao">
+                        <MudIconButton Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Success" Size="Size.Small" OnClick="@(() => CompleteOrder(context.Id))" />
+                    </MudTooltip>
+                }
+                @if (context.Status == 0 || context.Status == 1)
                 {
                     <MudTooltip Text="Hủy đơn">
                         <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small" OnClick="@(() => ConfirmCancelOrder(context.Id))" />
@@ -100,6 +113,25 @@
     private MudTable<OrderSummaryResponse>? _table;
     private OrderFilterRequest _filter = new OrderFilterRequest();
 
+    protected override void OnInitialized()
+    {
+        // Đăng ký sự kiện LocationChanged để reload table khi navigate về trang này
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Chỉ reload khi đang ở trang /orders
+        if (e.Location.EndsWith("/orders", StringComparison.OrdinalIgnoreCase))
+        {
+            await InvokeAsync(LoadDataAsync);
+        }
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
     private async Task<TableData<OrderSummaryResponse>> ServerReload(TableState state, CancellationToken cancellationToken)
     {
         _filter.PageIndex = state.Page + 1;
@@ -134,6 +166,32 @@
     private void ViewDetails(int id)
     {
         NavigationManager.NavigateTo($"/orders/{id}");
+    }
+
+    private void NavigateToExport(int orderId)
+    {
+        NavigationManager.NavigateTo($"/inventory/export/{orderId}");
+    }
+
+    private async Task CompleteOrder(int orderId)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Xác nhận giao hàng",
+            "Bạn xác nhận đơn hàng này đã được giao thành công?",
+            yesText: "Xác nhận",
+            cancelText: "Hủy");
+        if (confirmed != true) return;
+
+        var apiResult = await OrderService.CompleteOrderAsync(orderId);
+        if (apiResult.Success)
+        {
+            Snackbar.Add("Đã xác nhận giao hàng thành công.", Severity.Success);
+            await LoadDataAsync();
+        }
+        else
+        {
+            Snackbar.Add(apiResult.Message ?? "Lỗi khi xác nhận giao hàng.", Severity.Error);
+        }
     }
 
     private async Task ConfirmCancelOrder(int orderId)
@@ -185,7 +243,7 @@
     {
         0 => "Chờ duyệt",
         1 => "Chờ xuất kho",
-        2 => "Đang giao",
+        2 => "Đã xuất kho",
         3 => "Thành công",
         4 => "Đã hủy",
         _ => "Không xác định"
@@ -195,7 +253,7 @@
     {
         0 => Color.Default,
         1 => Color.Warning,
-        2 => Color.Info,
+        2 => Color.Success,
         3 => Color.Success,
         4 => Color.Error,
         _ => Color.Default

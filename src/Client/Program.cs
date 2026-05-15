@@ -11,6 +11,7 @@ using Client.Services;
 using Client.Services.Auth;
 using Client.Services.Category;
 using Client.Services.Customer;
+using Client.Services.Banner;
 using Client.Services.Employee;
 using Client.Services.Manufacturer;
 using Client.Services.Pos;
@@ -80,5 +81,6 @@ builder.Services.AddScoped<IServiceTicketClientService, ServiceTicketClientServi
 builder.Services.AddScoped<IServiceInvoiceClientService, ServiceInvoiceClientService>();
 builder.Services.AddScoped<IAnalyticsClientService, AnalyticsClientService>();
 builder.Services.AddScoped<Client.Services.Reviews.IReviewClientService, Client.Services.Reviews.ReviewClientService>();
+builder.Services.AddScoped<IBannerClientService, BannerClientService>();
 
 await builder.Build().RunAsync();
