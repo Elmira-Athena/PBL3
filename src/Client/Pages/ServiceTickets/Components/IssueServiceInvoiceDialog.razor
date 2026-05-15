@@ -50,6 +50,6 @@
 
     private void Submit()
     {
-        MudDialog.Close(DialogResult.Ok(new { PaymentMethod, Note }));
+        MudDialog.Close(DialogResult.Ok((PaymentMethod, Note)));
     }
 }

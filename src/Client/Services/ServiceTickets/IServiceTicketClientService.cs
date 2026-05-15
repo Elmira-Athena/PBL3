@@ -22,6 +22,7 @@ namespace Client.Services.ServiceTickets
         Task<ApiResult<RmaShipmentDto>> CreateRmaShipmentAsync(int ticketId, CreateRmaShipmentRequest request);
         Task<ApiResult<bool>> RecordRmaResolutionAsync(int ticketId, UpdateRmaResolutionRequest request);
         Task<ApiResult<bool>> Perform1For1SwapAsync(int ticketId, Perform1For1SwapRequest request);
+        Task<ApiResult<bool>> StartRepairAsync(int ticketId);
         Task<ApiResult<bool>> MarkWaitingPartsAsync(int ticketId);
         Task<ApiResult<bool>> ResumeRepairAsync(int ticketId);
         Task<ApiResult<bool>> CompleteRepairAsync(int ticketId, CompleteRepairRequest request);

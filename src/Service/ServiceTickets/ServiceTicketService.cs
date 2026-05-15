@@ -230,7 +230,7 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> RecordDiagnosisAsync(int ticketId, ServiceTicketDiagnosisDto request, Guid userId)
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
+            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -248,7 +248,7 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> ChooseBranchAsync(int ticketId, ServiceTicketBranchDto request, Guid userId)
         {
-            var ticket = await _ticketRepository.GetByIdWithDetailsAsync(ticketId);
+            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -808,7 +808,7 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> MarkWaitingPartsAsync(int ticketId, Guid userId)
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
+            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -836,7 +836,7 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> ResumeRepairAsync(int ticketId, Guid userId)
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
+            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -856,6 +856,34 @@ namespace PBL3.Service.ServiceTickets
                 ChangedByEmployeeId = userId,
                 ChangedAt = DateTime.UtcNow,
                 Note = "Tiếp tục sửa chữa"
+            });
+
+            await _ticketRepository.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> StartRepairAsync(int ticketId, Guid userId)
+        {
+            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+            if (ticket == null)
+                throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            if (ticket.ResolutionType != (byte)1)
+                throw new InvalidOperationException("Chỉ áp dụng cho phiếu sửa chữa bảo hành nội bộ.");
+
+            ValidateTransition(ticket.Status, (byte)5);
+            byte prev = ticket.Status;
+            ticket.Status = (byte)5;
+            ticket.ModifiedDate = DateTime.UtcNow;
+
+            await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+            {
+                TicketId = ticketId,
+                FromStatus = prev,
+                ToStatus = (byte)5,
+                ChangedByEmployeeId = userId,
+                ChangedAt = DateTime.UtcNow,
+                Note = "Bắt đầu sửa chữa bảo hành"
             });
 
             await _ticketRepository.SaveChangesAsync();
@@ -907,8 +935,9 @@ namespace PBL3.Service.ServiceTickets
                     LaborCost = acceptedQuote.LaborCost,
                     PartsTotal = acceptedQuote.PartsTotal,
                     GrandTotal = acceptedQuote.GrandTotal,
-                    PaymentMethod = (byte)0,
-                    PaymentStatus = (byte)0
+                    PaymentMethod = request.PaymentMethod,
+                    PaymentStatus = (byte)0,
+                    Note = request.Note
                 };
 
                 await _invoiceRepository.AddAsync(invoice);
@@ -945,7 +974,7 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> CancelTicketAsync(int ticketId, string reason, Guid userId)
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
+            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
