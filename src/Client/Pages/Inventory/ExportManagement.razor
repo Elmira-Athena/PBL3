@@ -71,7 +71,16 @@
                     </MudTd>
                     <MudTd DataLabel="Khách hàng">
                         <div class="d-flex align-center gap-2">
-                            <MudAvatar Color="Color.Primary" Size="Size.Small">@GetInitials(context.CustomerName)</MudAvatar>
+                            @if (!string.IsNullOrEmpty(context.CustomerAvatarUrl))
+                            {
+                                <MudAvatar Size="Size.Small">
+                                <MudImage Src="@context.CustomerAvatarUrl" Alt="Avatar" Style="width:100%;height:100%;object-fit:cover;" />
+                            </MudAvatar>
+                            }
+                            else
+                            {
+                                <MudAvatar Color="Color.Primary" Size="Size.Small">@GetInitials(context.CustomerName)</MudAvatar>
+                            }
                             <MudText Typo="Typo.body2">@context.CustomerName</MudText>
                         </div>
                     </MudTd>
@@ -168,7 +177,16 @@
                     </MudTd>
                     <MudTd DataLabel="Khách hàng">
                         <div class="d-flex align-center gap-2">
-                            <MudAvatar Color="Color.Secondary" Size="Size.Small">@GetInitials(context.CustomerName)</MudAvatar>
+                            @if (!string.IsNullOrEmpty(context.CustomerAvatarUrl))
+                            {
+                                <MudAvatar Size="Size.Small">
+                                <MudImage Src="@context.CustomerAvatarUrl" Alt="Avatar" Style="width:100%;height:100%;object-fit:cover;" />
+                            </MudAvatar>
+                            }
+                            else
+                            {
+                                <MudAvatar Color="Color.Secondary" Size="Size.Small">@GetInitials(context.CustomerName)</MudAvatar>
+                            }
                             <MudText Typo="Typo.body2">@context.CustomerName</MudText>
                         </div>
                     </MudTd>
