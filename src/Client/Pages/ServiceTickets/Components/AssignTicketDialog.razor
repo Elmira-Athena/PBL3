@@ -18,11 +18,11 @@
         }
         else
         {
-            <MudSelect T="Guid" @bind-Value="_selectedEmployeeId" Label="Kỹ thuật viên" Variant="Variant.Outlined"
+            <MudSelect T="Guid?" @bind-Value="_selectedEmployeeId" Label="Kỹ thuật viên" Variant="Variant.Outlined"
                        Margin="Margin.Dense" Required="true" RequiredError="Vui lòng chọn kỹ thuật viên">
                 @foreach (var emp in _employees)
                 {
-                    <MudSelectItem T="Guid" Value="emp.Id">@emp.FullName</MudSelectItem>
+                    <MudSelectItem T="Guid?" Value="emp.Id">@emp.FullName</MudSelectItem>
                 }
             </MudSelect>
         }
@@ -30,7 +30,7 @@
     <DialogActions>
         <MudButton OnClick="Cancel" Color="Color.Default">Đóng</MudButton>
         <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled"
-                   Disabled="@(_selectedEmployeeId == Guid.Empty || _employees?.Count == 0)">Gán Kỹ Thuật Viên</MudButton>
+                   Disabled="@(_selectedEmployeeId == null || _employees?.Count == 0)">Gán Kỹ Thuật Viên</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -38,7 +38,7 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     private List<EmployeeDto>? _employees;
-    private Guid _selectedEmployeeId = Guid.Empty;
+    private Guid? _selectedEmployeeId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -58,9 +58,9 @@
 
     private void Submit()
     {
-        if (_selectedEmployeeId != Guid.Empty)
+        if (_selectedEmployeeId.HasValue)
         {
-            MudDialog.Close(DialogResult.Ok(_selectedEmployeeId));
+            MudDialog.Close(DialogResult.Ok(_selectedEmployeeId.Value));
         }
     }
 }
