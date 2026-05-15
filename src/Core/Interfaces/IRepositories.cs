@@ -335,7 +335,17 @@ namespace PBL3.Core.Interfaces
     {
         IQueryable<Order> GetQueryable();
         Task<Order?> GetByIdAsync(int id);
+
+        /// <summary>
+        /// Lấy chi tiết đơn hàng theo Id, bao gồm Details và Serials (AsNoTracking — dùng cho read-only).
+        /// </summary>
         Task<Order?> GetByIdWithDetailsAsync(int id);
+
+        /// <summary>
+        /// Lấy chi tiết đơn hàng theo Id kèm tracking (dùng cho các thao tác ghi: xuất kho, cập nhật trạng thái...).
+        /// </summary>
+        Task<Order?> GetByIdWithDetailsTrackedAsync(int id);
+
         Task<string?> GetLastOrderCodeByDateAsync(string datePrefix);
         
         /// <summary>

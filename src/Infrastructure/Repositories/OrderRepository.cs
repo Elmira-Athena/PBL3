@@ -41,6 +41,23 @@ namespace PBL3.Infrastructure.Repositories
                 .FirstOrDefaultAsync(o => o.Id == id);
         }
 
+        /// <summary>
+        /// Load Order kèm Details/Serials WITH TRACKING — dùng cho các thao tác ghi (xuất kho).
+        /// </summary>
+        public async Task<Order?> GetByIdWithDetailsTrackedAsync(int id)
+        {
+            return await _dbContext.Orders
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.Variant)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.OrderSerials)
+                        .ThenInclude(os => os.Serial)
+                .Include(o => o.VoucherUsages)
+                    .ThenInclude(vu => vu.Voucher)
+                .Include(o => o.User)
+                .FirstOrDefaultAsync(o => o.Id == id);
+        }
+
         public async Task<string?> GetLastOrderCodeByDateAsync(string datePrefix)
         {
             return await _dbContext.Orders

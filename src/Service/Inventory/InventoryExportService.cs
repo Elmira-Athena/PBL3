@@ -36,7 +36,7 @@ namespace PBL3.Service.Inventory
         public async Task<ApiResult<bool>> ExportOrderAsync(ExportOrderRequest request)
         {
             // 1. Xác thực Đơn hàng (Order Validation)
-            var order = await _orderRepo.GetByIdWithDetailsAsync(request.OrderId);
+            var order = await _orderRepo.GetByIdWithDetailsTrackedAsync(request.OrderId);
             if (order == null)
             {
                 return ApiResult<bool>.Fail("Đơn hàng không tồn tại.");
