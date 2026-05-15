@@ -17,6 +17,7 @@ using PBL3.Infrastructure.Repositories;
 using PBL3.Service.Auth;
 using PBL3.Service.Categories;
 using PBL3.Service.ImportReceipts;
+using PBL3.Service.Banners;
 using PBL3.Service.Manufacturers;
 using PBL3.Service.Products;
 using PBL3.Service.ProductSerials;
@@ -33,6 +34,7 @@ using PBL3.Service.ServiceTickets;
 using PBL3.Service.ServiceInvoices;
 using PBL3.Service.Analytics;
 using PBL3.Service.Reviews;
+using PBL3.Shared.DTOs.Banners;
 using PBL3.Shared.DTOs.Reviews;
 using FluentValidation;
 using PBL3.Shared.Validators;
@@ -129,6 +131,7 @@ builder.Services.AddScoped<IQuotationRepository, QuotationRepository>();
 builder.Services.AddScoped<IRmaShipmentRepository, RmaShipmentRepository>();
 builder.Services.AddScoped<IServiceInvoiceRepository, ServiceInvoiceRepository>();
 builder.Services.AddScoped<ISerialRepairLogRepository, SerialRepairLogRepository>();
+builder.Services.AddScoped<IBannerRepository, BannerRepository>();
 
 // DI: Unit of Work
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -154,6 +157,9 @@ builder.Services.AddScoped<IServiceInvoiceService, ServiceInvoiceService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 builder.Services.AddScoped<IProductReviewService, ProductReviewService>();
 builder.Services.AddScoped<IValidator<CreateReviewRequest>, CreateReviewRequestValidator>();
+builder.Services.AddScoped<IBannerService, BannerService>();
+builder.Services.AddScoped<IValidator<CreateBannerRequest>, CreateBannerRequestValidator>();
+builder.Services.AddScoped<IValidator<UpdateBannerRequest>, UpdateBannerRequestValidator>();
 
 // DI: AWS S3 Storage
 var awsCfg = builder.Configuration.GetSection("AwsSettings");
