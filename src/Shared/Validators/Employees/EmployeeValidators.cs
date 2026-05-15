@@ -2,7 +2,7 @@ using FluentValidation;
 using PBL3.Shared.DTOs.Employees;
 using System;
 
-namespace PBL3.Shared.Validators
+namespace PBL3.Shared.Validators.Employees
 {
     public class CreateEmployeeRequestValidator : AbstractValidator<CreateEmployeeRequest>
     {

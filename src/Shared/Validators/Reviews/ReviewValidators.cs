@@ -1,7 +1,7 @@
 using FluentValidation;
 using PBL3.Shared.DTOs.Reviews;
 
-namespace PBL3.Shared.Validators
+namespace PBL3.Shared.Validators.Reviews
 {
     public class CreateReviewRequestValidator : AbstractValidator<CreateReviewRequest>
     {

@@ -1,7 +1,7 @@
 using FluentValidation;
 using PBL3.Shared.DTOs.ServiceTickets;
 
-namespace PBL3.Shared.Validators
+namespace PBL3.Shared.Validators.ServiceTickets
 {
     public class ServiceTicketIntakeRequestValidator : AbstractValidator<ServiceTicketIntakeRequestDto>
     {

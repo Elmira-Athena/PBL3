@@ -1,7 +1,7 @@
 using FluentValidation;
 using PBL3.Shared.DTOs.Vouchers;
 
-namespace PBL3.Shared.Validators
+namespace PBL3.Shared.Validators.Vouchers
 {
     public class CreateVoucherRequestValidator : AbstractValidator<CreateVoucherRequest>
     {

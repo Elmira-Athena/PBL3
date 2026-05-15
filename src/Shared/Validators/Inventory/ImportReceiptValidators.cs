@@ -1,7 +1,7 @@
 using FluentValidation;
 using PBL3.Shared.DTOs.Inventory;
 
-namespace PBL3.Shared.Validators
+namespace PBL3.Shared.Validators.Inventory
 {
     /// <summary>
     /// Validator cho từng dòng chi tiết phiếu nhập.

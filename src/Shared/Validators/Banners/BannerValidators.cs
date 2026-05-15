@@ -1,7 +1,7 @@
 using FluentValidation;
 using PBL3.Shared.DTOs.Banners;
 
-namespace PBL3.Shared.Validators
+namespace PBL3.Shared.Validators.Banners
 {
     /// <summary>
     /// Validator cho banner. <see cref="UpdateBannerRequest"/> kế thừa <see cref="CreateBannerRequest"/>

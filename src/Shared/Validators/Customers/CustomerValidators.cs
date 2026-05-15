@@ -2,7 +2,7 @@ using FluentValidation;
 using PBL3.Shared.DTOs.Customers;
 using System;
 
-namespace PBL3.Shared.Validators
+namespace PBL3.Shared.Validators.Customers
 {
     public class CreateCustomerRequestValidator : AbstractValidator<CreateCustomerRequest>
     {

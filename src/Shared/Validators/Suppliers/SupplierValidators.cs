@@ -1,7 +1,7 @@
 using FluentValidation;
 using PBL3.Shared.DTOs.Suppliers;
 
-namespace PBL3.Shared.Validators
+namespace PBL3.Shared.Validators.Suppliers
 {
     public class CreateSupplierRequestValidator : AbstractValidator<CreateSupplierRequest>
     {

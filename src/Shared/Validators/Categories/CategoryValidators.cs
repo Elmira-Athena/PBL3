@@ -1,7 +1,7 @@
 using FluentValidation;
 using PBL3.Shared.DTOs.Categories;
 
-namespace PBL3.Shared.Validators
+namespace PBL3.Shared.Validators.Categories
 {
     public class CreateCategoryRequestValidator : AbstractValidator<CreateCategoryRequest>
     {
