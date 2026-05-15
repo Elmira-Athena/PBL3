@@ -195,6 +195,9 @@ namespace PBL3.Service.ImportReceipts
         {
             var (items, totalCount) = await _receiptRepo.GetPagedListAsync(
                 filter.Keyword,
+                filter.FromDate,
+                filter.ToDate,
+                filter.SupplierId,
                 filter.PageNumber,
                 filter.PageSize,
                 filter.SortBy,

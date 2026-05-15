@@ -157,6 +157,9 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<(List<ImportReceipt> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int? supplierId,
             int pageNumber,
             int pageSize,
             string? sortBy,

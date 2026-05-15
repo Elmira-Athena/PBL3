@@ -1,0 +1,143 @@
+@page "/warehouse/import-receipts/{Id:int}"
+
+@inject IImportReceiptClientService ImportReceiptService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Chi tiết phiếu nhập kho - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+
+    <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Color="Color.Default" Class="mb-4"
+               OnClick="@(() => Navigation.NavigateTo("/warehouse/import-receipts"))">
+        Quay lại
+    </MudButton>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center mt-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (_receipt != null)
+    {
+        <MudText Typo="Typo.h5" Class="fw-bold mb-4" Style="color: var(--mud-palette-text-primary);">
+            Phiếu nhập kho @_receipt.ReceiptCode
+        </MudText>
+
+        @* ===== HEADER INFO ===== *@
+        <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Mã phiếu</MudText>
+                    <MudText Typo="Typo.body1" Style="font-weight: 600; font-family: monospace;">@_receipt.ReceiptCode</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Nhà cung cấp</MudText>
+                    <MudText Typo="Typo.body1" Style="font-weight: 500;">@_receipt.SupplierName</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Ngày nhập</MudText>
+                    <MudText Typo="Typo.body1">@_receipt.ImportDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Tổng tiền</MudText>
+                    <MudText Typo="Typo.body1" Style="font-weight: 700; color: var(--mud-palette-primary);">@_receipt.TotalAmount.ToString("N0") đ</MudText>
+                </MudItem>
+                @if (!string.IsNullOrWhiteSpace(_receipt.Note))
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Ghi chú</MudText>
+                        <MudText Typo="Typo.body2">@_receipt.Note</MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudPaper>
+
+        @* ===== DETAILS TABLE ===== *@
+        <MudPaper Elevation="1" Class="pa-5 rounded-lg">
+            <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">Chi tiết sản phẩm nhập</MudText>
+
+            @if (_receipt.Details != null && _receipt.Details.Count > 0)
+            {
+                <MudTable Items="@_receipt.Details"
+                          Dense="true"
+                          Hover="true"
+                          Bordered="false"
+                          Striped="false"
+                          Elevation="0"
+                          Class="rounded-lg"
+                          Style="border: 1px solid var(--mud-palette-lines-default);">
+                    <HeaderContent>
+                        <MudTh>Mã SP</MudTh>
+                        <MudTh>Tên biến thể</MudTh>
+                        <MudTh Style="text-align: center;">Số lượng</MudTh>
+                        <MudTh Style="text-align: right;">Giá nhập</MudTh>
+                        <MudTh Style="text-align: right;">Thành tiền</MudTh>
+                        <MudTh>Serial Numbers</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Mã SP">
+                            <MudText Typo="Typo.body2" Style="font-family: monospace;">@context.SKU</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Tên biến thể">
+                            <MudText Typo="Typo.body2" Style="font-weight: 500;">@context.VariantName</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Số lượng" Style="text-align: center;">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">
+                                @context.Quantity
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Giá nhập" Style="text-align: right;">
+                            <MudText Typo="Typo.body2">@context.ImportPrice.ToString("N0") đ</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Thành tiền" Style="text-align: right;">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.SubTotal.ToString("N0") đ</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Serial Numbers">
+                            <div style="display: flex; flex-wrap: wrap; gap: 4px; max-width: 400px;">
+                                @foreach (var serial in context.SerialNumbers)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                             Style="font-family: monospace; font-size: 0.7rem;">
+                                        @serial
+                                    </MudChip>
+                                }
+                            </div>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="rounded-lg">
+                    Không có dữ liệu chi tiết.
+                </MudAlert>
+            }
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ImportReceiptDto? _receipt;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await ImportReceiptService.GetByIdAsync(Id);
+
+        if (result.Success && result.Data != null)
+        {
+            _receipt = result.Data;
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Không tìm thấy phiếu nhập kho.", Severity.Error);
+            Navigation.NavigateTo("/warehouse/import-receipts");
+        }
+
+        _isLoading = false;
+    }
+}

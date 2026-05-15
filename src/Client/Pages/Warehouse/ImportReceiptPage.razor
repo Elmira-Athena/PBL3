@@ -1,4 +1,4 @@
-@page "/warehouse/import-receipt"
+@page "/warehouse/import-receipts/new"
 
 @using Client.Services.Inventory
 @using PBL3.Shared.DTOs.Inventory
@@ -10,6 +10,10 @@
     @* ===== HEADER ===== *@
     <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
         <div>
+            <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Color="Color.Default" Class="mb-1"
+                       OnClick="@(() => Navigation.NavigateTo("/warehouse/import-receipts"))">
+                Quay lại
+            </MudButton>
             <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
                 Tạo phiếu nhập kho
             </MudText>
@@ -669,7 +673,7 @@
             if (result.Success)
             {
                 Snackbar.Add("Lưu phiếu nhập kho thành công!", Severity.Success);
-                Navigation.NavigateTo("/warehouse/import-receipt");
+                Navigation.NavigateTo("/warehouse/import-receipts");
             }
             else
             {

@@ -16,6 +16,9 @@ namespace PBL3.Infrastructure.Repositories
 
         public async Task<(List<ImportReceipt> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int? supplierId,
             int pageNumber,
             int pageSize,
             string? sortBy,
@@ -26,7 +29,6 @@ namespace PBL3.Infrastructure.Repositories
                 .Include(r => r.Supplier)
                 .AsQueryable();
 
-            // Tìm kiếm theo Mã phiếu hoặc Tên NCC
             if (!string.IsNullOrWhiteSpace(keyword))
             {
                 var kw = keyword.Trim().ToLower();
@@ -34,6 +36,15 @@ namespace PBL3.Infrastructure.Repositories
                     r.ReceiptCode.ToLower().Contains(kw) ||
                     r.Supplier.Name.ToLower().Contains(kw));
             }
+
+            if (fromDate.HasValue)
+                query = query.Where(r => r.ImportDate >= fromDate.Value.ToUniversalTime());
+
+            if (toDate.HasValue)
+                query = query.Where(r => r.ImportDate < toDate.Value.AddDays(1).ToUniversalTime());
+
+            if (supplierId.HasValue)
+                query = query.Where(r => r.SupplierId == supplierId.Value);
 
             var totalCount = await query.CountAsync();
 

@@ -41,6 +41,12 @@ namespace Client.Services.Inventory
                 queryParams.Add($"PageNumber={filter.PageNumber}");
                 queryParams.Add($"PageSize={filter.PageSize}");
 
+                if (filter.FromDate.HasValue)
+                    queryParams.Add($"FromDate={filter.FromDate.Value:yyyy-MM-dd}");
+                if (filter.ToDate.HasValue)
+                    queryParams.Add($"ToDate={filter.ToDate.Value:yyyy-MM-dd}");
+                if (filter.SupplierId.HasValue)
+                    queryParams.Add($"SupplierId={filter.SupplierId.Value}");
                 if (!string.IsNullOrWhiteSpace(filter.SortBy))
                     queryParams.Add($"SortBy={Uri.EscapeDataString(filter.SortBy)}");
                 if (filter.SortDescending)

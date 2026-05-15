@@ -1,0 +1,156 @@
+@page "/warehouse/import-receipts"
+
+@using Client.Services.Inventory
+@using Client.Services.Supplier
+@using PBL3.Shared.DTOs.Inventory
+@using PBL3.Shared.DTOs.Suppliers
+
+@inject IImportReceiptClientService ImportReceiptService
+@inject ISupplierClientService SupplierService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Quản lý nhập kho - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Quản lý nhập kho
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Lịch sử các lần nhập kho hàng
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => Navigation.NavigateTo("/warehouse/import-receipts/new"))"
+                   Style="text-transform: none; border-radius: 8px; font-weight: 600;">
+            Tạo phiếu nhập kho
+        </MudButton>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
+        <MudTextField Value="_filter.Keyword"
+                      ValueChanged="@((string s) => { _filter.Keyword = s; _table?.ReloadServerData(); })"
+                      Label="Tìm theo mã phiếu / nhà cung cấp"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Style="max-width: 280px;"
+                      Adornment="Adornment.End"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      DebounceInterval="400"
+                      Immediate="true" />
+
+        <MudSelect T="int?"
+                   Value="_filter.SupplierId"
+                   ValueChanged="@((int? v) => { _filter.SupplierId = v; _table?.ReloadServerData(); })"
+                   Label="Nhà cung cấp"
+                   Clearable="true"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Style="max-width: 220px;"
+                   AnchorOrigin="Origin.BottomCenter">
+            <MudSelectItem T="int?" Value="@null">Tất cả</MudSelectItem>
+            @foreach (var supplier in _suppliers)
+            {
+                <MudSelectItem T="int?" Value="@supplier.Id">@supplier.Name</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudDatePicker Date="_filter.FromDate"
+                       DateChanged="@((DateTime? d) => { _filter.FromDate = d; _table?.ReloadServerData(); })"
+                       Label="Từ ngày"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy"
+                       Clearable="true"
+                       Style="max-width: 160px;" />
+
+        <MudDatePicker Date="_filter.ToDate"
+                       DateChanged="@((DateTime? d) => { _filter.ToDate = d; _table?.ReloadServerData(); })"
+                       Label="Đến ngày"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy"
+                       Clearable="true"
+                       Style="max-width: 160px;" />
+    </MudPaper>
+
+    <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<ImportReceiptDto>>>(ServerReload))"
+              Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1" Class="rounded-lg" @ref="_table">
+        <HeaderContent>
+            <MudTh>Mã phiếu</MudTh>
+            <MudTh>Nhà cung cấp</MudTh>
+            <MudTh>Ngày nhập</MudTh>
+            <MudTh Style="text-align: right;">Tổng tiền</MudTh>
+            <MudTh>Ghi chú</MudTh>
+            <MudTh Style="text-align: center;">Hành động</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã phiếu">
+                <MudText Typo="Typo.body2" Style="font-weight: 600; font-family: monospace;">@context.ReceiptCode</MudText>
+            </MudTd>
+            <MudTd DataLabel="Nhà cung cấp">
+                <MudText Typo="Typo.body2">@context.SupplierName</MudText>
+            </MudTd>
+            <MudTd DataLabel="Ngày nhập">
+                <MudText Typo="Typo.body2">@context.ImportDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Tổng tiền" Style="text-align: right;">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.TotalAmount.ToString("N0") đ</MudText>
+            </MudTd>
+            <MudTd DataLabel="Ghi chú">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@(context.Note ?? "—")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Hành động" Style="text-align: center;">
+                <MudTooltip Text="Xem chi tiết">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                   Color="Color.Info"
+                                   Size="Size.Small"
+                                   OnClick="@(() => Navigation.NavigateTo($"/warehouse/import-receipts/{context.Id}"))" />
+                </MudTooltip>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="pa-4">Không tìm thấy phiếu nhập kho nào.</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText Class="pa-4">Đang tải dữ liệu...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private MudTable<ImportReceiptDto>? _table;
+    private ImportReceiptFilterRequest _filter = new();
+    private List<SupplierDto> _suppliers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await SupplierService.GetListAsync(new SupplierFilterRequest { PageSize = 100 });
+        if (result.Success && result.Data != null)
+            _suppliers = result.Data.Items;
+    }
+
+    private async Task<TableData<ImportReceiptDto>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        _filter.PageNumber = state.Page + 1;
+        _filter.PageSize = state.PageSize;
+
+        var result = await ImportReceiptService.GetListAsync(_filter);
+
+        if (result.Success && result.Data != null)
+            return new TableData<ImportReceiptDto> { TotalItems = result.Data.TotalCount, Items = result.Data.Items };
+
+        if (!result.Success)
+            Snackbar.Add(result.Message ?? "Không thể tải danh sách phiếu nhập.", Severity.Error);
+
+        return new TableData<ImportReceiptDto> { TotalItems = 0, Items = new List<ImportReceiptDto>() };
+    }
+}
