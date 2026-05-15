@@ -4,7 +4,7 @@ using PBL3.Service.Banners;
 using PBL3.Shared.DTOs.Banners;
 using PBL3.Shared.DTOs.Common;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/[controller]")]

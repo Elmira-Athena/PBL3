@@ -6,7 +6,7 @@ using PBL3.Service.Reviews;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Reviews;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/reviews")]

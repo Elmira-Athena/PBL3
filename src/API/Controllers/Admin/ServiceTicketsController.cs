@@ -8,7 +8,7 @@ using PBL3.Service.ServiceTickets;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.ServiceTickets;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/service-tickets")]

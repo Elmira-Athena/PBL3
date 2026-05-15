@@ -7,7 +7,7 @@ using PBL3.Shared.DTOs.Products;
 using System;
 using System.Threading.Tasks;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/[controller]")]

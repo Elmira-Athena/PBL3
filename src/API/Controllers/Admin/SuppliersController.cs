@@ -5,7 +5,7 @@ using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Products;
 using PBL3.Shared.DTOs.Suppliers;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/[controller]")]

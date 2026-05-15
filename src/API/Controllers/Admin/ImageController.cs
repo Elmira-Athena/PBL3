@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using PBL3.Service.Storage;
 using PBL3.Shared.DTOs.Common;
 
-namespace PBL3.API.Controllers;
+namespace PBL3.API.Controllers.Admin;
 
 [ApiController]
 [Route("api/images")]

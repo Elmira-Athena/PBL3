@@ -4,7 +4,7 @@ using PBL3.Service.BuildPc;
 using PBL3.Shared.DTOs.BuildPc;
 using PBL3.Shared.DTOs.Common;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [Route("api/build-pc")]
     [ApiController]

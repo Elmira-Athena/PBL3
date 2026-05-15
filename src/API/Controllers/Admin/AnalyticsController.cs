@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.Analytics;
 using PBL3.Shared.DTOs.Analytics;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/[controller]")]

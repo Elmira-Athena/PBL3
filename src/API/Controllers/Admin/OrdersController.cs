@@ -7,7 +7,7 @@ using PBL3.Service.Orders;
 using PBL3.Shared.DTOs.Sale;
 using PBL3.Shared.DTOs.Common;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [Route("api/[controller]")]
     [ApiController]

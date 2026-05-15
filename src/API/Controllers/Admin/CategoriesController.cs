@@ -4,7 +4,7 @@ using PBL3.Service.Categories;
 using PBL3.Shared.DTOs.Categories;
 using PBL3.Shared.DTOs.Common;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/[controller]")]

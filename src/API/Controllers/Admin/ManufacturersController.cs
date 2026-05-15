@@ -4,7 +4,7 @@ using PBL3.Service.Manufacturers;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Manufacturers;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/[controller]")]
