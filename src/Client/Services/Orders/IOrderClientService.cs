@@ -12,5 +12,6 @@ namespace Client.Services.Orders
         Task<ApiResult<bool>> CancelOrderAsync(int id, string cancelReason);
         Task<ApiResult<CheckoutResponse>> CheckoutAsync(CheckoutRequest request);
         Task<ApiResult<bool>> CompleteOrderAsync(int id);
+        Task<ApiResult<bool>> ConfirmOrderAsync(int id);
     }
 }

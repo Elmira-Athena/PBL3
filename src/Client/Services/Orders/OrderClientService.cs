@@ -80,5 +80,19 @@ namespace Client.Services.Orders
 
             return ApiResult<bool>.Fail($"Lỗi HTTP: {response.StatusCode}");
         }
+
+        public async Task<ApiResult<bool>> ConfirmOrderAsync(int id)
+        {
+            var response = await _httpClient.PutAsJsonAsync($"/api/orders/{id}/confirm", new { });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+                return result ?? ApiResult<bool>.Fail("Không nhận được phản hồi từ máy chủ");
+            }
+
+            var errorResult = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+            return errorResult ?? ApiResult<bool>.Fail($"Lỗi HTTP: {response.StatusCode}");
+        }
     }
 }
