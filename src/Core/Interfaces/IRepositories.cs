@@ -335,7 +335,17 @@ namespace PBL3.Core.Interfaces
     {
         IQueryable<Order> GetQueryable();
         Task<Order?> GetByIdAsync(int id);
+
+        /// <summary>
+        /// Lấy chi tiết đơn hàng theo Id, bao gồm Details và Serials (AsNoTracking — dùng cho read-only).
+        /// </summary>
         Task<Order?> GetByIdWithDetailsAsync(int id);
+
+        /// <summary>
+        /// Lấy chi tiết đơn hàng theo Id kèm tracking (dùng cho các thao tác ghi: xuất kho, cập nhật trạng thái...).
+        /// </summary>
+        Task<Order?> GetByIdWithDetailsTrackedAsync(int id);
+
         Task<string?> GetLastOrderCodeByDateAsync(string datePrefix);
         
         /// <summary>
@@ -404,6 +414,23 @@ namespace PBL3.Core.Interfaces
         /// (0: Pending, 1: Confirmed, 2: Shipping)
         /// </summary>
         Task<bool> HasPendingOrdersAsync(Guid userId);
+    }
+
+    /// <summary>
+    /// Repository interface cho Employee (Type = 1).
+    /// </summary>
+    public interface IEmployeeRepository
+    {
+        Task<(List<AppUser> Items, int TotalCount)> GetPagedListAsync(
+            string? keyword,
+            bool? isActive,
+            byte? gender,
+            int pageNumber,
+            int pageSize,
+            string? sortBy,
+            bool sortDescending);
+
+        Task<AppUser?> GetByIdWithProfileAsync(Guid id);
     }
 
     /// <summary>

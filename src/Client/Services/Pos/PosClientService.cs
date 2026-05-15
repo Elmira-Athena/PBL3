@@ -18,10 +18,19 @@ namespace Client.Services.Pos
 
         public async Task<ApiResult<PosScanResponse>> ScanBarcodeAsync(string serialNumber)
         {
-            var request = new PosScanRequest { SerialNumber = serialNumber };
-            var response = await _httpClient.PostAsJsonAsync($"/api/pos/scan", request);
-            return await response.Content.ReadFromJsonAsync<ApiResult<PosScanResponse>>() 
-                ?? ApiResult<PosScanResponse>.Fail("Lỗi hệ thống khi quét mã.");
+            try
+            {
+                var request = new PosScanRequest { SerialNumber = serialNumber };
+                var response = await _httpClient.PostAsJsonAsync($"/api/pos/scan", request);
+                if (!response.IsSuccessStatusCode)
+                    return ApiResult<PosScanResponse>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                return await response.Content.ReadFromJsonAsync<ApiResult<PosScanResponse>>()
+                    ?? ApiResult<PosScanResponse>.Fail("Lỗi hệ thống khi quét mã.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<PosScanResponse>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
         }
 
         public async Task<ApiResult<PosCustomerDto>> SearchCustomerByPhoneAsync(string phone)
@@ -42,16 +51,34 @@ namespace Client.Services.Pos
 
         public async Task<ApiResult<PosOrderDto>> CheckoutAsync(PosCheckoutRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/pos/checkout", request);
-            return await response.Content.ReadFromJsonAsync<ApiResult<PosOrderDto>>()
-                ?? ApiResult<PosOrderDto>.Fail("Lỗi hệ thống khi thanh toán.");
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/api/pos/checkout", request);
+                if (!response.IsSuccessStatusCode)
+                    return ApiResult<PosOrderDto>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                return await response.Content.ReadFromJsonAsync<ApiResult<PosOrderDto>>()
+                    ?? ApiResult<PosOrderDto>.Fail("Lỗi hệ thống khi thanh toán.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<PosOrderDto>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
         }
 
         public async Task<ApiResult<int>> SaveDraftAsync(PosCheckoutRequest request)
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/pos/draft", request);
-            return await response.Content.ReadFromJsonAsync<ApiResult<int>>()
-                ?? ApiResult<int>.Fail("Lỗi hệ thống khi lưu tạm.");
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("/api/pos/draft", request);
+                if (!response.IsSuccessStatusCode)
+                    return ApiResult<int>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                return await response.Content.ReadFromJsonAsync<ApiResult<int>>()
+                    ?? ApiResult<int>.Fail("Lỗi hệ thống khi lưu tạm.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<int>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
         }
 
         public async Task<ApiResult<List<PosDraftDto>>> GetDraftsAsync()

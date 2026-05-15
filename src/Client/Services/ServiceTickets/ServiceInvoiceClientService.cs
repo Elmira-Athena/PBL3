@@ -28,16 +28,16 @@ namespace Client.Services.ServiceTickets
 
                 var response = await _httpClient.GetAsync(url);
                 if (!response.IsSuccessStatusCode)
-                    return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = $"Không thể tải danh sách. Lỗi {(int)response.StatusCode}." };
+                    return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
 
                 try
                 {
                     return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceInvoiceListDto>>>()
-                        ?? new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi tải danh sách hóa đơn." };
+                        ?? new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi lấy danh sách hóa đơn." };
                 }
                 catch
                 {
-                    return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi tải danh sách hóa đơn." };
+                    return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi lấy danh sách hóa đơn." };
                 }
             }
             catch (Exception ex)
@@ -52,7 +52,7 @@ namespace Client.Services.ServiceTickets
             {
                 var response = await _httpClient.GetAsync($"api/service-invoices/{id}");
                 if (!response.IsSuccessStatusCode)
-                    return new ApiResult<ServiceInvoiceDetailDto> { Message = $"Không thể tải. Lỗi {(int)response.StatusCode}." };
+                    return new ApiResult<ServiceInvoiceDetailDto> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
 
                 try
                 {

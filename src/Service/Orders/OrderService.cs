@@ -8,6 +8,7 @@ using PBL3.Core.Interfaces;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Sale;
 using PBL3.Shared.DTOs.Products;
+using PBL3.Shared.Enums;
 namespace PBL3.Service.Orders
 {
     public class OrderService : IOrderService
@@ -129,7 +130,8 @@ namespace PBL3.Service.Orders
                 }
                 string newOrderCode = $"{datePrefix}-{nextIndex:D3}";
 
-                byte orderStatus = (byte)(request.PaymentMethod == 0 ? 1 : 0); // 1: Confirmed (COD), 0: Pending (Online)
+                // Tất cả đơn hàng online đều bắt đầu ở Pending (chờ duyệt), dù COD hay chuyển khoản.
+                byte orderStatus = (byte)OrderStatus.Pending;
 
                 var order = new Order
                 {

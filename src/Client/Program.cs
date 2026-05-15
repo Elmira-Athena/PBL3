@@ -12,6 +12,7 @@ using Client.Services.Auth;
 using Client.Services.Category;
 using Client.Services.Customer;
 using Client.Services.Banner;
+using Client.Services.Employee;
 using Client.Services.Manufacturer;
 using Client.Services.Pos;
 using Client.Services.Product;
@@ -67,6 +68,7 @@ builder.Services.AddScoped<IProductSerialClientService, ProductSerialClientServi
 builder.Services.AddScoped<IAuthClientService, AuthClientService>();
 builder.Services.AddScoped<IPosClientService, PosClientService>();
 builder.Services.AddScoped<ICustomerClientService, CustomerClientService>();
+builder.Services.AddScoped<IEmployeeClientService, EmployeeClientService>();
 builder.Services.AddScoped<IUserAddressClientService, UserAddressClientService>();
 builder.Services.AddScoped<Client.Services.Orders.IOrderClientService, Client.Services.Orders.OrderClientService>();
 builder.Services.AddScoped<IInventoryExportClientService, InventoryExportClientService>();

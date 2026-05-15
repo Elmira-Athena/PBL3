@@ -1,52 +1,93 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Core.Entities;
+using PBL3.Service.Employees;
 using PBL3.Shared.DTOs.Common;
+using PBL3.Shared.DTOs.Employees;
+using System;
+using System.Threading.Tasks;
 
 namespace PBL3.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin, Employee")]
+    [Authorize(Roles = "Admin")]
     public class EmployeesController : ControllerBase
     {
-        private readonly UserManager<AppUser> _userManager;
+        private readonly IEmployeeService _employeeService;
 
-        public EmployeesController(UserManager<AppUser> userManager)
+        public EmployeesController(IEmployeeService employeeService)
         {
-            _userManager = userManager;
+            _employeeService = employeeService;
         }
 
-        /// <summary>
-        /// Lấy danh sách tất cả nhân viên (Admin, Employee)
-        /// </summary>
         [HttpGet]
-        [ProducesResponseType(typeof(ApiResult<List<EmployeeDto>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetEmployees()
+        [ProducesResponseType(typeof(ApiResult<PagedResult<EmployeeListDto>>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetList(
+            [FromQuery] string? keyword,
+            [FromQuery] bool? isActive,
+            [FromQuery] byte? gender,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] bool sortDescending = true)
         {
-            try
+            var filter = new EmployeeFilterRequest
             {
-                var adminUsers = await _userManager.GetUsersInRoleAsync("Admin");
-                var employeeUsers = await _userManager.GetUsersInRoleAsync("Employee");
+                Keyword = keyword,
+                IsActive = isActive,
+                Gender = gender,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                SortBy = sortBy,
+                SortDescending = sortDescending
+            };
 
-                var employees = new List<EmployeeDto>();
+            var result = await _employeeService.GetPagedListAsync(filter);
+            return Ok(result);
+        }
 
-                foreach (var user in adminUsers.Union(employeeUsers))
-                {
-                    employees.Add(new EmployeeDto
-                    {
-                        Id = user.Id,
-                        FullName = user.Profile?.FullName ?? user.UserName ?? "N/A"
-                    });
-                }
+        [HttpPost]
+        [ProducesResponseType(typeof(ApiResult<EmployeeListDto>), StatusCodes.Status201Created)]
+        public async Task<IActionResult> Create([FromBody] CreateEmployeeRequest request)
+        {
+            var result = await _employeeService.CreateAsync(request);
+            if (!result.Success)
+                return BadRequest(result);
 
-                return Ok(ApiResult<List<EmployeeDto>>.Ok(employees.OrderBy(e => e.FullName).ToList()));
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ApiResult<List<EmployeeDto>>.Fail($"Lỗi: {ex.Message}"));
-            }
+            return CreatedAtAction(nameof(GetList), result);
+        }
+
+        [HttpPut("{id:guid}")]
+        [ProducesResponseType(typeof(ApiResult<EmployeeListDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> Update(Guid id, [FromBody] UpdateEmployeeRequest request)
+        {
+            var result = await _employeeService.UpdateAsync(id, request);
+            if (!result.Success)
+                return result.Message.Contains("Không tìm thấy") ? NotFound(result) : BadRequest(result);
+
+            return Ok(result);
+        }
+
+        [HttpDelete("{id:guid}")]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> Deactivate(Guid id)
+        {
+            var result = await _employeeService.DeactivateAsync(id);
+            if (!result.Success)
+                return result.Message.Contains("Không tìm thấy") ? NotFound(result) : BadRequest(result);
+
+            return Ok(result);
+        }
+
+        [HttpPut("{id:guid}/activate")]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> Reactivate(Guid id)
+        {
+            var result = await _employeeService.ReactivateAsync(id);
+            if (!result.Success)
+                return result.Message.Contains("Không tìm thấy") ? NotFound(result) : BadRequest(result);
+
+            return Ok(result);
         }
     }
 }

@@ -19,7 +19,10 @@ namespace Client.Services.Inventory
             try
             {
                 var url = $"{BaseUrl}/check-exist?serialNumber={Uri.EscapeDataString(serialNumber)}&variantId={variantId}";
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<bool>>(url);
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                    return ApiResult<bool>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
                 return result ?? ApiResult<bool>.Fail("Không thể kiểm tra mã Serial.");
             }
             catch (Exception ex)
@@ -52,7 +55,10 @@ namespace Client.Services.Inventory
                 queryParams.Add($"sortDescending={filter.SortDescending}");
 
                 var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<ProductSerialListDto>>>(url);
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                    return ApiResult<PagedResult<ProductSerialListDto>>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ProductSerialListDto>>>();
                 return result ?? ApiResult<PagedResult<ProductSerialListDto>>.Fail("Không thể lấy danh sách Serial.");
             }
             catch (Exception ex)
@@ -75,7 +81,10 @@ namespace Client.Services.Inventory
                     ? $"{BaseUrl}/statistics?{string.Join("&", queryParams)}"
                     : $"{BaseUrl}/statistics";
 
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<ProductSerialStatisticsDto>>(url);
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                    return ApiResult<ProductSerialStatisticsDto>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<ProductSerialStatisticsDto>>();
                 return result ?? ApiResult<ProductSerialStatisticsDto>.Fail("Không thể lấy thống kê Serial.");
             }
             catch (Exception ex)
@@ -89,7 +98,10 @@ namespace Client.Services.Inventory
             try
             {
                 var url = $"{BaseUrl}/{id}";
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<ProductSerialDetailDto>>(url);
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                    return ApiResult<ProductSerialDetailDto>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<ProductSerialDetailDto>>();
                 return result ?? ApiResult<ProductSerialDetailDto>.Fail("Không thể lấy chi tiết Serial.");
             }
             catch (Exception ex)
@@ -107,6 +119,8 @@ namespace Client.Services.Inventory
                 {
                     Content = JsonContent.Create(request)
                 });
+                if (!response.IsSuccessStatusCode)
+                    return ApiResult<bool>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
                 var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
                 return result ?? ApiResult<bool>.Fail("Không thể cập nhật trạng thái Serial.");
             }

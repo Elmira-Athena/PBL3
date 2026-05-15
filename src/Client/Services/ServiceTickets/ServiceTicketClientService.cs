@@ -260,6 +260,8 @@ namespace Client.Services.ServiceTickets
             try
             {
                 var response = await _httpClient.PostAsync($"api/service-tickets/{ticketId}/waiting-parts", null);
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
                 return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
                     ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi ghi nhận chờ phụ tùng." };
             }
@@ -274,6 +276,8 @@ namespace Client.Services.ServiceTickets
             try
             {
                 var response = await _httpClient.PostAsync($"api/service-tickets/{ticketId}/resume-repair", null);
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
                 return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
                     ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi tiếp tục sửa chữa." };
             }

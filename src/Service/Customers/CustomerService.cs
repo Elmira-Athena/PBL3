@@ -221,6 +221,22 @@ namespace PBL3.Service.Customers
             return ApiResult<bool>.Ok(true, "Khóa tài khoản thành công.");
         }
 
+        public async Task<ApiResult<bool>> ReactivateAsync(Guid id)
+        {
+            var user = await _customerRepo.GetByIdWithProfileAsync(id);
+            if (user == null)
+                return ApiResult<bool>.Fail("Không tìm thấy khách hàng yêu cầu.");
+
+            user.IsActive = true;
+
+            var updateResult = await _userManager.UpdateAsync(user);
+            if (!updateResult.Succeeded)
+                return ApiResult<bool>.Fail("Cập nhật trạng thái thất bại.");
+
+            _logger.LogInformation("Mở khóa tài khoản khách hàng: {Email} (Id: {UserId})", user.Email, user.Id);
+            return ApiResult<bool>.Ok(true, "Mở khóa tài khoản thành công.");
+        }
+
         // ===================================
         // PRIVATE HELPERS
         // ===================================

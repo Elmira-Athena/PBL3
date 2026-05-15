@@ -13,5 +13,6 @@ namespace PBL3.Service.Customers
         Task<ApiResult<CustomerDto>> CreateAsync(CreateCustomerRequest request);
         Task<ApiResult<CustomerDto>> UpdateAsync(Guid id, UpdateCustomerRequest request);
         Task<ApiResult<bool>> DeactivateAsync(Guid id);
+        Task<ApiResult<bool>> ReactivateAsync(Guid id);
     }
 }
