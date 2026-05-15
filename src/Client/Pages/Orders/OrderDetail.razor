@@ -30,6 +30,12 @@
                         Xác nhận đã giao
                     </MudButton>
                 }
+                @if (_order.Status == 0) // Pending — chờ duyệt
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" OnClick="ConfirmOrderApprove">
+                        Duyệt đơn
+                    </MudButton>
+                }
                 @if (_order.Status == 0 || _order.Status == 1) // Pending or Confirmed
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small" OnClick="ConfirmCancelOrder">
@@ -275,6 +281,20 @@
         else
         {
             Snackbar.Add(result.Message ?? "Lỗi khi cập nhật đơn hàng.", Severity.Error);
+        }
+    }
+
+    private async Task ConfirmOrderApprove()
+    {
+        var result = await OrderService.ConfirmOrderAsync(Id);
+        if (result.Success)
+        {
+            Snackbar.Add("Đã duyệt đơn hàng thành công.", Severity.Success);
+            await LoadOrder();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi khi duyệt đơn hàng.", Severity.Error);
         }
     }
 
