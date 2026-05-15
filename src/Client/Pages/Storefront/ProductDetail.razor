@@ -67,7 +67,9 @@
                     </MudText>
                     <MudDivider Vertical="true" FlexItem="true" />
                     <div class="d-flex align-center">
-                        <MudRating SelectedValue="(int)_product.Rating" Max="5" ReadOnly="true" Size="Size.Small" />
+                        <div style="pointer-events: none;">
+                            <MudRating SelectedValue="(int)_product.Rating" Max="5" ReadOnly="true" Size="Size.Small" />
+                        </div>
                         <MudText Typo="Typo.caption" Class="ml-2 text-muted">(@_product.ReviewCount đánh giá)</MudText>
                     </div>
                 </div>
@@ -260,26 +262,6 @@
         margin-bottom: 1rem;
         font-weight: 600;
         color: var(--mud-palette-primary);
-    }
-
-    /* Disable hover effects on read-only MudRating */
-    .mud-rating-item .mud-icon-button:hover {
-        background-color: transparent !important;
-    }
-    .mud-rating-item .mud-icon-button .mud-button-root:hover {
-        background-color: transparent !important;
-    }
-    .mud-rating-item .mud-ripple-checkbox {
-        display: none !important;
-    }
-    .mud-rating-item button[disabled] {
-        cursor: default !important;
-        pointer-events: none !important;
-    }
-    .mud-rating-item .mud-icon-button[disabled]:hover,
-    .mud-rating-item .mud-icon-button[disabled]:focus {
-        background-color: transparent !important;
-        box-shadow: none !important;
     }
 </style>
 
