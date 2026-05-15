@@ -54,7 +54,7 @@
             <MudAlert Severity="@(_isExported ? Severity.Success : Severity.Warning)" Variant="Variant.Filled" Class="mb-4 rounded-lg">
                 @if (_isExported)
                 {
-                    <span><b>Xuất kho thành công!</b> Đơn hàng đã chuyển sang trạng thái <b>Đang giao hàng</b>. Không thể chỉnh sửa thêm.</span>
+                    <span><b>Xuất kho thành công!</b> Đơn hàng đã chuyển sang trạng thái <b>Đã xuất kho / Đang giao hàng</b>. Không thể chỉnh sửa thêm.</span>
                 }
                 else
                 {
@@ -431,7 +431,7 @@
             var result = await InventoryExportService.ExportOrderAsync(request);
             if (result.Success)
             {
-                Snackbar.Add("Xuất kho thành công! Đơn hàng chuyển sang trạng thái Đang giao hàng.", Severity.Success);
+                Snackbar.Add("Xuất kho thành công! Đơn hàng chuyển sang trạng thái Đã xuất kho.", Severity.Success);
                 _isExported = true;
                 _activeDetail = null;
                 // Tải lại đơn hàng để hiển thị trạng thái mới (Đang giao)
@@ -471,7 +471,7 @@
     {
         0 => "Chờ duyệt",
         1 => "Chờ xuất kho",
-        2 => "Đang giao",
+        2 => "Đã xuất kho",
         3 => "Thành công",
         4 => "Đã hủy",
         5 => "Hoàn trả",
