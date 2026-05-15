@@ -26,7 +26,7 @@
         <div class="d-flex align-center justify-space-between mb-4">
             <MudText Typo="Typo.h5" Style="font-weight: 700;">Đơn hàng @_order.OrderCode</MudText>
             <div class="d-flex gap-2">
-                @if (_order.Status == 2) // Shipping
+                @if (_order.Status == 2) // Exported — đã xuất kho
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" OnClick="ConfirmCompleteOrder">
                         Xác nhận đã giao
