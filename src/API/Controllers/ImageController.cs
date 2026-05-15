@@ -1,5 +1,7 @@
+using Amazon.S3;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using PBL3.Service.Storage;
 using PBL3.Shared.DTOs.Common;
 
@@ -16,10 +18,12 @@ public class ImageController : ControllerBase
     private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5MB
 
     private readonly IStorageService _storage;
+    private readonly ILogger<ImageController> _logger;
 
-    public ImageController(IStorageService storage)
+    public ImageController(IStorageService storage, ILogger<ImageController> logger)
     {
         _storage = storage;
+        _logger = logger;
     }
 
     [HttpPost("upload")]
@@ -35,9 +39,16 @@ public class ImageController : ControllerBase
         if (!AllowedContentTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
             return BadRequest(ApiResult<UploadImageResponse>.Fail("Chỉ chấp nhận file ảnh định dạng JPEG, PNG, WebP hoặc GIF."));
 
-        using var stream = file.OpenReadStream();
-        var url = await _storage.UploadAsync(stream, file.FileName, file.ContentType, folder, ct);
-
-        return Ok(ApiResult<UploadImageResponse>.Ok(new UploadImageResponse(url), "Upload ảnh thành công."));
+        try
+        {
+            using var stream = file.OpenReadStream();
+            var url = await _storage.UploadAsync(stream, file.FileName, file.ContentType, folder, ct);
+            return Ok(ApiResult<UploadImageResponse>.Ok(new UploadImageResponse(url), "Upload ảnh thành công."));
+        }
+        catch (AmazonS3Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi S3 khi upload ảnh: {ErrorCode}", ex.ErrorCode);
+            return StatusCode(503, ApiResult<UploadImageResponse>.Fail("Dịch vụ lưu trữ ảnh hiện không khả dụng. Vui lòng thử lại sau."));
+        }
     }
 }
