@@ -59,6 +59,22 @@
                     <MudTextField @bind-Value="_model.City" For="@(() => _model.City)" Label="Thành phố" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 </MudItem>
 
+                @if (!IsEditMode)
+                {
+                    <MudItem xs="12">
+                        <MudSelect @bind-Value="_model.IsTechnician" Label="Chức vụ" Variant="Variant.Outlined" Margin="Margin.Dense">
+                            <MudSelectItem Value="false">Nhân viên</MudSelectItem>
+                            <MudSelectItem Value="true">Kỹ thuật viên</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudCheckBox @bind-Value="_model.IsTechnician" Label="Kỹ thuật viên" Color="Color.Primary" />
+                    </MudItem>
+                }
+
                 @if (IsEditMode)
                 {
                     <MudItem xs="12">
@@ -118,6 +134,7 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid? InitialId { get; set; }
+    [Parameter] public EmployeeListDto? InitialData { get; set; }
 
     public class DialogFormModel
     {
@@ -129,6 +146,7 @@
         public string? AvatarUrl { get; set; }
         public string? Address { get; set; }
         public string? City { get; set; }
+        public bool IsTechnician { get; set; }
     }
 
     private DialogFormModel _model = new();
@@ -138,6 +156,12 @@
     private bool _isSaving;
     private bool _isUploadingAvatar;
 
+    protected override void OnInitialized()
+    {
+        if (IsEditMode && InitialData != null)
+            LoadData(InitialData);
+    }
+
     public void LoadData(EmployeeListDto employee)
     {
         _model.FullName = employee.FullName;
@@ -146,6 +170,7 @@
         _model.AvatarUrl = employee.AvatarUrl;
         _model.Address = employee.Address;
         _model.City = employee.City;
+        _model.IsTechnician = employee.IsTechnician;
         _email = employee.Email;
         _phoneNumber = employee.PhoneNumber;
     }
@@ -179,7 +204,8 @@
                     DateOfBirth = _model.DateOfBirth,
                     AvatarUrl = _model.AvatarUrl,
                     Address = _model.Address,
-                    City = _model.City
+                    City = _model.City,
+                    IsTechnician = _model.IsTechnician
                 };
                 var result = await EmployeeService.UpdateAsync(InitialId!.Value, request);
                 if (result.Success)
@@ -202,7 +228,8 @@
                     Gender = _model.Gender,
                     DateOfBirth = _model.DateOfBirth,
                     Address = _model.Address,
-                    City = _model.City
+                    City = _model.City,
+                    IsTechnician = _model.IsTechnician
                 };
                 var result = await EmployeeService.CreateAsync(request);
                 if (result.Success)

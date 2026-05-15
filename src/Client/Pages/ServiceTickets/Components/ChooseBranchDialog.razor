@@ -5,20 +5,20 @@
     <DialogContent>
         <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">Chọn Loại Sửa</MudText>
         <MudText Typo="Typo.body2" Class="mb-4">
-            Lựa chọn phương thức xử lý phù hợp với tình trạng máy
+            Lựa chọn phương thức xử lý phù hợp với tình trạng sản phẩm
         </MudText>
 
         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
             @if (IsInWarranty)
             {
                 <MudText Typo="Typo.body2">
-                    Máy đang <strong>còn bảo hành</strong>. Bạn có thể chọn sửa nội bộ, gửi hãng hoặc đổi 1-1.
+                    Sản phẩm đang <strong>còn bảo hành</strong>. Bạn có thể chọn sửa nội bộ, gửi hãng hoặc đổi 1-1.
                 </MudText>
             }
             else
             {
                 <MudText Typo="Typo.body2">
-                    Máy đã <strong>hết bảo hành</strong>. Chỉ có thể sửa tính phí.
+                    Sản phẩm đã <strong>hết bảo hành</strong>. Chỉ có thể sửa tính phí.
                 </MudText>
             }
         </MudAlert>
@@ -59,7 +59,7 @@
                         <div Class="w-100">
                             <MudText Typo="Typo.body2" Class="fw-bold">Đổi 1-1</MudText>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                Xuất máy mới cùng biến thể, thu hồi máy hỏng
+                                Xuất sản phẩm mới cùng biến thể, thu hồi sản phẩm hỏng
                             </MudText>
                         </div>
                     </MudButton>

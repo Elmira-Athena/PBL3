@@ -1,6 +1,7 @@
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Employees;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Client.Services.Employee
@@ -12,5 +13,6 @@ namespace Client.Services.Employee
         Task<ApiResult<EmployeeListDto>> UpdateAsync(Guid id, UpdateEmployeeRequest request);
         Task<ApiResult<bool>> DeactivateAsync(Guid id);
         Task<ApiResult<bool>> ReactivateAsync(Guid id);
+        Task<ApiResult<List<EmployeeDto>>> GetTechniciansAsync();
     }
 }

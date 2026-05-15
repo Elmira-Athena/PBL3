@@ -6,13 +6,13 @@
 @inject NavigationManager NavManager
 @inject ISnackbar Snackbar
 
-<PageTitle>Tiếp nhận máy - HushStore</PageTitle>
+<PageTitle>Tiếp nhận sản phẩm - HushStore</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-4">
     <MudPaper Elevation="0" Class="mb-6 pa-0">
-        <MudText Typo="Typo.h5" Class="fw-bold mb-2">Tiếp Nhận Máy</MudText>
+        <MudText Typo="Typo.h5" Class="fw-bold mb-2">Tiếp Nhận Sản Phẩm</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            Quét mã Serial và ghi nhận tình trạng máy
+            Quét mã Serial và ghi nhận tình trạng sản phẩm
         </MudText>
     </MudPaper>
 
@@ -26,7 +26,7 @@
                 Label="Mã Serial"
                 Variant="Variant.Outlined"
                 Placeholder="VD: MBMS-2024-9JQK"
-                HelperText="Nhập mã Serial để kiểm tra tình trạng máy"
+                HelperText="Nhập mã Serial để kiểm tra tình trạng sản phẩm"
                 Class="mb-4" />
 
             <div Class="d-flex gap-2">
@@ -51,7 +51,7 @@
         else
         {
             <!-- Step 2: Confirm Serial Info -->
-            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">1. Thông Tin Máy</MudText>
+            <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">1. Thông Tin Sản Phẩm</MudText>
 
             <MudPaper Elevation="0" Class="pa-4 mb-4 rounded-lg" Style="background-color: rgba(0,0,0,0.02);">
                 <MudGrid Spacing="2">
@@ -116,7 +116,7 @@
             <MudText Typo="Typo.subtitle1" Class="fw-bold mb-3">3. Vấn Đề Khách Báo Cáo</MudText>
 
             <MudTextField @bind-Value="request.CustomerReportedIssue"
-                Label="Mô tả vấn đề máy gặp phải"
+                Label="Mô tả vấn đề sản phẩm gặp phải"
                 Variant="Variant.Outlined"
                 Lines="3"
                 Placeholder="VD: Máy bị chậm, hay restart đột ngột, không nhận phím..."
@@ -184,7 +184,7 @@
             return;
         }
 
-        Snackbar.Add("Tiếp nhận máy thành công!", Severity.Success);
+        Snackbar.Add("Tiếp nhận sản phẩm thành công!", Severity.Success);
         NavManager.NavigateTo($"/admin/service-tickets/{result.Data?.Id}");
     }
 }

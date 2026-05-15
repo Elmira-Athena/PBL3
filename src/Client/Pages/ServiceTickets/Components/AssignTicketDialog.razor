@@ -1,6 +1,7 @@
 @namespace Client.Pages.ServiceTickets.Components
 @using PBL3.Shared.DTOs.Common
 @using System.Net.Http.Json
+@inject Client.Services.Employee.IEmployeeClientService EmployeeService
 
 <MudDialog>
     <DialogContent>
@@ -35,7 +36,6 @@
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
-    @inject HttpClient Http
 
     private List<EmployeeDto>? _employees;
     private Guid _selectedEmployeeId = Guid.Empty;
@@ -47,14 +47,8 @@
 
     private async Task LoadEmployeesAsync()
     {
-        try
-        {
-            _employees = await Http.GetFromJsonAsync<List<EmployeeDto>>("api/employees") ?? new();
-        }
-        catch
-        {
-            _employees = new();
-        }
+        var result = await EmployeeService.GetTechniciansAsync();
+        _employees = result.Success ? result.Data ?? new() : new();
     }
 
     private void Cancel()

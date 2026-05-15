@@ -202,6 +202,16 @@ if (app.Environment.IsProduction())
     await db.Database.MigrateAsync();
 }
 
+// Seed "Technician" role if it doesn't exist
+using (var roleScope = app.Services.CreateScope())
+{
+    var roleManager = roleScope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
+    if (!await roleManager.RoleExistsAsync("Technician"))
+    {
+        await roleManager.CreateAsync(new AppRole { Name = "Technician", RoleCode = "KTV" });
+    }
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
