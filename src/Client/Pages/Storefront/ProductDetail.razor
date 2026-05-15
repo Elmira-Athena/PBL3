@@ -349,7 +349,8 @@
         if (result.Success)
         {
             Snackbar.Add($"Đã thêm {_quantity} sản phẩm vào giỏ hàng!", Severity.Success);
-            NavigationManager.NavigateTo("/cart");
+            // Reset số lượng về 1 để tiếp tục thêm
+            _quantity = 1;
         }
         else
         {
@@ -375,7 +376,7 @@
         var result = await CartClientService.AddToCartAsync(_currentVariant.Id, _quantity);
         if (result.Success)
         {
-            NavigationManager.NavigateTo("/checkout");
+            NavigationManager.NavigateTo("/cart");
         }
         else
         {
