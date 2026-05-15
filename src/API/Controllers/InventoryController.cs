@@ -39,5 +39,21 @@ namespace PBL3.API.Controllers
 
             return Ok(result);
         }
+
+        [HttpGet("serials/validate")]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ValidateSerial([FromQuery] string serialNo, [FromQuery] int variantId)
+        {
+            if (string.IsNullOrWhiteSpace(serialNo) || variantId <= 0)
+                return BadRequest(ApiResult<bool>.Fail("Tham số không hợp lệ."));
+
+            var result = await _inventoryExportService.ValidateSerialAsync(serialNo, variantId);
+
+            if (!result.Success)
+                return BadRequest(result);
+
+            return Ok(result);
+        }
     }
 }
