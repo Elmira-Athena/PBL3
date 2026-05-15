@@ -7,7 +7,7 @@ using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
 using System.Security.Claims;
 
-namespace PBL3.API.Controllers.Admin
+namespace PBL3.API.Controllers.Storefront
 {
     [Route("api/[controller]")]
     [ApiController]
