@@ -51,6 +51,7 @@ namespace PBL3.Infrastructure.Repositories
             return await _context.ProductSerials
                 .Include(s => s.Variant)
                     .ThenInclude(v => v.Product)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.SerialNumber == serialNumber);
         }
 

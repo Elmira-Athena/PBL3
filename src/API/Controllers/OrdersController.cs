@@ -67,6 +67,7 @@ namespace PBL3.API.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<IActionResult> GetPagedOrders([FromQuery] OrderFilterRequest request)
         {
             var result = await _orderService.GetPagedOrdersAsync(request);
