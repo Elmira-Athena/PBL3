@@ -1,0 +1,289 @@
+@page "/inventory/export"
+@using Client.Services.Orders
+@using PBL3.Shared.DTOs.Sale
+
+@inject IOrderClientService OrderService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Quản lý xuất kho - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Quản lý xuất kho
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Theo dõi đơn hàng chờ xuất và lịch sử xuất kho
+            </MudText>
+        </div>
+    </MudPaper>
+
+    <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-0 pt-4">
+
+        @* ===== TAB 1: ĐƠN CHỜ XUẤT ===== *@
+        <MudTabPanel Text="Đơn chờ xuất" Icon="@Icons.Material.Outlined.PendingActions">
+            <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
+                <MudTextField Value="_pendingFilter.Keyword"
+                              ValueChanged="@((string s) => { _pendingFilter.Keyword = s; _pendingTable?.ReloadServerData(); })"
+                              Label="Tìm theo SĐT / Mã đơn"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Style="max-width: 260px;"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              DebounceInterval="400"
+                              Immediate="true" />
+
+                <MudDatePicker Date="_pendingFilter.FromDate"
+                               DateChanged="@((DateTime? d) => { _pendingFilter.FromDate = d; _pendingTable?.ReloadServerData(); })"
+                               Label="Từ ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true"
+                               Style="max-width: 160px;" />
+
+                <MudDatePicker Date="_pendingFilter.ToDate"
+                               DateChanged="@((DateTime? d) => { _pendingFilter.ToDate = d; _pendingTable?.ReloadServerData(); })"
+                               Label="Đến ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true"
+                               Style="max-width: 160px;" />
+            </MudPaper>
+
+            <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<OrderSummaryResponse>>>(PendingServerReload))"
+                      Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1" Class="rounded-lg" @ref="_pendingTable">
+                <HeaderContent>
+                    <MudTh>Mã đơn</MudTh>
+                    <MudTh>Khách hàng</MudTh>
+                    <MudTh>SĐT</MudTh>
+                    <MudTh>Ngày tạo</MudTh>
+                    <MudTh>Tổng tiền</MudTh>
+                    <MudTh>Trạng thái</MudTh>
+                    <MudTh Style="text-align: right;">Hành động</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Mã đơn">
+                        <MudText Typo="Typo.body2" Style="font-weight: 500;">#@context.OrderCode</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Khách hàng">
+                        <div class="d-flex align-center gap-2">
+                            <MudAvatar Color="Color.Primary" Size="Size.Small">@GetInitials(context.CustomerName)</MudAvatar>
+                            <MudText Typo="Typo.body2">@context.CustomerName</MudText>
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="SĐT">@context.CustomerPhone</MudTd>
+                    <MudTd DataLabel="Ngày tạo">@context.CreatedDate.ToString("dd/MM/yyyy HH:mm")</MudTd>
+                    <MudTd DataLabel="Tổng tiền">
+                        <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.TotalAmount.ToString("N0") đ</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Trạng thái">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Style="pointer-events:none;">
+                            Chờ xuất kho
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Hành động" Style="text-align: right;">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.RocketLaunch"
+                                   OnClick="@(() => NavigationManager.NavigateTo($"/inventory/export/{context.Id}"))">
+                            Tiến hành Xuất kho
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">Không có đơn hàng nào đang chờ xuất kho.</MudText>
+                </NoRecordsContent>
+                <LoadingContent>
+                    <MudText Class="pa-4">Đang tải dữ liệu...</MudText>
+                </LoadingContent>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+                </PagerContent>
+            </MudTable>
+        </MudTabPanel>
+
+        @* ===== TAB 2: LỊCH SỬ XUẤT KHO ===== *@
+        <MudTabPanel Text="Lịch sử xuất kho" Icon="@Icons.Material.Outlined.History">
+            <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
+                <MudTextField Value="_historyFilter.Keyword"
+                              ValueChanged="@((string s) => { _historyFilter.Keyword = s; _historyTable?.ReloadServerData(); })"
+                              Label="Tìm theo SĐT / Mã đơn"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Style="max-width: 260px;"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              DebounceInterval="400"
+                              Immediate="true" />
+
+                <MudDatePicker Date="_historyFilter.FromDate"
+                               DateChanged="@((DateTime? d) => { _historyFilter.FromDate = d; _historyTable?.ReloadServerData(); })"
+                               Label="Từ ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true"
+                               Style="max-width: 160px;" />
+
+                <MudDatePicker Date="_historyFilter.ToDate"
+                               DateChanged="@((DateTime? d) => { _historyFilter.ToDate = d; _historyTable?.ReloadServerData(); })"
+                               Label="Đến ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true"
+                               Style="max-width: 160px;" />
+
+                <MudSelect T="string"
+                           Value="_historyStatusKey"
+                           ValueChanged="OnHistoryStatusChanged"
+                           Label="Trạng thái"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Style="max-width: 200px;"
+                           AnchorOrigin="Origin.BottomCenter">
+                    <MudSelectItem T="string" Value="@("all")">Tất cả</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("exported")">Đã xuất kho</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("success")">Thành công</MudSelectItem>
+                </MudSelect>
+            </MudPaper>
+
+            <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<OrderSummaryResponse>>>(HistoryServerReload))"
+                      Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1" Class="rounded-lg" @ref="_historyTable">
+                <HeaderContent>
+                    <MudTh>Mã đơn</MudTh>
+                    <MudTh>Khách hàng</MudTh>
+                    <MudTh>SĐT</MudTh>
+                    <MudTh>Ngày xuất</MudTh>
+                    <MudTh>Tổng tiền</MudTh>
+                    <MudTh>Trạng thái</MudTh>
+                    <MudTh Style="text-align: center;">Hành động</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Mã đơn">
+                        <MudText Typo="Typo.body2" Style="font-weight: 500;">#@context.OrderCode</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Khách hàng">
+                        <div class="d-flex align-center gap-2">
+                            <MudAvatar Color="Color.Secondary" Size="Size.Small">@GetInitials(context.CustomerName)</MudAvatar>
+                            <MudText Typo="Typo.body2">@context.CustomerName</MudText>
+                        </div>
+                    </MudTd>
+                    <MudTd DataLabel="SĐT">@context.CustomerPhone</MudTd>
+                    <MudTd DataLabel="Ngày xuất">@context.CreatedDate.ToString("dd/MM/yyyy HH:mm")</MudTd>
+                    <MudTd DataLabel="Tổng tiền">
+                        <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.TotalAmount.ToString("N0") đ</MudText>
+                    </MudTd>
+                    <MudTd DataLabel="Trạng thái">
+                        <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)" Variant="Variant.Filled" Style="pointer-events:none;">
+                            @GetStatusText(context.Status)
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Hành động" Style="text-align: center;">
+                        <MudTooltip Text="Xem chi tiết">
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                           Color="Color.Info"
+                                           Size="Size.Small"
+                                           OnClick="@(() => NavigationManager.NavigateTo($"/inventory/export/{context.Id}"))" />
+                        </MudTooltip>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">Không tìm thấy lịch sử xuất kho nào.</MudText>
+                </NoRecordsContent>
+                <LoadingContent>
+                    <MudText Class="pa-4">Đang tải dữ liệu...</MudText>
+                </LoadingContent>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+                </PagerContent>
+            </MudTable>
+        </MudTabPanel>
+
+    </MudTabs>
+</MudContainer>
+
+@code {
+    private MudTable<OrderSummaryResponse>? _pendingTable;
+    private MudTable<OrderSummaryResponse>? _historyTable;
+
+    private OrderFilterRequest _pendingFilter = new() { Status = 1 };
+    private OrderFilterRequest _historyFilter = new() { MinStatus = 2, MaxStatus = 3 };
+    private string _historyStatusKey = "all";
+
+    private async Task<TableData<OrderSummaryResponse>> PendingServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        _pendingFilter.PageIndex = state.Page + 1;
+        _pendingFilter.PageSize = state.PageSize;
+        _pendingFilter.Status = 1;
+
+        var result = await OrderService.GetPagedOrdersAsync(_pendingFilter);
+        return new TableData<OrderSummaryResponse>
+        {
+            TotalItems = result.TotalCount,
+            Items = result.Items ?? new List<OrderSummaryResponse>()
+        };
+    }
+
+    private async Task<TableData<OrderSummaryResponse>> HistoryServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        _historyFilter.PageIndex = state.Page + 1;
+        _historyFilter.PageSize = state.PageSize;
+
+        var result = await OrderService.GetPagedOrdersAsync(_historyFilter);
+        return new TableData<OrderSummaryResponse>
+        {
+            TotalItems = result.TotalCount,
+            Items = result.Items ?? new List<OrderSummaryResponse>()
+        };
+    }
+
+    private void OnHistoryStatusChanged(string key)
+    {
+        _historyStatusKey = key;
+        _historyFilter.Status = null;
+        _historyFilter.MinStatus = null;
+        _historyFilter.MaxStatus = null;
+
+        switch (key)
+        {
+            case "exported":
+                _historyFilter.Status = 2;
+                break;
+            case "success":
+                _historyFilter.Status = 3;
+                break;
+            default:
+                _historyFilter.MinStatus = 2;
+                _historyFilter.MaxStatus = 3;
+                break;
+        }
+
+        _historyTable?.ReloadServerData();
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+    }
+
+    private static string GetStatusText(byte status) => status switch
+    {
+        2 => "Đã xuất kho",
+        3 => "Thành công",
+        _ => "Không xác định"
+    };
+
+    private static Color GetStatusColor(byte status) => status switch
+    {
+        2 => Color.Success,
+        3 => Color.Success,
+        _ => Color.Default
+    };
+}

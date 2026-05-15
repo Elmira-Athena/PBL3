@@ -40,6 +40,10 @@ namespace Client.Services.Orders
                     queryString += $"&keyword={request.Keyword}";
                 if (request.Status.HasValue)
                     queryString += $"&status={request.Status.Value}";
+                if (request.MinStatus.HasValue)
+                    queryString += $"&minStatus={request.MinStatus.Value}";
+                if (request.MaxStatus.HasValue)
+                    queryString += $"&maxStatus={request.MaxStatus.Value}";
                 if (request.FromDate.HasValue)
                     queryString += $"&fromDate={request.FromDate.Value:yyyy-MM-ddTHH:mm:ss}";
                 if (request.ToDate.HasValue)

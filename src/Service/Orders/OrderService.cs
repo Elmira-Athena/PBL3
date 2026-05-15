@@ -466,6 +466,11 @@ namespace PBL3.Service.Orders
                 query = query.Where(o => o.Status == request.Status.Value);
             }
 
+            if (request.MinStatus.HasValue)
+                query = query.Where(o => o.Status >= request.MinStatus.Value);
+            if (request.MaxStatus.HasValue)
+                query = query.Where(o => o.Status <= request.MaxStatus.Value);
+
             if (request.FromDate.HasValue)
             {
                 query = query.Where(o => o.OrderDate >= request.FromDate.Value);

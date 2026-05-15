@@ -246,8 +246,6 @@ namespace PBL3.Service.ServiceTickets
             return true;
         }
 
-        // Issue #1: Add ValidateTransition call
-
         public async Task<bool> ChooseBranchAsync(int ticketId, ServiceTicketBranchDto request, Guid userId)
         {
             var ticket = await _ticketRepository.GetByIdWithDetailsAsync(ticketId);
@@ -283,6 +281,8 @@ namespace PBL3.Service.ServiceTickets
             // Issue #10: Check ticket status is Diagnosing
             if (ticket.Status != (byte)1)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Đang chẩn đoán.");
+
+            ValidateTransition(ticket.Status, (byte)2);
 
             if (ticket.ResolutionType != (byte)4)
                 throw new InvalidOperationException("Chỉ phiếu sửa tính phí mới có báo giá.");
@@ -370,6 +370,8 @@ namespace PBL3.Service.ServiceTickets
             if (nextStatus != (byte)4 && nextStatus != (byte)5)
                 throw new InvalidOperationException("Trạng thái tiếp theo không hợp lệ.");
 
+            ValidateTransition(ticket.Status, nextStatus);
+
             await _unitOfWork.BeginTransactionAsync();
             try
             {
@@ -412,6 +414,8 @@ namespace PBL3.Service.ServiceTickets
             var quotation = await _quotationRepository.GetByIdWithTrackingAsync(quotationId);
             if (quotation == null || quotation.TicketId != ticketId)
                 throw new InvalidOperationException("Báo giá không tồn tại.");
+
+            ValidateTransition(ticket.Status, (byte)3);
 
             await _unitOfWork.BeginTransactionAsync();
             try
@@ -460,6 +464,8 @@ namespace PBL3.Service.ServiceTickets
             var existingRma = await _rmaRepository.GetByTicketIdAsync(ticketId);
             if (existingRma != null)
                 throw new InvalidOperationException("Phiếu này đã được gửi hãng rồi.");
+
+            ValidateTransition(ticket.Status, (byte)6);
 
             // Issue #13: Use UoW transaction pattern instead of individual SaveChanges
             await _unitOfWork.BeginTransactionAsync();
@@ -512,6 +518,9 @@ namespace PBL3.Service.ServiceTickets
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            byte toStatus = request.ManufacturerResolution == (byte)2 ? (byte)8 : (byte)7;
+            ValidateTransition(ticket.Status, toStatus);
 
             await _unitOfWork.BeginTransactionAsync();
             try
@@ -647,6 +656,8 @@ namespace PBL3.Service.ServiceTickets
             if (ticket.ReplacementSerialId.HasValue)
                 throw new InvalidOperationException("Phiếu này đã được đổi 1-1 trước đó.");
 
+            ValidateTransition(ticket.Status, (byte)8);
+
             var oldSerial = await _serialRepository.GetByIdWithTrackingAsync(ticket.SerialId);
             if (oldSerial == null)
                 throw new InvalidOperationException("Serial cũ không tồn tại.");
@@ -748,6 +759,8 @@ namespace PBL3.Service.ServiceTickets
             if (!new[] { (byte)5, (byte)7, (byte)8 }.Contains(ticket.Status))
                 throw new InvalidOperationException("Phiếu phải ở trạng thái sửa chữa hoặc đã nhận từ hãng.");
 
+            ValidateTransition(ticket.Status, (byte)9);
+
             await _unitOfWork.BeginTransactionAsync();
             try
             {
@@ -802,6 +815,8 @@ namespace PBL3.Service.ServiceTickets
             if (ticket.Status != (byte)5)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Đang sửa.");
 
+            ValidateTransition(ticket.Status, (byte)4);
+
             ticket.Status = (byte)4;
             ticket.ModifiedDate = DateTime.UtcNow;
 
@@ -827,6 +842,8 @@ namespace PBL3.Service.ServiceTickets
 
             if (ticket.Status != (byte)4)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Chờ phụ tùng.");
+
+            ValidateTransition(ticket.Status, (byte)5);
 
             ticket.Status = (byte)5;
             ticket.ModifiedDate = DateTime.UtcNow;
@@ -934,6 +951,8 @@ namespace PBL3.Service.ServiceTickets
 
             if (new[] { (byte)3, (byte)9, (byte)10 }.Contains(ticket.Status))
                 throw new InvalidOperationException("Không thể thay đổi trạng thái phiếu đã đóng.");
+
+            ValidateTransition(ticket.Status, (byte)10);
 
             // Issue #3: Capture FromStatus BEFORE changing status
             byte previousStatus = ticket.Status;
@@ -1065,10 +1084,11 @@ namespace PBL3.Service.ServiceTickets
                 (0, 1), (0, 10),
                 (1, 2), (1, 4), (1, 5), (1, 6), (1, 8), (1, 10),
                 (2, 4), (2, 5), (2, 3), (2, 10),
-                (4, 5), (5, 4), (5, 9),
-                (6, 7),
-                (7, 9), (7, 8),
-                (8, 9)
+                (4, 5), (4, 10),
+                (5, 4), (5, 9), (5, 10),
+                (6, 7), (6, 10),
+                (7, 9), (7, 8), (7, 10),
+                (8, 9), (8, 10)
             };
 
             if (!validTransitions.Contains((currentStatus, targetStatus)))
