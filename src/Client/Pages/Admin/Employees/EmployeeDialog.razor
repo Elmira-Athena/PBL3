@@ -67,6 +67,26 @@
                             <MudSelectItem Value="true">Kỹ thuật viên</MudSelectItem>
                         </MudSelect>
                     </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.Password"
+                                      For="@(() => _model.Password)"
+                                      Label="Mật khẩu"
+                                      InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                      OnAdornmentClick="@(() => _showPassword = !_showPassword)" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.ConfirmPassword"
+                                      For="@(() => _model.ConfirmPassword)"
+                                      Label="Xác nhận mật khẩu"
+                                      InputType="@(_showConfirmPassword ? InputType.Text : InputType.Password)"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@(_showConfirmPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                      OnAdornmentClick="@(() => _showConfirmPassword = !_showConfirmPassword)" />
+                    </MudItem>
                 }
                 else
                 {
@@ -147,6 +167,8 @@
         public string? Address { get; set; }
         public string? City { get; set; }
         public bool IsTechnician { get; set; }
+        public string Password { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
     }
 
     private DialogFormModel _model = new();
@@ -155,6 +177,8 @@
     private bool IsEditMode => InitialId.HasValue && InitialId.Value != Guid.Empty;
     private bool _isSaving;
     private bool _isUploadingAvatar;
+    private bool _showPassword;
+    private bool _showConfirmPassword;
 
     protected override void OnInitialized()
     {
@@ -229,7 +253,9 @@
                     DateOfBirth = _model.DateOfBirth,
                     Address = _model.Address,
                     City = _model.City,
-                    IsTechnician = _model.IsTechnician
+                    IsTechnician = _model.IsTechnician,
+                    Password = _model.Password,
+                    ConfirmPassword = _model.ConfirmPassword
                 };
                 var result = await EmployeeService.CreateAsync(request);
                 if (result.Success)
