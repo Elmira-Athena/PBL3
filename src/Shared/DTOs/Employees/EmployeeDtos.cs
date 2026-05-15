@@ -28,6 +28,8 @@ namespace PBL3.Shared.DTOs.Employees
         public string? Address { get; set; }
         public string? City { get; set; }
         public bool IsTechnician { get; set; }
+        public string Password { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
     }
 
     public class UpdateEmployeeRequest

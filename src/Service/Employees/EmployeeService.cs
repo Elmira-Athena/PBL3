@@ -93,8 +93,7 @@ namespace PBL3.Service.Employees
                 }
             };
 
-            var generatedPassword = GenerateRandomPassword(12);
-            var createResult = await _userManager.CreateAsync(user, generatedPassword);
+            var createResult = await _userManager.CreateAsync(user, request.Password);
             if (!createResult.Succeeded)
             {
                 var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
@@ -206,33 +205,5 @@ namespace PBL3.Service.Employees
             CreatedDate = user.CreatedDate,
             IsTechnician = isTechnician
         };
-
-        private static string GenerateRandomPassword(int length)
-        {
-            const string lowercase = "abcdefghijklmnopqrstuvwxyz";
-            const string uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            const string digits = "1234567890";
-            const string special = "!@#$%^&*()";
-
-            var random = new Random();
-            var password = new char[length];
-
-            password[0] = lowercase[random.Next(lowercase.Length)];
-            password[1] = uppercase[random.Next(uppercase.Length)];
-            password[2] = digits[random.Next(digits.Length)];
-            password[3] = special[random.Next(special.Length)];
-
-            var allChars = lowercase + uppercase + digits + special;
-            for (int i = 4; i < length; i++)
-                password[i] = allChars[random.Next(allChars.Length)];
-
-            for (int i = 0; i < length; i++)
-            {
-                int r = i + random.Next(length - i);
-                (password[r], password[i]) = (password[i], password[r]);
-            }
-
-            return new string(password);
-        }
     }
 }

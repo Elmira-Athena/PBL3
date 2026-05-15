@@ -136,45 +136,45 @@ namespace Client.Services.ServiceTickets
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> AssignTechnicianAsync(int ticketId, AssignTechnicianRequest request)
+        public async Task<ApiResult<bool>> AssignTechnicianAsync(int ticketId, AssignTechnicianRequest request)
         {
             try
             {
                 var response = await _httpClient.PutAsJsonAsync($"api/service-tickets/{ticketId}/assign", request);
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi gán kỹ thuật viên." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi gán kỹ thuật viên." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> RecordDiagnosisAsync(int ticketId, RecordDiagnosisRequest request)
+        public async Task<ApiResult<bool>> RecordDiagnosisAsync(int ticketId, RecordDiagnosisRequest request)
         {
             try
             {
                 var response = await _httpClient.PutAsJsonAsync($"api/service-tickets/{ticketId}/diagnosis", request);
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi ghi kết luận chẩn đoán." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi ghi kết luận chẩn đoán." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> ChooseBranchAsync(int ticketId, ChooseBranchRequest request)
+        public async Task<ApiResult<bool>> ChooseBranchAsync(int ticketId, ChooseBranchRequest request)
         {
             try
             {
                 var response = await _httpClient.PutAsJsonAsync($"api/service-tickets/{ticketId}/branch", request);
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi chọn loại sửa chữa." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi chọn loại sửa chữa." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
@@ -192,31 +192,31 @@ namespace Client.Services.ServiceTickets
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> AcceptQuotationAsync(int ticketId, int quotationId, AcceptQuotationRequest request)
+        public async Task<ApiResult<bool>> AcceptQuotationAsync(int ticketId, int quotationId, AcceptQuotationRequest request)
         {
             try
             {
                 var response = await _httpClient.PostAsJsonAsync($"api/service-tickets/{ticketId}/quotation/{quotationId}/accept", request);
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi duyệt báo giá." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi duyệt báo giá." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> RejectQuotationAsync(int ticketId, int quotationId, RejectQuotationRequest request)
+        public async Task<ApiResult<bool>> RejectQuotationAsync(int ticketId, int quotationId, RejectQuotationRequest request)
         {
             try
             {
                 var response = await _httpClient.PostAsJsonAsync($"api/service-tickets/{ticketId}/quotation/{quotationId}/reject", request);
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi từ chối báo giá." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi từ chối báo giá." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
@@ -234,77 +234,77 @@ namespace Client.Services.ServiceTickets
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> RecordRmaResolutionAsync(int ticketId, UpdateRmaResolutionRequest request)
+        public async Task<ApiResult<bool>> RecordRmaResolutionAsync(int ticketId, UpdateRmaResolutionRequest request)
         {
             try
             {
                 var response = await _httpClient.PutAsJsonAsync($"api/service-tickets/{ticketId}/rma/resolution", request);
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi cập nhật kết quả RMA." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi cập nhật kết quả RMA." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> Perform1For1SwapAsync(int ticketId, Perform1For1SwapRequest request)
+        public async Task<ApiResult<bool>> Perform1For1SwapAsync(int ticketId, Perform1For1SwapRequest request)
         {
             try
             {
                 var response = await _httpClient.PostAsJsonAsync($"api/service-tickets/{ticketId}/swap", request);
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi thực hiện đổi 1-1." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi thực hiện đổi 1-1." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> MarkWaitingPartsAsync(int ticketId)
+        public async Task<ApiResult<bool>> MarkWaitingPartsAsync(int ticketId)
         {
             try
             {
                 var response = await _httpClient.PostAsync($"api/service-tickets/{ticketId}/waiting-parts", null);
                 if (!response.IsSuccessStatusCode)
-                    return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi ghi nhận chờ phụ tùng." };
+                    return new ApiResult<bool> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi ghi nhận chờ phụ tùng." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> ResumeRepairAsync(int ticketId)
+        public async Task<ApiResult<bool>> ResumeRepairAsync(int ticketId)
         {
             try
             {
                 var response = await _httpClient.PostAsync($"api/service-tickets/{ticketId}/resume-repair", null);
                 if (!response.IsSuccessStatusCode)
-                    return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi tiếp tục sửa chữa." };
+                    return new ApiResult<bool> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi tiếp tục sửa chữa." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> CompleteRepairAsync(int ticketId, CompleteRepairRequest request)
+        public async Task<ApiResult<bool>> CompleteRepairAsync(int ticketId, CompleteRepairRequest request)
         {
             try
             {
                 var response = await _httpClient.PostAsJsonAsync($"api/service-tickets/{ticketId}/complete", request);
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi hoàn tất sửa chữa." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi hoàn tất sửa chữa." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
@@ -322,17 +322,17 @@ namespace Client.Services.ServiceTickets
             }
         }
 
-        public async Task<ApiResult<ServiceTicketDetailDto>> CancelTicketAsync(int ticketId, CancelTicketRequest request)
+        public async Task<ApiResult<bool>> CancelTicketAsync(int ticketId, CancelTicketRequest request)
         {
             try
             {
                 var response = await _httpClient.PostAsJsonAsync($"api/service-tickets/{ticketId}/cancel", request);
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Lỗi hủy phiếu." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi hủy phiếu." };
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
             }
         }
 
