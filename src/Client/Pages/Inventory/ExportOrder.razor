@@ -293,19 +293,35 @@
             if (result.Success && result.Data != null)
             {
                 _currentOrder = result.Data;
+                _isExported = false; // reset trước
+
                 _details = _currentOrder.Items.Select(i => new ExportDetailViewModel
                 {
-                    OrderDetailId = i.Id, // i.Id in OrderDetailLineDto mapping might be needed! Let's check this next.
+                    OrderDetailId = i.Id,
                     VariantId = i.VariantId,
-                    ProductName = i.VariantName.Split(" - ").FirstOrDefault() ?? i.VariantName, // fallback if format varies
+                    ProductName = i.VariantName.Split(" - ").FirstOrDefault() ?? i.VariantName,
                     VariantName = i.VariantName,
                     SKU = i.SKU,
                     RequiredQuantity = i.Quantity,
                     UnitPrice = i.UnitPrice,
-                    ScannedSerials = new List<string>()
+                    // Nếu đơn đã xuất kho → load serials đã gán từ DB
+                    ScannedSerials = (_currentOrder.Status >= 2 && i.Serials != null)
+                        ? new List<string>(i.Serials)
+                        : new List<string>()
                 }).ToList();
+
                 _activeDetail = null;
-                Snackbar.Add("Tải dữ liệu đơn hàng thành công.", Severity.Success);
+
+                // Khoá UI nếu đơn đã được xuất kho
+                if (_currentOrder.Status >= 2)
+                {
+                    _isExported = true;
+                    Snackbar.Add("Đơn hàng này đã được xuất kho. Không thể chỉnh sửa.", Severity.Info);
+                }
+                else
+                {
+                    Snackbar.Add("Tải dữ liệu đơn hàng thành công.", Severity.Success);
+                }
             }
             else
             {
