@@ -38,7 +38,8 @@ using PBL3.Service.Reviews;
 using PBL3.Shared.DTOs.Banners;
 using PBL3.Shared.DTOs.Reviews;
 using FluentValidation;
-using PBL3.Shared.Validators;
+using PBL3.Shared.Validators.Banners;
+using PBL3.Shared.Validators.Reviews;
 
 var builder = WebApplication.CreateBuilder(args);
 
