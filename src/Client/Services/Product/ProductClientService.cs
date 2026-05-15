@@ -109,6 +109,20 @@ namespace Client.Services.Product
             }
         }
 
+        public async Task<ApiResult<bool>> UpdateProductImagesAsync(int productId, List<SaveImageRequest> images)
+        {
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync($"{BaseUrl}/{productId}/images", images);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+                return result ?? ApiResult<bool>.Fail("Không thể cập nhật ảnh sản phẩm.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
         public async Task<ApiResult<bool>> DeleteAsync(int id)
         {
             try

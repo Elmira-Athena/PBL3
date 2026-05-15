@@ -501,10 +501,18 @@
             // ManufacturerId đã được set vào _model.ManufacturerId bên trên
             _statusForUpdate = _editDetail.Status;
 
+            // Load ảnh hiện có từ variant đầu tiên vào _productImages
+            var firstVariant = _editDetail.Variants.FirstOrDefault();
+            if (firstVariant?.Images != null && firstVariant.Images.Count > 0)
+            {
+                _productImages = firstVariant.Images
+                    .OrderBy(img => img.SortOrder)
+                    .Select(img => img.ImageUrl)
+                    .ToList();
+            }
+
             // Load specs từ variant đầu tiên (nếu có) hoặc để trống
-            var firstVariantSpecs = _editDetail.Variants.Count > 0
-                ? _editDetail.Variants[0].Specifications
-                : null;
+            var firstVariantSpecs = firstVariant?.Specifications;
 
             if (firstVariantSpecs != null)
             {
@@ -658,6 +666,21 @@
             };
 
             var result = await ProductService.UpdateAsync(Id!.Value, updateRequest);
+
+            if (result.Success && _productImages.Count > 0)
+            {
+                var imageRequests = _productImages.Select((url, idx) => new SaveImageRequest
+                {
+                    ImageUrl = url,
+                    IsMain = idx == 0,
+                    SortOrder = idx
+                }).ToList();
+
+                var imgResult = await ProductService.UpdateProductImagesAsync(Id!.Value, imageRequests);
+                if (!imgResult.Success)
+                    Snackbar.Add($"Lưu ảnh thất bại: {imgResult.Message}", Severity.Warning);
+            }
+
             _isSaving = false;
 
             if (result.Success)

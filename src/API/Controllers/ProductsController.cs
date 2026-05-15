@@ -109,6 +109,28 @@ namespace PBL3.API.Controllers
         }
 
         /// <summary>
+        /// Cập nhật danh sách ảnh cho sản phẩm (thay toàn bộ ảnh của tất cả variants).
+        /// </summary>
+        [HttpPut("{id:int}/images")]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> UpdateImages(int id, [FromBody] List<SaveImageRequest> images)
+        {
+            var result = await _productService.UpdateImagesAsync(id, images);
+
+            if (!result.Success)
+            {
+                if (result.Message.Contains("Không tìm thấy"))
+                    return NotFound(result);
+
+                return BadRequest(result);
+            }
+
+            return Ok(result);
+        }
+
+        /// <summary>
         /// Xóa mềm sản phẩm (Soft Delete).
         /// </summary>
         [HttpDelete("{id:int}")]

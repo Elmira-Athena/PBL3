@@ -114,6 +114,7 @@ namespace PBL3.Core.Interfaces
         Task AddAsync(Product product);
         Task AddVariantAsync(ProductVariant variant);
         Task RemoveVariant(ProductVariant variant);
+        Task ReplaceProductImagesAsync(int productId, List<ProductImage> newImages);
         Task SaveChangesAsync();
     }
 

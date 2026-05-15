@@ -10,6 +10,7 @@ namespace Client.Services.Product
         Task<ApiResult<ProductDetailDto>> CreateAsync(CreateProductRequest request);
         Task<ApiResult<ProductDetailDto>> UpdateAsync(int id, UpdateProductRequest request);
         Task<ApiResult<ProductVariantDto>> AddVariantAsync(int productId, SaveVariantRequest request);
+        Task<ApiResult<bool>> UpdateProductImagesAsync(int productId, List<SaveImageRequest> images);
         Task<ApiResult<bool>> DeleteAsync(int id);
     }
 }

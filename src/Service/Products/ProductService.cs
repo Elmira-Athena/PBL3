@@ -241,6 +241,27 @@ namespace PBL3.Service.Products
         }
 
         // ========================================================
+        // UPDATE IMAGES — Thay toàn bộ ảnh của sản phẩm
+        // ========================================================
+        public async Task<ApiResult<bool>> UpdateImagesAsync(int productId, List<SaveImageRequest> images)
+        {
+            var product = await _productRepo.GetByIdAsync(productId);
+            if (product == null)
+                return ApiResult<bool>.Fail("Không tìm thấy sản phẩm yêu cầu.");
+
+            var newImages = images.Select((img, idx) => new ProductImage
+            {
+                ImageUrl = img.ImageUrl,
+                IsMain = idx == 0,
+                SortOrder = idx
+            }).ToList();
+
+            await _productRepo.ReplaceProductImagesAsync(productId, newImages);
+            await _productRepo.SaveChangesAsync();
+
+            return ApiResult<bool>.Ok(true, "Cập nhật ảnh sản phẩm thành công.");
+        }
+
         // DELETE — Soft Delete sản phẩm
         // ========================================================
         public async Task<ApiResult<bool>> DeleteAsync(int id)
