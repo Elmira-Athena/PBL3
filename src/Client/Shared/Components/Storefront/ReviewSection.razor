@@ -67,7 +67,7 @@
                         @_averageRating.ToString("0.0")
                     </MudText>
                     <div style="pointer-events: none;">
-                        <MudRating Value="(int)Math.Round(_averageRating)" MaxValue="5" ReadOnly="true" Size="Size.Medium" />
+                        <MudRating SelectedValue="(int)Math.Round(_averageRating)" MaxValue="5" ReadOnly="true" Size="Size.Medium" />
                     </div>
                     <MudText Typo="Typo.caption" Class="text-muted mt-1">@_totalCount đánh giá</MudText>
 
@@ -122,7 +122,7 @@
                                     </div>
                                 </div>
                                 <div style="pointer-events: none;">
-                                    <MudRating Value="review.Rating" MaxValue="5" ReadOnly="true" Size="Size.Small" />
+                                    <MudRating SelectedValue="review.Rating" MaxValue="5" ReadOnly="true" Size="Size.Small" />
                                 </div>
                                 @if (!string.IsNullOrEmpty(review.Title))
                                 {
