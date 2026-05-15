@@ -71,9 +71,16 @@
     <RowTemplate>
         <MudTd DataLabel="Khách hàng">
             <div class="d-flex align-center">
-                <MudAvatar Image="@context.AvatarUrl" Color="Color.Primary" Class="mr-3">
-                    @(string.IsNullOrEmpty(context.FullName) ? "?" : context.FullName[0].ToString().ToUpper())
-                </MudAvatar>
+                @if (!string.IsNullOrEmpty(context.AvatarUrl))
+                {
+                    <MudAvatar Image="@context.AvatarUrl" Class="mr-3" />
+                }
+                else
+                {
+                    <MudAvatar Color="Color.Primary" Class="mr-3">
+                        @(string.IsNullOrEmpty(context.FullName) ? "?" : context.FullName[0].ToString().ToUpper())
+                    </MudAvatar>
+                }
                 <MudText Typo="Typo.body2">@context.FullName</MudText>
             </div>
         </MudTd>
@@ -171,16 +178,13 @@
 
     private async Task OpenUpdateDialog(CustomerDto customer)
     {
-        var parameters = new DialogParameters { ["InitialId"] = customer.Id };
+        var parameters = new DialogParameters
+        {
+            ["InitialId"]   = customer.Id,
+            ["InitialData"] = customer
+        };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
         var dialog = DialogService.Show<CustomerDialog>("Cập nhật khách hàng", parameters, options);
-        
-        // Truyền dữ liệu ban đầu
-        if (dialog.Dialog != null && dialog.Dialog is CustomerDialog dlg)
-        {
-            dlg.LoadData(customer);
-        }
-
         var result = await dialog.Result;
 
         if (!result.Canceled)

@@ -60,10 +60,10 @@
 
     <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-2">Hỗ trợ khách hàng</MudText>
     <div class="d-flex flex-wrap gap-3">
-        <MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách bảo mật</MudLink>
-        <MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách bảo hành</MudLink>
-        <MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách thanh toán</MudLink>
-        <MudLink Href="#" Typo="Typo.caption" Color="Color.Default">Chính sách vận chuyển</MudLink>
+        <MudText Typo="Typo.caption" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách bảo mật</MudText>
+        <MudText Typo="Typo.caption" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách bảo hành</MudText>
+        <MudText Typo="Typo.caption" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách thanh toán</MudText>
+        <MudText Typo="Typo.caption" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách vận chuyển</MudText>
     </div>
 
 </div>
@@ -71,6 +71,9 @@
 @code {
     private RegisterCustomerRequest _model = new();
     private bool _isLoading = false;
+
+    private void HandleComingSoon() =>
+        Snackbar.Add("Tính năng đang phát triển", Severity.Info);
 
     private async Task HandleRegister()
     {

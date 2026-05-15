@@ -311,6 +311,7 @@
         if (result.Success && result.Data != null)
         {
             _totalCount = result.Data.TotalCount;
+            StateHasChanged();
             return new TableData<VoucherDto>
             {
                 Items      = result.Data.Items,

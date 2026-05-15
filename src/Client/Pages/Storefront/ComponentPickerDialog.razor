@@ -133,7 +133,15 @@
                                         <div class="flex-grow-1">
                                             <MudText Typo="Typo.body2" Style="font-weight:600;">@product.Name</MudText>
                                             <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                                Kho hàng: <span style="color:#27ae60; font-weight:600;">Còn hàng</span>
+                                                Kho hàng:
+                                                @if (product.IsAvailable)
+                                                {
+                                                    <span style="color:#27ae60; font-weight:600;">Còn hàng</span>
+                                                }
+                                                else
+                                                {
+                                                    <span style="color:#e74c3c; font-weight:600;">Hết hàng</span>
+                                                }
                                             </MudText>
                                         </div>
 

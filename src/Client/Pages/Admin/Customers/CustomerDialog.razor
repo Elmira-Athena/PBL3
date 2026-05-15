@@ -120,6 +120,7 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public Guid? InitialId { get; set; }
+    [Parameter] public CustomerDto? InitialData { get; set; }
     
     // Khi Edit, EditForm xử lý Validation dựa trên loại DTO.
     // Vì DTO tạo mới và DTO Cập nhật khác nhau, ta sử dụng 1 model chung (hoặc kiểu dynamic/obj base) 
@@ -147,6 +148,12 @@
     private bool IsEditMode => InitialId.HasValue && InitialId.Value != Guid.Empty;
     private bool _isSaving = false;
     private bool _isUploadingAvatar = false;
+
+    protected override void OnInitialized()
+    {
+        if (IsEditMode && InitialData != null)
+            LoadData(InitialData);
+    }
 
     // Method to pass existing data into dialog
     public void LoadData(CustomerDto customer)
