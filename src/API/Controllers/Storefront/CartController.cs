@@ -7,7 +7,7 @@ using PBL3.Service.Cart;
 using PBL3.Shared.DTOs.Cart;
 using PBL3.Shared.DTOs.Common;
 
-namespace PBL3.API.Controllers
+namespace PBL3.API.Controllers.Storefront
 {
     [ApiController]
     [Route("api/cart")]
