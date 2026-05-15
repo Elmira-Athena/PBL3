@@ -7,5 +7,6 @@ namespace Client.Services.Inventory
     public interface IInventoryExportClientService
     {
         Task<ApiResult<bool>> ExportOrderAsync(ExportOrderRequest request);
+        Task<ApiResult<bool>> ValidateSerialAsync(string serialNo, int variantId);
     }
 }

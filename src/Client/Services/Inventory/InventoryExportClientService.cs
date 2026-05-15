@@ -27,5 +27,20 @@ namespace Client.Services.Inventory
             var errorResult = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
             return errorResult ?? ApiResult<bool>.Fail($"Lỗi HTTP: {response.StatusCode}");
         }
+
+        public async Task<ApiResult<bool>> ValidateSerialAsync(string serialNo, int variantId)
+        {
+            var url = $"/api/inventory/serials/validate?serialNo={Uri.EscapeDataString(serialNo)}&variantId={variantId}";
+            var response = await _httpClient.GetAsync(url);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                       ?? ApiResult<bool>.Fail("Không nhận được dữ liệu hợp lệ từ server.");
+            }
+
+            var errorResult = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+            return errorResult ?? ApiResult<bool>.Fail($"Lỗi HTTP: {response.StatusCode}");
+        }
     }
 }
