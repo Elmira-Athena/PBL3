@@ -3,6 +3,8 @@
 @using PBL3.Shared.DTOs.Common
 @using Client.Pages.Orders.Components
 @using Client.Services.Orders
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin,Employee")]
 @inject IOrderClientService OrderService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -32,7 +34,14 @@
                 }
                 @if (_order.Status == 0) // Pending — chờ duyệt
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" OnClick="ConfirmOrderApprove">
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.CheckCircle"
+                               OnClick="ConfirmOrderApprove"
+                               Disabled="_isApproving">
+                        @if (_isApproving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                        }
                         Duyệt đơn
                     </MudButton>
                 }
@@ -233,6 +242,7 @@
 
     private OrderDetailDto? _order;
     private bool _isLoading = true;
+    private bool _isApproving = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -286,7 +296,18 @@
 
     private async Task ConfirmOrderApprove()
     {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Xác nhận duyệt đơn",
+            $"Bạn có chắc chắn muốn duyệt đơn hàng {_order?.OrderCode} không? Hành động này không thể hoàn tác.",
+            yesText: "Duyệt đơn",
+            cancelText: "Hủy");
+
+        if (confirmed != true) return;
+
+        _isApproving = true;
+        StateHasChanged();
         var result = await OrderService.ConfirmOrderAsync(Id);
+        _isApproving = false;
         if (result.Success)
         {
             Snackbar.Add("Đã duyệt đơn hàng thành công.", Severity.Success);
