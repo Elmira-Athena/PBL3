@@ -27,8 +27,18 @@ namespace Client.Services.ServiceTickets
                     url += $"&sortBy={Uri.EscapeDataString(sortBy)}&sortDescending={sortDescending}";
 
                 var response = await _httpClient.GetAsync(url);
-                return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceInvoiceListDto>>>()
-                    ?? new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi lấy danh sách hóa đơn." };
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = $"Không thể tải danh sách. Lỗi {(int)response.StatusCode}." };
+
+                try
+                {
+                    return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceInvoiceListDto>>>()
+                        ?? new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi tải danh sách hóa đơn." };
+                }
+                catch
+                {
+                    return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi tải danh sách hóa đơn." };
+                }
             }
             catch (Exception ex)
             {
@@ -41,8 +51,18 @@ namespace Client.Services.ServiceTickets
             try
             {
                 var response = await _httpClient.GetAsync($"api/service-invoices/{id}");
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceInvoiceDetailDto>>()
-                    ?? new ApiResult<ServiceInvoiceDetailDto> { Message = "Không tìm thấy hóa đơn." };
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<ServiceInvoiceDetailDto> { Message = $"Không thể tải. Lỗi {(int)response.StatusCode}." };
+
+                try
+                {
+                    return await response.Content.ReadFromJsonAsync<ApiResult<ServiceInvoiceDetailDto>>()
+                        ?? new ApiResult<ServiceInvoiceDetailDto> { Message = "Không tìm thấy hóa đơn." };
+                }
+                catch
+                {
+                    return new ApiResult<ServiceInvoiceDetailDto> { Message = "Không tìm thấy hóa đơn." };
+                }
             }
             catch (Exception ex)
             {
