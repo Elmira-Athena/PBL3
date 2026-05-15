@@ -101,6 +101,20 @@ namespace Client.Services.Customer
             }
         }
 
+        public async Task<ApiResult<bool>> ReactivateAsync(Guid id)
+        {
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync($"{BaseUrl}/{id}/activate", (object?)null);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+                return result ?? ApiResult<bool>.Fail("Không thể mở khóa tài khoản khách hàng.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
         public async Task<ApiResult<CustomerDto>> GetMyProfileAsync()
         {
             try

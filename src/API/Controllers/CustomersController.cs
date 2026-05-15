@@ -108,5 +108,26 @@ namespace PBL3.API.Controllers
 
             return Ok(result);
         }
+
+        /// <summary>
+        /// Mở khóa tài khoản khách hàng.
+        /// </summary>
+        [HttpPut("{id:guid}/activate")]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Reactivate(Guid id)
+        {
+            var result = await _customerService.ReactivateAsync(id);
+
+            if (!result.Success)
+            {
+                if (result.Message.Contains("Không tìm thấy"))
+                    return NotFound(result);
+
+                return BadRequest(result);
+            }
+
+            return Ok(result);
+        }
     }
 }

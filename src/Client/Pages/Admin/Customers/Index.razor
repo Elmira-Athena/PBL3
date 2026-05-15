@@ -58,6 +58,10 @@
             {
                 <MudIconButton Icon="@Icons.Material.Filled.Lock" Color="Color.Error" Size="Size.Small" OnClick="@(() => ConfirmDeactivate(context))" />
             }
+            else
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.LockOpen" Color="Color.Success" Size="Size.Small" OnClick="@(() => ConfirmReactivate(context))" />
+            }
         </MudTd>
     </RowTemplate>
     <NoRecordsContent>
@@ -168,6 +172,29 @@
             else
             {
                 Snackbar.Add(res.Message ?? "Khóa thất bại.", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ConfirmReactivate(CustomerDto customer)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Xác nhận mở khóa",
+            $"Bạn có chắc chắn muốn mở khóa tài khoản của khách hàng '{customer.FullName}'?",
+            yesText: "Mở khóa", cancelText: "Hủy",
+            options: new DialogOptions { MaxWidth = MaxWidth.ExtraSmall });
+
+        if (result == true)
+        {
+            var res = await CustomerService.ReactivateAsync(customer.Id);
+            if (res.Success)
+            {
+                Snackbar.Add("Mở khóa tài khoản thành công.", Severity.Success);
+                await _table.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add(res.Message ?? "Mở khóa thất bại.", Severity.Error);
             }
         }
     }

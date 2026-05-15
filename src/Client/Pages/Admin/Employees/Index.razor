@@ -1,0 +1,226 @@
+@page "/admin/employees"
+@using PBL3.Shared.DTOs.Employees
+@using Client.Services.Employee
+@inject IEmployeeClientService EmployeeService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Quản lý nhân viên</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4" Style="font-weight: 700;">Nhân viên</MudText>
+
+<MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<EmployeeListDto>>>(ServerReload))"
+          Dense="true" Hover="true" @ref="_table" Elevation="2" Class="mb-4" Loading="@_isLoading">
+    <ToolBarContent>
+        <MudTextField T="string"
+                      ValueChanged="@(s => OnSearch(s))"
+                      Placeholder="Tìm theo tên, email, SĐT"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      IconSize="Size.Medium"
+                      Class="mt-0 mr-3"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      DebounceInterval="400"
+                      OnDebounceIntervalElapsed="@(s => OnSearch(s))" />
+
+        <MudSelect T="bool?"
+                   Value="_filterIsActive"
+                   ValueChanged="@((bool? v) => { _filterIsActive = v; _table.ReloadServerData(); })"
+                   Label="Trạng thái"
+                   Clearable="true"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Class="mr-3"
+                   Style="min-width: 150px;">
+            <MudSelectItem T="bool?" Value="@((bool?)null)">Tất cả</MudSelectItem>
+            <MudSelectItem T="bool?" Value="@((bool?)true)">Hoạt động</MudSelectItem>
+            <MudSelectItem T="bool?" Value="@((bool?)false)">Đã khóa</MudSelectItem>
+        </MudSelect>
+
+        <MudSelect T="byte?"
+                   Value="_filterGender"
+                   ValueChanged="@((byte? v) => { _filterGender = v; _table.ReloadServerData(); })"
+                   Label="Giới tính"
+                   Clearable="true"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Class="mr-3"
+                   Style="min-width: 130px;">
+            <MudSelectItem T="byte?" Value="@((byte?)null)">Tất cả</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte?)0)">Nam</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte?)1)">Nữ</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte?)2)">Khác</MudSelectItem>
+        </MudSelect>
+
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+            Thêm nhân viên
+        </MudButton>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Nhân viên</MudTh>
+        <MudTh>Số điện thoại</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>Tham gia</MudTh>
+        <MudTh>Trạng thái</MudTh>
+        <MudTh Style="width: 130px; text-align: center;">Thao tác</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Nhân viên">
+            <div class="d-flex align-center">
+                <MudAvatar Image="@context.AvatarUrl" Color="Color.Primary" Class="mr-3">
+                    @(string.IsNullOrEmpty(context.FullName) ? "?" : context.FullName[0].ToString().ToUpper())
+                </MudAvatar>
+                <MudText Typo="Typo.body2">@context.FullName</MudText>
+            </div>
+        </MudTd>
+        <MudTd DataLabel="Số điện thoại">@context.PhoneNumber</MudTd>
+        <MudTd DataLabel="Email">@context.Email</MudTd>
+        <MudTd DataLabel="Tham gia">@context.CreatedDate.ToString("dd/MM/yyyy")</MudTd>
+        <MudTd DataLabel="Trạng thái">
+            @if (context.IsActive)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success">Hoạt động</MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Error">Đã khóa</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Thao tác" Style="text-align: center;">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Warning" Size="Size.Small"
+                           OnClick="@(() => OpenUpdateDialog(context))" />
+            @if (context.IsActive)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Lock" Color="Color.Error" Size="Size.Small"
+                               OnClick="@(() => ConfirmDeactivate(context))" />
+            }
+            else
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.LockOpen" Color="Color.Success" Size="Size.Small"
+                               OnClick="@(() => ConfirmReactivate(context))" />
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>Không tìm thấy nhân viên nào.</MudText>
+    </NoRecordsContent>
+    <LoadingContent>
+        <MudText>Đang tải dữ liệu...</MudText>
+    </LoadingContent>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" RowsPerPageString="Số dòng mỗi trang:" InfoFormat="{first_item}-{last_item} của {all_items}" />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private MudTable<EmployeeListDto> _table = null!;
+    private string _searchString = string.Empty;
+    private bool? _filterIsActive;
+    private byte? _filterGender;
+    private bool _isLoading;
+
+    private async Task<TableData<EmployeeListDto>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        _isLoading = true;
+        try
+        {
+            var filter = new EmployeeFilterRequest
+            {
+                Keyword = _searchString,
+                IsActive = _filterIsActive,
+                Gender = _filterGender,
+                PageNumber = state.Page + 1,
+                PageSize = state.PageSize,
+                SortBy = state.SortLabel,
+                SortDescending = state.SortDirection == SortDirection.Descending
+            };
+
+            var result = await EmployeeService.GetListAsync(filter);
+
+            if (result.Success && result.Data != null)
+                return new TableData<EmployeeListDto> { TotalItems = result.Data.TotalCount, Items = result.Data.Items };
+
+            Snackbar.Add(result.Message ?? "Lỗi tải danh sách", Severity.Error);
+            return new TableData<EmployeeListDto> { TotalItems = 0, Items = new List<EmployeeListDto>() };
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSearch(string text)
+    {
+        _searchString = text;
+        _table.ReloadServerData();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = DialogService.Show<EmployeeDialog>("Thêm mới nhân viên", options);
+        var result = await dialog.Result;
+        if (!result.Canceled) await _table.ReloadServerData();
+    }
+
+    private async Task OpenUpdateDialog(EmployeeListDto employee)
+    {
+        var parameters = new DialogParameters { ["InitialId"] = employee.Id };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = DialogService.Show<EmployeeDialog>("Cập nhật nhân viên", parameters, options);
+
+        if (dialog.Dialog is EmployeeDialog dlg)
+            dlg.LoadData(employee);
+
+        var result = await dialog.Result;
+        if (!result.Canceled) await _table.ReloadServerData();
+    }
+
+    private async Task ConfirmDeactivate(EmployeeListDto employee)
+    {
+        bool? confirmed = await DialogService.ShowMessageBox(
+            "Cảnh báo khóa tài khoản",
+            $"Bạn có chắc chắn muốn khóa tài khoản của nhân viên '{employee.FullName}'?",
+            yesText: "Khóa", cancelText: "Hủy",
+            options: new DialogOptions { MaxWidth = MaxWidth.ExtraSmall });
+
+        if (confirmed == true)
+        {
+            var res = await EmployeeService.DeactivateAsync(employee.Id);
+            if (res.Success)
+            {
+                Snackbar.Add("Khóa tài khoản thành công.", Severity.Success);
+                await _table.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add(res.Message ?? "Khóa thất bại.", Severity.Error);
+            }
+        }
+    }
+
+    private async Task ConfirmReactivate(EmployeeListDto employee)
+    {
+        bool? confirmed = await DialogService.ShowMessageBox(
+            "Xác nhận mở khóa",
+            $"Bạn có chắc chắn muốn mở khóa tài khoản của nhân viên '{employee.FullName}'?",
+            yesText: "Mở khóa", cancelText: "Hủy",
+            options: new DialogOptions { MaxWidth = MaxWidth.ExtraSmall });
+
+        if (confirmed == true)
+        {
+            var res = await EmployeeService.ReactivateAsync(employee.Id);
+            if (res.Success)
+            {
+                Snackbar.Add("Mở khóa tài khoản thành công.", Severity.Success);
+                await _table.ReloadServerData();
+            }
+            else
+            {
+                Snackbar.Add(res.Message ?? "Mở khóa thất bại.", Severity.Error);
+            }
+        }
+    }
+}
