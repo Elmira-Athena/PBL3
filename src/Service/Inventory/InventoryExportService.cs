@@ -139,5 +139,21 @@ namespace PBL3.Service.Inventory
                 return ApiResult<bool>.Fail($"Lỗi khi xuất kho: {ex.Message}");
             }
         }
+
+        public async Task<ApiResult<bool>> ValidateSerialAsync(string serialNo, int variantId)
+        {
+            var serial = await _serialRepo.GetBySerialNumberAsync(serialNo);
+
+            if (serial == null)
+                return ApiResult<bool>.Fail($"Mã Serial '{serialNo}' không tồn tại trong hệ thống.");
+
+            if (serial.VariantId != variantId)
+                return ApiResult<bool>.Fail($"Mã Serial '{serialNo}' không thuộc sản phẩm yêu cầu.");
+
+            if (serial.Status != (byte)SerialStatus.Available)
+                return ApiResult<bool>.Fail($"Mã Serial '{serialNo}' không ở trạng thái Available (có thể đã bán hoặc hỏng).");
+
+            return ApiResult<bool>.Ok(true);
+        }
     }
 }

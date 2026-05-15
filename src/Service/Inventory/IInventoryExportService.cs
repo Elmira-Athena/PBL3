@@ -11,5 +11,10 @@ namespace PBL3.Service.Inventory
         /// Gắn Serial vật lý vào đơn hàng Online và chuyển trạng thái đơn hàng.
         /// </summary>
         Task<ApiResult<bool>> ExportOrderAsync(ExportOrderRequest request);
+
+        /// <summary>
+        /// Kiểm tra tính hợp lệ của mã Serial trước khi thêm vào danh sách xuất kho.
+        /// </summary>
+        Task<ApiResult<bool>> ValidateSerialAsync(string serialNo, int variantId);
     }
 }
