@@ -61,7 +61,7 @@
             <!-- Right: Order Area -->
             <MudItem xs="12" md="7" Class="pl-md-8">
                 <MudText Typo="Typo.h4" Class="fw-bold mb-2">@_product.Name</MudText>
-                <div class="d-flex align-center mb-4 gap-4">
+                <div class="d-flex align-center mb-3 gap-4">
                     <MudText Typo="Typo.body2" Class="text-muted">
                         Thương hiệu: <span class="fw-bold text-dark">@_product.ManufacturerName</span>
                     </MudText>
@@ -72,25 +72,27 @@
                     </div>
                 </div>
 
-                <MudDivider Class="mb-6" />
+                <MudDivider Class="mb-4" />
 
                 <!-- Price -->
                 <div class="mb-6">
                     @if (_currentVariant != null)
                     {
-                        <div class="d-flex align-center gap-3 mb-1">
+                        <div class="d-flex flex-column mb-1">
+                            @if (_currentVariant.OriginalPrice.HasValue)
+                            {
+                                <div class="d-flex align-center gap-2 mb-1">
+                                    <MudText Typo="Typo.h6" Class="text-muted text-decoration-line-through">
+                                        @_currentVariant.OriginalPrice.Value.ToString("N0") ₫
+                                    </MudText>
+                                    <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">
+                                        -@((int)Math.Round((1 - _currentVariant.Price / _currentVariant.OriginalPrice.Value) * 100))%
+                                    </MudChip>
+                                </div>
+                            }
                             <MudText Typo="Typo.h3" Color="Color.Error" Class="fw-bold">
                                 @_currentVariant.Price.ToString("N0") ₫
                             </MudText>
-                            @if (_currentVariant.OriginalPrice.HasValue)
-                            {
-                                <MudText Typo="Typo.h5" Class="text-muted text-decoration-line-through">
-                                    @_currentVariant.OriginalPrice.Value.ToString("N0") ₫
-                                </MudText>
-                                <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">
-                                    -@((int)Math.Round((1 - _currentVariant.Price / _currentVariant.OriginalPrice.Value) * 100))%
-                                </MudChip>
-                            }
                         </div>
                         @if (!_currentVariant.IsAvailable)
                         {
@@ -341,15 +343,17 @@
         _isProcessing = true;
         StateHasChanged();
         var result = await CartClientService.AddToCartAsync(_currentVariant.Id, _quantity);
+        _isProcessing = false;
         if (result.Success)
         {
-            Snackbar.Add("Đã thêm vào giỏ hàng thành công!", Severity.Success);
+            Snackbar.Add($"Đã thêm {_quantity} sản phẩm vào giỏ hàng!", Severity.Success);
+            // Reset số lượng về 1 để tiếp tục thêm
+            _quantity = 1;
         }
         else
         {
             Snackbar.Add(result.Message ?? "Lỗi khi thêm vào giỏ hàng.", Severity.Error);
         }
-        _isProcessing = false;
     }
 
     private async Task BuyNowAsync()
