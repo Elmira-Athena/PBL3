@@ -57,6 +57,7 @@ namespace PBL3.Shared.DTOs.Storefront
         public int Id { get; set; }
         public string VariantName { get; set; } = string.Empty;
         public decimal Price { get; set; }
+        public decimal? OriginalPrice { get; set; }
         public bool IsAvailable { get; set; }
         public int StockQuantity { get; set; }
         public Dictionary<string, string> Specifications { get; set; } = new();

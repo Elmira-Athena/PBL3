@@ -148,6 +148,7 @@ namespace PBL3.Service.Storefront
                 Id = v.Id,
                 VariantName = v.VariantName,
                 Price = v.Price,
+                OriginalPrice = v.OriginalPrice > v.Price ? v.OriginalPrice : null,
                 IsAvailable = v.StockQuantity > 0,
                 StockQuantity = v.StockQuantity,
                 Specifications = v.Specifications ?? new()

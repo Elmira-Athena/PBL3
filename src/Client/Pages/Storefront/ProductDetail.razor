@@ -78,9 +78,20 @@
                 <div class="mb-6">
                     @if (_currentVariant != null)
                     {
-                        <MudText Typo="Typo.h3" Color="Color.Error" Class="fw-bold mb-1">
-                            @_currentVariant.Price.ToString("N0") ₫
-                        </MudText>
+                        <div class="d-flex align-center gap-3 mb-1">
+                            <MudText Typo="Typo.h3" Color="Color.Error" Class="fw-bold">
+                                @_currentVariant.Price.ToString("N0") ₫
+                            </MudText>
+                            @if (_currentVariant.OriginalPrice.HasValue)
+                            {
+                                <MudText Typo="Typo.h5" Class="text-muted text-decoration-line-through">
+                                    @_currentVariant.OriginalPrice.Value.ToString("N0") ₫
+                                </MudText>
+                                <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">
+                                    -@((int)Math.Round((1 - _currentVariant.Price / _currentVariant.OriginalPrice.Value) * 100))%
+                                </MudChip>
+                            }
+                        </div>
                         @if (!_currentVariant.IsAvailable)
                         {
                             <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">Hết hàng</MudChip>
