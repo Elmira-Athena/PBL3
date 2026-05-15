@@ -291,7 +291,6 @@
         if (_activeDetail == null) return;
 
         var code = _scannedCode?.Trim() ?? string.Empty;
-
         if (string.IsNullOrWhiteSpace(code)) return;
 
         if (_activeDetail.ScannedSerials.Count >= _activeDetail.RequiredQuantity)
@@ -301,23 +300,41 @@
             return;
         }
 
-        if (_activeDetail.ScannedSerials.Contains(code) || _details.Any(d => d.ScannedSerials.Contains(code)))
+        if (_activeDetail.ScannedSerials.Contains(code) || _details.Any(d => d != _activeDetail && d.ScannedSerials.Contains(code)))
         {
             Snackbar.Add("Mã Serial này đã được quét trong đơn này!", Severity.Error);
             _scannedCode = string.Empty;
             return;
         }
 
-        // Add to list immediately (Backend validates on Submit)
+        // Validate real-time với backend
+        _isScanning = true;
+        StateHasChanged();
+
+        var validateResult = await InventoryExportService.ValidateSerialAsync(code, _activeDetail.VariantId);
+
+        _isScanning = false;
+
+        if (!validateResult.Success)
+        {
+            Snackbar.Add(validateResult.Message ?? "Mã Serial không hợp lệ.", Severity.Error);
+            _scannedCode = string.Empty;
+            StateHasChanged();
+            if (_serialInput != null)
+            {
+                await Task.Delay(50);
+                await _serialInput.FocusAsync();
+            }
+            return;
+        }
+
         _activeDetail.ScannedSerials.Add(code);
         _scannedCode = string.Empty;
 
         if (_activeDetail.ScannedSerials.Count >= _activeDetail.RequiredQuantity)
-        {
             Snackbar.Add($"Đã quét đủ {_activeDetail.RequiredQuantity} mã cho {_activeDetail.ProductName}!", Severity.Success);
-        }
 
-        // Re-focus input
+        StateHasChanged();
         if (_serialInput != null)
         {
             await Task.Delay(50);
