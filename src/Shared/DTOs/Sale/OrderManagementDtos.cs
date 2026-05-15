@@ -21,6 +21,7 @@ namespace PBL3.Shared.DTOs.Sale
         public string OrderCode { get; set; } = string.Empty;
         public string CustomerName { get; set; } = string.Empty;
         public string CustomerPhone { get; set; } = string.Empty;
+        public string? CustomerAvatarUrl { get; set; }
         public decimal TotalAmount { get; set; }
         public DateTime CreatedDate { get; set; }
         public byte Status { get; set; }

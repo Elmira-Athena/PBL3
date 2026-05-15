@@ -81,9 +81,16 @@
             </MudTd>
             <MudTd DataLabel="Khách hàng">
                 <div class="d-flex align-center gap-2">
-                    <MudAvatar Color="Color.Primary" Size="Size.Small">
-                        @GetInitials(context.CustomerName)
-                    </MudAvatar>
+                    @if (!string.IsNullOrEmpty(context.CustomerAvatarUrl))
+                    {
+                        <MudAvatar Image="@context.CustomerAvatarUrl" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudAvatar Color="Color.Primary" Size="Size.Small">
+                            @GetInitials(context.CustomerName)
+                        </MudAvatar>
+                    }
                     <MudText Typo="Typo.body2">@context.CustomerName</MudText>
                 </div>
             </MudTd>

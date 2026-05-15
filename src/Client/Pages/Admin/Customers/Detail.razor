@@ -23,9 +23,16 @@ else if (_customer != null)
         <MudItem xs="12" md="8">
             <MudCard Elevation="2" Class="pa-6" Style="height: 100%;">
                 <div class="d-flex align-center">
-                    <MudAvatar Image="@_customer.AvatarUrl" Style="width: 100px; height: 100px;" Color="Color.Primary" Class="mr-6">
-                        <MudText Typo="Typo.h4">@(string.IsNullOrEmpty(_customer.FullName) ? "?" : _customer.FullName[0].ToString().ToUpper())</MudText>
-                    </MudAvatar>
+                    @if (!string.IsNullOrEmpty(_customer.AvatarUrl))
+                    {
+                        <MudAvatar Image="@_customer.AvatarUrl" Style="width: 100px; height: 100px;" Class="mr-6" />
+                    }
+                    else
+                    {
+                        <MudAvatar Style="width: 100px; height: 100px;" Color="Color.Primary" Class="mr-6">
+                            <MudText Typo="Typo.h4">@(string.IsNullOrEmpty(_customer.FullName) ? "?" : _customer.FullName[0].ToString().ToUpper())</MudText>
+                        </MudAvatar>
+                    }
                     <div>
                         <MudText Typo="Typo.h5" Style="font-weight: 600;">@_customer.FullName</MudText>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
