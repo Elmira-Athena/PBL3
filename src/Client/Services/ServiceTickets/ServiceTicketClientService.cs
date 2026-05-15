@@ -262,6 +262,22 @@ namespace Client.Services.ServiceTickets
             }
         }
 
+        public async Task<ApiResult<bool>> StartRepairAsync(int ticketId)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsync($"api/service-tickets/{ticketId}/start-repair", null);
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<bool> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
+                return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                    ?? new ApiResult<bool> { Message = "Lỗi bắt đầu sửa chữa." };
+            }
+            catch (Exception ex)
+            {
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+            }
+        }
+
         public async Task<ApiResult<bool>> MarkWaitingPartsAsync(int ticketId)
         {
             try

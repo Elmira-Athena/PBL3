@@ -234,11 +234,63 @@
                             </MudButton>
                         }
 
+                        @if (ticket.Status == 1 && ticket.ResolutionType == 1) // Warranty internal repair
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                                       OnClick="StartRepair" Size="Size.Small">
+                                Bắt Đầu Sửa Chữa
+                            </MudButton>
+                        }
+
+                        @if (ticket.Status == 1 && ticket.ResolutionType == 2) // RMA
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
+                                       OnClick="CreateRmaShipment" Size="Size.Small">
+                                Tạo Phiếu RMA
+                            </MudButton>
+                        }
+
+                        @if (ticket.Status == 1 && ticket.ResolutionType == 3) // 1-1 swap
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
+                                       OnClick="PerformSwap" Size="Size.Small">
+                                Đổi Máy 1-1
+                            </MudButton>
+                        }
+
                         @if (ticket.Status == 5) // InRepair
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
                                        OnClick="CompleteRepair" Size="Size.Small">
                                 Hoàn Tất
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Warning" FullWidth="true"
+                                       OnClick="MarkWaitingParts" Size="Size.Small">
+                                Chờ Linh Kiện
+                            </MudButton>
+                        }
+
+                        @if (ticket.Status == 4) // WaitingParts
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                       OnClick="ResumeRepair" Size="Size.Small">
+                                Tiếp Tục Sửa Chữa
+                            </MudButton>
+                        }
+
+                        @if (ticket.Status == 6) // SentToRMA
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                       OnClick="RecordRmaResolution" Size="Size.Small">
+                                Ghi Nhận Kết Quả RMA
+                            </MudButton>
+                        }
+
+                        @if (ticket.Status == 9 && ticket.ResolutionType == 4 && ticket.Invoice == null) // Completed & PaidRepair
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
+                                       OnClick="IssueInvoice" Size="Size.Small">
+                                Xuất Hóa Đơn
                             </MudButton>
                         }
 
@@ -431,6 +483,106 @@
             {
                 Snackbar.Add(apiResult.Message ?? "Hủy phiếu thất bại.", Severity.Error);
             }
+        }
+    }
+
+    private async Task StartRepair()
+    {
+        var apiResult = await ServiceTicketService.StartRepairAsync(Id);
+        Snackbar.Add(apiResult.Success ? "Đã bắt đầu sửa chữa." : apiResult.Message ?? "Thất bại.",
+                     apiResult.Success ? Severity.Success : Severity.Error);
+        if (apiResult.Success) await LoadTicket();
+    }
+
+    private async Task CreateRmaShipment()
+    {
+        var dialog = await DialogService.ShowAsync<CreateRmaDialog>("Tạo Phiếu Gửi Hãng",
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            var (carrierName, trackingCode) = ((string, string))result.Data!;
+            var request = new CreateRmaShipmentRequest { CarrierName = carrierName, TrackingCode = trackingCode };
+            var apiResult = await ServiceTicketService.CreateRmaShipmentAsync(Id, request);
+            Snackbar.Add(apiResult.Success ? "Đã tạo phiếu RMA." : apiResult.Message ?? "Thất bại.",
+                         apiResult.Success ? Severity.Success : Severity.Error);
+            if (apiResult.Success) await LoadTicket();
+        }
+    }
+
+    private async Task PerformSwap()
+    {
+        var dialog = await DialogService.ShowAsync<SwapSerialPickerDialog>("Chọn Máy Thay Thế",
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            var serialId = (int)result.Data!;
+            var request = new Perform1For1SwapRequest { ReplacementSerialId = serialId };
+            var apiResult = await ServiceTicketService.Perform1For1SwapAsync(Id, request);
+            Snackbar.Add(apiResult.Success ? "Đã đổi máy 1-1 thành công." : apiResult.Message ?? "Thất bại.",
+                         apiResult.Success ? Severity.Success : Severity.Error);
+            if (apiResult.Success) await LoadTicket();
+        }
+    }
+
+    private async Task MarkWaitingParts()
+    {
+        var dialog = await DialogService.ShowAsync<MarkWaitingPartsDialog>("Chờ Linh Kiện",
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            var apiResult = await ServiceTicketService.MarkWaitingPartsAsync(Id);
+            Snackbar.Add(apiResult.Success ? "Đã chuyển sang chờ linh kiện." : apiResult.Message ?? "Thất bại.",
+                         apiResult.Success ? Severity.Success : Severity.Error);
+            if (apiResult.Success) await LoadTicket();
+        }
+    }
+
+    private async Task ResumeRepair()
+    {
+        var apiResult = await ServiceTicketService.ResumeRepairAsync(Id);
+        Snackbar.Add(apiResult.Success ? "Đã tiếp tục sửa chữa." : apiResult.Message ?? "Thất bại.",
+                     apiResult.Success ? Severity.Success : Severity.Error);
+        if (apiResult.Success) await LoadTicket();
+    }
+
+    private async Task RecordRmaResolution()
+    {
+        var parameters = new DialogParameters { { "TicketId", Id } };
+        var dialog = await DialogService.ShowAsync<UpdateRmaResolutionDialog>("Kết Quả RMA",
+            parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            var (resolution, notes, replacementSerialId) = ((byte, string, int))result.Data!;
+            var request = new UpdateRmaResolutionRequest
+            {
+                ManufacturerResolution = resolution,
+                ManufacturerNotes = notes,
+                ReplacementSerialId = replacementSerialId > 0 ? replacementSerialId : null
+            };
+            var apiResult = await ServiceTicketService.RecordRmaResolutionAsync(Id, request);
+            Snackbar.Add(apiResult.Success ? "Đã cập nhật kết quả RMA." : apiResult.Message ?? "Thất bại.",
+                         apiResult.Success ? Severity.Success : Severity.Error);
+            if (apiResult.Success) await LoadTicket();
+        }
+    }
+
+    private async Task IssueInvoice()
+    {
+        var dialog = await DialogService.ShowAsync<IssueServiceInvoiceDialog>("Xuất Hóa Đơn",
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            var (paymentMethod, note) = ((byte, string))result.Data!;
+            var request = new IssueServiceInvoiceRequest { PaymentMethod = paymentMethod, Note = note };
+            var apiResult = await ServiceTicketService.IssueServiceInvoiceAsync(Id, request);
+            Snackbar.Add(apiResult.Success ? "Đã xuất hóa đơn." : apiResult.Message ?? "Thất bại.",
+                         apiResult.Success ? Severity.Success : Severity.Error);
+            if (apiResult.Success) await LoadTicket();
         }
     }
 }

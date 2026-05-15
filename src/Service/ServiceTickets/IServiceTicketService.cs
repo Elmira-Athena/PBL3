@@ -16,6 +16,7 @@ namespace PBL3.Service.ServiceTickets
         Task<bool> RecordRmaResolutionAsync(int ticketId, RmaResolutionUpdateDto request, Guid userId);
         Task<bool> Perform1For1SwapAsync(int ticketId, int newSerialId, Guid userId);
         Task<bool> MarkInternalRepairCompletedAsync(int ticketId, ServiceTicketCompleteDto request, Guid userId);
+        Task<bool> StartRepairAsync(int ticketId, Guid userId);
         Task<bool> MarkWaitingPartsAsync(int ticketId, Guid userId);
         Task<bool> ResumeRepairAsync(int ticketId, Guid userId);
         Task<ServiceInvoiceDetailDto?> IssueServiceInvoiceAsync(int ticketId, ServiceInvoiceCreateDto request, Guid userId);

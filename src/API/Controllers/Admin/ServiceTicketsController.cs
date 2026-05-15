@@ -340,13 +340,33 @@ namespace PBL3.API.Controllers.Admin
             }
         }
 
-        [HttpPost("{id}/swap")]
-        public async Task<ApiResult<bool>> Perform1For1Swap(int id, [FromBody] int newSerialId)
+        [HttpPost("{id}/start-repair")]
+        public async Task<ApiResult<bool>> StartRepair(int id)
         {
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.Perform1For1SwapAsync(id, newSerialId, userId);
+                var result = await _service.StartRepairAsync(id, userId);
+                return ApiResult<bool>.Ok(result, "Bắt đầu sửa chữa thành công.");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error starting repair");
+                return ApiResult<bool>.Fail("Lỗi khi bắt đầu sửa chữa: " + ex.Message);
+            }
+        }
+
+        [HttpPost("{id}/swap")]
+        public async Task<ApiResult<bool>> Perform1For1Swap(int id, [FromBody] Perform1For1SwapDto request)
+        {
+            try
+            {
+                var userId = GetCurrentUserId();
+                var result = await _service.Perform1For1SwapAsync(id, request.ReplacementSerialId, userId);
                 return ApiResult<bool>.Ok(result, "Đổi 1-1 thành công.");
             }
             catch (InvalidOperationException ex)

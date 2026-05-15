@@ -1,5 +1,6 @@
 @namespace Client.Pages.ServiceTickets.Components
 @using MudBlazor
+@inject IDialogService DialogService
 
 <MudDialog>
     <DialogContent>
@@ -70,17 +71,18 @@
     {
         if (ManufacturerResolution > 0)
         {
-            MudDialog.Close(DialogResult.Ok(new
-            {
-                ManufacturerResolution,
-                ManufacturerNotes,
-                SelectedSerialId
-            }));
+            MudDialog.Close(DialogResult.Ok((ManufacturerResolution, ManufacturerNotes, SelectedSerialId)));
         }
     }
 
-    private void OpenSwapDialog()
+    private async Task OpenSwapDialog()
     {
-        // TODO: Open SwapSerialPickerDialog here
+        var dialog = await DialogService.ShowAsync<SwapSerialPickerDialog>("Chọn Serial Thay Thế",
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled && result.Data is int serialId)
+        {
+            SelectedSerialId = serialId;
+        }
     }
 }
