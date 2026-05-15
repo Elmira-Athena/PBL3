@@ -1,0 +1,350 @@
+@using PBL3.Shared.DTOs.Banners
+@inject IImageClientService ImageService
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(IsEditMode ? Icons.Material.Filled.Edit : Icons.Material.Filled.ViewCarousel)"
+                     Color="Color.Primary" />
+            <MudText Typo="Typo.h6">
+                @(IsEditMode ? "Chỉnh sửa banner" : "Thêm banner mới")
+            </MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_isLoadingDetail)
+        {
+            <MudStack Spacing="3" Class="pa-4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+            </MudStack>
+        }
+        else
+        {
+            <MudForm @ref="_form" Model="_model">
+                <MudStack Spacing="3" Class="pt-2">
+
+                    @* ===== BANNER PREVIEW (FIXED 3:1) ===== *@
+                    <div>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1">
+                            Xem trước (kích thước hiển thị thực tế trên trang chủ — tỉ lệ 3:1)
+                        </MudText>
+                        <div style="width: 100%; max-width: 100%; aspect-ratio: 3 / 1; background: var(--mud-palette-background-grey); border: 1px dashed var(--mud-palette-divider); border-radius: 8px; overflow: hidden; position: relative;">
+                            @if (!string.IsNullOrWhiteSpace(_model.ImageUrl))
+                            {
+                                <img src="@_model.ImageUrl" alt="Banner preview"
+                                     style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+                            }
+                            else
+                            {
+                                <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Large" Class="mud-text-disabled" />
+                                    <MudText Typo="Typo.body2" Class="mud-text-disabled">Chưa có ảnh banner</MudText>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @* ===== UPLOAD ẢNH ===== *@
+                    <div>
+                        <InputFile id="bannerImageInput" OnChange="HandleImageUpload" accept="image/*"
+                                   style="display:none" disabled="@_isUploadingImage" />
+                        <label for="bannerImageInput" style="cursor: @(_isUploadingImage ? "not-allowed" : "pointer"); display: block;">
+                            <MudPaper Outlined="true"
+                                      Class="d-flex align-center justify-center pa-3 rounded-lg gap-2"
+                                      Style="border-style: dashed; min-height: 52px; background: var(--mud-palette-background-grey);">
+                                @if (_isUploadingImage)
+                                {
+                                    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Đang upload...</MudText>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" Color="Color.Default" />
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                        @(string.IsNullOrWhiteSpace(_model.ImageUrl) ? "Chọn ảnh banner" : "Thay ảnh khác")
+                                    </MudText>
+                                }
+                            </MudPaper>
+                        </label>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-1 d-block">
+                            Kích thước khuyến nghị: 1200×400px (tỉ lệ 3:1). Ảnh khác kích thước sẽ được tự động crop để vừa khung.
+                        </MudText>
+                        @if (!string.IsNullOrWhiteSpace(_model.ImageUrl))
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Class="mt-1"
+                                       OnClick="() => _model.ImageUrl = string.Empty" StartIcon="@Icons.Material.Filled.Delete">
+                                Xóa ảnh
+                            </MudButton>
+                        }
+                    </div>
+
+                    @* ===== TIÊU ĐỀ ===== *@
+                    <MudTextField @bind-Value="_model.Title"
+                                  Label="Tiêu đề"
+                                  Placeholder="VD: Khuyến mãi tháng 5 — giảm 30%"
+                                  Required="true"
+                                  RequiredError="Tiêu đề không được để trống."
+                                  MaxLength="200"
+                                  Counter="200"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Outlined.Title" />
+
+                    @* ===== LIÊN KẾT ===== *@
+                    <MudTextField @bind-Value="_model.LinkUrl"
+                                  Label="Đường dẫn khi click (tùy chọn)"
+                                  Placeholder="VD: /products/123 hoặc https://..."
+                                  MaxLength="500"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Outlined.Link"
+                                  Validation="@(new Func<string?, string?>(ValidateLink))" />
+
+                    @* ===== SORT + ACTIVE ===== *@
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField @bind-Value="_model.SortOrder"
+                                             Label="Thứ tự hiển thị"
+                                             HelperText="Số nhỏ hơn hiển thị trước"
+                                             Min="0" Max="9999"
+                                             Variant="Variant.Outlined"
+                                             Adornment="Adornment.Start"
+                                             AdornmentIcon="@Icons.Material.Outlined.Sort" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6" Class="d-flex align-center">
+                            <MudSwitch T="bool" @bind-Value="_model.IsActive"
+                                       Color="Color.Success"
+                                       Label="@(_model.IsActive ? "Đang hiển thị" : "Đã ẩn")" />
+                        </MudItem>
+                    </MudGrid>
+
+                    @* ===== HIỆU LỰC ===== *@
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="6">
+                            <MudDatePicker @bind-Date="_model.StartDate"
+                                           Label="Ngày bắt đầu (tùy chọn)"
+                                           Variant="Variant.Outlined"
+                                           Clearable="true"
+                                           AdornmentIcon="@Icons.Material.Outlined.EventAvailable" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudDatePicker @bind-Date="_model.EndDate"
+                                           Label="Ngày kết thúc (tùy chọn)"
+                                           Variant="Variant.Outlined"
+                                           Clearable="true"
+                                           AdornmentIcon="@Icons.Material.Outlined.EventBusy" />
+                        </MudItem>
+                    </MudGrid>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        Để trống cả hai ngày = banner luôn hiệu lực (khi đang bật).
+                    </MudText>
+
+                </MudStack>
+            </MudForm>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3 rounded-lg" Variant="Variant.Filled">
+                    @_errorMessage
+                </MudAlert>
+            }
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default" Style="text-transform: none;">
+            Hủy
+        </MudButton>
+        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="_isSaving"
+                   Style="text-transform: none; border-radius: 8px;">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(IsEditMode ? "Cập nhật" : "Tạo mới")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private IBannerClientService BannerService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    /// <summary>Id banner khi chỉnh sửa (null hoặc 0 = tạo mới).</summary>
+    [Parameter] public int? BannerId { get; set; }
+
+    private bool IsEditMode => BannerId.HasValue && BannerId.Value > 0;
+
+    private MudForm _form = null!;
+    private BannerFormModel _model = new();
+    private bool _isSaving;
+    private bool _isLoadingDetail;
+    private bool _isUploadingImage;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEditMode)
+        {
+            _isLoadingDetail = true;
+            StateHasChanged();
+
+            var result = await BannerService.GetByIdAsync(BannerId!.Value);
+            if (result.Success && result.Data != null)
+            {
+                _model = new BannerFormModel
+                {
+                    Title     = result.Data.Title,
+                    ImageUrl  = result.Data.ImageUrl,
+                    LinkUrl   = result.Data.LinkUrl,
+                    SortOrder = result.Data.SortOrder,
+                    IsActive  = result.Data.IsActive,
+                    StartDate = NormalizeUtcToLocalDate(result.Data.StartDate),
+                    EndDate   = NormalizeUtcToLocalDate(result.Data.EndDate)
+                };
+            }
+            else
+            {
+                _errorMessage = result.Message;
+            }
+
+            _isLoadingDetail = false;
+        }
+    }
+
+    private async Task HandleImageUpload(InputFileChangeEventArgs e)
+    {
+        _isUploadingImage = true;
+        StateHasChanged();
+
+        var url = await ImageService.UploadAsync(e.File, "banners");
+        if (url != null)
+            _model.ImageUrl = url;
+        else
+            Snackbar.Add("Upload ảnh banner thất bại. Vui lòng thử lại.", Severity.Error);
+
+        _isUploadingImage = false;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// API trả về UTC; MudDatePicker chỉ làm việc với ngày local. Đảm bảo Kind=Utc trước khi shift về local.
+    /// </summary>
+    private static DateTime? NormalizeUtcToLocalDate(DateTime? utc)
+    {
+        if (!utc.HasValue) return null;
+        var asUtc = DateTime.SpecifyKind(utc.Value, DateTimeKind.Utc);
+        return asUtc.ToLocalTime().Date;
+    }
+
+    /// <summary>
+    /// MudDatePicker trả Kind=Unspecified. Coerce thành local midnight, sau đó shift về UTC.
+    /// </summary>
+    private static DateTime? LocalDateToUtc(DateTime? local)
+    {
+        if (!local.HasValue) return null;
+        var asLocal = DateTime.SpecifyKind(local.Value.Date, DateTimeKind.Local);
+        return asLocal.ToUniversalTime();
+    }
+
+    private static string? ValidateLink(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return null;
+        if (!(url.StartsWith("http://") || url.StartsWith("https://") || url.StartsWith("/")))
+            return "Đường dẫn phải bắt đầu bằng http://, https:// hoặc / (nội bộ).";
+        return null;
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        // ImageUrl không bind vào MudTextField (quản lý qua InputFile) → MudForm không validate được; kiểm tra thủ công ở đây.
+        // Các rule còn lại (date range, link format, SortOrder, độ dài) đã có ở server validator.
+        if (string.IsNullOrWhiteSpace(_model.ImageUrl))
+        {
+            _errorMessage = "Ảnh banner không được để trống. Vui lòng tải lên ảnh trước khi lưu.";
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            if (IsEditMode)
+            {
+                var request = new UpdateBannerRequest
+                {
+                    Title     = _model.Title,
+                    ImageUrl  = _model.ImageUrl,
+                    LinkUrl   = _model.LinkUrl,
+                    SortOrder = _model.SortOrder,
+                    IsActive  = _model.IsActive,
+                    StartDate = LocalDateToUtc(_model.StartDate),
+                    EndDate   = LocalDateToUtc(_model.EndDate)
+                };
+
+                var result = await BannerService.UpdateAsync(BannerId!.Value, request);
+                if (result.Success)
+                {
+                    Snackbar.Add("Cập nhật banner thành công!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                }
+            }
+            else
+            {
+                var request = new CreateBannerRequest
+                {
+                    Title     = _model.Title,
+                    ImageUrl  = _model.ImageUrl,
+                    LinkUrl   = _model.LinkUrl,
+                    SortOrder = _model.SortOrder,
+                    IsActive  = _model.IsActive,
+                    StartDate = LocalDateToUtc(_model.StartDate),
+                    EndDate   = LocalDateToUtc(_model.EndDate)
+                };
+
+                var result = await BannerService.CreateAsync(request);
+                if (result.Success)
+                {
+                    Snackbar.Add("Tạo banner thành công!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                }
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private class BannerFormModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty;
+        public string? LinkUrl { get; set; }
+        public int SortOrder { get; set; }
+        public bool IsActive { get; set; } = true;
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+    }
+}
