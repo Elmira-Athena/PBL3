@@ -76,6 +76,7 @@ src/Shared/Validators/
     EmployeeValidators.cs
   Inventory/
     ImportReceiptValidators.cs
+    ExportOrderValidators.cs        ← moved from flat (already has correct namespace)
   Products/
     ProductValidators.cs     ← Create/Update Product validators only
     VariantValidators.cs     ← CreateVariant + SaveVariant validators (split from ProductValidators.cs)
@@ -83,7 +84,6 @@ src/Shared/Validators/
     ReviewValidators.cs
   Sale/
     CreateOrderRequestValidator.cs  ← already here
-    ExportOrderValidators.cs        ← moved from flat
   ServiceTickets/
     ServiceTicketValidators.cs
   Suppliers/
@@ -104,7 +104,7 @@ src/Shared/Validators/
 | ProductValidators.cs | `PBL3.Shared.Validators` | `PBL3.Shared.Validators.Products` |
 | VariantValidators.cs | _(new file)_ | `PBL3.Shared.Validators.Products` |
 | ReviewValidators.cs | `PBL3.Shared.Validators` | `PBL3.Shared.Validators.Reviews` |
-| ExportOrderValidators.cs | `PBL3.Shared.Validators` | `PBL3.Shared.Validators.Sale` |
+| ExportOrderValidators.cs | `PBL3.Shared.Validators.Inventory` _(already correct)_ | `PBL3.Shared.Validators.Inventory` |
 | ServiceTicketValidators.cs | `PBL3.Shared.Validators` | `PBL3.Shared.Validators.ServiceTickets` |
 | SupplierValidators.cs | `PBL3.Shared.Validators` | `PBL3.Shared.Validators.Suppliers` |
 | VoucherValidators.cs | `PBL3.Shared.Validators` | `PBL3.Shared.Validators.Vouchers` |
