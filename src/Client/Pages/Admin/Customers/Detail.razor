@@ -25,7 +25,9 @@ else if (_customer != null)
                 <div class="d-flex align-center">
                     @if (!string.IsNullOrEmpty(_customer.AvatarUrl))
                     {
-                        <MudAvatar Image="@_customer.AvatarUrl" Style="width: 100px; height: 100px;" Class="mr-6" />
+                        <MudAvatar Style="width: 100px; height: 100px;" Class="mr-6">
+                            <MudImage Src="@_customer.AvatarUrl" Alt="Avatar" Style="width:100%;height:100%;object-fit:cover;" />
+                        </MudAvatar>
                     }
                     else
                     {
