@@ -9,7 +9,7 @@ using PBL3.Shared.DTOs.ServiceTickets;
 namespace PBL3.API.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/service-invoices")]
     [Authorize(Roles = "Admin, Employee")]
     public class ServiceInvoicesController : ControllerBase
     {
