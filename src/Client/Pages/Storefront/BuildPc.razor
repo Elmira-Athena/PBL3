@@ -172,22 +172,35 @@
     <MudGrid Spacing="3">
         @foreach (var preset in _presets)
         {
-            <MudItem xs="12" sm="6" md="3">
+            <MudItem xs="12" sm="12" md="6">
                 <MudCard Elevation="2" Class="rounded-lg">
-                    <MudCardContent Class="pb-0">
-                        <MudText Typo="Typo.subtitle2" Color="Color.Primary"
-                                 Style="font-weight:700; text-transform:uppercase; letter-spacing:.05em;">
+                    <MudCardContent Class="pb-2">
+                        <MudText Typo="Typo.subtitle1" Color="Color.Primary"
+                                 Style="font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:12px;">
                             @preset.Title
                         </MudText>
+
+                        @* Bảng linh kiện *@
+                        <MudTable Items="@preset.Items" Hover="true" Elevation="0"
+                                  Dense="true" Class="border rounded preset-table">
+                            <HeaderContent>
+                                <MudTh Style="font-weight:700; width:140px;">Linh kiện</MudTh>
+                                <MudTh Style="font-weight:700;">Sản phẩm</MudTh>
+                                <MudTh Style="font-weight:700; width:70px; text-align:center;">Số lượng</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Linh kiện">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.ComponentName</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Sản phẩm">
+                                    <MudText Typo="Typo.body2">@context.ProductName</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Số lượng" Style="text-align:center;">
+                                    <MudText Typo="Typo.body2">@context.Quantity</MudText>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
                     </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Variant="Variant.Outlined"
-                                   Size="Size.Small"
-                                   Href="@preset.Href"
-                                   FullWidth="true">
-                            Xem tất cả sản phẩm
-                        </MudButton>
-                    </MudCardActions>
                 </MudCard>
             </MudItem>
         }
@@ -208,10 +221,17 @@
     private class PresetConfig
     {
         public string Title { get; init; } = string.Empty;
-        public string Href { get; init; } = string.Empty;
+        public List<PresetItem> Items { get; init; } = new();
     }
 
-    // ─── State ────────────────────────────────────────────────────────────────
+    private class PresetItem
+    {
+        public string ComponentName { get; init; } = string.Empty;
+        public string ProductName { get; init; } = string.Empty;
+        public int Quantity { get; init; } = 1;
+    }
+
+    // ─── State ───────────────────────────────────────────────────────────────────────────
     private List<PcSlot> _slots = new()
     {
         new() { Index = 1,  Name = "Bộ vi xử lý",        CategorySlug = "cpu" },
@@ -234,10 +254,69 @@
 
     private static readonly List<PresetConfig> _presets = new()
     {
-        new() { Title = "Cấu hình PC CPU Intel", Href = "/category/cpu" },
-        new() { Title = "Cấu hình PC CPU AMD",   Href = "/category/cpu" },
-        new() { Title = "Cấu hình PC Gaming",    Href = "/category/vga" },
-        new() { Title = "Cấu hình PC Văn phòng", Href = "/category/man-hinh" },
+        new()
+        {
+            Title = "Cấu hình PC Intel Văn Phòng",
+            Items = new()
+            {
+                new() { ComponentName = "CPU",         ProductName = "Intel Core i5-12400",          Quantity = 1 },
+                new() { ComponentName = "Bo mạch chủ", ProductName = "ASUS Prime H610M-K D4",         Quantity = 1 },
+                new() { ComponentName = "RAM",         ProductName = "Kingston 8GB DDR4 3200MHz",     Quantity = 2 },
+                new() { ComponentName = "SSD",         ProductName = "Kingston NV2 500GB NVMe",       Quantity = 1 },
+                new() { ComponentName = "VGA",         ProductName = "Intel UHD Graphics 730 (tích hợp)", Quantity = 1 },
+                new() { ComponentName = "Nguồn",       ProductName = "Corsair CV550 550W 80+ Bronze", Quantity = 1 },
+                new() { ComponentName = "Vỏ Case",     ProductName = "Xigmatek Gemini M",             Quantity = 1 },
+                new() { ComponentName = "Màn hình",    ProductName = "Dell E2422H 24" FHD IPS",       Quantity = 1 },
+            }
+        },
+        new()
+        {
+            Title = "Cấu hình PC AMD Gaming Tầm Trung",
+            Items = new()
+            {
+                new() { ComponentName = "CPU",         ProductName = "AMD Ryzen 5 5600X",            Quantity = 1 },
+                new() { ComponentName = "Bo mạch chủ", ProductName = "MSI B550M Pro-VDH WiFi",         Quantity = 1 },
+                new() { ComponentName = "RAM",         ProductName = "G.Skill Ripjaws V 16GB DDR4 3600", Quantity = 1 },
+                new() { ComponentName = "SSD",         ProductName = "Samsung 870 EVO 1TB SATA",      Quantity = 1 },
+                new() { ComponentName = "VGA",         ProductName = "MSI RX 6600 MECH 2X 8GB",      Quantity = 1 },
+                new() { ComponentName = "Nguồn",       ProductName = "Seasonic Focus GX-650 80+ Gold",Quantity = 1 },
+                new() { ComponentName = "Vỏ Case",     ProductName = "NZXT H510 Mid Tower",           Quantity = 1 },
+                new() { ComponentName = "Tản nhiệt",   ProductName = "DeepCool AK400",                Quantity = 1 },
+                new() { ComponentName = "Màn hình",    ProductName = "AOC 27G2 27" FHD 144Hz IPS",   Quantity = 1 },
+            }
+        },
+        new()
+        {
+            Title = "Cấu hình PC Gaming Hi-End",
+            Items = new()
+            {
+                new() { ComponentName = "CPU",         ProductName = "Intel Core i7-13700K",          Quantity = 1 },
+                new() { ComponentName = "Bo mạch chủ", ProductName = "ASUS ROG Strix Z790-F Gaming",   Quantity = 1 },
+                new() { ComponentName = "RAM",         ProductName = "Corsair Vengeance 32GB DDR5 6000",Quantity = 1 },
+                new() { ComponentName = "SSD",         ProductName = "Samsung 990 Pro 2TB NVMe PCIe 4.0",Quantity = 1 },
+                new() { ComponentName = "VGA",         ProductName = "ASUS TUF RTX 4070 Ti 12GB",     Quantity = 1 },
+                new() { ComponentName = "Nguồn",       ProductName = "Corsair RM1000x 1000W 80+ Gold",Quantity = 1 },
+                new() { ComponentName = "Vỏ Case",     ProductName = "Lian Li PC-O11 Dynamic EVO XL", Quantity = 1 },
+                new() { ComponentName = "Tản nhiệt AIO",ProductName = "NZXT Kraken 360 AIO 360mm",    Quantity = 1 },
+                new() { ComponentName = "Màn hình",    ProductName = "LG 32GQ850 32" QHD 240Hz Nano IPS",Quantity = 1 },
+            }
+        },
+        new()
+        {
+            Title = "Cấu hình PC Đồ Họa / Workstation",
+            Items = new()
+            {
+                new() { ComponentName = "CPU",         ProductName = "AMD Ryzen 9 7950X",             Quantity = 1 },
+                new() { ComponentName = "Bo mạch chủ", ProductName = "ASUS ProArt X670E-Creator WiFi", Quantity = 1 },
+                new() { ComponentName = "RAM",         ProductName = "Kingston Fury Beast 64GB DDR5 5200",Quantity = 1 },
+                new() { ComponentName = "SSD",         ProductName = "WD Black SN850X 2TB NVMe",      Quantity = 2 },
+                new() { ComponentName = "VGA",         ProductName = "NVIDIA RTX 4080 16GB",          Quantity = 1 },
+                new() { ComponentName = "Nguồn",       ProductName = "be quiet! Dark Power 13 1000W", Quantity = 1 },
+                new() { ComponentName = "Vỏ Case",     ProductName = "Fractal Design Define 7 XL",    Quantity = 1 },
+                new() { ComponentName = "Tản nhiệt AIO",ProductName = "Corsair iCUE H150i Elite 360mm",Quantity = 1 },
+                new() { ComponentName = "Màn hình",    ProductName = "ASUS ProArt PA329CV 32" 4K IPS",Quantity = 1 },
+            }
+        },
     };
 
     private bool _isExporting = false;

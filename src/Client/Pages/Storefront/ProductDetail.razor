@@ -261,6 +261,26 @@
         font-weight: 600;
         color: var(--mud-palette-primary);
     }
+
+    /* Disable hover effects on read-only MudRating */
+    .mud-rating-item .mud-icon-button:hover {
+        background-color: transparent !important;
+    }
+    .mud-rating-item .mud-icon-button .mud-button-root:hover {
+        background-color: transparent !important;
+    }
+    .mud-rating-item .mud-ripple-checkbox {
+        display: none !important;
+    }
+    .mud-rating-item button[disabled] {
+        cursor: default !important;
+        pointer-events: none !important;
+    }
+    .mud-rating-item .mud-icon-button[disabled]:hover,
+    .mud-rating-item .mud-icon-button[disabled]:focus {
+        background-color: transparent !important;
+        box-shadow: none !important;
+    }
 </style>
 
 @code {
