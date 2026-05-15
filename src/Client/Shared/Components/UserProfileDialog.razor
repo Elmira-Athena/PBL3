@@ -1,7 +1,13 @@
 @using Client.Services.Auth
+@using Client.Services.Customer
+@using Client.Services.Image
 @using PBL3.Shared.DTOs.Auth
+@using PBL3.Shared.DTOs.Customers
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
 @inject IAuthClientService AuthService
+@inject ICustomerClientService CustomerService
+@inject IImageClientService ImageService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ISnackbar Snackbar
 
@@ -10,57 +16,144 @@
         <MudText Typo="Typo.h6" Style="font-weight: 700;">Hồ sơ cá nhân</MudText>
     </TitleContent>
     <DialogContent>
-        @* ===== Profile Info ===== *@
-        <MudPaper Elevation="0" Class="pa-4 mb-4 rounded-lg" Style="background: var(--mud-palette-background-grey);">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-3">
-                <MudAvatar Color="Color.Primary" Size="Size.Large" Style="width: 56px; height: 56px; font-size: 1.5rem;">
-                    @(_displayName?.FirstOrDefault())
+        @if (_isLoading)
+        {
+            <div class="d-flex flex-column align-center py-4">
+                <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            </div>
+        }
+        else
+        {
+            @* ===== Avatar ===== *@
+            <div class="d-flex flex-column align-center mb-4">
+                <MudAvatar Color="Color.Primary" Size="Size.Large"
+                           Style="width: 80px; height: 80px; font-size: 2rem; margin-bottom: 8px;">
+                    @if (!string.IsNullOrWhiteSpace(_profileModel.AvatarUrl))
+                    {
+                        <MudImage Src="@_profileModel.AvatarUrl" Alt="Avatar"
+                                  Style="width:100%;height:100%;object-fit:cover;" />
+                    }
+                    else
+                    {
+                        @(_displayName?.FirstOrDefault())
+                    }
                 </MudAvatar>
-                <div>
-                    <MudText Typo="Typo.h6" Style="font-weight: 700;">@_displayName</MudText>
-                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@_email</MudText>
-                </div>
-            </MudStack>
-            <MudChip T="string" Size="Size.Small" Color="@_roleColor" Variant="Variant.Filled" Style="pointer-events: none; font-weight: 600;">
-                @_roleLabel
-            </MudChip>
-        </MudPaper>
 
-        @* ===== Change Password ===== *@
-        <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-3">Đổi mật khẩu</MudText>
-        <MudTextField @bind-Value="_model.CurrentPassword"
-                      Label="Mật khẩu hiện tại"
-                      Variant="Variant.Outlined"
-                      InputType="InputType.Password"
-                      Margin="Margin.Dense"
-                      Class="mb-3" />
-        <MudTextField @bind-Value="_model.NewPassword"
-                      Label="Mật khẩu mới"
-                      Variant="Variant.Outlined"
-                      InputType="InputType.Password"
-                      Margin="Margin.Dense"
-                      Class="mb-3" />
-        <MudTextField @bind-Value="_model.ConfirmPassword"
-                      Label="Xác nhận mật khẩu mới"
-                      Variant="Variant.Outlined"
-                      InputType="InputType.Password"
-                      Margin="Margin.Dense"
-                      Error="@_confirmError"
-                      ErrorText="Mật khẩu xác nhận không khớp." />
+                <div class="d-flex align-center gap-2">
+                    <InputFile id="userAvatarInput" OnChange="HandleAvatarUpload"
+                               accept="image/*" style="display:none" disabled="@_isUploadingAvatar" />
+                    <label for="userAvatarInput" style="cursor: @(_isUploadingAvatar ? "not-allowed" : "pointer");">
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
+                                   StartIcon="@(_isUploadingAvatar ? null : Icons.Material.Filled.CameraAlt)"
+                                   HtmlTag="span" Style="text-transform: none; pointer-events: none;">
+                            @if (_isUploadingAvatar)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                            }
+                            @(string.IsNullOrWhiteSpace(_profileModel.AvatarUrl) ? "Tải ảnh lên" : "Đổi ảnh")
+                        </MudButton>
+                    </label>
+                    @if (!string.IsNullOrWhiteSpace(_profileModel.AvatarUrl))
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                       Size="Size.Small" OnClick="RemoveAvatar" Title="Xóa ảnh" />
+                    }
+                </div>
+            </div>
+
+            @* ===== Role badge ===== *@
+            <div class="d-flex justify-center mb-4">
+                <MudChip T="string" Size="Size.Small" Color="@_roleColor" Variant="Variant.Filled"
+                         Style="pointer-events: none; font-weight: 600;">
+                    @_roleLabel
+                </MudChip>
+            </div>
+
+            @* ===== Profile fields ===== *@
+            <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-2">Thông tin cá nhân</MudText>
+            <MudTextField @bind-Value="_profileModel.FullName"
+                          Label="Họ và tên"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-3" />
+            <MudSelect T="byte" @bind-Value="_profileModel.Gender"
+                       Label="Giới tính"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       Class="mb-3">
+                <MudSelectItem T="byte" Value="@((byte)0)">Nam</MudSelectItem>
+                <MudSelectItem T="byte" Value="@((byte)1)">Nữ</MudSelectItem>
+                <MudSelectItem T="byte" Value="@((byte)2)">Khác</MudSelectItem>
+            </MudSelect>
+            <MudDatePicker @bind-Date="_dateOfBirth"
+                           Label="Ngày sinh"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           DateFormat="dd/MM/yyyy"
+                           Class="mb-3" />
+            <MudTextField @bind-Value="_profileModel.Address"
+                          Label="Địa chỉ"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-3" />
+            <MudTextField @bind-Value="_profileModel.City"
+                          Label="Thành phố"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-4" />
+            <MudButton OnClick="SaveProfile"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Disabled="@_isSavingProfile"
+                       Style="text-transform: none; margin-bottom: 24px;">
+                @if (_isSavingProfile)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Lưu thông tin
+            </MudButton>
+
+            <MudDivider Class="mb-4" />
+
+            @* ===== Change Password ===== *@
+            <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-2">Đổi mật khẩu</MudText>
+            <MudTextField @bind-Value="_pwModel.CurrentPassword"
+                          Label="Mật khẩu hiện tại"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Margin="Margin.Dense"
+                          Class="mb-3" />
+            <MudTextField @bind-Value="_pwModel.NewPassword"
+                          Label="Mật khẩu mới"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Margin="Margin.Dense"
+                          Class="mb-3" />
+            <MudTextField @bind-Value="_pwModel.ConfirmPassword"
+                          Label="Xác nhận mật khẩu mới"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Margin="Margin.Dense"
+                          Error="@_confirmError"
+                          ErrorText="Mật khẩu xác nhận không khớp."
+                          Class="mb-3" />
+            <MudButton OnClick="SubmitChangePassword"
+                       Variant="Variant.Outlined"
+                       Color="Color.Warning"
+                       FullWidth="true"
+                       Disabled="@_isBusy"
+                       Style="text-transform: none;">
+                @if (_isBusy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Đổi mật khẩu
+            </MudButton>
+        }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel" Variant="Variant.Text" Style="text-transform: none;">Đóng</MudButton>
-        <MudButton OnClick="SubmitChangePassword"
-                   Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   Disabled="@_isBusy"
-                   Style="text-transform: none;">
-            @if (_isBusy)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-            }
-            Đổi mật khẩu
-        </MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -69,10 +162,16 @@
     private IMudDialogInstance MudDialog { get; set; } = null!;
 
     private string? _displayName;
-    private string? _email;
     private string _roleLabel = string.Empty;
     private Color _roleColor = Color.Default;
-    private ChangePasswordRequest _model = new();
+
+    private UpdateCustomerRequest _profileModel = new();
+    private DateTime? _dateOfBirth;
+    private bool _isLoading = true;
+    private bool _isSavingProfile;
+    private bool _isUploadingAvatar;
+
+    private ChangePasswordRequest _pwModel = new();
     private bool _isBusy;
     private bool _confirmError;
 
@@ -81,7 +180,6 @@
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         _displayName = user.Identity?.Name;
-        _email = user.FindFirst(c => c.Type == System.Security.Claims.ClaimTypes.Email)?.Value;
 
         if (user.IsInRole("Admin"))
         {
@@ -98,34 +196,89 @@
             _roleLabel = "Khách hàng";
             _roleColor = Color.Success;
         }
+
+        var result = await CustomerService.GetMyProfileAsync();
+        if (result.Success && result.Data != null)
+        {
+            var p = result.Data;
+            _profileModel = new UpdateCustomerRequest
+            {
+                FullName = p.FullName,
+                Gender = (byte)p.Gender,
+                DateOfBirth = p.DateOfBirth,
+                AvatarUrl = p.AvatarUrl,
+                Address = p.Address,
+                City = p.City,
+            };
+            _dateOfBirth = p.DateOfBirth;
+        }
+        _isLoading = false;
+    }
+
+    private async Task HandleAvatarUpload(InputFileChangeEventArgs e)
+    {
+        _isUploadingAvatar = true;
+        StateHasChanged();
+        var url = await ImageService.UploadAsync(e.File, "avatars");
+        if (url != null)
+            _profileModel.AvatarUrl = url;
+        else
+            Snackbar.Add("Tải ảnh thất bại.", Severity.Error);
+        _isUploadingAvatar = false;
+    }
+
+    private void RemoveAvatar() => _profileModel.AvatarUrl = null;
+
+    private async Task SaveProfile()
+    {
+        if (string.IsNullOrWhiteSpace(_profileModel.FullName))
+        {
+            Snackbar.Add("Vui lòng nhập họ và tên.", Severity.Warning);
+            return;
+        }
+
+        _profileModel.DateOfBirth = _dateOfBirth;
+        _isSavingProfile = true;
+        var result = await CustomerService.UpdateMyProfileAsync(_profileModel);
+        _isSavingProfile = false;
+
+        if (result.Success)
+        {
+            _displayName = _profileModel.FullName;
+            Snackbar.Add("Cập nhật thông tin thành công!", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Cập nhật thất bại.", Severity.Error);
+        }
     }
 
     private async Task SubmitChangePassword()
     {
         _confirmError = false;
 
-        if (string.IsNullOrWhiteSpace(_model.CurrentPassword) ||
-            string.IsNullOrWhiteSpace(_model.NewPassword) ||
-            string.IsNullOrWhiteSpace(_model.ConfirmPassword))
+        if (string.IsNullOrWhiteSpace(_pwModel.CurrentPassword) ||
+            string.IsNullOrWhiteSpace(_pwModel.NewPassword) ||
+            string.IsNullOrWhiteSpace(_pwModel.ConfirmPassword))
         {
             Snackbar.Add("Vui lòng điền đầy đủ thông tin.", Severity.Warning);
             return;
         }
 
-        if (_model.NewPassword != _model.ConfirmPassword)
+        if (_pwModel.NewPassword != _pwModel.ConfirmPassword)
         {
             _confirmError = true;
             return;
         }
 
         _isBusy = true;
-        var result = await AuthService.ChangePasswordAsync(_model);
+        var result = await AuthService.ChangePasswordAsync(_pwModel);
         _isBusy = false;
 
         if (result.Success)
         {
             Snackbar.Add("Đổi mật khẩu thành công!", Severity.Success);
-            _model = new();
+            _pwModel = new();
         }
         else
         {
