@@ -321,8 +321,17 @@
         if (!result.Canceled)
         {
             var employeeId = (Guid)result.Data;
-            Snackbar.Add("Đã gán kỹ thuật viên. (Chưa lưu vào server)", Severity.Success);
-            await LoadTicket();
+            var request = new AssignTechnicianRequest { EmployeeId = employeeId };
+            var apiResult = await ServiceTicketService.AssignTechnicianAsync(Id, request);
+            if (apiResult.Success)
+            {
+                Snackbar.Add("Đã gán kỹ thuật viên thành công.", Severity.Success);
+                await LoadTicket();
+            }
+            else
+            {
+                Snackbar.Add(apiResult.Message ?? "Gán kỹ thuật viên thất bại.", Severity.Error);
+            }
         }
     }
 
@@ -336,8 +345,17 @@
         if (!result.Canceled)
         {
             var findings = (string)result.Data;
-            Snackbar.Add("Đã ghi nhận chẩn đoán. (Chưa lưu vào server)", Severity.Success);
-            await LoadTicket();
+            var request = new RecordDiagnosisRequest { DiagnosisFindings = findings };
+            var apiResult = await ServiceTicketService.RecordDiagnosisAsync(Id, request);
+            if (apiResult.Success)
+            {
+                Snackbar.Add("Đã ghi nhận kết luận chẩn đoán.", Severity.Success);
+                await LoadTicket();
+            }
+            else
+            {
+                Snackbar.Add(apiResult.Message ?? "Ghi nhận chẩn đoán thất bại.", Severity.Error);
+            }
         }
     }
 
@@ -351,11 +369,16 @@
         if (!result.Canceled)
         {
             var resolutionType = (byte)result.Data;
-            Snackbar.Add($"Đã chọn loại sửa. (Chưa lưu vào server)", Severity.Success);
-            if (ticket != null)
+            var request = new ChooseBranchRequest { ResolutionType = resolutionType };
+            var apiResult = await ServiceTicketService.ChooseBranchAsync(Id, request);
+            if (apiResult.Success)
             {
-                ticket.ResolutionType = resolutionType;
-                StateHasChanged();
+                Snackbar.Add("Đã chọn loại sửa chữa.", Severity.Success);
+                await LoadTicket();
+            }
+            else
+            {
+                Snackbar.Add(apiResult.Message ?? "Chọn loại sửa thất bại.", Severity.Error);
             }
         }
     }
@@ -374,8 +397,16 @@
         var result = await dialog.Result;
         if (!result.Canceled)
         {
-            Snackbar.Add("Đã hoàn tát phiếu. (Chưa lưu vào server)", Severity.Success);
-            await LoadTicket();
+            var apiResult = await ServiceTicketService.CompleteRepairAsync(Id, new CompleteRepairRequest());
+            if (apiResult.Success)
+            {
+                Snackbar.Add("Đã hoàn tất phiếu sửa chữa.", Severity.Success);
+                await LoadTicket();
+            }
+            else
+            {
+                Snackbar.Add(apiResult.Message ?? "Hoàn tất phiếu thất bại.", Severity.Error);
+            }
         }
     }
 
@@ -389,8 +420,17 @@
         if (!result.Canceled)
         {
             var reason = (string)result.Data;
-            Snackbar.Add("Đã hủy phiếu. (Chưa lưu vào server)", Severity.Success);
-            await LoadTicket();
+            var request = new CancelTicketRequest { CancelReason = reason };
+            var apiResult = await ServiceTicketService.CancelTicketAsync(Id, request);
+            if (apiResult.Success)
+            {
+                Snackbar.Add("Đã hủy phiếu sửa chữa.", Severity.Success);
+                await LoadTicket();
+            }
+            else
+            {
+                Snackbar.Add(apiResult.Message ?? "Hủy phiếu thất bại.", Severity.Error);
+            }
         }
     }
 }
