@@ -27,6 +27,9 @@ namespace Client.Services.Customer
                 if (request.IsActive.HasValue)
                     queryParams.Add($"IsActive={request.IsActive.Value.ToString().ToLower()}");
 
+                if (request.Gender.HasValue)
+                    queryParams.Add($"Gender={request.Gender.Value}");
+
                 queryParams.Add($"PageNumber={request.PageNumber}");
                 queryParams.Add($"PageSize={request.PageSize}");
 

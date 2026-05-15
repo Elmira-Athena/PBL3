@@ -25,14 +25,26 @@
         </MudButton>
     </MudPaper>
 
-    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-4 align-center">
-        <MudTextField @bind-Value="keyword" Label="Tìm Serial / Phiếu" Variant="Variant.Outlined"
-                      Margin="Margin.Dense" Style="max-width: 250px;"
-                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
-                      OnKeyUp="OnSearchKeyPress" />
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
+        <MudTextField Value="keyword"
+                      ValueChanged="@((string s) => { keyword = s; table?.ReloadServerData(); })"
+                      Label="Tìm Serial / Mã phiếu"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Style="max-width: 250px;"
+                      Adornment="Adornment.End"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      DebounceInterval="400"
+                      Immediate="true" />
 
-        <MudSelect T="byte?" @bind-Value="statusFilter" Label="Trạng thái" Variant="Variant.Outlined"
-                   Margin="Margin.Dense" Style="max-width: 200px;">
+        <MudSelect T="byte?"
+                   Value="statusFilter"
+                   ValueChanged="@((byte? v) => { statusFilter = v; table?.ReloadServerData(); })"
+                   Label="Trạng thái"
+                   Clearable="true"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Style="max-width: 190px;">
             <MudSelectItem T="byte?" Value="@null">Tất cả</MudSelectItem>
             <MudSelectItem T="byte?" Value="0">Đã tiếp nhận</MudSelectItem>
             <MudSelectItem T="byte?" Value="1">Đang chẩn đoán</MudSelectItem>
@@ -41,9 +53,23 @@
             <MudSelectItem T="byte?" Value="9">Hoàn tất</MudSelectItem>
         </MudSelect>
 
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RefreshList" Class="ml-auto">
-            Lọc kết quả
-        </MudButton>
+        <MudDatePicker Date="fromDate"
+                       DateChanged="@((DateTime? d) => { fromDate = d; table?.ReloadServerData(); })"
+                       Label="Từ ngày"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy"
+                       Clearable="true"
+                       Style="max-width: 155px;" />
+
+        <MudDatePicker Date="toDate"
+                       DateChanged="@((DateTime? d) => { toDate = d; table?.ReloadServerData(); })"
+                       Label="Đến ngày"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy"
+                       Clearable="true"
+                       Style="max-width: 155px;" />
     </MudPaper>
 
     <MudTable T="ServiceTicketListDto" ServerData="ServerReload"
@@ -99,6 +125,8 @@
 @code {
     private string? keyword;
     private byte? statusFilter;
+    private DateTime? fromDate;
+    private DateTime? toDate;
     private MudTable<ServiceTicketListDto>? table;
 
     private async Task<TableData<ServiceTicketListDto>> ServerReload(TableState state, CancellationToken token = default)
@@ -106,7 +134,8 @@
         try
         {
             var result = await ServiceTicketService.GetPagedListAsync(
-                keyword, state.Page + 1, state.PageSize, "IntakeDate", true);
+                keyword, statusFilter, fromDate, toDate,
+                state.Page + 1, state.PageSize, "IntakeDate", true);
 
             if (!result.Success || result.Data?.Items == null)
             {
@@ -125,18 +154,6 @@
             Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
             return new TableData<ServiceTicketListDto> { Items = new List<ServiceTicketListDto>(), TotalItems = 0 };
         }
-    }
-
-    private async Task RefreshList()
-    {
-        if (table != null)
-            await table.ReloadServerData();
-    }
-
-    private async Task OnSearchKeyPress(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-            await RefreshList();
     }
 
     private void GoToIntake() => NavManager.NavigateTo("/admin/service-tickets/intake");

@@ -16,13 +16,20 @@ namespace Client.Services.ServiceTickets
         }
 
         public async Task<ApiResult<PagedResult<ServiceInvoiceListDto>>> GetPagedListAsync(
-            string? keyword, int pageNumber, int pageSize, string? sortBy, bool sortDescending)
+            string? keyword, byte? paymentStatus, DateTime? fromDate, DateTime? toDate,
+            int pageNumber, int pageSize, string? sortBy, bool sortDescending)
         {
             try
             {
                 var url = $"api/service-invoices?pageNumber={pageNumber}&pageSize={pageSize}";
                 if (!string.IsNullOrEmpty(keyword))
                     url += $"&keyword={Uri.EscapeDataString(keyword)}";
+                if (paymentStatus.HasValue)
+                    url += $"&paymentStatus={paymentStatus.Value}";
+                if (fromDate.HasValue)
+                    url += $"&fromDate={fromDate.Value:yyyy-MM-dd}";
+                if (toDate.HasValue)
+                    url += $"&toDate={toDate.Value:yyyy-MM-dd}";
                 if (!string.IsNullOrEmpty(sortBy))
                     url += $"&sortBy={Uri.EscapeDataString(sortBy)}&sortDescending={sortDescending}";
 

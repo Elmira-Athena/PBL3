@@ -36,6 +36,7 @@ namespace PBL3.Service.Customers
             var (items, totalCount) = await _customerRepo.GetPagedListAsync(
                 filter.Keyword,
                 filter.IsActive,
+                filter.Gender,
                 filter.PageNumber,
                 filter.PageSize,
                 filter.SortBy,

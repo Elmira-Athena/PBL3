@@ -16,6 +16,9 @@ namespace PBL3.Infrastructure.Repositories
 
         public async Task<(List<ServiceInvoice> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,
+            byte? paymentStatus,
+            DateTime? fromDate,
+            DateTime? toDate,
             int pageNumber,
             int pageSize,
             string? sortBy,
@@ -24,9 +27,16 @@ namespace PBL3.Infrastructure.Repositories
             var query = _dbContext.ServiceInvoices.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(keyword))
-            {
                 query = query.Where(i => i.InvoiceCode.Contains(keyword));
-            }
+
+            if (paymentStatus.HasValue)
+                query = query.Where(i => i.PaymentStatus == paymentStatus.Value);
+
+            if (fromDate.HasValue)
+                query = query.Where(i => i.IssuedDate >= fromDate.Value.Date);
+
+            if (toDate.HasValue)
+                query = query.Where(i => i.IssuedDate < toDate.Value.Date.AddDays(1));
 
             var totalCount = await query.CountAsync();
 

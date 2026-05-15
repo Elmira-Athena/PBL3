@@ -58,7 +58,27 @@
                     <MudSelectItem T="bool?" Value="@((bool?)false)">Tạm dừng</MudSelectItem>
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12" sm="12" md="5" Class="d-flex align-center justify-end gap-2">
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker Date="_fromDate"
+                               DateChanged="@((DateTime? d) => { _fromDate = d; _table?.ReloadServerData(); })"
+                               Label="Từ ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true"
+                               Style="border-radius: 8px;" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker Date="_toDate"
+                               DateChanged="@((DateTime? d) => { _toDate = d; _table?.ReloadServerData(); })"
+                               Label="Đến ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true"
+                               Style="border-radius: 8px;" />
+            </MudItem>
+            <MudItem xs="12" sm="12" md="1" Class="d-flex align-center justify-end gap-2">
                 <MudChip T="string" Icon="@Icons.Material.Filled.Info" Color="Color.Info" Variant="Variant.Outlined" Size="Size.Small">
                     @_totalCount voucher
                 </MudChip>
@@ -264,6 +284,8 @@
     private bool _isLoading;
     private string _keyword = string.Empty;
     private bool? _statusFilter;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
     private int _totalCount;
 
     private async Task<TableData<VoucherDto>> LoadServerData(TableState state, CancellationToken ct)
@@ -275,6 +297,8 @@
         {
             Keyword        = _keyword,
             IsActive       = _statusFilter,
+            FromDate       = _fromDate,
+            ToDate         = _toDate,
             PageNumber     = state.Page + 1,
             PageSize       = state.PageSize,
             SortBy         = state.SortLabel,

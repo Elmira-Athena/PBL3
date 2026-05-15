@@ -394,6 +394,7 @@ namespace PBL3.Core.Interfaces
         Task<(List<AppUser> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,
             bool? isActive,
+            byte? gender,
             int pageNumber,
             int pageSize,
             string? sortBy,

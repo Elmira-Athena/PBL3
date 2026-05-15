@@ -125,6 +125,9 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<(List<ServiceInvoice> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,
+            byte? paymentStatus,
+            DateTime? fromDate,
+            DateTime? toDate,
             int pageNumber,
             int pageSize,
             string? sortBy,

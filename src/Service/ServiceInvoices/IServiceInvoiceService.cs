@@ -7,6 +7,7 @@ namespace PBL3.Service.ServiceInvoices
         Task<ServiceInvoiceDetailDto?> GetByIdAsync(int id);
         Task<ServiceInvoiceDetailDto?> GetByTicketIdAsync(int ticketId);
         Task<(List<ServiceInvoiceListDto> Items, int TotalCount)> GetPagedListAsync(
-            string? keyword, int pageNumber, int pageSize, string? sortBy, bool sortDescending);
+            string? keyword, byte? paymentStatus, DateTime? fromDate, DateTime? toDate,
+            int pageNumber, int pageSize, string? sortBy, bool sortDescending);
     }
 }

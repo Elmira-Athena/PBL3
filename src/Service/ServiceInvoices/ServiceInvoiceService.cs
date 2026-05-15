@@ -29,9 +29,11 @@ namespace PBL3.Service.ServiceInvoices
         }
 
         public async Task<(List<ServiceInvoiceListDto> Items, int TotalCount)> GetPagedListAsync(
-            string? keyword, int pageNumber, int pageSize, string? sortBy, bool sortDescending)
+            string? keyword, byte? paymentStatus, DateTime? fromDate, DateTime? toDate,
+            int pageNumber, int pageSize, string? sortBy, bool sortDescending)
         {
-            var (items, totalCount) = await _repository.GetPagedListAsync(keyword, pageNumber, pageSize, sortBy, sortDescending);
+            var (items, totalCount) = await _repository.GetPagedListAsync(
+                keyword, paymentStatus, fromDate, toDate, pageNumber, pageSize, sortBy, sortDescending);
             var dtos = items.Select(MapToListDto).ToList();
             return (dtos, totalCount);
         }

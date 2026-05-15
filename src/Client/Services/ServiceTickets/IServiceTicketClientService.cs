@@ -8,7 +8,8 @@ namespace Client.Services.ServiceTickets
         Task<ApiResult<ServiceTicketIntakeEvaluationDto>> EvaluateIntakeAsync(string serialNumber);
         Task<ApiResult<ServiceTicketDetailDto>> CreateTicketAsync(CreateServiceTicketRequest request);
         Task<ApiResult<PagedResult<ServiceTicketListDto>>> GetPagedListAsync(
-            string? keyword, int pageNumber, int pageSize, string? sortBy, bool sortDescending);
+            string? keyword, byte? status, DateTime? fromDate, DateTime? toDate,
+            int pageNumber, int pageSize, string? sortBy, bool sortDescending);
         Task<ApiResult<PagedResult<ServiceTicketListDto>>> GetMyTicketsAsync(
             string? keyword, int pageNumber, int pageSize, string? sortBy, bool sortDescending);
         Task<ApiResult<ServiceTicketDetailDto>> GetByIdAsync(int id);

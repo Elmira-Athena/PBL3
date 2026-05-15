@@ -6,7 +6,8 @@ namespace Client.Services.ServiceTickets
     public interface IServiceInvoiceClientService
     {
         Task<ApiResult<PagedResult<ServiceInvoiceListDto>>> GetPagedListAsync(
-            string? keyword, int pageNumber, int pageSize, string? sortBy, bool sortDescending);
+            string? keyword, byte? paymentStatus, DateTime? fromDate, DateTime? toDate,
+            int pageNumber, int pageSize, string? sortBy, bool sortDescending);
         Task<ApiResult<ServiceInvoiceDetailDto>> GetByIdAsync(int id);
     }
 }

@@ -1,4 +1,9 @@
 @page "/admin/products"
+@using PBL3.Shared.DTOs.Products
+@using PBL3.Shared.DTOs.Manufacturers
+@using PBL3.Shared.DTOs.Categories
+@using Client.Services.Category
+@using Client.Services.Manufacturer
 
 <PageTitle>Quản lý Sản phẩm - HushStore</PageTitle>
 
@@ -25,7 +30,7 @@
     @* ===== FILTER BAR ===== *@
     <MudPaper Elevation="1" Class="pa-4 rounded-lg mb-4">
         <MudGrid>
-            <MudItem xs="12" sm="6" md="4">
+            <MudItem xs="12" sm="6" md="3">
                 <MudTextField @bind-Value="_keyword"
                               Placeholder="Tìm kiếm sản phẩm..."
                               Adornment="Adornment.Start"
@@ -37,15 +42,52 @@
                               OnDebounceIntervalElapsed="OnSearchChanged"
                               Style="border-radius: 8px;" />
             </MudItem>
-            <MudItem xs="12" sm="6" md="8" Class="d-flex align-center justify-end gap-2">
-                <MudButton Variant="Variant.Text"
-                           Color="Color.Default"
-                           StartIcon="@Icons.Material.Filled.Refresh"
-                           OnClick="@(() => { if (_table != null) _table.ReloadServerData(); })"
-                           Size="Size.Small"
-                           Style="text-transform: none;">
-                    Làm mới
-                </MudButton>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="ProductStatus?"
+                           Value="_statusFilter"
+                           ValueChanged="@((ProductStatus? v) => { _statusFilter = v; _table?.ReloadServerData(); })"
+                           Label="Trạng thái"
+                           Clearable="true"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Style="border-radius: 8px;">
+                    <MudSelectItem T="ProductStatus?" Value="@((ProductStatus?)null)">Tất cả</MudSelectItem>
+                    <MudSelectItem T="ProductStatus?" Value="@((ProductStatus?)ProductStatus.Active)">Đang bán</MudSelectItem>
+                    <MudSelectItem T="ProductStatus?" Value="@((ProductStatus?)ProductStatus.Draft)">Nháp</MudSelectItem>
+                    <MudSelectItem T="ProductStatus?" Value="@((ProductStatus?)ProductStatus.StopBusiness)">Ngừng kinh doanh</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="int?"
+                           Value="_manufacturerFilter"
+                           ValueChanged="@((int? v) => { _manufacturerFilter = v; _table?.ReloadServerData(); })"
+                           Label="Hãng sản xuất"
+                           Clearable="true"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Style="border-radius: 8px;">
+                    <MudSelectItem T="int?" Value="@((int?)null)">Tất cả</MudSelectItem>
+                    @foreach (var m in _manufacturers)
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)m.Id)">@m.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="int?"
+                           Value="_categoryFilter"
+                           ValueChanged="@((int? v) => { _categoryFilter = v; _table?.ReloadServerData(); })"
+                           Label="Danh mục"
+                           Clearable="true"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Style="border-radius: 8px;">
+                    <MudSelectItem T="int?" Value="@((int?)null)">Tất cả</MudSelectItem>
+                    @foreach (var c in _categories)
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)c.Id)">@c.Name</MudSelectItem>
+                    }
+                </MudSelect>
             </MudItem>
         </MudGrid>
     </MudPaper>
@@ -186,6 +228,8 @@
 
 @code {
     [Inject] private IProductClientService ProductService { get; set; } = null!;
+    [Inject] private ICategoryClientService CategoryService { get; set; } = null!;
+    [Inject] private IManufacturerClientService ManufacturerService { get; set; } = null!;
     [Inject] private IDialogService DialogService { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private NavigationManager Navigation { get; set; } = null!;
@@ -193,10 +237,42 @@
     private MudTable<ProductListDto>? _table;
     private bool _isLoading;
     private string _keyword = string.Empty;
+    private ProductStatus? _statusFilter;
+    private int? _manufacturerFilter;
+    private int? _categoryFilter;
 
-    /// <summary>
-    /// ServerData callback for MudTable – gọi API phân trang.
-    /// </summary>
+    private List<(int Id, string Name)> _categories = new();
+    private List<ManufacturerSummaryDto> _manufacturers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var catTask = CategoryService.GetTreeAsync();
+        var mfgTask = ManufacturerService.GetDropdownAsync();
+        await Task.WhenAll(catTask, mfgTask);
+
+        var catResult = await catTask;
+        if (catResult.Success && catResult.Data != null)
+            _categories = FlattenCategories(catResult.Data);
+
+        var mfgResult = await mfgTask;
+        if (mfgResult.Success && mfgResult.Data != null)
+            _manufacturers = mfgResult.Data;
+    }
+
+    private static List<(int Id, string Name)> FlattenCategories(
+        List<CategoryTreeDto> nodes, int depth = 0)
+    {
+        var result = new List<(int, string)>();
+        foreach (var node in nodes)
+        {
+            var prefix = depth > 0 ? new string('─', depth * 2) + " " : "";
+            result.Add((node.Id, prefix + node.Name));
+            if (node.Children.Count > 0)
+                result.AddRange(FlattenCategories(node.Children, depth + 1));
+        }
+        return result;
+    }
+
     private async Task<TableData<ProductListDto>> LoadServerData(TableState state, CancellationToken ct)
     {
         _isLoading = true;
@@ -205,7 +281,10 @@
         var request = new ProductFilterRequest
         {
             Keyword = _keyword,
-            PageNumber = state.Page + 1, // MudTable page is 0-based, API is 1-based
+            Status = _statusFilter,
+            ManufacturerId = _manufacturerFilter,
+            CategoryId = _categoryFilter,
+            PageNumber = state.Page + 1,
             PageSize = state.PageSize,
             SortBy = state.SortLabel,
             SortDescending = state.SortDirection == SortDirection.Descending
@@ -238,9 +317,6 @@
         _table?.ReloadServerData();
     }
 
-    /// <summary>
-    /// Hiển thị khoảng giá từ MinPrice – MaxPrice.
-    /// </summary>
     private string FormatPriceRange(ProductListDto item)
     {
         if (item.MinPrice == item.MaxPrice)
@@ -249,9 +325,6 @@
         return $"{item.MinPrice:N0}đ - {item.MaxPrice:N0}đ";
     }
 
-    /// <summary>
-    /// Dialog xác nhận xóa sản phẩm.
-    /// </summary>
     private async Task ConfirmDelete(ProductListDto product)
     {
         bool? confirm = await DialogService.ShowMessageBox(

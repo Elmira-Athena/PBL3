@@ -12,10 +12,49 @@
 <MudText Typo="Typo.h5" Class="mb-4" Style="font-weight: 700;">Khách hàng</MudText>
 
 <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<CustomerDto>>>(ServerReload))"
-          Dense="true" Hover="true" @ref="_table" Elevation="2" Class="mb-4">
+          Dense="true" Hover="true" @ref="_table" Elevation="2" Class="mb-4" Loading="@_isLoading">
     <ToolBarContent>
-        <MudTextField T="string" ValueChanged="@(s => OnSearch(s))" Placeholder="Nhập từ khóa tìm kiếm" Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Variant="Variant.Outlined" Margin="Margin.Dense"></MudTextField>
+        <MudTextField T="string"
+                      ValueChanged="@(s => OnSearch(s))"
+                      Placeholder="Tìm theo tên, email, SĐT"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      IconSize="Size.Medium"
+                      Class="mt-0 mr-3"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      DebounceInterval="400"
+                      OnDebounceIntervalElapsed="@(s => OnSearch(s))" />
+
+        <MudSelect T="bool?"
+                   Value="_filterIsActive"
+                   ValueChanged="@((bool? v) => { _filterIsActive = v; _table.ReloadServerData(); })"
+                   Label="Trạng thái"
+                   Clearable="true"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Class="mr-3"
+                   Style="min-width: 150px;">
+            <MudSelectItem T="bool?" Value="@((bool?)null)">Tất cả</MudSelectItem>
+            <MudSelectItem T="bool?" Value="@((bool?)true)">Hoạt động</MudSelectItem>
+            <MudSelectItem T="bool?" Value="@((bool?)false)">Đã khóa</MudSelectItem>
+        </MudSelect>
+
+        <MudSelect T="byte?"
+                   Value="_filterGender"
+                   ValueChanged="@((byte? v) => { _filterGender = v; _table.ReloadServerData(); })"
+                   Label="Giới tính"
+                   Clearable="true"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Class="mr-3"
+                   Style="min-width: 130px;">
+            <MudSelectItem T="byte?" Value="@((byte?)null)">Tất cả</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte?)0)">Nam</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte?)1)">Nữ</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte?)2)">Khác</MudSelectItem>
+        </MudSelect>
+
         <MudSpacer />
         <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
             Thêm tài khoản
@@ -77,33 +116,38 @@
 
 @code {
     private MudTable<CustomerDto> _table = null!;
-    private CustomerFilterRequest _filter = new();
     private string _searchString = string.Empty;
+    private bool? _filterIsActive;
+    private byte? _filterGender;
+    private bool _isLoading;
 
     private async Task<TableData<CustomerDto>> ServerReload(TableState state, CancellationToken cancellationToken)
     {
-        _filter.Keyword = _searchString;
-        _filter.PageNumber = state.Page + 1;
-        _filter.PageSize = state.PageSize;
-
-        // Xử lý sort (dù ở đây chỉ demo sort cơ bản)
-        _filter.SortBy = state.SortLabel;
-        _filter.SortDescending = state.SortDirection == SortDirection.Descending;
-
-        var result = await CustomerService.GetListAsync(_filter);
-
-        if (result != null && result.Success && result.Data != null)
+        _isLoading = true;
+        try
         {
-            return new TableData<CustomerDto>
+            var filter = new CustomerFilterRequest
             {
-                TotalItems = result.Data.TotalCount,
-                Items = result.Data.Items
+                Keyword = _searchString,
+                IsActive = _filterIsActive,
+                Gender = _filterGender,
+                PageNumber = state.Page + 1,
+                PageSize = state.PageSize,
+                SortBy = state.SortLabel,
+                SortDescending = state.SortDirection == SortDirection.Descending
             };
-        }
-        else
-        {
+
+            var result = await CustomerService.GetListAsync(filter);
+
+            if (result != null && result.Success && result.Data != null)
+                return new TableData<CustomerDto> { TotalItems = result.Data.TotalCount, Items = result.Data.Items };
+
             Snackbar.Add(result?.Message ?? "Lỗi tải danh sách", Severity.Error);
             return new TableData<CustomerDto> { TotalItems = 0, Items = new List<CustomerDto>() };
+        }
+        finally
+        {
+            _isLoading = false;
         }
     }
 

@@ -21,6 +21,7 @@ namespace PBL3.Infrastructure.Repositories
         public async Task<(List<AppUser> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,
             bool? isActive,
+            byte? gender,
             int pageNumber,
             int pageSize,
             string? sortBy,
@@ -36,9 +37,11 @@ namespace PBL3.Infrastructure.Repositories
 
             // Lọc theo IsActive nếu có
             if (isActive.HasValue)
-            {
                 query = query.Where(u => u.IsActive == isActive.Value);
-            }
+
+            // Lọc theo giới tính nếu có
+            if (gender.HasValue)
+                query = query.Where(u => u.Profile != null && u.Profile.Gender == gender.Value);
 
             // Lọc theo keyword (tìm trên Email, PhoneNumber, FullName)
             if (!string.IsNullOrWhiteSpace(keyword))

@@ -25,6 +25,9 @@ namespace PBL3.API.Controllers
         [HttpGet]
         public async Task<ApiResult<PagedResult<ServiceInvoiceListDto>>> GetList(
             [FromQuery] string? keyword,
+            [FromQuery] byte? paymentStatus,
+            [FromQuery] DateTime? fromDate,
+            [FromQuery] DateTime? toDate,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
             [FromQuery] string? sortBy = "IssuedDate",
@@ -35,7 +38,8 @@ namespace PBL3.API.Controllers
                 if (pageNumber < 1) pageNumber = 1;
                 if (pageSize < 1 || pageSize > 100) pageSize = 10;
 
-                var (items, totalCount) = await _service.GetPagedListAsync(keyword, pageNumber, pageSize, sortBy, sortDescending);
+                var (items, totalCount) = await _service.GetPagedListAsync(
+                    keyword, paymentStatus, fromDate, toDate, pageNumber, pageSize, sortBy, sortDescending);
                 var result = new PagedResult<ServiceInvoiceListDto>
                 {
                     Items = items,
