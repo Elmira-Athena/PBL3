@@ -31,8 +31,6 @@ namespace PBL3.Shared.DTOs.Cart
 
     /// <summary>
     /// Response chi tiết 1 item trong giỏ hàng.
-    /// KHÔNG chứa StockQuantity hay CostPrice (bảo mật tồn kho).
-    /// </summary>
     public class CartItemResponse
     {
         public int Id { get; set; }
@@ -43,6 +41,7 @@ namespace PBL3.Shared.DTOs.Cart
         public decimal UnitPrice { get; set; }
         public int Quantity { get; set; }
         public decimal SubTotal { get; set; }
+        public int StockQuantity { get; set; }
     }
 
     /// <summary>

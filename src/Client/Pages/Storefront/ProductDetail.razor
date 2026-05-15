@@ -85,9 +85,13 @@
                         {
                             <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">Hết hàng</MudChip>
                         }
+                        else if (_currentVariant.StockQuantity <= 5)
+                        {
+                            <MudChip T="string" Color="Color.Warning" Variant="Variant.Outlined" Size="Size.Small">Chỉ còn @_currentVariant.StockQuantity sản phẩm</MudChip>
+                        }
                         else
                         {
-                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">Còn hàng</MudChip>
+                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">Còn @_currentVariant.StockQuantity sản phẩm</MudChip>
                         }
                     }
                 </div>
@@ -97,23 +101,23 @@
                 {
                     <div class="mb-6">
                         <MudText Typo="Typo.subtitle2" Class="fw-bold mb-2">Chọn phiên bản:</MudText>
-                        <MudChipGroup T="StorefrontVariantResponse" Value="_currentVariant" ValueChanged="OnVariantChanged" SelectionMode="SelectionMode.SingleSelection" Class="gap-2">
+                        <MudChipSet T="StorefrontVariantResponse" SelectedValue="_currentVariant" SelectedValueChanged="OnVariantChanged" SelectionMode="SelectionMode.SingleSelection" Class="gap-2">
                             @foreach (var variant in _product.Variants)
                             {
-                                <MudChip T="StorefrontVariantResponse" Value="@variant" Variant="Variant.Text" Color="Color.Primary" 
+                                <MudChip T="StorefrontVariantResponse" Value="@variant" Variant="Variant.Text" Color="Color.Primary"
                                          Disabled="!variant.IsAvailable"
                                          Class="@($"border {(variant.Id == _currentVariant?.Id ? "border-primary border-2 bg-light-primary" : "border-lines-default")}")">
                                     @variant.VariantName
                                 </MudChip>
                             }
-                        </MudChipGroup>
+                        </MudChipSet>
                     </div>
                 }
 
                 <!-- Quantity -->
                 <div class="mb-6 d-flex align-center gap-4">
                     <MudText Typo="Typo.subtitle2" Class="fw-bold">Số lượng:</MudText>
-                    <MudNumericField @bind-Value="_quantity" Min="1" Max="99" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width: 100px;" Disabled="!IsCurrentVariantAvailable()" />
+                    <MudNumericField @bind-Value="_quantity" Min="1" Max="@(Math.Max(_currentVariant?.StockQuantity ?? 1, 1))" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width: 100px;" Disabled="!IsCurrentVariantAvailable()" />
                 </div>
 
                 <!-- Actions -->

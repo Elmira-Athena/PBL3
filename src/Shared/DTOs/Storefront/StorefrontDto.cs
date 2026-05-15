@@ -52,17 +52,13 @@ namespace PBL3.Shared.DTOs.Storefront
 
     /// <summary>
     /// Thông tin phân loại sản phẩm cho trang chi tiết.
-    /// Bảo mật: Không trả về StockQuantity, chỉ trả về cờ IsAvailable.
-    /// </summary>
     public class StorefrontVariantResponse
     {
         public int Id { get; set; }
         public string VariantName { get; set; } = string.Empty;
         public decimal Price { get; set; }
-        /// <summary>
-        /// true nếu còn hàng (StockQuantity > 0), false nếu hết hàng.
-        /// </summary>
         public bool IsAvailable { get; set; }
+        public int StockQuantity { get; set; }
         public Dictionary<string, string> Specifications { get; set; } = new();
     }
 

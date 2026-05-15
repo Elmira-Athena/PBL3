@@ -64,6 +64,18 @@
                                         <div class="d-flex flex-column justify-center">
                                             <MudText Typo="Typo.subtitle1" Class="fw-bold line-clamp-2 mb-1">@item.ProductName</MudText>
                                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" Class="mt-0">@item.VariantName</MudChip>
+                                            @if (item.StockQuantity == 0)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Error">Hết hàng</MudText>
+                                            }
+                                            else if (item.StockQuantity <= 5)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Warning">Chỉ còn @item.StockQuantity sản phẩm</MudText>
+                                            }
+                                            else
+                                            {
+                                                <MudText Typo="Typo.caption" Class="text-muted">Tồn kho: @item.StockQuantity</MudText>
+                                            }
                                         </div>
                                     </MudItem>
                                     

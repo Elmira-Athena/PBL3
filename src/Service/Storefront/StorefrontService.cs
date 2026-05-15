@@ -149,6 +149,7 @@ namespace PBL3.Service.Storefront
                 VariantName = v.VariantName,
                 Price = v.Price,
                 IsAvailable = v.StockQuantity > 0,
+                StockQuantity = v.StockQuantity,
                 Specifications = v.Specifications ?? new()
             }).ToList();
 

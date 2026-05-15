@@ -40,7 +40,8 @@ namespace PBL3.Service.Cart
                     ImageUrl = image?.ImageUrl,
                     UnitPrice = cart.Variant.Price,
                     Quantity = cart.Quantity,
-                    SubTotal = cart.Variant.Price * cart.Quantity
+                    SubTotal = cart.Variant.Price * cart.Quantity,
+                    StockQuantity = cart.Variant.StockQuantity
                 });
             }
 
