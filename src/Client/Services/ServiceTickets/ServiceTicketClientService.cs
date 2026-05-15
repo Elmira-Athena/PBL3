@@ -55,8 +55,18 @@ namespace Client.Services.ServiceTickets
                     url += $"&sortBy={Uri.EscapeDataString(sortBy)}&sortDescending={sortDescending}";
 
                 var response = await _httpClient.GetAsync(url);
-                return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceTicketListDto>>>()
-                    ?? new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Lỗi lấy danh sách." };
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Lỗi tải danh sách phiếu." };
+
+                try
+                {
+                    return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceTicketListDto>>>()
+                        ?? new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Lỗi lấy danh sách." };
+                }
+                catch
+                {
+                    return new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Lỗi lấy danh sách." };
+                }
             }
             catch (Exception ex)
             {
@@ -76,8 +86,18 @@ namespace Client.Services.ServiceTickets
                     url += $"&sortBy={Uri.EscapeDataString(sortBy)}&sortDescending={sortDescending}";
 
                 var response = await _httpClient.GetAsync(url);
-                return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceTicketListDto>>>()
-                    ?? new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Lỗi lấy danh sách." };
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Lỗi tải danh sách phiếu." };
+
+                try
+                {
+                    return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceTicketListDto>>>()
+                        ?? new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Lỗi lấy danh sách." };
+                }
+                catch
+                {
+                    return new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Lỗi lấy danh sách." };
+                }
             }
             catch (Exception ex)
             {
@@ -90,8 +110,18 @@ namespace Client.Services.ServiceTickets
             try
             {
                 var response = await _httpClient.GetAsync($"api/service-tickets/{id}");
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
-                    ?? new ApiResult<ServiceTicketDetailDto> { Message = "Không tìm thấy phiếu." };
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<ServiceTicketDetailDto> { Message = "Không thể tải phiếu." };
+
+                try
+                {
+                    return await response.Content.ReadFromJsonAsync<ApiResult<ServiceTicketDetailDto>>()
+                        ?? new ApiResult<ServiceTicketDetailDto> { Message = "Không tìm thấy phiếu." };
+                }
+                catch
+                {
+                    return new ApiResult<ServiceTicketDetailDto> { Message = "Không tìm thấy phiếu." };
+                }
             }
             catch (Exception ex)
             {

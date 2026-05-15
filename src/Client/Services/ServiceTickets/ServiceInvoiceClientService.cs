@@ -29,8 +29,16 @@ namespace Client.Services.ServiceTickets
                 var response = await _httpClient.GetAsync(url);
                 if (!response.IsSuccessStatusCode)
                     return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
-                return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceInvoiceListDto>>>()
-                    ?? new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi lấy danh sách hóa đơn." };
+
+                try
+                {
+                    return await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ServiceInvoiceListDto>>>()
+                        ?? new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi lấy danh sách hóa đơn." };
+                }
+                catch
+                {
+                    return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Lỗi lấy danh sách hóa đơn." };
+                }
             }
             catch (Exception ex)
             {
@@ -45,8 +53,16 @@ namespace Client.Services.ServiceTickets
                 var response = await _httpClient.GetAsync($"api/service-invoices/{id}");
                 if (!response.IsSuccessStatusCode)
                     return new ApiResult<ServiceInvoiceDetailDto> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
-                return await response.Content.ReadFromJsonAsync<ApiResult<ServiceInvoiceDetailDto>>()
-                    ?? new ApiResult<ServiceInvoiceDetailDto> { Message = "Không tìm thấy hóa đơn." };
+
+                try
+                {
+                    return await response.Content.ReadFromJsonAsync<ApiResult<ServiceInvoiceDetailDto>>()
+                        ?? new ApiResult<ServiceInvoiceDetailDto> { Message = "Không tìm thấy hóa đơn." };
+                }
+                catch
+                {
+                    return new ApiResult<ServiceInvoiceDetailDto> { Message = "Không tìm thấy hóa đơn." };
+                }
             }
             catch (Exception ex)
             {
