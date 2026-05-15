@@ -107,6 +107,8 @@ namespace Client.Services.Voucher
             try
             {
                 var response = await _httpClient.PatchAsync($"{BaseUrl}/{id}/toggle-status", null);
+                if (!response.IsSuccessStatusCode)
+                    return ApiResult<VoucherDto>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
                 var result = await response.Content.ReadFromJsonAsync<ApiResult<VoucherDto>>();
                 return result ?? ApiResult<VoucherDto>.Fail("Không thể thay đổi trạng thái voucher.");
             }
