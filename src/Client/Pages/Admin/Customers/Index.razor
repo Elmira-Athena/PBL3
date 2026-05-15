@@ -73,7 +73,9 @@
             <div class="d-flex align-center">
                 @if (!string.IsNullOrEmpty(context.AvatarUrl))
                 {
-                    <MudAvatar Image="@context.AvatarUrl" Class="mr-3" />
+                    <MudAvatar Class="mr-3">
+                        <MudImage Src="@context.AvatarUrl" Alt="Avatar" Style="width:100%;height:100%;object-fit:cover;" />
+                    </MudAvatar>
                 }
                 else
                 {
