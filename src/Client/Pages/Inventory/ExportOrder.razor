@@ -16,9 +16,14 @@
             </MudText>
             @if (_currentOrder != null)
             {
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                    Khách hàng: @(_currentOrder.ShipName ?? "Khách lẻ") - @(_currentOrder.ShipPhone ?? "")
-                </MudText>
+                <div class="d-flex align-center gap-3 mt-1">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Khách hàng: @(_currentOrder.ShipName ?? "Khách lẻ") - @(_currentOrder.ShipPhone ?? "")
+                    </MudText>
+                    <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_currentOrder.Status)" Variant="Variant.Filled" Style="pointer-events:none;">
+                        @GetStatusText(_currentOrder.Status)
+                    </MudChip>
+                </div>
             }
             else
             {
@@ -43,6 +48,20 @@
 
     @if (_currentOrder != null)
     {
+        @* Cảnh báo nếu đơn hàng không ở trạng thái Đã xác nhận *@
+        @if (_currentOrder.Status != 1)
+        {
+            <MudAlert Severity="@(_isExported ? Severity.Success : Severity.Warning)" Variant="Variant.Filled" Class="mb-4 rounded-lg">
+                @if (_isExported)
+                {
+                    <span><b>Xuất kho thành công!</b> Đơn hàng đã chuyển sang trạng thái <b>Đang giao hàng</b>. Không thể chỉnh sửa thêm.</span>
+                }
+                else
+                {
+                    <span><b>Không thể xuất kho!</b> Đơn hàng đang ở trạng thái <b>@GetStatusText(_currentOrder.Status)</b>. Chỉ đơn ở trạng thái <b>Chờ xuất kho</b> mới có thể xuất.</span>
+                }
+            </MudAlert>
+        }
         <MudGrid Spacing="4">
             @* ================================================================ *@
             @* CỘT TRÁI (8 cột): Bảng sản phẩm cần xuất                       *@
@@ -97,11 +116,17 @@
                                         Đã hoàn tất
                                     </MudChip>
                                 }
-                                else
+                                else if (!_isExported && _currentOrder?.Status == 1)
                                 {
                                     <MudButton Variant="@(_activeDetail == context ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Small" OnClick="@(() => SelectDetail(context))" Style="text-transform: none; border-radius: 6px; font-size: 0.75rem;">
                                         Nhập mã
                                     </MudButton>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined" Style="pointer-events: none;">
+                                        Chưa xuất
+                                    </MudChip>
                                 }
                             </MudTd>
                         </RowTemplate>
@@ -116,13 +141,26 @@
                     </MudStack>
                     
                     <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd">
-                        <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Medium" OnClick="SubmitExportAsync" Disabled="@(!IsAllScanned || _isSubmitting)" Style="text-transform: none; border-radius: 8px; font-weight: 600; min-width: 180px;">
-                            @if (_isSubmitting)
-                            {
-                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                            }
-                            Lưu phiếu xuất hàng
-                        </MudButton>
+                        @if (!_isExported && _currentOrder?.Status == 1)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Medium"
+                                       OnClick="SubmitExportAsync"
+                                       Disabled="@(!IsAllScanned || _isSubmitting)"
+                                       StartIcon="@Icons.Material.Filled.LocalShipping"
+                                       Style="text-transform: none; border-radius: 8px; font-weight: 600; min-width: 180px;">
+                                @if (_isSubmitting)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                }
+                                Lưu phiếu xuất hàng
+                            </MudButton>
+                        }
+                        else if (_isExported)
+                        {
+                            <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Style="pointer-events:none;" StartIcon="@Icons.Material.Filled.CheckCircle">
+                                Đã xuất kho - Không thể chỉnh sửa
+                            </MudChip>
+                        }
                     </MudStack>
                 </MudPaper>
             </MudItem>
@@ -156,7 +194,16 @@
                             </MudText>
                         </MudStack>
 
-                        <MudTextField @ref="_serialInput" T="string" @bind-Value="_scannedCode" Label="Quét mã Serial" Placeholder="Quét hoặc nhập mã Serial..." Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="@_isScanning" Adornment="Adornment.End" AdornmentIcon="@(_isScanning ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.QrCodeScanner)" OnKeyUp="OnSerialKeyUp" Immediate="true" Class="mb-3" Style="border-radius: 8px;" />
+                        @if (!_isExported)
+                        {
+                            <MudTextField @ref="_serialInput" T="string" @bind-Value="_scannedCode"
+                                          Label="Quét mã Serial" Placeholder="Quét hoặc nhập mã Serial..."
+                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Disabled="@_isScanning"
+                                          Adornment="Adornment.End"
+                                          AdornmentIcon="@(_isScanning ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.QrCodeScanner)"
+                                          OnKeyUp="OnSerialKeyUp" Immediate="true" Class="mb-3" Style="border-radius: 8px;" />
+                        }
 
                         @if (_activeDetail.ScannedSerials.Count > 0)
                         {
@@ -165,7 +212,10 @@
                                     <tr>
                                         <th style="width: 40px;">STT</th>
                                         <th>Serial</th>
-                                        <th style="width: 80px; text-align: center;">Trạng thái</th>
+                                        @if (!_isExported)
+                                        {
+                                            <th style="width: 80px; text-align: center;">Xóa</th>
+                                        }
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -176,9 +226,12 @@
                                         <tr>
                                             <td>@(_activeDetail.ScannedSerials.Count - index)</td>
                                             <td>@serial</td>
-                                            <td style="text-align: center;">
-                                                <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveSerial(index))" />
-                                            </td>
+                                            @if (!_isExported)
+                                            {
+                                                <td style="text-align: center;">
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" Size="Size.Small" OnClick="@(() => RemoveSerial(index))" />
+                                                </td>
+                                            }
                                         </tr>
                                     }
                                 </tbody>
@@ -209,6 +262,7 @@
     private bool _isScanning;
     private MudTextField<string>? _serialInput;
     private bool _isSubmitting;
+    private bool _isExported;
 
     private decimal TotalAmount => _currentOrder?.TotalAmount ?? 0;
     private bool IsAllScanned => _details.Count > 0 && _details.All(d => d.ScannedSerials.Count == d.RequiredQuantity);
@@ -377,10 +431,13 @@
             var result = await InventoryExportService.ExportOrderAsync(request);
             if (result.Success)
             {
-                Snackbar.Add("Lưu phiếu xuất kho thành công!", Severity.Success);
-                _currentOrder = null; // reset
-                _details.Clear();
-                _searchOrderId = null;
+                Snackbar.Add("Xuất kho thành công! Đơn hàng chuyển sang trạng thái Đang giao hàng.", Severity.Success);
+                _isExported = true;
+                _activeDetail = null;
+                // Tải lại đơn hàng để hiển thị trạng thái mới (Đang giao)
+                var reloaded = await OrderService.GetByIdAsync(_currentOrder.Id);
+                if (reloaded.Success && reloaded.Data != null)
+                    _currentOrder = reloaded.Data;
             }
             else
             {
@@ -409,4 +466,26 @@
         public decimal UnitPrice { get; set; }
         public List<string> ScannedSerials { get; set; } = new();
     }
+
+    private string GetStatusText(byte status) => status switch
+    {
+        0 => "Chờ duyệt",
+        1 => "Chờ xuất kho",
+        2 => "Đang giao",
+        3 => "Thành công",
+        4 => "Đã hủy",
+        5 => "Hoàn trả",
+        _ => "Không xác định"
+    };
+
+    private Color GetStatusColor(byte status) => status switch
+    {
+        0 => Color.Default,
+        1 => Color.Warning,
+        2 => Color.Info,
+        3 => Color.Success,
+        4 => Color.Error,
+        5 => Color.Dark,
+        _ => Color.Default
+    };
 }
