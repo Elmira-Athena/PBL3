@@ -1132,6 +1132,7 @@ namespace PBL3.Service.ServiceTickets
                 TicketCode = ticket.TicketCode,
                 SerialNumber = ticket.Serial.SerialNumber,
                 ProductName = ticket.Serial.Variant.Product.Name,
+                SerialVariantId = ticket.Serial.VariantId,
                 IntakeDate = ticket.IntakeDate,
                 Status = ticket.Status,
                 StatusLabel = GetStatusLabel(ticket.Status),

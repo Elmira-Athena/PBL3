@@ -93,7 +93,7 @@
 
     private void SelectSerial(int serialId, string serialNumber)
     {
-        MudDialog.Close(DialogResult.Ok(serialId));
+        MudDialog.Close(DialogResult.Ok((serialId, serialNumber)));
     }
 
     private void Cancel()

@@ -60,6 +60,7 @@ namespace PBL3.Shared.DTOs.ServiceTickets
 
         public string SerialNumber { get; set; } = string.Empty;
         public string ProductName { get; set; } = string.Empty;
+        public int SerialVariantId { get; set; }
         public string? CustomerName { get; set; }
 
         public DateTime IntakeDate { get; set; }

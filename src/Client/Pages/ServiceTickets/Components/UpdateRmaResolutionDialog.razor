@@ -56,6 +56,7 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public int TicketId { get; set; }
+    [Parameter] public int VariantId { get; set; }
 
     public byte ManufacturerResolution { get; set; } = 0;
     public string ManufacturerNotes { get; set; } = string.Empty;
@@ -77,12 +78,14 @@
 
     private async Task OpenSwapDialog()
     {
+        var parameters = new DialogParameters { { "VariantId", VariantId } };
         var dialog = await DialogService.ShowAsync<SwapSerialPickerDialog>("Chọn Serial Thay Thế",
-            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+            parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
         var result = await dialog.Result;
-        if (!result.Canceled && result.Data is int serialId)
+        if (!result.Canceled && result.Data is (int serialId, string serialNumber))
         {
             SelectedSerialId = serialId;
+            SelectedSerialNumber = serialNumber;
         }
     }
 }
