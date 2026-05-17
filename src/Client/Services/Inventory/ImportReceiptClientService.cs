@@ -29,7 +29,7 @@ namespace Client.Services.Inventory
             }
         }
 
-        public async Task<ApiResult<PagedResult<ImportReceiptDto>>> GetListAsync(ImportReceiptFilterRequest filter)
+        public async Task<ApiResult<PagedResult<ImportReceiptDto>>> GetListAsync(ImportReceiptFilterRequest filter, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -53,8 +53,12 @@ namespace Client.Services.Inventory
                     queryParams.Add("SortDescending=true");
 
                 var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<ImportReceiptDto>>>(url);
+                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<ImportReceiptDto>>>(url, cancellationToken);
                 return result ?? ApiResult<PagedResult<ImportReceiptDto>>.Fail("Không thể tải danh sách phiếu nhập.");
+            }
+            catch (OperationCanceledException)
+            {
+                return ApiResult<PagedResult<ImportReceiptDto>>.Fail(string.Empty);
             }
             catch (Exception ex)
             {
