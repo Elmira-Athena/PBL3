@@ -116,6 +116,8 @@ namespace PBL3.Infrastructure.Repositories
         public async Task<ServiceTicket?> GetByIdWithTrackingAsync(int id)
         {
             return await _dbContext.ServiceTickets
+                .Include(t => t.Serial)
+                    .ThenInclude(s => s.Variant)
                 .Include(t => t.ReplacementSerial)
                 .Include(t => t.RmaShipment)
                 .Include(t => t.Quotations)

@@ -676,7 +676,7 @@ namespace PBL3.Service.ServiceTickets
 
             var oldWarranties = await _warrantyRepository.GetActiveBySerialIdAsync(oldSerial.Id);
             var oldEndDate = oldWarranties.FirstOrDefault()?.EndDate
-                ?? oldSerial.SoldDate?.AddMonths(oldSerial.Variant.WarrantyMonth)
+                ?? oldSerial.SoldDate?.AddMonths(ticket.Serial.Variant.WarrantyMonth)
                 ?? DateTime.UtcNow;
 
             await _unitOfWork.BeginTransactionAsync();
