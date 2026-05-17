@@ -38,95 +38,100 @@
     @* ── Component table ── *@
     <MudPaper Elevation="2" Class="rounded-lg overflow-hidden">
 
-        @* Bảng các linh kiện đã chọn *@
+        @* Column header — chỉ hiện khi có ít nhất 1 slot đã chọn *@
         @if (HasAnyItem)
         {
-            <MudTable Items="@_slots.Where(s => s.SelectedItem != null)"
-                      Hover="true" Elevation="0" Dense="true"
-                      Class="mb-0">
-                <HeaderContent>
-                    <MudTh Style="width:180px; font-weight:700;">Linh kiện</MudTh>
-                    <MudTh Style="font-weight:700;">Tên sản phẩm</MudTh>
-                    <MudTh Style="width:110px; font-weight:700; text-align:center;">Số lượng</MudTh>
-                    <MudTh Style="width:130px; font-weight:700; text-align:right;">Đơn giá</MudTh>
-                    <MudTh Style="width:140px; font-weight:700; text-align:right;">Thành tiền</MudTh>
-                    <MudTh Style="width:90px;"></MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    @{ var slot = context; var item = slot.SelectedItem!; }
-                    <MudTd DataLabel="Linh kiện">
-                        <MudText Typo="Typo.body2" Style="font-weight:600;">@slot.Name</MudText>
-                    </MudTd>
-                    <MudTd DataLabel="Tên sản phẩm">
-                        <div class="d-flex align-center gap-2">
-                            @if (!string.IsNullOrEmpty(item.ImageUrl))
-                            {
-                                <img src="@item.ImageUrl" style="width:40px; height:40px; object-fit:contain; flex-shrink:0;" />
-                            }
-                            <div>
-                                <MudText Typo="Typo.body2" Style="font-weight:600;">@item.ProductName</MudText>
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@item.VariantName</MudText>
-                                @if (item.WarrantyMonth > 0)
-                                {
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Bảo hành: @item.WarrantyMonth tháng</MudText>
-                                }
-                            </div>
-                        </div>
-                    </MudTd>
-                    <MudTd DataLabel="Số lượng" Style="text-align:center;">
-                        <MudNumericField T="int"
-                                        Value="@item.Quantity"
-                                        ValueChanged="@(q => UpdateQuantity(slot, q))"
-                                        Min="1" Max="10"
-                                        Variant="Variant.Outlined"
-                                        Margin="Margin.Dense"
-                                        Style="width:72px;" />
-                    </MudTd>
-                    <MudTd DataLabel="Đơn giá" Style="text-align:right; white-space:nowrap;">
-                        <MudText Typo="Typo.body2">@item.UnitPrice.ToString("N0")đ</MudText>
-                    </MudTd>
-                    <MudTd DataLabel="Thành tiền" Style="text-align:right; white-space:nowrap;">
-                        <MudText Typo="Typo.body2" Color="Color.Error" Style="font-weight:700;">@((item.UnitPrice * item.Quantity).ToString("N0"))đ</MudText>
-                    </MudTd>
-                    <MudTd>
-                        <div class="d-flex gap-1 justify-end">
-                            <MudTooltip Text="Thay đổi linh kiện">
-                                <MudIconButton Icon="@Icons.Material.Outlined.Edit"
-                                               Size="Size.Small" Color="Color.Primary"
-                                               OnClick="@(() => OpenPicker(slot))" />
-                            </MudTooltip>
-                            <MudTooltip Text="Xóa">
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                               Size="Size.Small" Color="Color.Error"
-                                               OnClick="@(() => RemoveItem(slot))" />
-                            </MudTooltip>
-                        </div>
-                    </MudTd>
-                </RowTemplate>
-            </MudTable>
+            <div class="build-pc-header-row d-flex align-center">
+                <div class="slot-label" style="visibility:hidden;"></div>
+                <div class="slot-content build-pc-header-content">
+                    <div style="flex:1; font-weight:700;">Tên sản phẩm</div>
+                    <div style="width:110px; font-weight:700; text-align:center;">Số lượng</div>
+                    <div style="width:130px; font-weight:700; text-align:right;">Đơn giá</div>
+                    <div style="width:140px; font-weight:700; text-align:right;">Thành tiền</div>
+                    <div style="width:90px;"></div>
+                </div>
+            </div>
             <MudDivider />
         }
 
-        @* Các slot chưa chọn linh kiện *@
-        @foreach (var slot in _slots.Where(s => s.SelectedItem == null))
+        @* Tất cả 16 slot theo thứ tự cố định *@
+        @foreach (var slot in _slots)
         {
-            <div class="build-pc-row d-flex align-center pa-3">
-                <div class="slot-label" style="width: 180px;">
+            <div class="build-pc-row d-flex align-center">
+                <div class="slot-label">
                     <MudText Typo="Typo.body1" Style="font-weight:600;">
                         @slot.Index. @slot.Name
                     </MudText>
                 </div>
                 <div class="slot-content">
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Add"
-                               OnClick="@(() => OpenPicker(slot))">
-                        Chọn @slot.Name
-                    </MudButton>
+                    @if (slot.SelectedItem == null)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="@(() => OpenPicker(slot))">
+                            Chọn @slot.Name
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <div class="slot-selected-item">
+                            <div class="slot-col-name d-flex align-center gap-2">
+                                @if (!string.IsNullOrEmpty(slot.SelectedItem!.ImageUrl))
+                                {
+                                    <img src="@slot.SelectedItem!.ImageUrl"
+                                         style="width:40px; height:40px; object-fit:contain; flex-shrink:0;" />
+                                }
+                                <div>
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@slot.SelectedItem!.ProductName</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@slot.SelectedItem!.VariantName</MudText>
+                                    @if (slot.SelectedItem!.WarrantyMonth > 0)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            Bảo hành: @slot.SelectedItem!.WarrantyMonth tháng
+                                        </MudText>
+                                    }
+                                </div>
+                            </div>
+                            <div class="slot-col-qty">
+                                <MudNumericField T="int"
+                                                Value="@slot.SelectedItem!.Quantity"
+                                                ValueChanged="@(q => UpdateQuantity(slot, q))"
+                                                Min="1" Max="10"
+                                                Variant="Variant.Outlined"
+                                                Margin="Margin.Dense"
+                                                Style="width:72px;" />
+                            </div>
+                            <div class="slot-col-price">
+                                <MudText Typo="Typo.body2" Style="white-space:nowrap;">
+                                    @slot.SelectedItem!.UnitPrice.ToString("N0")đ
+                                </MudText>
+                            </div>
+                            <div class="slot-col-total">
+                                <MudText Typo="Typo.body2" Color="Color.Error"
+                                         Style="font-weight:700; white-space:nowrap;">
+                                    @((slot.SelectedItem!.UnitPrice * slot.SelectedItem!.Quantity).ToString("N0"))đ
+                                </MudText>
+                            </div>
+                            <div class="slot-col-actions d-flex gap-1 justify-end">
+                                <MudTooltip Text="Thay đổi linh kiện">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                                   Size="Size.Small" Color="Color.Primary"
+                                                   OnClick="@(() => OpenPicker(slot))" />
+                                </MudTooltip>
+                                <MudTooltip Text="Xóa">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Size="Size.Small" Color="Color.Error"
+                                                   OnClick="@(() => RemoveItem(slot))" />
+                                </MudTooltip>
+                            </div>
+                        </div>
+                    }
                 </div>
             </div>
             <MudDivider />
         }
+
     </MudPaper>
 
     @* ── Cost estimate (bottom) ── *@
@@ -460,4 +465,22 @@
         display: flex;
         align-items: center;
     }
+
+    .build-pc-header-row {
+        min-height: 48px;
+        background: rgba(0, 0, 0, .04);
+    }
+
+    .build-pc-header-content,
+    .slot-selected-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+    }
+
+    .slot-col-name    { flex: 1; }
+    .slot-col-qty     { width: 110px; flex-shrink: 0; display: flex; justify-content: center; }
+    .slot-col-price   { width: 130px; flex-shrink: 0; text-align: right; }
+    .slot-col-total   { width: 140px; flex-shrink: 0; text-align: right; }
+    .slot-col-actions { width: 90px;  flex-shrink: 0; }
 </style>
