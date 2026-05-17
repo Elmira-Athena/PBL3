@@ -1,6 +1,7 @@
 @namespace Client.Pages.ServiceTickets.Components
 @using MudBlazor
 @using PBL3.Shared.DTOs.Inventory
+@using PBL3.Shared.DTOs.Common
 @using System.Net.Http.Json
 
 <MudDialog>
@@ -68,9 +69,17 @@
         _isLoading = true;
         try
         {
-            // TODO: Call API to get available serials for this variant
-            // For now, just simulate empty list
-            _serials = new();
+            var response = await Http.GetFromJsonAsync<ApiResult<PagedResult<ProductSerialListDto>>>(
+                $"api/product-serials?VariantId={VariantId}&Status=0&PageSize=100");
+
+            if (response?.Success == true && response.Data?.Items != null)
+            {
+                _serials = response.Data.Items.ToList();
+            }
+            else
+            {
+                _serials = new();
+            }
         }
         catch
         {

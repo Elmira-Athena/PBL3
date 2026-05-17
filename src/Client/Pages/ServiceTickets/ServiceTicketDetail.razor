@@ -254,7 +254,7 @@
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
                                        OnClick="PerformSwap" Size="Size.Small">
-                                Đổi Máy 1-1
+                                Đổi Sản phẩm 1-1
                             </MudButton>
                         }
 
@@ -512,7 +512,7 @@
 
     private async Task PerformSwap()
     {
-        var dialog = await DialogService.ShowAsync<SwapSerialPickerDialog>("Chọn Máy Thay Thế",
+        var dialog = await DialogService.ShowAsync<SwapSerialPickerDialog>("Chọn Sản phẩm Thay Thế",
             new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
         var result = await dialog.Result;
         if (!result.Canceled)
@@ -520,7 +520,7 @@
             var serialId = (int)result.Data!;
             var request = new Perform1For1SwapRequest { ReplacementSerialId = serialId };
             var apiResult = await ServiceTicketService.Perform1For1SwapAsync(Id, request);
-            Snackbar.Add(apiResult.Success ? "Đã đổi máy 1-1 thành công." : apiResult.Message ?? "Thất bại.",
+            Snackbar.Add(apiResult.Success ? "Đã đổi sản phẩm 1-1 thành công." : apiResult.Message ?? "Thất bại.",
                          apiResult.Success ? Severity.Success : Severity.Error);
             if (apiResult.Success) await LoadTicket();
         }
