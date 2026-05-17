@@ -512,12 +512,13 @@
 
     private async Task PerformSwap()
     {
+        var parameters = new DialogParameters { { "VariantId", ticket!.SerialVariantId } };
         var dialog = await DialogService.ShowAsync<SwapSerialPickerDialog>("Chọn Sản phẩm Thay Thế",
-            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+            parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
         var result = await dialog.Result;
         if (!result.Canceled)
         {
-            var serialId = (int)result.Data!;
+            var (serialId, _) = ((int, string))result.Data!;
             var request = new Perform1For1SwapRequest { ReplacementSerialId = serialId };
             var apiResult = await ServiceTicketService.Perform1For1SwapAsync(Id, request);
             Snackbar.Add(apiResult.Success ? "Đã đổi sản phẩm 1-1 thành công." : apiResult.Message ?? "Thất bại.",
@@ -550,7 +551,10 @@
 
     private async Task RecordRmaResolution()
     {
-        var parameters = new DialogParameters { { "TicketId", Id } };
+        var parameters = new DialogParameters {
+            { "TicketId", Id },
+            { "VariantId", ticket!.SerialVariantId }
+        };
         var dialog = await DialogService.ShowAsync<UpdateRmaResolutionDialog>("Kết Quả RMA",
             parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         var result = await dialog.Result;
