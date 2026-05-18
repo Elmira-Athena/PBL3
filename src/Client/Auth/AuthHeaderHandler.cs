@@ -42,11 +42,26 @@ public class AuthHeaderHandler : DelegatingHandler
 
         var response = await base.SendAsync(request, cancellationToken);
 
+        // Tài khoản bị khóa → 403 với header X-Account-Status: locked
+        if (response.StatusCode == HttpStatusCode.Forbidden &&
+            response.Headers.TryGetValues("X-Account-Status", out var statusValues) &&
+            statusValues.FirstOrDefault() == "locked")
+        {
+            var result = await response.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>(
+                cancellationToken: cancellationToken);
+            await _localStorage.RemoveItemAsync(TokenKey);
+            await _localStorage.RemoveItemAsync(RefreshTokenKey);
+            _authStateProvider.NotifyAuthStateChanged();
+            var encoded = Uri.EscapeDataString(result?.Message ?? "Tài khoản của bạn đã bị khóa.");
+            _navigationManager.NavigateTo($"/login?locked=true&reason={encoded}");
+            return response;
+        }
+
         // Bỏ qua endpoint auth để tránh redirect loop
         if (response.StatusCode == HttpStatusCode.Unauthorized &&
             !(request.RequestUri?.AbsolutePath.Contains("/api/auth/") ?? false))
         {
-            var newToken = await TryRefreshAsync(cancellationToken);
+            var (newToken, refreshError) = await TryRefreshAsync(cancellationToken);
             if (newToken != null)
             {
                 // Token mới → retry request gốc, user không bị gián đoạn
@@ -58,19 +73,28 @@ public class AuthHeaderHandler : DelegatingHandler
             await _localStorage.RemoveItemAsync(TokenKey);
             await _localStorage.RemoveItemAsync(RefreshTokenKey);
             _authStateProvider.NotifyAuthStateChanged();
-            _navigationManager.NavigateTo("/login?expired=true");
+
+            if (refreshError?.Contains("bị khóa") == true)
+            {
+                var encoded = Uri.EscapeDataString(refreshError);
+                _navigationManager.NavigateTo($"/login?locked=true&reason={encoded}");
+            }
+            else
+            {
+                _navigationManager.NavigateTo("/login?expired=true");
+            }
         }
 
         return response;
     }
 
-    private async Task<string?> TryRefreshAsync(CancellationToken cancellationToken)
+    private async Task<(string? Token, string? ErrorMessage)> TryRefreshAsync(CancellationToken cancellationToken)
     {
         var accessToken = (await _localStorage.GetItemAsStringAsync(TokenKey))?.Trim('"');
         var refreshToken = (await _localStorage.GetItemAsStringAsync(RefreshTokenKey))?.Trim('"');
 
         if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(refreshToken))
-            return null;
+            return (null, null);
 
         try
         {
@@ -82,22 +106,33 @@ public class AuthHeaderHandler : DelegatingHandler
             });
 
             var res = await base.SendAsync(req, cancellationToken);
-            if (!res.IsSuccessStatusCode) return null;
+            if (!res.IsSuccessStatusCode)
+            {
+                string? errorMessage = null;
+                try
+                {
+                    var errResult = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>(
+                        cancellationToken: cancellationToken);
+                    errorMessage = errResult?.Message;
+                }
+                catch { }
+                return (null, errorMessage);
+            }
 
             var result = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>(
                 cancellationToken: cancellationToken);
 
-            if (result?.Success != true || result.Data == null) return null;
+            if (result?.Success != true || result.Data == null) return (null, result?.Message);
 
             await _localStorage.SetItemAsStringAsync(TokenKey, result.Data.AccessToken);
             await _localStorage.SetItemAsStringAsync(RefreshTokenKey, result.Data.RefreshToken);
             _authStateProvider.NotifyAuthStateChanged();
 
-            return result.Data.AccessToken;
+            return (result.Data.AccessToken, null);
         }
         catch
         {
-            return null;
+            return (null, null);
         }
     }
 

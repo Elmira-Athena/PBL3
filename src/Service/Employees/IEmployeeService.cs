@@ -12,7 +12,7 @@ namespace PBL3.Service.Employees
         Task<ApiResult<EmployeeListDto>> GetByIdAsync(Guid id);
         Task<ApiResult<EmployeeListDto>> CreateAsync(CreateEmployeeRequest request);
         Task<ApiResult<EmployeeListDto>> UpdateAsync(Guid id, UpdateEmployeeRequest request);
-        Task<ApiResult<bool>> DeactivateAsync(Guid id);
+        Task<ApiResult<bool>> DeactivateAsync(Guid id, string? lockReason);
         Task<ApiResult<bool>> ReactivateAsync(Guid id);
         Task<ApiResult<List<EmployeeDto>>> GetTechniciansSimpleAsync();
     }

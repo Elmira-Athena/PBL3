@@ -2,6 +2,7 @@
 @using PBL3.Shared.DTOs.Customers
 @using PBL3.Shared.DTOs.Common
 @using MudBlazor
+@using Client.Shared.Components
 @inject ICustomerClientService CustomerService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -199,21 +200,16 @@
     {
         var parameters = new DialogParameters
         {
-            { "ContentText", $"Bạn có chắc chắn muốn khóa tài khoản của khách hàng '{customer.FullName}'?" },
-            { "ButtonText", "Tiến hành khóa" },
-            { "Color", Color.Error }
+            { "AccountName", customer.FullName }
         };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<LockAccountDialog>("Khóa tài khoản", parameters, options);
+        var result = await dialog.Result;
 
-        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
-
-        bool? result = await DialogService.ShowMessageBox(
-            "Cảnh báo khóa tài khoản", 
-            (MarkupString)"", 
-            yesText:"Khóa", cancelText:"Hủy", options: options);
-
-        if (result == true)
+        if (!result.Canceled)
         {
-            var res = await CustomerService.DeactivateAsync(customer.Id);
+            var lockReason = result.Data as string;
+            var res = await CustomerService.DeactivateAsync(customer.Id, lockReason);
             if (res.Success)
             {
                 Snackbar.Add("Khóa tài khoản thành công.", Severity.Success);

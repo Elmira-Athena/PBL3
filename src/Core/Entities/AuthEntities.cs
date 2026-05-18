@@ -11,6 +11,8 @@ namespace PBL3.Core.Entities
     {
         // B. QUẢN TRỊ & TRẠNG THÁI
         public bool IsActive { get; set; } = true;
+        [MaxLength(500)]
+        public string? LockReason { get; set; }
         public byte Type { get; set; } // 0: Admin, 1: Employee, 2: Customer
 
         // C. REFRESH TOKEN (Lưu trực tiếp trên User, 1-1)

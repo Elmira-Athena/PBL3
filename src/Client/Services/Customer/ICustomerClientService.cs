@@ -10,7 +10,7 @@ namespace Client.Services.Customer
         Task<ApiResult<CustomerDetailDto>> GetByIdAsync(Guid id);
         Task<ApiResult<CustomerDto>> CreateAsync(CreateCustomerRequest request);
         Task<ApiResult<CustomerDto>> UpdateAsync(Guid id, UpdateCustomerRequest request);
-        Task<ApiResult<bool>> DeactivateAsync(Guid id);
+        Task<ApiResult<bool>> DeactivateAsync(Guid id, string? lockReason = null);
         Task<ApiResult<bool>> ReactivateAsync(Guid id);
         Task<ApiResult<CustomerDto>> GetMyProfileAsync();
         Task<ApiResult<CustomerDto>> UpdateMyProfileAsync(UpdateCustomerRequest request);

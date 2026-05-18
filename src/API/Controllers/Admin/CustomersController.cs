@@ -94,9 +94,9 @@ namespace PBL3.API.Controllers.Admin
         [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> Deactivate(Guid id)
+        public async Task<IActionResult> Deactivate(Guid id, [FromQuery] string? lockReason = null)
         {
-            var result = await _customerService.DeactivateAsync(id);
+            var result = await _customerService.DeactivateAsync(id, lockReason);
 
             if (!result.Success)
             {
