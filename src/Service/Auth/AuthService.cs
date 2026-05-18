@@ -39,14 +39,21 @@ namespace PBL3.Service.Auth
                 return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
             }
 
-            // 2. Kiểm tra tài khoản bị khóa (Lockout do brute-force)
+            // 2. Kiểm tra IsActive (Tài khoản bị vô hiệu hóa bởi Admin) — trước khi check password
+            if (!user.IsActive)
+            {
+                var reason = !string.IsNullOrEmpty(user.LockReason) ? user.LockReason : "Vui lòng liên hệ quản trị viên.";
+                return ApiResult<TokenResponse>.Fail($"Tài khoản đã bị khóa. Lý do: {reason}");
+            }
+
+            // 3. Kiểm tra tài khoản bị khóa (Lockout do brute-force)
             if (await _userManager.IsLockedOutAsync(user))
             {
                 return ApiResult<TokenResponse>.Fail(
                     "Tài khoản đã bị tạm khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau.");
             }
 
-            // 3. Kiểm tra mật khẩu
+            // 4. Kiểm tra mật khẩu
             var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
             if (!passwordValid)
             {
@@ -55,15 +62,8 @@ namespace PBL3.Service.Auth
                 return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
             }
 
-            // 4. Reset lockout counter khi đăng nhập đúng
+            // 5. Reset lockout counter khi đăng nhập đúng
             await _userManager.ResetAccessFailedCountAsync(user);
-
-            // 5. Kiểm tra IsActive (Tài khoản bị vô hiệu hóa bởi Admin)
-            if (!user.IsActive)
-            {
-                var reason = !string.IsNullOrEmpty(user.LockReason) ? user.LockReason : "Vui lòng liên hệ quản trị viên.";
-                return ApiResult<TokenResponse>.Fail($"Tài khoản đã bị khóa. Lý do: {reason}");
-            }
 
             // 6. Sinh Access Token (JWT) với đầy đủ Claims
             var accessToken = await GenerateJwtTokenAsync(user);

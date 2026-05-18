@@ -181,6 +181,8 @@ namespace PBL3.Service.Employees
             if (!updateResult.Succeeded)
                 return ApiResult<bool>.Fail("Cập nhật trạng thái thất bại.");
 
+            await _userManager.SetLockoutEndDateAsync(user, null);
+            await _userManager.ResetAccessFailedCountAsync(user);
             _cache.Remove($"user_isactive_{id.ToString().ToLowerInvariant()}");
             _logger.LogInformation("Mở khóa tài khoản nhân viên: {Email} (Id: {UserId})", user.Email, user.Id);
             return ApiResult<bool>.Ok(true, "Mở khóa tài khoản thành công.");
