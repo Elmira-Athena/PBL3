@@ -3,6 +3,7 @@
 @using PBL3.Shared.DTOs.Storefront
 @using Client.Services.Storefront
 @using Client.Services.Cart
+@using Client.Services.Comparison
 @using Client.Shared.Components.Storefront
 @using Microsoft.AspNetCore.Components.Authorization
 @inject IStorefrontClientService StorefrontClientService
@@ -10,6 +11,7 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IComparisonService ComparisonService
 
 <PageTitle>@(_product?.Name ?? "Chi tiết sản phẩm") - HushStore</PageTitle>
 
@@ -136,15 +138,21 @@
                 </div>
 
                 <!-- Actions -->
-                <div class="d-flex gap-4">
+                <div class="d-flex gap-4 flex-wrap">
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Class="flex-1 py-3 fw-bold rounded-lg"
                                StartIcon="@Icons.Material.Filled.AddShoppingCart"
                                OnClick="AddToCartAsync" Disabled="!IsCurrentVariantAvailable() || _isProcessing">
                         THÊM VÀO GIỎ
                     </MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Large" Class="flex-1 py-3 fw-bold rounded-lg" 
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Large" Class="flex-1 py-3 fw-bold rounded-lg"
                                OnClick="BuyNowAsync" Disabled="!IsCurrentVariantAvailable() || _isProcessing">
                         MUA NGAY
+                    </MudButton>
+                    <MudButton Variant="@(ComparisonService.Contains(_product!.Id) ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Secondary" Size="Size.Large" Class="py-3 fw-bold rounded-lg"
+                               StartIcon="@Icons.Material.Filled.CompareArrows"
+                               OnClick="HandleCompareClick">
+                        SO SÁNH
                     </MudButton>
                 </div>
             </MudItem>
@@ -388,5 +396,39 @@
     private void NavigateToProduct(string slug)
     {
         NavigationManager.NavigateTo($"/product/{slug}");
+    }
+
+    private void HandleCompareClick()
+    {
+        if (_product == null) return;
+
+        if (ComparisonService.Contains(_product.Id))
+        {
+            ComparisonService.Remove(_product.Id);
+            return;
+        }
+
+        var card = new ProductCardResponse
+        {
+            Id = _product.Id,
+            Name = _product.Name,
+            Slug = _product.Slug,
+            ThumbnailUrl = _product.Images.FirstOrDefault(),
+            ManufacturerName = _product.ManufacturerName,
+            CurrentPrice = _currentVariant?.Price ?? 0,
+            OldPrice = _currentVariant?.OriginalPrice ?? _currentVariant?.Price ?? 0,
+            IsAvailable = _currentVariant?.IsAvailable ?? false,
+            Rating = _product.Rating,
+            ReviewCount = _product.ReviewCount,
+            CategoryId = _product.CategoryId
+        };
+
+        var result = ComparisonService.TryAdd(card);
+        if (!result.Success && result.ErrorMessage != null)
+            Snackbar.Add(result.ErrorMessage, Severity.Warning);
+        else if (result.Replaced)
+            Snackbar.Add($"Chỉ có thể so sánh sản phẩm cùng nhóm hàng. {result.OldCategoryName} đã được xoá khỏi giỏ so sánh.", Severity.Warning);
+        else if (result.Success)
+            Snackbar.Add($"Đã thêm \"{_product.Name}\" vào danh sách so sánh.", Severity.Success);
     }
 }

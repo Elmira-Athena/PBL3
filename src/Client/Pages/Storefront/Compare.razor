@@ -1,0 +1,284 @@
+@page "/compare"
+@layout StorefrontLayout
+@using PBL3.Shared.DTOs.Storefront
+@using Client.Services.Comparison
+@using Client.Services.Storefront
+@inject IComparisonService ComparisonService
+@inject IStorefrontClientService StorefrontService
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<PageTitle>So sánh sản phẩm - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-6 mb-20">
+    <MudText Typo="Typo.h4" Class="fw-bold mb-6">So sánh sản phẩm</MudText>
+
+    @if (_isLoading)
+    {
+        <MudGrid>
+            @for (int i = 0; i < ComparisonService.Items.Count; i++)
+            {
+                <MudItem xs="12" sm="@(12 / ComparisonService.Items.Count)">
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" Class="rounded-lg mb-3" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Height="24px" Width="80%" Class="mb-2" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Height="20px" Width="60%" />
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    else if (_productDetails.Count == 0)
+    {
+        <div class="d-flex flex-column align-center justify-center py-16">
+            <MudIcon Icon="@Icons.Material.Filled.CompareArrows" Style="font-size: 80px;" Color="Color.Secondary" Class="mb-4 opacity-50" />
+            <MudText Typo="Typo.h5" Class="fw-bold mb-2">Chưa có sản phẩm để so sánh</MudText>
+            <MudText Typo="Typo.body1" Class="text-muted mb-6">Hãy thêm ít nhất 2 sản phẩm vào danh sách so sánh.</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/"))">
+                Về trang chủ
+            </MudButton>
+        </div>
+    }
+    else
+    {
+        @* Diff filter checkbox *@
+        <div class="d-flex align-center mb-4 gap-3">
+            <MudCheckBox @bind-Value="_showDiffOnly"
+                         Label="Chỉ hiển thị điểm khác biệt"
+                         Color="Color.Primary"
+                         Disabled="@(_productDetails.Count < 2)" />
+        </div>
+
+        <div class="overflow-x-auto">
+            <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+                <colgroup>
+                    <col style="width: 180px;" />
+                    @foreach (var _ in _productDetails)
+                    {
+                        <col />
+                    }
+                </colgroup>
+                <tbody>
+
+                    @* ===== Product header row ===== *@
+                    <tr>
+                        <td style="padding: 12px; border: 1px solid #e0e0e0; background: #f5f5f5;"></td>
+                        @foreach (var detail in _productDetails)
+                        {
+                            var item = ComparisonService.Items.FirstOrDefault(x => x.Id == detail.Id);
+                            <td style="padding: 16px; border: 1px solid #e0e0e0; vertical-align: top; text-align: center; min-width: 200px;">
+                                @if (!string.IsNullOrEmpty(item?.ThumbnailUrl))
+                                {
+                                    <img src="@item!.ThumbnailUrl" alt="@detail.Name"
+                                         style="width: 140px; height: 140px; object-fit: contain; display: block; margin: 0 auto;" />
+                                }
+                                else
+                                {
+                                    <div style="width: 140px; height: 140px; background: #f5f5f5; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Image" Color="Color.Default" Size="Size.Large" />
+                                    </div>
+                                }
+                                <MudText Typo="Typo.subtitle1" Class="fw-bold mt-3 mb-1">@detail.Name</MudText>
+                                <MudText Typo="Typo.body2" Class="text-muted mb-2">@detail.ManufacturerName</MudText>
+
+                                @* Price *@
+                                @{
+                                    var selectedVar = GetSelectedVariant(detail.Id);
+                                }
+                                @if (selectedVar != null)
+                                {
+                                    <MudText Typo="Typo.h6" Color="Color.Error" Class="fw-bold">
+                                        @selectedVar.Price.ToString("N0") ₫
+                                    </MudText>
+                                    @if (selectedVar.OriginalPrice.HasValue && selectedVar.OriginalPrice > selectedVar.Price)
+                                    {
+                                        <MudText Typo="Typo.caption" Style="text-decoration: line-through;" Color="Color.Default">
+                                            @selectedVar.OriginalPrice!.Value.ToString("N0") ₫
+                                        </MudText>
+                                    }
+                                }
+
+                                @* Variant selector *@
+                                @if (detail.Variants.Count > 1)
+                                {
+                                    <div class="mt-3">
+                                        <MudText Typo="Typo.caption" Class="fw-bold mb-1" Style="color: #666;">Phiên bản:</MudText>
+                                        <MudChipSet T="StorefrontVariantResponse"
+                                                    SelectedValue="@GetSelectedVariant(detail.Id)"
+                                                    SelectedValueChanged="@(v => SetSelectedVariant(detail.Id, v))"
+                                                    SelectionMode="SelectionMode.SingleSelection"
+                                                    Class="gap-1 justify-center">
+                                            @foreach (var variant in detail.Variants)
+                                            {
+                                                <MudChip T="StorefrontVariantResponse"
+                                                         Value="@variant"
+                                                         Size="Size.Small"
+                                                         Variant="Variant.Outlined"
+                                                         Color="Color.Primary"
+                                                         Disabled="!variant.IsAvailable">
+                                                    @variant.VariantName
+                                                </MudChip>
+                                            }
+                                        </MudChipSet>
+                                    </div>
+                                }
+
+                                <div class="d-flex gap-2 justify-center mt-3 flex-wrap">
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                               Href="@($"/product/{detail.Slug}")">
+                                        Xem chi tiết
+                                    </MudButton>
+                                    @* FIX: Nút xóa rõ ràng dưới mỗi sản phẩm *@
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.Delete"
+                                               OnClick="@(() => ComparisonService.Remove(detail.Id))">
+                                        Xóa
+                                    </MudButton>
+                                </div>
+                            </td>
+                        }
+                    </tr>
+
+                    @* ===== Spec rows ===== *@
+                    @foreach (var specKey in GetAllSpecKeys())
+                    {
+                        var values = _productDetails.Select(d => GetSelectedVariant(d.Id)?.Specifications.GetValueOrDefault(specKey) ?? "—").ToList();
+                        var allSame = values.Distinct().Count() == 1;
+                        var rowClass = _showDiffOnly && allSame && _productDetails.Count >= 2 ? "d-none" : "";
+
+                        <tr class="@rowClass">
+                            <td style="padding: 10px 12px; border: 1px solid #e0e0e0; background: #fafafa; font-weight: 600; font-size: 0.85rem; color: #555;">
+                                @specKey
+                            </td>
+                            @foreach (var detail in _productDetails)
+                            {
+                                var val = GetSelectedVariant(detail.Id)?.Specifications.GetValueOrDefault(specKey) ?? "—";
+                                var isDiff = !allSame;
+                                <td style="padding: 10px 12px; border: 1px solid #e0e0e0; font-size: 0.9rem; text-align: center;
+                                           background: @(isDiff ? "rgba(25, 118, 210, 0.04)" : "white");
+                                           color: @(val == "—" ? "#bbb" : "inherit");">
+                                    @val
+                                </td>
+                            }
+                        </tr>
+                    }
+
+                    @* Empty specs fallback *@
+                    @if (!GetAllSpecKeys().Any())
+                    {
+                        <tr>
+                            <td colspan="@(_productDetails.Count + 1)"
+                                style="padding: 24px; border: 1px solid #e0e0e0; text-align: center; color: #999;">
+                                Không có thông số kỹ thuật để so sánh.
+                            </td>
+                        </tr>
+                    }
+
+                </tbody>
+            </table>
+        </div>
+    }
+</MudContainer>
+
+<style>
+    .fw-bold { font-weight: 600; }
+    .text-muted { color: var(--mud-palette-text-secondary); }
+    .overflow-x-auto { overflow-x: auto; }
+</style>
+
+@code {
+    private bool _isLoading = true;
+    private bool _showDiffOnly = false;
+    private List<ProductDetailResponse> _productDetails = new();
+    private Dictionary<int, StorefrontVariantResponse?> _selectedVariants = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (ComparisonService.Items.Count == 0)
+        {
+            NavigationManager.NavigateTo("/");
+            return;
+        }
+        ComparisonService.OnChanged += HandleComparisonChanged;
+        await LoadDetailsAsync();
+    }
+
+    private async Task LoadDetailsAsync()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        var tasks = ComparisonService.Items.Select(item => StorefrontService.GetProductDetailAsync(item.Slug));
+        var results = await Task.WhenAll(tasks);
+
+        _productDetails = results
+            .Where(r => r.Success && r.Data != null)
+            .Select(r => r.Data!)
+            .ToList();
+
+        foreach (var detail in _productDetails)
+        {
+            if (!_selectedVariants.ContainsKey(detail.Id))
+                _selectedVariants[detail.Id] = detail.Variants.FirstOrDefault(v => v.IsAvailable) ?? detail.Variants.FirstOrDefault();
+        }
+
+        _isLoading = false;
+    }
+
+    private void HandleComparisonChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            if (ComparisonService.Items.Count == 0)
+            {
+                NavigationManager.NavigateTo("/");
+                return;
+            }
+
+            var removedIds = _productDetails.Select(d => d.Id)
+                .Except(ComparisonService.Items.Select(i => i.Id))
+                .ToList();
+
+            foreach (var id in removedIds)
+            {
+                _productDetails.RemoveAll(d => d.Id == id);
+                _selectedVariants.Remove(id);
+            }
+
+            var existingIds = _productDetails.Select(d => d.Id).ToHashSet();
+            var toAdd = ComparisonService.Items.Where(i => !existingIds.Contains(i.Id)).ToList();
+            if (toAdd.Any())
+            {
+                var tasks = toAdd.Select(item => StorefrontService.GetProductDetailAsync(item.Slug));
+                var results = await Task.WhenAll(tasks);
+                foreach (var r in results.Where(r => r.Success && r.Data != null))
+                {
+                    _productDetails.Add(r.Data!);
+                    _selectedVariants[r.Data!.Id] = r.Data.Variants.FirstOrDefault(v => v.IsAvailable) ?? r.Data.Variants.FirstOrDefault();
+                }
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private StorefrontVariantResponse? GetSelectedVariant(int productId)
+        => _selectedVariants.GetValueOrDefault(productId);
+
+    private void SetSelectedVariant(int productId, StorefrontVariantResponse? variant)
+    {
+        _selectedVariants[productId] = variant;
+    }
+
+    private IEnumerable<string> GetAllSpecKeys()
+    {
+        return _productDetails
+            .Select(d => GetSelectedVariant(d.Id)?.Specifications ?? new Dictionary<string, string>())
+            .SelectMany(s => s.Keys)
+            .Distinct()
+            .OrderBy(k => k);
+    }
+
+    public void Dispose()
+    {
+        ComparisonService.OnChanged -= HandleComparisonChanged;
+    }
+}

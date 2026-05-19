@@ -1,6 +1,8 @@
 @using PBL3.Shared.DTOs.Storefront
+@using Client.Services.Comparison
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject IComparisonService ComparisonService
 
 <MudCard Elevation="2" Class="pa-2 rounded-lg position-relative d-flex flex-column h-100" Style="cursor:pointer;" @onclick="HandleClick">
     @if (Product.DiscountPercent > 0)
@@ -23,13 +25,22 @@
                 <MudText Typo="Typo.caption" Style="color: white; font-weight: 700;">Hết hàng</MudText>
             </div>
         }
+        <div style="position: absolute; top: 0; left: 0; z-index: 2;" @onclick:stopPropagation="true">
+            <MudTooltip Text="@(ComparisonService.Contains(Product.Id) ? "Bỏ khỏi so sánh" : "Thêm vào so sánh")">
+                <MudIconButton Icon="@(ComparisonService.Contains(Product.Id) ? Icons.Material.Filled.CompareArrows : Icons.Material.Outlined.CompareArrows)"
+                               Size="Size.Small"
+                               Color="@(ComparisonService.Contains(Product.Id) ? Color.Primary : Color.Default)"
+                               Style="background: rgba(255,255,255,0.85); padding: 4px;"
+                               OnClick="HandleCompareClick" />
+            </MudTooltip>
+        </div>
     </div>
 
     <MudCardContent Class="pa-2 flex-grow-1 d-flex flex-column">
         <MudText Typo="Typo.body2" Class="fw-bold mb-1" Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 40px;">
             @Product.Name
         </MudText>
-        
+
         <div class="mt-auto">
             <div style="min-height: 18px;">
                 @if (Product.DiscountPercent > 0)
@@ -60,5 +71,22 @@
     private void HandleClick()
     {
         NavigationManager.NavigateTo($"/product/{Product.Slug}");
+    }
+
+    private void HandleCompareClick()
+    {
+        if (ComparisonService.Contains(Product.Id))
+        {
+            ComparisonService.Remove(Product.Id);
+            return;
+        }
+        var result = ComparisonService.TryAdd(Product);
+        if (!result.Success && result.ErrorMessage != null)
+            Snackbar.Add(result.ErrorMessage, Severity.Warning);
+        else if (result.Replaced)
+            Snackbar.Add($"Chỉ có thể so sánh sản phẩm cùng nhóm hàng. {result.OldCategoryName} đã được xoá khỏi giỏ so sánh.", Severity.Warning);
+        else if (result.Success)
+            Snackbar.Add($"Đã thêm \"{Product.Name}\" vào danh sách so sánh.", Severity.Success);
+        StateHasChanged();
     }
 }
