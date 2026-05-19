@@ -1,0 +1,96 @@
+@using Client.Services.Comparison
+@using PBL3.Shared.DTOs.Storefront
+@inject IComparisonService ComparisonService
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+@if (ComparisonService.Items.Count > 0)
+{
+    <div style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 1200;">
+        <MudPaper Elevation="8" Class="pa-3"
+                  Style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-top: 2px solid #c0392b; border-radius: 0;">
+            <div class="d-flex align-center justify-center gap-4 flex-wrap">
+
+                @* Product slots *@
+                <div class="d-flex align-center gap-3">
+                    @for (int i = 0; i < 3; i++)
+                    {
+                        var idx = i;
+                        if (idx < ComparisonService.Items.Count)
+                        {
+                            var product = ComparisonService.Items[idx];
+                            <div class="position-relative" style="width: 72px; text-align: center;">
+                                <div style="width: 64px; height: 64px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin: 0 auto;">
+                                    @if (!string.IsNullOrEmpty(product.ThumbnailUrl))
+                                    {
+                                        <img src="@product.ThumbnailUrl" alt="@product.Name"
+                                             style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Image" Color="Color.Default" />
+                                    }
+                                </div>
+                                <MudText Typo="Typo.caption" Style="color: white; display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 72px;">
+                                    @product.Name
+                                </MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                               Size="Size.Small"
+                                               Style="position: absolute; top: -10px; right: -4px; background: #c0392b; color: white; padding: 2px; width: 20px; height: 20px; min-width: unset;"
+                                               OnClick="@(() => ComparisonService.Remove(product.Id))" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="width: 64px; height: 64px; border: 2px dashed rgba(255,255,255,0.3); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <MudIcon Icon="@Icons.Material.Filled.Add" Style="color: rgba(255,255,255,0.3);" />
+                            </div>
+                        }
+                    }
+                </div>
+
+                <MudDivider Vertical="true" FlexItem="true" Style="background: rgba(255,255,255,0.2); height: 60px;" />
+
+                @* Actions *@
+                <div class="d-flex align-center gap-2">
+                    <MudButton Variant="Variant.Outlined"
+                               Size="Size.Small"
+                               Style="color: rgba(255,255,255,0.7); border-color: rgba(255,255,255,0.3);"
+                               OnClick="@(() => ComparisonService.Clear())">
+                        Xóa tất cả
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Error"
+                               Size="Size.Medium"
+                               StartIcon="@Icons.Material.Filled.CompareArrows"
+                               Disabled="@(ComparisonService.Items.Count < 2)"
+                               OnClick="GoToCompare">
+                        So sánh ngay (@ComparisonService.Items.Count)
+                    </MudButton>
+                </div>
+            </div>
+        </MudPaper>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        ComparisonService.OnChanged += HandleChanged;
+    }
+
+    private void HandleChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void GoToCompare()
+    {
+        NavigationManager.NavigateTo("/compare");
+    }
+
+    public void Dispose()
+    {
+        ComparisonService.OnChanged -= HandleChanged;
+    }
+}

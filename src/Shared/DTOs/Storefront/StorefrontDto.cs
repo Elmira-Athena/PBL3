@@ -39,6 +39,7 @@ namespace PBL3.Shared.DTOs.Storefront
         public string Slug { get; set; } = string.Empty;
         public string? ThumbnailUrl { get; set; }
         public string ManufacturerName { get; set; } = string.Empty;
+        public int CategoryId { get; set; }
 
         public decimal OldPrice { get; set; }
         public decimal CurrentPrice { get; set; }
@@ -71,6 +72,7 @@ namespace PBL3.Shared.DTOs.Storefront
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string Slug { get; set; } = string.Empty;
+        public int CategoryId { get; set; }
 
         /// <summary>Thương hiệu (VD: "MSI")</summary>
         public string ManufacturerName { get; set; } = string.Empty;

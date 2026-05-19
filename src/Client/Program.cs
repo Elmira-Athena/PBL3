@@ -22,6 +22,7 @@ using Client.Services.Voucher;
 using Client.Services.Image;
 using Client.Services.ServiceTickets;
 using Client.Services.Analytics;
+using Client.Services.Comparison;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -82,5 +83,6 @@ builder.Services.AddScoped<IServiceInvoiceClientService, ServiceInvoiceClientSer
 builder.Services.AddScoped<IAnalyticsClientService, AnalyticsClientService>();
 builder.Services.AddScoped<Client.Services.Reviews.IReviewClientService, Client.Services.Reviews.ReviewClientService>();
 builder.Services.AddScoped<IBannerClientService, BannerClientService>();
+builder.Services.AddScoped<IComparisonService, ComparisonService>();
 
 await builder.Build().RunAsync();

@@ -66,6 +66,7 @@ namespace PBL3.Service.Storefront
                     p.Id,
                     p.Name,
                     p.Slug,
+                    p.CategoryId,
                     // Get variants that are not deleted
                     ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
                     // Get the main image of the first active variant
@@ -106,6 +107,7 @@ namespace PBL3.Service.Storefront
                     Name = p.Name,
                     Slug = p.Slug,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
+                    CategoryId = p.CategoryId,
                     CurrentPrice = currentPrice,
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,
@@ -176,6 +178,7 @@ namespace PBL3.Service.Storefront
                 Id = product.Id,
                 Name = product.Name,
                 Slug = product.Slug,
+                CategoryId = product.CategoryId,
                 ManufacturerName = product.Manufacturer?.Name ?? string.Empty,
                 Description = product.Description,
                 Specifications = specsJson,
@@ -210,6 +213,7 @@ namespace PBL3.Service.Storefront
                     p.Id,
                     p.Name,
                     p.Slug,
+                    p.CategoryId,
                     ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
                     MainImage = p.Variants.Where(v => !v.IsDeleted)
                         .SelectMany(v => v.Images)
@@ -249,6 +253,7 @@ namespace PBL3.Service.Storefront
                     Name = p.Name,
                     Slug = p.Slug,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
+                    CategoryId = p.CategoryId,
                     CurrentPrice = currentPrice,
                     OldPrice = oldPrice,
                     DiscountPercent = discountPercent,
@@ -319,6 +324,7 @@ namespace PBL3.Service.Storefront
                     p.Id,
                     p.Name,
                     p.Slug,
+                    p.CategoryId,
                     ManufacturerName = p.Manufacturer != null ? p.Manufacturer.Name : string.Empty,
                     ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
                     MainImage = p.Variants.Where(v => !v.IsDeleted)
@@ -355,6 +361,7 @@ namespace PBL3.Service.Storefront
                     Name = p.Name,
                     Slug = p.Slug,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
+                    CategoryId = p.CategoryId,
                     ManufacturerName = p.ManufacturerName,
                     CurrentPrice = currentPrice,
                     OldPrice = oldPrice,
@@ -433,6 +440,7 @@ namespace PBL3.Service.Storefront
                     p.Id,
                     p.Name,
                     p.Slug,
+                    p.CategoryId,
                     ManufacturerName = p.Manufacturer != null ? p.Manufacturer.Name : string.Empty,
                     ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
                     MainImage = p.Variants.Where(v => !v.IsDeleted)
@@ -471,6 +479,7 @@ namespace PBL3.Service.Storefront
                     Name = p.Name,
                     Slug = p.Slug,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
+                    CategoryId = p.CategoryId,
                     ManufacturerName = p.ManufacturerName,
                     CurrentPrice = currentPrice,
                     OldPrice = oldPrice,
