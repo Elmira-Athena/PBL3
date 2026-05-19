@@ -143,13 +143,13 @@
         _filter.PageNumber = state.Page + 1;
         _filter.PageSize = state.PageSize;
 
-        var result = await ImportReceiptService.GetListAsync(_filter);
+        var result = await ImportReceiptService.GetListAsync(_filter, cancellationToken);
 
         if (result.Success && result.Data != null)
             return new TableData<ImportReceiptDto> { TotalItems = result.Data.TotalCount, Items = result.Data.Items };
 
-        if (!result.Success)
-            Snackbar.Add(result.Message ?? "Không thể tải danh sách phiếu nhập.", Severity.Error);
+        if (!result.Success && !string.IsNullOrEmpty(result.Message))
+            Snackbar.Add(result.Message, Severity.Error);
 
         return new TableData<ImportReceiptDto> { TotalItems = 0, Items = new List<ImportReceiptDto>() };
     }

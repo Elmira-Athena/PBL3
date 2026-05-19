@@ -40,7 +40,7 @@
         <MudText Typo="Typo.body2" Class="fw-bold mb-1" Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 40px;">
             @Product.Name
         </MudText>
-        
+
         <div class="mt-auto">
             <div style="min-height: 18px;">
                 @if (Product.DiscountPercent > 0)
@@ -80,10 +80,12 @@
             ComparisonService.Remove(Product.Id);
             return;
         }
-        var error = ComparisonService.TryAdd(Product);
-        if (error != null)
-            Snackbar.Add(error, Severity.Warning);
-        else
+        var result = ComparisonService.TryAdd(Product);
+        if (!result.Success && result.ErrorMessage != null)
+            Snackbar.Add(result.ErrorMessage, Severity.Warning);
+        else if (result.Replaced)
+            Snackbar.Add($"Chỉ có thể so sánh sản phẩm cùng nhóm hàng. {result.OldCategoryName} đã được xoá khỏi giỏ so sánh.", Severity.Warning);
+        else if (result.Success)
             Snackbar.Add($"Đã thêm \"{Product.Name}\" vào danh sách so sánh.", Severity.Success);
         StateHasChanged();
     }

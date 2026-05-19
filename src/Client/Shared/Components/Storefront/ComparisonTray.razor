@@ -2,6 +2,7 @@
 @using PBL3.Shared.DTOs.Storefront
 @inject IComparisonService ComparisonService
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
 @implements IDisposable
 
 @if (ComparisonService.Items.Count > 0)
@@ -42,9 +43,13 @@
                         }
                         else
                         {
-                            <div style="width: 64px; height: 64px; border: 2px dashed rgba(255,255,255,0.3); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                                <MudIcon Icon="@Icons.Material.Filled.Add" Style="color: rgba(255,255,255,0.3);" />
-                            </div>
+                            @* Slot trống: mở popup tìm kiếm cùng danh mục *@
+                            <MudTooltip Text="Thêm sản phẩm để so sánh">
+                                <div style="width: 64px; height: 64px; border: 2px dashed rgba(255,255,255,0.4); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+                                     @onclick="OpenAddDialog">
+                                    <MudIcon Icon="@Icons.Material.Filled.Add" Style="color: rgba(255,255,255,0.7);" />
+                                </div>
+                            </MudTooltip>
                         }
                     }
                 </div>
@@ -87,6 +92,27 @@
     private void GoToCompare()
     {
         NavigationManager.NavigateTo("/compare");
+    }
+
+    private async Task OpenAddDialog()
+    {
+        if (ComparisonService.Items.Count == 0) return;
+
+        var firstItem = ComparisonService.Items[0];
+        var parameters = new DialogParameters
+        {
+            [nameof(AddToCompareDialog.CategoryId)] = firstItem.CategoryId,
+            [nameof(AddToCompareDialog.CategoryName)] = firstItem.CategoryName
+        };
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true,
+            CloseOnEscapeKey = true
+        };
+
+        await DialogService.ShowAsync<AddToCompareDialog>("Thêm sản phẩm so sánh", parameters, options);
     }
 
     public void Dispose()

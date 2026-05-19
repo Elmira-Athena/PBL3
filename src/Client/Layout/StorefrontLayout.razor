@@ -55,17 +55,51 @@
         @* -- Search Bar -- *@
         <MudPaper Elevation="0" Class="d-flex align-center rounded-lg px-3 flex-grow-1"
                   Style="background-color: white; max-width: 600px;">
-            <MudTextField T="string" Placeholder="Nhập từ khóa tìm kiếm..."
-                          @bind-Value="_searchKeyword"
-                          Variant="Variant.Text"
-                          Class="flex-grow-1"
-                          Style="font-size: 0.9rem;"
-                          Margin="Margin.Dense"
-                          Adornment="Adornment.End"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          AdornmentColor="Color.Error"
-                          OnAdornmentClick="PerformSearch"
-                          OnKeyDown="OnSearchKeyDown" />
+            <MudAutocomplete T="ProductCardResponse"
+                             @bind-Text="_searchKeyword"
+                             ValueChanged="OnProductSelected"
+                             SearchFunc="SearchSuggestionsAsync"
+                             ToStringFunc="@(p => p?.Name ?? string.Empty)"
+                             Placeholder="Nhập từ khóa tìm kiếm..."
+                             Variant="Variant.Text"
+                             Class="flex-grow-1"
+                             Style="font-size: 0.9rem;"
+                             Margin="Margin.Dense"
+                             Adornment="Adornment.End"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             AdornmentColor="Color.Error"
+                             OnAdornmentClick="PerformSearch"
+                             OnKeyDown="OnSearchKeyDown"
+                             DebounceInterval="400"
+                             MinCharacters="2"
+                             MaxItems="8"
+                             Dense="true"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             CoerceValue="false">
+                <ItemTemplate Context="product">
+                    <div class="d-flex align-center gap-2 py-1 px-1">
+                        @if (!string.IsNullOrEmpty(product.ThumbnailUrl))
+                        {
+                            <img src="@product.ThumbnailUrl" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;" alt="" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Style="width:36px;opacity:0.4;" />
+                        }
+                        <div class="d-flex flex-column flex-grow-1 overflow-hidden">
+                            <MudText Typo="Typo.body2" Style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">@product.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@product.ManufacturerName</MudText>
+                        </div>
+                        <MudText Typo="Typo.body2" Color="Color.Error" Style="white-space:nowrap;font-weight:600;margin-left:8px;">
+                            @product.CurrentPrice.ToString("N0")₫
+                        </MudText>
+                    </div>
+                </ItemTemplate>
+                <NoItemsTemplate>
+                    <MudText Typo="Typo.body2" Class="px-4 py-2" Color="Color.Secondary">Không tìm thấy sản phẩm phù hợp</MudText>
+                </NoItemsTemplate>
+            </MudAutocomplete>
         </MudPaper>
         <MudSpacer />
 
@@ -156,6 +190,26 @@
         {
             // Silently handle — don't break the layout
         }
+    }
+
+    private async Task<IEnumerable<ProductCardResponse>> SearchSuggestionsAsync(string keyword, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(keyword) || keyword.Length < 2)
+            return [];
+        try
+        {
+            var result = await StorefrontService.SearchProductsAsync(keyword, null, null, null, 1, 8);
+            if (result.Success && result.Data != null)
+                return result.Data.Items;
+        }
+        catch { }
+        return [];
+    }
+
+    private void OnProductSelected(ProductCardResponse? product)
+    {
+        if (product != null)
+            Navigation.NavigateTo($"/products/{product.Slug}");
     }
 
     private void OnSearchKeyDown(KeyboardEventArgs args)

@@ -79,6 +79,7 @@ nunit-*.xml
 
 .vscode/
 src/API/appsettings.Development.json
+src/Client/wwwroot/appsettings.Development.json
 
 # Secrets — không bao giờ commit
 .env

@@ -12,15 +12,26 @@ public class ComparisonService : IComparisonService
 
     public bool Contains(int productId) => _items.Any(p => p.Id == productId);
 
-    public string? TryAdd(ProductCardResponse product)
+    public ComparisonAddResult TryAdd(ProductCardResponse product)
     {
-        if (Contains(product.Id)) return null;
-        if (_items.Count >= 3) return "Chỉ có thể so sánh tối đa 3 sản phẩm cùng lúc.";
+        if (Contains(product.Id))
+            return ComparisonAddResult.AlreadyExists();
+
+        if (_items.Count >= 3)
+            return ComparisonAddResult.Fail("Chỉ có thể so sánh tối đa 3 sản phẩm cùng lúc.");
+
         if (_items.Count > 0 && _items[0].CategoryId != product.CategoryId)
-            return "Chỉ có thể so sánh các sản phẩm cùng danh mục.";
+        {
+            var oldCategoryName = _items[0].CategoryName;
+            _items.Clear();
+            _items.Add(product);
+            OnChanged?.Invoke();
+            return ComparisonAddResult.ReplacedCategory(oldCategoryName);
+        }
+
         _items.Add(product);
         OnChanged?.Invoke();
-        return null;
+        return ComparisonAddResult.Added();
     }
 
     public void Remove(int productId)

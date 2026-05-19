@@ -67,6 +67,7 @@ namespace PBL3.Service.Storefront
                     p.Name,
                     p.Slug,
                     p.CategoryId,
+                    CategoryName = p.Category != null ? p.Category.Name : string.Empty,
                     // Get variants that are not deleted
                     ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
                     // Get the main image of the first active variant
@@ -106,6 +107,8 @@ namespace PBL3.Service.Storefront
                     Id = p.Id,
                     Name = p.Name,
                     Slug = p.Slug,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.CategoryName,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
                     CategoryId = p.CategoryId,
                     CurrentPrice = currentPrice,
@@ -125,6 +128,7 @@ namespace PBL3.Service.Storefront
             var product = await _context.Products
                 .AsNoTracking()
                 .Include(p => p.Manufacturer)
+                .Include(p => p.Category)
                 .Include(p => p.Variants.Where(v => !v.IsDeleted))
                     .ThenInclude(v => v.Images)
                 .Where(p => p.Slug == slug && p.Status == 1 && !p.IsDeleted)
@@ -179,6 +183,7 @@ namespace PBL3.Service.Storefront
                 Name = product.Name,
                 Slug = product.Slug,
                 CategoryId = product.CategoryId,
+                CategoryName = product.Category?.Name ?? string.Empty,
                 ManufacturerName = product.Manufacturer?.Name ?? string.Empty,
                 Description = product.Description,
                 Specifications = specsJson,
@@ -214,6 +219,7 @@ namespace PBL3.Service.Storefront
                     p.Name,
                     p.Slug,
                     p.CategoryId,
+                    CategoryName = p.Category != null ? p.Category.Name : string.Empty,
                     ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
                     MainImage = p.Variants.Where(v => !v.IsDeleted)
                         .SelectMany(v => v.Images)
@@ -252,6 +258,8 @@ namespace PBL3.Service.Storefront
                     Id = p.Id,
                     Name = p.Name,
                     Slug = p.Slug,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.CategoryName,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
                     CategoryId = p.CategoryId,
                     CurrentPrice = currentPrice,
@@ -325,6 +333,7 @@ namespace PBL3.Service.Storefront
                     p.Name,
                     p.Slug,
                     p.CategoryId,
+                    CategoryName = p.Category != null ? p.Category.Name : string.Empty,
                     ManufacturerName = p.Manufacturer != null ? p.Manufacturer.Name : string.Empty,
                     ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
                     MainImage = p.Variants.Where(v => !v.IsDeleted)
@@ -360,6 +369,8 @@ namespace PBL3.Service.Storefront
                     Id = p.Id,
                     Name = p.Name,
                     Slug = p.Slug,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.CategoryName,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
                     CategoryId = p.CategoryId,
                     ManufacturerName = p.ManufacturerName,
@@ -441,6 +452,7 @@ namespace PBL3.Service.Storefront
                     p.Name,
                     p.Slug,
                     p.CategoryId,
+                    CategoryName = p.Category != null ? p.Category.Name : string.Empty,
                     ManufacturerName = p.Manufacturer != null ? p.Manufacturer.Name : string.Empty,
                     ActiveVariants = p.Variants.Where(v => !v.IsDeleted),
                     MainImage = p.Variants.Where(v => !v.IsDeleted)
@@ -478,6 +490,8 @@ namespace PBL3.Service.Storefront
                     Id = p.Id,
                     Name = p.Name,
                     Slug = p.Slug,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.CategoryName,
                     ThumbnailUrl = p.MainImage?.ImageUrl,
                     CategoryId = p.CategoryId,
                     ManufacturerName = p.ManufacturerName,

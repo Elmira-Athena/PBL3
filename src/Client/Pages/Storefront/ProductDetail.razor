@@ -423,10 +423,12 @@
             CategoryId = _product.CategoryId
         };
 
-        var error = ComparisonService.TryAdd(card);
-        if (error != null)
-            Snackbar.Add(error, Severity.Warning);
-        else
+        var result = ComparisonService.TryAdd(card);
+        if (!result.Success && result.ErrorMessage != null)
+            Snackbar.Add(result.ErrorMessage, Severity.Warning);
+        else if (result.Replaced)
+            Snackbar.Add($"Chỉ có thể so sánh sản phẩm cùng nhóm hàng. {result.OldCategoryName} đã được xoá khỏi giỏ so sánh.", Severity.Warning);
+        else if (result.Success)
             Snackbar.Add($"Đã thêm \"{_product.Name}\" vào danh sách so sánh.", Severity.Success);
     }
 }

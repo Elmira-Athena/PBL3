@@ -65,24 +65,17 @@
                         {
                             var item = ComparisonService.Items.FirstOrDefault(x => x.Id == detail.Id);
                             <td style="padding: 16px; border: 1px solid #e0e0e0; vertical-align: top; text-align: center; min-width: 200px;">
-                                <div class="position-relative d-inline-block">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                                   Size="Size.Small"
-                                                   Color="Color.Error"
-                                                   Style="position: absolute; top: -12px; right: -12px; z-index: 1; background: white; border: 1px solid #e0e0e0;"
-                                                   OnClick="@(() => ComparisonService.Remove(detail.Id))" />
-                                    @if (!string.IsNullOrEmpty(item?.ThumbnailUrl))
-                                    {
-                                        <img src="@item!.ThumbnailUrl" alt="@detail.Name"
-                                             style="width: 140px; height: 140px; object-fit: contain; display: block; margin: 0 auto;" />
-                                    }
-                                    else
-                                    {
-                                        <div style="width: 140px; height: 140px; background: #f5f5f5; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
-                                            <MudIcon Icon="@Icons.Material.Filled.Image" Color="Color.Default" Size="Size.Large" />
-                                        </div>
-                                    }
-                                </div>
+                                @if (!string.IsNullOrEmpty(item?.ThumbnailUrl))
+                                {
+                                    <img src="@item!.ThumbnailUrl" alt="@detail.Name"
+                                         style="width: 140px; height: 140px; object-fit: contain; display: block; margin: 0 auto;" />
+                                }
+                                else
+                                {
+                                    <div style="width: 140px; height: 140px; background: #f5f5f5; display: flex; align-items: center; justify-content: center; margin: 0 auto;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Image" Color="Color.Default" Size="Size.Large" />
+                                    </div>
+                                }
                                 <MudText Typo="Typo.subtitle1" Class="fw-bold mt-3 mb-1">@detail.Name</MudText>
                                 <MudText Typo="Typo.body2" Class="text-muted mb-2">@detail.ManufacturerName</MudText>
 
@@ -128,10 +121,18 @@
                                     </div>
                                 }
 
-                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
-                                           Class="mt-3" Href="@($"/product/{detail.Slug}")">
-                                    Xem chi tiết
-                                </MudButton>
+                                <div class="d-flex gap-2 justify-center mt-3 flex-wrap">
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                               Href="@($"/product/{detail.Slug}")">
+                                        Xem chi tiết
+                                    </MudButton>
+                                    @* FIX: Nút xóa rõ ràng dưới mỗi sản phẩm *@
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.Delete"
+                                               OnClick="@(() => ComparisonService.Remove(detail.Id))">
+                                        Xóa
+                                    </MudButton>
+                                </div>
                             </td>
                         }
                     </tr>

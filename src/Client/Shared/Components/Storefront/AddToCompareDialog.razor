@@ -1,0 +1,171 @@
+@using PBL3.Shared.DTOs.Storefront
+@using Client.Services.Comparison
+@using Client.Services.Storefront
+@inject IStorefrontClientService StorefrontService
+@inject IComparisonService ComparisonService
+@inject ISnackbar Snackbar
+
+<MudDialog Style="max-height: 85vh;">
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.CompareArrows" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Thêm sản phẩm so sánh</MudText>
+            @if (!string.IsNullOrEmpty(CategoryName))
+            {
+                <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">@CategoryName</MudChip>
+            }
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <MudTextField @bind-Value="_keyword"
+                      Placeholder="@($"Tìm trong {CategoryName}...")"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Immediate="true"
+                      DebounceInterval="350"
+                      OnDebounceIntervalElapsed="SearchAsync"
+                      Class="mb-4" />
+
+        @if (_isLoading)
+        {
+            <MudStack Spacing="2">
+                @for (int i = 0; i < 4; i++)
+                {
+                    <MudPaper Elevation="1" Class="pa-3 rounded-lg">
+                        <div class="d-flex align-center gap-3">
+                            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="60px" Height="60px" />
+                            <div class="flex-grow-1">
+                                <MudSkeleton SkeletonType="SkeletonType.Text" Width="70%" />
+                                <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" />
+                            </div>
+                        </div>
+                    </MudPaper>
+                }
+            </MudStack>
+        }
+        else if (_results.Count == 0 && _hasSearched)
+        {
+            <div class="d-flex flex-column align-center py-8 text-muted">
+                <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Style="font-size: 3rem;" Class="mb-2 opacity-50" />
+                <MudText Typo="Typo.body2">Không tìm thấy sản phẩm phù hợp</MudText>
+            </div>
+        }
+        else if (_results.Count == 0)
+        {
+            <div class="d-flex flex-column align-center py-8 text-muted">
+                <MudIcon Icon="@Icons.Material.Outlined.Search" Style="font-size: 3rem;" Class="mb-2 opacity-50" />
+                <MudText Typo="Typo.body2">Nhập từ khóa để tìm sản phẩm trong nhóm <strong>@CategoryName</strong></MudText>
+            </div>
+        }
+        else
+        {
+            <MudStack Spacing="2">
+                @foreach (var product in _results)
+                {
+                    var isInList = ComparisonService.Contains(product.Id);
+                    <MudPaper @onclick="@(() => HandleSelect(product))"
+                              Elevation="1"
+                              Class="@($"pa-3 rounded-lg {(isInList ? "opacity-50" : "cursor-pointer")}")"
+                              Style="@(isInList ? "" : "transition: box-shadow 0.15s;")">
+                        <div class="d-flex align-center gap-3">
+                            @if (!string.IsNullOrEmpty(product.ThumbnailUrl))
+                            {
+                                <img src="@product.ThumbnailUrl" alt="@product.Name"
+                                     style="width: 60px; height: 60px; object-fit: contain; flex-shrink: 0;" />
+                            }
+                            else
+                            {
+                                <div style="width: 60px; height: 60px; background: #f5f5f5; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Image" Color="Color.Default" />
+                                </div>
+                            }
+                            <div class="flex-grow-1 overflow-hidden">
+                                <MudText Typo="Typo.body2" Class="fw-bold"
+                                         Style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    @product.Name
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@product.ManufacturerName</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Error" Class="fw-bold">
+                                    @product.CurrentPrice.ToString("N0")₫
+                                </MudText>
+                            </div>
+                            @if (isInList)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Outlined.AddCircleOutline" Color="Color.Primary" />
+                            }
+                        </div>
+                    </MudPaper>
+                }
+            </MudStack>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Đóng</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .cursor-pointer { cursor: pointer; }
+    .fw-bold { font-weight: 600; }
+    .text-muted { color: var(--mud-palette-text-secondary); }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public int CategoryId { get; set; }
+    [Parameter] public string CategoryName { get; set; } = string.Empty;
+
+    private string _keyword = string.Empty;
+    private bool _isLoading = false;
+    private bool _hasSearched = false;
+    private List<ProductCardResponse> _results = new();
+
+    private async Task SearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_keyword))
+        {
+            _results = new();
+            _hasSearched = false;
+            return;
+        }
+
+        _isLoading = true;
+        _hasSearched = true;
+        StateHasChanged();
+
+        var response = await StorefrontService.SearchProductsAsync(
+            _keyword.Trim(), CategoryId, null, null, 1, 12);
+
+        if (response.Success && response.Data != null)
+            _results = response.Data.Items;
+        else
+            _results = new();
+
+        _isLoading = false;
+    }
+
+    private void HandleSelect(ProductCardResponse product)
+    {
+        if (ComparisonService.Contains(product.Id)) return;
+
+        var result = ComparisonService.TryAdd(product);
+        if (result.Success)
+        {
+            Snackbar.Add($"Đã thêm \"{product.Name}\" vào danh sách so sánh.", Severity.Success);
+            MudDialog.Close();
+        }
+        else if (result.ErrorMessage != null)
+        {
+            Snackbar.Add(result.ErrorMessage, Severity.Warning);
+        }
+    }
+}
