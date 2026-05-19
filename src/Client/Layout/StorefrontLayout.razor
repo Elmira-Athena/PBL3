@@ -209,7 +209,7 @@
     private void OnProductSelected(ProductCardResponse? product)
     {
         if (product != null)
-            Navigation.NavigateTo($"/products/{product.Slug}");
+            Navigation.NavigateTo($"/product/{product.Slug}");
     }
 
     private void OnSearchKeyDown(KeyboardEventArgs args)
