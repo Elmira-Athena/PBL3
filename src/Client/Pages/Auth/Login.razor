@@ -59,10 +59,28 @@
 
     protected override void OnInitialized()
     {
-        if (new Uri(Navigation.Uri).Query.Contains("expired=true"))
+        var query = new Uri(Navigation.Uri).Query;
+        if (query.Contains("locked=true"))
+        {
+            var message = ExtractQueryParam(query, "reason");
+            Snackbar.Add(
+                string.IsNullOrEmpty(message) ? "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên." : Uri.UnescapeDataString(message),
+                Severity.Error);
+        }
+        else if (query.Contains("expired=true"))
         {
             Snackbar.Add("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", Severity.Warning);
         }
+    }
+
+    private static string? ExtractQueryParam(string query, string key)
+    {
+        foreach (var part in query.TrimStart('?').Split('&'))
+        {
+            var idx = part.IndexOf('=');
+            if (idx >= 0 && part[..idx] == key) return part[(idx + 1)..];
+        }
+        return null;
     }
 
     private async Task HandleLogin()

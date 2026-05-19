@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
@@ -17,17 +18,20 @@ namespace PBL3.Service.Customers
         private readonly ICustomerRepository _customerRepo;
         private readonly ICartRepository _cartRepo;
         private readonly UserManager<AppUser> _userManager;
+        private readonly IMemoryCache _cache;
         private readonly ILogger<CustomerService> _logger;
 
         public CustomerService(
             ICustomerRepository customerRepo,
             ICartRepository cartRepo,
             UserManager<AppUser> userManager,
+            IMemoryCache cache,
             ILogger<CustomerService> logger)
         {
             _customerRepo = customerRepo;
             _cartRepo = cartRepo;
             _userManager = userManager;
+            _cache = cache;
             _logger = logger;
         }
 
@@ -190,7 +194,7 @@ namespace PBL3.Service.Customers
             return ApiResult<CustomerDto>.Ok(MapToDto(user), "Cập nhật tài khoản thành công.");
         }
 
-        public async Task<ApiResult<bool>> DeactivateAsync(Guid id)
+        public async Task<ApiResult<bool>> DeactivateAsync(Guid id, string? lockReason)
         {
             var user = await _customerRepo.GetByIdWithProfileAsync(id);
             if (user == null)
@@ -204,7 +208,7 @@ namespace PBL3.Service.Customers
             }
 
             user.IsActive = false;
-            // Thu hồi Refresh Token
+            user.LockReason = lockReason;
             user.RefreshToken = null;
             user.RefreshTokenExpiryTime = null;
 
@@ -214,9 +218,7 @@ namespace PBL3.Service.Customers
                 return ApiResult<bool>.Fail("Cập nhật trạng thái thất bại.");
             }
 
-            // Có thể Update SecurityStamp để ngắt các session hiện tại của JWT (yêu cầu ValidateSecurityStampMiddleware được config)
-            await _userManager.UpdateSecurityStampAsync(user);
-
+            _cache.Remove($"user_isactive_{id.ToString().ToLowerInvariant()}");
             _logger.LogInformation("Khóa tài khoản khách hàng: {Email} (Id: {UserId})", user.Email, user.Id);
 
             return ApiResult<bool>.Ok(true, "Khóa tài khoản thành công.");
@@ -229,11 +231,15 @@ namespace PBL3.Service.Customers
                 return ApiResult<bool>.Fail("Không tìm thấy khách hàng yêu cầu.");
 
             user.IsActive = true;
+            user.LockReason = null;
 
             var updateResult = await _userManager.UpdateAsync(user);
             if (!updateResult.Succeeded)
                 return ApiResult<bool>.Fail("Cập nhật trạng thái thất bại.");
 
+            await _userManager.SetLockoutEndDateAsync(user, null);
+            await _userManager.ResetAccessFailedCountAsync(user);
+            _cache.Remove($"user_isactive_{id.ToString().ToLowerInvariant()}");
             _logger.LogInformation("Mở khóa tài khoản khách hàng: {Email} (Id: {UserId})", user.Email, user.Id);
             return ApiResult<bool>.Ok(true, "Mở khóa tài khoản thành công.");
         }
@@ -255,6 +261,7 @@ namespace PBL3.Service.Customers
                 Address = user.Profile?.Address,
                 City = user.Profile?.City,
                 IsActive = user.IsActive,
+                LockReason = user.LockReason,
                 CreatedDate = user.CreatedDate
             };
         }

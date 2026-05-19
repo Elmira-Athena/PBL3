@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @using PBL3.Shared.DTOs.Employees
 @using Client.Services.Employee
+@using Client.Shared.Components
 @inject IEmployeeClientService EmployeeService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -191,15 +192,18 @@
 
     private async Task ConfirmDeactivate(EmployeeListDto employee)
     {
-        bool? confirmed = await DialogService.ShowMessageBox(
-            "Cảnh báo khóa tài khoản",
-            $"Bạn có chắc chắn muốn khóa tài khoản của nhân viên '{employee.FullName}'?",
-            yesText: "Khóa", cancelText: "Hủy",
-            options: new DialogOptions { MaxWidth = MaxWidth.ExtraSmall });
-
-        if (confirmed == true)
+        var parameters = new DialogParameters
         {
-            var res = await EmployeeService.DeactivateAsync(employee.Id);
+            { "AccountName", employee.FullName }
+        };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<LockAccountDialog>("Khóa tài khoản", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            var lockReason = result.Data as string;
+            var res = await EmployeeService.DeactivateAsync(employee.Id, lockReason);
             if (res.Success)
             {
                 Snackbar.Add("Khóa tài khoản thành công.", Severity.Success);

@@ -11,7 +11,7 @@ namespace Client.Services.Employee
         Task<ApiResult<PagedResult<EmployeeListDto>>> GetListAsync(EmployeeFilterRequest request);
         Task<ApiResult<EmployeeListDto>> CreateAsync(CreateEmployeeRequest request);
         Task<ApiResult<EmployeeListDto>> UpdateAsync(Guid id, UpdateEmployeeRequest request);
-        Task<ApiResult<bool>> DeactivateAsync(Guid id);
+        Task<ApiResult<bool>> DeactivateAsync(Guid id, string? lockReason = null);
         Task<ApiResult<bool>> ReactivateAsync(Guid id);
         Task<ApiResult<List<EmployeeDto>>> GetTechniciansAsync();
     }

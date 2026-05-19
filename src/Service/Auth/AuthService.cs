@@ -39,14 +39,21 @@ namespace PBL3.Service.Auth
                 return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
             }
 
-            // 2. Kiểm tra tài khoản bị khóa (Lockout do brute-force)
+            // 2. Kiểm tra IsActive (Tài khoản bị vô hiệu hóa bởi Admin) — trước khi check password
+            if (!user.IsActive)
+            {
+                var reason = !string.IsNullOrEmpty(user.LockReason) ? user.LockReason : "Vui lòng liên hệ quản trị viên.";
+                return ApiResult<TokenResponse>.Fail($"Tài khoản đã bị khóa. Lý do: {reason}");
+            }
+
+            // 3. Kiểm tra tài khoản bị khóa (Lockout do brute-force)
             if (await _userManager.IsLockedOutAsync(user))
             {
                 return ApiResult<TokenResponse>.Fail(
                     "Tài khoản đã bị tạm khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau.");
             }
 
-            // 3. Kiểm tra mật khẩu
+            // 4. Kiểm tra mật khẩu
             var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
             if (!passwordValid)
             {
@@ -55,14 +62,8 @@ namespace PBL3.Service.Auth
                 return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
             }
 
-            // 4. Reset lockout counter khi đăng nhập đúng
+            // 5. Reset lockout counter khi đăng nhập đúng
             await _userManager.ResetAccessFailedCountAsync(user);
-
-            // 5. Kiểm tra IsActive (Tài khoản bị vô hiệu hóa bởi Admin)
-            if (!user.IsActive)
-            {
-                return ApiResult<TokenResponse>.Fail("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.");
-            }
 
             // 6. Sinh Access Token (JWT) với đầy đủ Claims
             var accessToken = await GenerateJwtTokenAsync(user);
@@ -109,7 +110,14 @@ namespace PBL3.Service.Auth
                 return ApiResult<TokenResponse>.Fail("Người dùng không tồn tại.");
             }
 
-            // 3. Kiểm tra Refresh Token có khớp và còn hạn không
+            // 3. Kiểm tra tài khoản còn hoạt động không (trước khi check token)
+            if (!user.IsActive)
+            {
+                var reason = !string.IsNullOrEmpty(user.LockReason) ? user.LockReason : "Vui lòng liên hệ quản trị viên.";
+                return ApiResult<TokenResponse>.Fail($"Tài khoản đã bị khóa. Lý do: {reason}");
+            }
+
+            // 4. Kiểm tra Refresh Token có khớp và còn hạn không
             var hashedToken = HashToken(request.RefreshToken);
             if (user.RefreshToken != hashedToken)
             {
@@ -119,16 +127,6 @@ namespace PBL3.Service.Auth
             if (user.RefreshTokenExpiryTime <= DateTime.UtcNow)
             {
                 return ApiResult<TokenResponse>.Fail("Refresh Token đã hết hạn. Vui lòng đăng nhập lại.");
-            }
-
-            // 4. Kiểm tra tài khoản còn hoạt động không
-            if (!user.IsActive)
-            {
-                // Thu hồi Refresh Token khi tài khoản bị khóa
-                user.RefreshToken = null;
-                user.RefreshTokenExpiryTime = null;
-                await _userManager.UpdateAsync(user);
-                return ApiResult<TokenResponse>.Fail("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.");
             }
 
             // 5. Sinh cặp Token MỚI (Token Rotation)

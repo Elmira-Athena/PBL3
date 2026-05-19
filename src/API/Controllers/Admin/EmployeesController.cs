@@ -71,9 +71,9 @@ namespace PBL3.API.Controllers.Admin
 
         [HttpDelete("{id:guid}")]
         [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Deactivate(Guid id)
+        public async Task<IActionResult> Deactivate(Guid id, [FromQuery] string? lockReason = null)
         {
-            var result = await _employeeService.DeactivateAsync(id);
+            var result = await _employeeService.DeactivateAsync(id, lockReason);
             if (!result.Success)
                 return result.Message.Contains("Không tìm thấy") ? NotFound(result) : BadRequest(result);
 

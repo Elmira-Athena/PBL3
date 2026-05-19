@@ -90,11 +90,14 @@ namespace Client.Services.Customer
             }
         }
 
-        public async Task<ApiResult<bool>> DeactivateAsync(Guid id)
+        public async Task<ApiResult<bool>> DeactivateAsync(Guid id, string? lockReason = null)
         {
             try
             {
-                var response = await _httpClient.DeleteAsync($"{BaseUrl}/{id}");
+                var url = string.IsNullOrEmpty(lockReason)
+                    ? $"{BaseUrl}/{id}"
+                    : $"{BaseUrl}/{id}?lockReason={Uri.EscapeDataString(lockReason)}";
+                var response = await _httpClient.DeleteAsync(url);
                 var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
                 return result ?? ApiResult<bool>.Fail("Không thể khóa tài khoản khách hàng.");
             }
