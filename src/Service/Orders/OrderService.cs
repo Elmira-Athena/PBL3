@@ -608,6 +608,51 @@ namespace PBL3.Service.Orders
             return ApiResult<bool>.Ok(true, "Đã duyệt đơn hàng thành công.");
         }
 
+        // === Customer self-service (ownership-enforced) ===
+
+        public async Task<ApiResult<OrderDetailDto>> GetMyOrderByIdAsync(int id, Guid userId)
+        {
+            var order = await _orderRepo.GetByIdWithDetailsAsync(id);
+            if (order == null || order.UserId != userId)
+                return ApiResult<OrderDetailDto>.Fail("Không tìm thấy đơn hàng.");
+
+            var dto = MapToOrderDetailDto(order);
+            return ApiResult<OrderDetailDto>.Ok(dto);
+        }
+
+        public async Task<ApiResult<bool>> CancelMyOrderAsync(int id, Guid userId, string cancelReason)
+        {
+            if (string.IsNullOrWhiteSpace(cancelReason))
+                return ApiResult<bool>.Fail("Vui lòng cung cấp lý do hủy đơn.");
+
+            var order = await _orderRepo.GetByIdAsync(id);
+            if (order == null || order.UserId != userId)
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+
+            if (order.Status != (byte)OrderStatus.Pending)
+                return ApiResult<bool>.Fail("Chỉ có thể hủy đơn hàng đang ở trạng thái 'Chờ duyệt'.");
+
+            order.Status = (byte)OrderStatus.Cancelled;
+            order.CancelReason = cancelReason;
+
+            await _unitOfWork.SaveChangesAsync();
+            return ApiResult<bool>.Ok(true, "Hủy đơn hàng thành công.");
+        }
+
+        public async Task<ApiResult<bool>> ConfirmReceivedByCustomerAsync(int id, Guid userId)
+        {
+            var order = await _orderRepo.GetByIdAsync(id);
+            if (order == null || order.UserId != userId)
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+
+            if (order.Status != (byte)OrderStatus.Exported)
+                return ApiResult<bool>.Fail("Chỉ có thể xác nhận khi đơn hàng đang ở trạng thái 'Đang giao'.");
+
+            order.Status = (byte)OrderStatus.Success;
+            await _unitOfWork.SaveChangesAsync();
+            return ApiResult<bool>.Ok(true, "Đã xác nhận nhận hàng thành công.");
+        }
+
         private OrderDetailDto MapToOrderDetailDto(Order order)
         {
             return new OrderDetailDto
@@ -638,6 +683,10 @@ namespace PBL3.Service.Orders
                     Quantity = d.Quantity,
                     UnitPrice = d.UnitPrice,
                     TotalLine = d.Quantity * d.UnitPrice,
+                    MainImageUrl = d.Variant.Images != null && d.Variant.Images.Any()
+                        ? (d.Variant.Images.FirstOrDefault(i => i.IsMain)?.ImageUrl
+                           ?? d.Variant.Images.OrderBy(i => i.SortOrder).First().ImageUrl)
+                        : null,
                     Serials = d.OrderSerials?.Select(os => os.Serial.SerialNumber).ToList() ?? new List<string>()
                 }).ToList(),
                 AppliedVouchers = order.VoucherUsages?.Select(v => new VoucherUsageDto

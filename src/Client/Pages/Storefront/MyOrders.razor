@@ -39,7 +39,8 @@
 
     <MudTable T="OrderSummaryResponse" ServerData="ServerReload"
               Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1"
-              Class="rounded-lg" @ref="_table">
+              Class="rounded-lg" @ref="_table"
+              OnRowClick="OnRowClick" RowStyle="cursor: pointer;">
         <HeaderContent>
             <MudTh>Mã đơn</MudTh>
             <MudTh>Ngày đặt</MudTh>
@@ -119,6 +120,12 @@
     {
         if (_table != null)
             await _table.ReloadServerData();
+    }
+
+    private void OnRowClick(TableRowClickEventArgs<OrderSummaryResponse> args)
+    {
+        if (args?.Item != null)
+            NavManager.NavigateTo($"/my/orders/{args.Item.Id}");
     }
 
     private static (string text, Color color) GetOrderStatus(int status) => status switch

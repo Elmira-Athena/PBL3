@@ -1,0 +1,67 @@
+@using MudBlazor
+
+<MudPaper Elevation="2" Class="pa-4 mb-4">
+    <MudText Typo="Typo.h6" Style="font-weight: 700;" Class="mb-3">Tiến trình đơn hàng</MudText>
+
+    @if (Status == 4)
+    {
+        <MudTimeline TimelinePosition="TimelinePosition.Top" TimelineOrientation="TimelineOrientation.Horizontal">
+            <MudTimelineItem Color="Color.Primary" Icon="@Icons.Material.Filled.Receipt" Size="Size.Small">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">Đã đặt</MudText>
+            </MudTimelineItem>
+            <MudTimelineItem Color="Color.Error" Icon="@Icons.Material.Filled.Cancel" Size="Size.Small">
+                <MudText Typo="Typo.body2" Style="font-weight: 600; color: var(--mud-palette-error);">Đã hủy</MudText>
+            </MudTimelineItem>
+        </MudTimeline>
+    }
+    else if (Status == 5)
+    {
+        <MudTimeline TimelinePosition="TimelinePosition.Top" TimelineOrientation="TimelineOrientation.Horizontal">
+            <MudTimelineItem Color="Color.Primary" Icon="@Icons.Material.Filled.Receipt" Size="Size.Small">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">Đã đặt</MudText>
+            </MudTimelineItem>
+            <MudTimelineItem Color="Color.Dark" Icon="@Icons.Material.Filled.AssignmentReturn" Size="Size.Small">
+                <MudText Typo="Typo.body2" Style="font-weight: 600;">Hoàn trả</MudText>
+            </MudTimelineItem>
+        </MudTimeline>
+    }
+    else
+    {
+        <MudTimeline TimelinePosition="TimelinePosition.Top" TimelineOrientation="TimelineOrientation.Horizontal">
+            @foreach (var step in _steps)
+            {
+                <MudTimelineItem Color="@GetStepColor(step.Index)" Icon="@step.Icon" Size="Size.Small">
+                    <MudText Typo="Typo.body2" Style="@GetStepTextStyle(step.Index)">@step.Label</MudText>
+                </MudTimelineItem>
+            }
+        </MudTimeline>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public byte Status { get; set; }
+
+    private record TimelineStep(int Index, string Label, string Icon);
+
+    private static readonly List<TimelineStep> _steps = new()
+    {
+        new TimelineStep(0, "Chờ duyệt", Icons.Material.Filled.Receipt),
+        new TimelineStep(1, "Đang xử lý", Icons.Material.Filled.Inventory2),
+        new TimelineStep(2, "Đang giao", Icons.Material.Filled.LocalShipping),
+        new TimelineStep(3, "Hoàn thành", Icons.Material.Filled.CheckCircle),
+    };
+
+    private Color GetStepColor(int stepIndex)
+    {
+        if (stepIndex < Status) return Color.Primary;       // đã đi qua
+        if (stepIndex == Status) return Color.Success;      // mốc hiện tại
+        return Color.Default;                               // mốc tương lai
+    }
+
+    private string GetStepTextStyle(int stepIndex)
+    {
+        if (stepIndex == Status) return "font-weight: 700; color: var(--mud-palette-success);";
+        if (stepIndex < Status) return "font-weight: 600;";
+        return "font-weight: 400; color: var(--mud-palette-text-secondary);";
+    }
+}

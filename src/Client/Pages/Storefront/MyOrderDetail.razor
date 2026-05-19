@@ -1,10 +1,10 @@
-@page "/orders/{Id:int}"
+@page "/my/orders/{Id:int}"
 @using PBL3.Shared.DTOs.Sale
 @using PBL3.Shared.DTOs.Common
 @using Client.Pages.Orders.Components
 @using Client.Services.Orders
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize(Roles = "Admin,Employee")]
+@attribute [Authorize(Roles = "Customer")]
 @inject IOrderClientService OrderService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -12,9 +12,9 @@
 
 <PageTitle>Chi tiết đơn hàng - HushStore</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
     <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Color="Color.Default" Class="mb-4" OnClick="GoBack">
-        Quay lại
+        Quay lại danh sách đơn hàng
     </MudButton>
 
     @if (_isLoading)
@@ -25,30 +25,26 @@
     {
         <div class="d-flex align-center justify-space-between mb-4">
             <MudText Typo="Typo.h5" Style="font-weight: 700;">Đơn hàng @_order.OrderCode</MudText>
-            <div class="d-flex gap-2">
-                @if (_order.Status == 2) // Exported — đã xuất kho
+            <div class="d-flex gap-2 align-center">
+                @if (_order.Status == 0)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" OnClick="ConfirmCompleteOrder">
-                        Xác nhận đã giao
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Cancel"
+                               OnClick="ConfirmCancelOrder">
+                        Hủy đơn hàng
                     </MudButton>
                 }
-                @if (_order.Status == 0) // Pending — chờ duyệt
+                @if (_order.Status == 2)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
                                StartIcon="@Icons.Material.Filled.CheckCircle"
-                               OnClick="ConfirmOrderApprove"
-                               Disabled="_isApproving">
-                        @if (_isApproving)
+                               OnClick="ConfirmReceived"
+                               Disabled="_isConfirming">
+                        @if (_isConfirming)
                         {
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
                         }
-                        Duyệt đơn
-                    </MudButton>
-                }
-                @if (_order.Status == 0 || _order.Status == 1) // Pending or Confirmed
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small" OnClick="ConfirmCancelOrder">
-                        Hủy đơn
+                        Đã nhận hàng
                     </MudButton>
                 }
                 <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_order.Status)" Variant="Variant.Filled">
@@ -72,11 +68,7 @@
                         </div>
                         <div>
                             <MudText Typo="Typo.subtitle2" Style="font-weight: 600;">Ngày đặt</MudText>
-                            <MudText Typo="Typo.body2">@_order.OrderDate.ToString("dd/MM/yyyy HH:mm")</MudText>
-                        </div>
-                        <div>
-                            <MudText Typo="Typo.subtitle2" Style="font-weight: 600;">Loại đơn</MudText>
-                            <MudText Typo="Typo.body2">@GetOrderTypeText(_order.OrderType)</MudText>
+                            <MudText Typo="Typo.body2">@_order.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
                         </div>
                     </div>
 
@@ -95,7 +87,7 @@
                 </MudCard>
             </MudItem>
 
-            @* Customer & Shipping Info *@
+            @* Shipping Info *@
             <MudItem xs="12" md="4">
                 <MudCard Elevation="2" Class="pa-6" Style="height: 100%;">
                     <MudText Typo="Typo.h6" Style="font-weight: 700;" Class="mb-4">Thông tin giao hàng</MudText>
@@ -119,9 +111,9 @@
                 <MudCard Elevation="2" Class="pa-6">
                     <MudText Typo="Typo.h6" Style="font-weight: 700;" Class="mb-4">Danh sách sản phẩm</MudText>
 
-                    <MudTable Items="@_order.Items" Hover="true" Dense="true" Elevation="0">
+                    <MudTable Items="@_order.Items" Hover="true" Dense="false" Elevation="0">
                         <HeaderContent>
-                            <MudTh Style="width: 72px;">Ảnh</MudTh>
+                            <MudTh Style="width: 80px;">Ảnh</MudTh>
                             <MudTh>Sản phẩm</MudTh>
                             <MudTh Style="text-align: right;">Số lượng</MudTh>
                             <MudTh Style="text-align: right;">Đơn giá</MudTh>
@@ -133,11 +125,11 @@
                                 @if (!string.IsNullOrEmpty(item.MainImageUrl))
                                 {
                                     <img src="@item.MainImageUrl" alt="@item.VariantName"
-                                         style="width: 56px; height: 56px; object-fit: cover; border-radius: 4px;" />
+                                         style="width: 64px; height: 64px; object-fit: cover; border-radius: 4px;" />
                                 }
                                 else
                                 {
-                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Medium" Color="Color.Default" />
+                                    <MudIcon Icon="@Icons.Material.Filled.Image" Size="Size.Large" Color="Color.Default" />
                                 }
                             </MudTd>
                             <MudTd DataLabel="Sản phẩm">
@@ -251,12 +243,11 @@
 </MudContainer>
 
 @code {
-    [Parameter]
-    public int Id { get; set; }
+    [Parameter] public int Id { get; set; }
 
     private OrderDetailDto? _order;
     private bool _isLoading = true;
-    private bool _isApproving = false;
+    private bool _isConfirming = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -289,65 +280,21 @@
         }
     }
 
-    private void GoBack()
-    {
-        Navigation.NavigateTo("/orders");
-    }
-
-    private async Task ConfirmCompleteOrder()
-    {
-        var result = await OrderService.CompleteOrderAsync(Id);
-        if (result.Success)
-        {
-            Snackbar.Add("Đơn hàng đã được cập nhật thành công.", Severity.Success);
-            await LoadOrder();
-        }
-        else
-        {
-            Snackbar.Add(result.Message ?? "Lỗi khi cập nhật đơn hàng.", Severity.Error);
-        }
-    }
-
-    private async Task ConfirmOrderApprove()
-    {
-        var confirmed = await DialogService.ShowMessageBox(
-            "Xác nhận duyệt đơn",
-            $"Bạn có chắc chắn muốn duyệt đơn hàng {_order?.OrderCode} không? Hành động này không thể hoàn tác.",
-            yesText: "Duyệt đơn",
-            cancelText: "Hủy");
-
-        if (confirmed != true) return;
-
-        _isApproving = true;
-        StateHasChanged();
-        var result = await OrderService.ConfirmOrderAsync(Id);
-        _isApproving = false;
-        if (result.Success)
-        {
-            Snackbar.Add("Đã duyệt đơn hàng thành công.", Severity.Success);
-            await LoadOrder();
-        }
-        else
-        {
-            Snackbar.Add(result.Message ?? "Lỗi khi duyệt đơn hàng.", Severity.Error);
-        }
-    }
+    private void GoBack() => Navigation.NavigateTo("/my/orders");
 
     private async Task ConfirmCancelOrder()
     {
-        var parameters = new DialogParameters();
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
-
-        var dialog = await DialogService.ShowAsync<CancelOrderDialog>("Hủy Đơn Hàng", parameters, options);
+        var dialog = await DialogService.ShowAsync<CancelOrderDialog>("Hủy Đơn Hàng", new DialogParameters(), options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled && result.Data is string cancelReason)
         {
-            var apiResult = await OrderService.CancelOrderAsync(Id, cancelReason);
+            var apiResult = await OrderService.CancelMyOrderAsync(Id, cancelReason);
             if (apiResult.Success)
             {
                 Snackbar.Add("Đã hủy đơn hàng thành công.", Severity.Success);
-                GoBack();
+                await LoadOrder();
             }
             else
             {
@@ -356,29 +303,55 @@
         }
     }
 
-    private string GetStatusText(byte status) => status switch
+    private async Task ConfirmReceived()
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Xác nhận đã nhận hàng",
+            $"Bạn xác nhận đã nhận đơn hàng {_order?.OrderCode}? Sau khi xác nhận, đơn sẽ chuyển sang trạng thái Hoàn thành.",
+            yesText: "Đã nhận hàng",
+            cancelText: "Đóng");
+
+        if (confirmed != true) return;
+
+        _isConfirming = true;
+        StateHasChanged();
+        var result = await OrderService.ConfirmReceivedAsync(Id);
+        _isConfirming = false;
+
+        if (result.Success)
+        {
+            Snackbar.Add("Cảm ơn bạn đã xác nhận nhận hàng.", Severity.Success);
+            await LoadOrder();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi khi xác nhận nhận hàng.", Severity.Error);
+        }
+    }
+
+    private static string GetStatusText(byte status) => status switch
     {
         0 => "Chờ duyệt",
         1 => "Chờ xuất kho",
-        2 => "Đã xuất kho",
-        3 => "Thành công",
+        2 => "Đang giao",
+        3 => "Hoàn thành",
         4 => "Đã hủy",
         5 => "Hoàn trả",
         _ => "Không xác định"
     };
 
-    private Color GetStatusColor(byte status) => status switch
+    private static Color GetStatusColor(byte status) => status switch
     {
-        0 => Color.Default,
-        1 => Color.Warning,
-        2 => Color.Success,
+        0 => Color.Warning,
+        1 => Color.Info,
+        2 => Color.Primary,
         3 => Color.Success,
         4 => Color.Error,
         5 => Color.Dark,
         _ => Color.Default
     };
 
-    private string GetPaymentMethodText(byte method) => method switch
+    private static string GetPaymentMethodText(byte method) => method switch
     {
         0 => "Thanh toán khi nhận hàng (COD)",
         1 => "Chuyển khoản ngân hàng",
@@ -386,18 +359,11 @@
         _ => "Không xác định"
     };
 
-    private string GetPaymentStatusText(byte status) => status switch
+    private static string GetPaymentStatusText(byte status) => status switch
     {
         0 => "Chưa thanh toán",
         1 => "Đã thanh toán",
         2 => "Đã hoàn tiền",
-        _ => "Không xác định"
-    };
-
-    private string GetOrderTypeText(byte type) => type switch
-    {
-        0 => "Online",
-        1 => "POS",
         _ => "Không xác định"
     };
 }
