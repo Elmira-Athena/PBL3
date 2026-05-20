@@ -74,6 +74,18 @@
                         </div>
                         <MudText Typo="Typo.caption" Class="ml-2 text-muted">(@_product.ReviewCount đánh giá)</MudText>
                     </div>
+                    <div class="ml-auto d-flex align-center gap-2">
+                        <MudDivider Vertical="true" FlexItem="true" />
+                        <MudTooltip Text="@(ComparisonService.Contains(_product!.Id) ? "Bỏ khỏi so sánh" : "Thêm vào so sánh")">
+                            <MudButton Variant="@(ComparisonService.Contains(_product!.Id) ? Variant.Filled : Variant.Outlined)"
+                                       Color="Color.Primary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.CompareArrows"
+                                       OnClick="HandleCompareClick"
+                                       Class="rounded-pill">
+                                So sánh
+                            </MudButton>
+                        </MudTooltip>
+                    </div>
                 </div>
 
                 <MudDivider Class="mb-4" />
@@ -148,12 +160,7 @@
                                OnClick="BuyNowAsync" Disabled="!IsCurrentVariantAvailable() || _isProcessing">
                         MUA NGAY
                     </MudButton>
-                    <MudButton Variant="@(ComparisonService.Contains(_product!.Id) ? Variant.Filled : Variant.Outlined)"
-                               Color="Color.Secondary" Size="Size.Large" Class="py-3 fw-bold rounded-lg"
-                               StartIcon="@Icons.Material.Filled.CompareArrows"
-                               OnClick="HandleCompareClick">
-                        SO SÁNH
-                    </MudButton>
+
                 </div>
             </MudItem>
         </MudGrid>

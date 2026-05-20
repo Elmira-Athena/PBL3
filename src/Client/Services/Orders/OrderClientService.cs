@@ -20,10 +20,8 @@ namespace Client.Services.Orders
             try
             {
                 var response = await _httpClient.GetAsync($"/api/orders/{id}");
-                if (!response.IsSuccessStatusCode)
-                    return ApiResult<OrderDetailDto>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
                 var result = await response.Content.ReadFromJsonAsync<ApiResult<OrderDetailDto>>();
-                return result ?? ApiResult<OrderDetailDto>.Fail("Không nhận được phản hồi từ máy chủ");
+                return result ?? ApiResult<OrderDetailDto>.Fail("Không nhận được phản hồi từ máy chủ.");
             }
             catch (Exception ex)
             {

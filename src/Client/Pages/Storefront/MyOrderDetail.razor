@@ -184,6 +184,10 @@
                             <div>
                                 <MudText Typo="Typo.subtitle2" Style="font-weight: 600;">Lý do hủy</MudText>
                                 <MudText Typo="Typo.body2" Color="Color.Error">@_order.CancelReason</MudText>
+                                @if (_order.PaymentStatus == 1)
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Warning" Class="mt-1">Liên hệ với cửa hàng để hoàn tiền.</MudText>
+                                }
                             </div>
                         }
                     </MudCard>
