@@ -33,6 +33,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         private bool IsCustomer => User.IsInRole("Customer");
+        private bool IsAdmin => User.IsInRole("Admin");
 
         [HttpPost("intake")]
         [AllowAnonymous]
@@ -196,8 +197,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.RecordDiagnosisAsync(id, request, userId);
+                var result = await _service.RecordDiagnosisAsync(id, request, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Ghi nhận chẩn đoán thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -216,8 +221,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.ChooseBranchAsync(id, request, userId);
+                var result = await _service.ChooseBranchAsync(id, request, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Chọn loại giải pháp thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -236,8 +245,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var quotation = await _service.CreateQuotationAsync(id, request, userId);
+                var quotation = await _service.CreateQuotationAsync(id, request, userId, IsAdmin);
                 return ApiResult<QuotationDetailDto>.Ok(quotation, "Tạo báo giá thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<QuotationDetailDto>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -257,7 +270,7 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.AcceptQuotationAsync(id, qid, request, userId);
+                var result = await _service.AcceptQuotationAsync(id, qid, request, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Chấp nhận báo giá thành công.");
             }
             catch (UnauthorizedAccessException ex)
@@ -282,7 +295,7 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.RejectQuotationAsync(id, qid, request, userId);
+                var result = await _service.RejectQuotationAsync(id, qid, request, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Từ chối báo giá thành công.");
             }
             catch (UnauthorizedAccessException ex)
@@ -306,8 +319,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var rma = await _service.CreateRmaShipmentAsync(id, request, userId);
+                var rma = await _service.CreateRmaShipmentAsync(id, request, userId, IsAdmin);
                 return ApiResult<RmaShipmentDetailDto>.Ok(rma, "Tạo phiếu RMA thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<RmaShipmentDetailDto>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -326,8 +343,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.RecordRmaResolutionAsync(id, request, userId);
+                var result = await _service.RecordRmaResolutionAsync(id, request, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Cập nhật kết quả RMA thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -346,8 +367,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.StartRepairAsync(id, userId);
+                var result = await _service.StartRepairAsync(id, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Bắt đầu sửa chữa thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -366,8 +391,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.Perform1For1SwapAsync(id, request.ReplacementSerialId, userId);
+                var result = await _service.Perform1For1SwapAsync(id, request.ReplacementSerialId, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Đổi 1-1 thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -386,8 +415,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.MarkWaitingPartsAsync(id, userId);
+                var result = await _service.MarkWaitingPartsAsync(id, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Cập nhật trạng thái thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -406,8 +439,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.ResumeRepairAsync(id, userId);
+                var result = await _service.ResumeRepairAsync(id, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Tiếp tục sửa chữa thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -426,8 +463,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var result = await _service.MarkInternalRepairCompletedAsync(id, request, userId);
+                var result = await _service.MarkInternalRepairCompletedAsync(id, request, userId, IsAdmin);
                 return ApiResult<bool>.Ok(result, "Hoàn tát sửa chữa thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
@@ -446,8 +487,12 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var userId = GetCurrentUserId();
-                var invoice = await _service.IssueServiceInvoiceAsync(id, request, userId);
+                var invoice = await _service.IssueServiceInvoiceAsync(id, request, userId, IsAdmin);
                 return ApiResult<ServiceInvoiceDetailDto>.Ok(invoice, "Tạo hóa đơn dịch vụ thành công.");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<ServiceInvoiceDetailDto>.Fail(ex.Message);
             }
             catch (InvalidOperationException ex)
             {
