@@ -294,6 +294,14 @@
                             </MudButton>
                         }
 
+                        @if (CanInteract && ticket.Status == 7) // ReceivedFromManufacturer
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                                       OnClick="CompleteRepair" Size="Size.Small">
+                                Hoàn Thành
+                            </MudButton>
+                        }
+
                         @if (CanInteract && ticket.Status == 9 && ticket.ResolutionType == 4 && ticket.Invoice == null) // Completed & PaidRepair
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
@@ -302,7 +310,7 @@
                             </MudButton>
                         }
 
-                        @if (_isAdmin && ticket.Status < 9 && ticket.Status != 3 && ticket.Status != 10) // Chỉ Admin hủy phiếu
+                        @if (CanInteract && ticket.Status < 9 && ticket.Status != 3 && ticket.Status != 10)
                         {
                             <MudButton Variant="Variant.Outlined" Color="Color.Error" FullWidth="true"
                                        OnClick="CancelTicket" Size="Size.Small">

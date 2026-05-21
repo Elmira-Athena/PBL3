@@ -533,7 +533,12 @@ namespace PBL3.Service.ServiceTickets
 
             CheckAssignment(ticket, userId, isAdmin);
 
-            byte toStatus = request.ManufacturerResolution == (byte)2 ? (byte)8 : (byte)7;
+            byte toStatus = request.ManufacturerResolution switch
+            {
+                2 => (byte)8,
+                3 => (byte)1,
+                _ => (byte)7
+            };
             ValidateTransition(ticket.Status, toStatus);
 
             await _unitOfWork.BeginTransactionAsync();
@@ -613,7 +618,7 @@ namespace PBL3.Service.ServiceTickets
                 }
                 else
                 {
-                    ticket.Status = (byte)7;
+                    ticket.Status = request.ManufacturerResolution == (byte)3 ? (byte)1 : (byte)7;
                 }
 
                 await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
@@ -623,9 +628,12 @@ namespace PBL3.Service.ServiceTickets
                     ToStatus = ticket.Status,
                     ChangedByEmployeeId = userId,
                     ChangedAt = now,
-                    Note = request.ManufacturerResolution == (byte)2
-                        ? "Hãng thay thế, chuyển sang Đã đổi 1-1"
-                        : "Nhận lại từ hãng"
+                    Note = request.ManufacturerResolution switch
+                    {
+                        2 => "Hãng thay thế, chuyển sang Đã đổi 1-1",
+                        3 => "Hãng từ chối, quay lại chẩn đoán",
+                        _ => "Nhận lại từ hãng"
+                    }
                 });
 
                 await _unitOfWork.SaveChangesAsync();
@@ -1155,7 +1163,7 @@ namespace PBL3.Service.ServiceTickets
                 (2, 4), (2, 5), (2, 3), (2, 10),
                 (4, 5), (4, 10),
                 (5, 4), (5, 9), (5, 10),
-                (6, 7), (6, 10),
+                (6, 1), (6, 7), (6, 10),
                 (7, 9), (7, 8), (7, 10),
                 (8, 9), (8, 10)
             };
