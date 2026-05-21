@@ -84,5 +84,6 @@ builder.Services.AddScoped<IAnalyticsClientService, AnalyticsClientService>();
 builder.Services.AddScoped<Client.Services.Reviews.IReviewClientService, Client.Services.Reviews.ReviewClientService>();
 builder.Services.AddScoped<IBannerClientService, BannerClientService>();
 builder.Services.AddScoped<IComparisonService, ComparisonService>();
+builder.Services.AddScoped<IInventoryCheckClientService, InventoryCheckClientService>();
 
 await builder.Build().RunAsync();

@@ -151,5 +151,17 @@ namespace PBL3.Infrastructure.Repositories
                 .Include(s => s.ImportReceipt).ThenInclude(r => r.Supplier)
                 .FirstOrDefaultAsync(s => s.Id == id);
         }
+
+        public async Task<List<(int SerialId, int VariantId, string SerialNumber)>> GetAvailableSerialsBatchAsync(List<int> variantIds)
+        {
+            return await _context.ProductSerials
+                .AsNoTracking()
+                .Where(s => variantIds.Contains(s.VariantId) && s.Status == 0) // Available
+                .Select(s => new { s.Id, s.VariantId, s.SerialNumber })
+                .ToListAsync()
+                .ContinueWith(t => t.Result
+                    .Select(x => (x.Id, x.VariantId, x.SerialNumber))
+                    .ToList());
+        }
     }
 }

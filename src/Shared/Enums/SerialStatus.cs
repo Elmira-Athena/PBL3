@@ -18,6 +18,9 @@ namespace PBL3.Shared.Enums
         Defective = 3,
 
         /// <summary>Đã trả lại.</summary>
-        Returned = 4
+        Returned = 4,
+
+        /// <summary>Thất thoát (phát hiện qua kiểm kê).</summary>
+        Lost = 5
     }
 }

@@ -1,0 +1,122 @@
+@using Client.Services.Inventory
+@using PBL3.Shared.DTOs.Inventory
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.EditNote" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Cập nhật lý do chênh lệch</MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        <MudStack Spacing="3" Class="pt-2">
+            <div>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Serial</MudText>
+                <MudText Typo="Typo.body2" Style="font-weight: 600; font-family: monospace;">@SerialNumber</MudText>
+            </div>
+
+            <MudTextField @bind-Value="_reason"
+                          Label="Lý do chênh lệch"
+                          Variant="Variant.Outlined"
+                          Required="true"
+                          MaxLength="500"
+                          Counter="500"
+                          Lines="3"
+                          Placeholder="VD: Serial bị mất trong quá trình vận chuyển nội bộ..." />
+
+            <MudTextField @bind-Value="_proposedActionNote"
+                          Label="Hướng xử lý đề xuất (tùy chọn)"
+                          Variant="Variant.Outlined"
+                          MaxLength="200"
+                          Counter="200"
+                          Lines="2"
+                          Placeholder="VD: Kiến nghị ghi nhận thất thoát, đề xuất điều tra thêm..." />
+        </MudStack>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3 rounded-lg" Variant="Variant.Filled">
+                @_errorMessage
+            </MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default" Style="text-transform: none;">
+            Hủy
+        </MudButton>
+        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="_isSaving"
+                   Style="text-transform: none; border-radius: 8px;">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Lưu lý do
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private IInventoryCheckClientService CheckService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    [Parameter] public int CheckId { get; set; }
+    [Parameter] public int DetailSerialId { get; set; }
+    [Parameter] public string SerialNumber { get; set; } = string.Empty;
+    [Parameter] public string? ExistingReason { get; set; }
+    [Parameter] public string? ExistingProposedAction { get; set; }
+
+    private string _reason = string.Empty;
+    private string? _proposedActionNote;
+    private bool _isSaving;
+    private string? _errorMessage;
+
+    protected override void OnInitialized()
+    {
+        _reason = ExistingReason ?? string.Empty;
+        _proposedActionNote = ExistingProposedAction;
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(_reason))
+        {
+            _errorMessage = "Lý do không được để trống.";
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new UpdateScanReasonRequest
+            {
+                Reason = _reason.Trim(),
+                ProposedActionNote = string.IsNullOrWhiteSpace(_proposedActionNote) ? null : _proposedActionNote.Trim()
+            };
+
+            var result = await CheckService.UpdateReasonAsync(CheckId, DetailSerialId, request);
+            if (result.Success)
+            {
+                Snackbar.Add("Đã cập nhật lý do thành công.", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                _errorMessage = result.Message ?? "Không thể cập nhật lý do.";
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
