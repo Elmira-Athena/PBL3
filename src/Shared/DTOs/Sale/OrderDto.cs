@@ -58,6 +58,7 @@ namespace PBL3.Shared.DTOs.Sale
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal TotalLine { get; set; }
+        public string? MainImageUrl { get; set; }
         public List<string> Serials { get; set; } = new();
     }
 }

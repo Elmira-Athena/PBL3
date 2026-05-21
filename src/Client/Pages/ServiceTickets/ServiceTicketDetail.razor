@@ -4,10 +4,12 @@
 @using Client.Shared.Components.ServiceTickets
 @using Client.Pages.ServiceTickets.Components
 @using MudBlazor
+@using System.Security.Claims
 @inject IServiceTicketClientService ServiceTicketService
 @inject NavigationManager NavManager
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Chi tiết phiếu sửa chữa - HushStore</PageTitle>
 
@@ -205,8 +207,14 @@
                     <MudDivider Class="my-4" />
 
                     <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Thao Tác</MudText>
+                    @if (!CanInteract)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            Phiếu đã được giao cho kỹ thuật viên khác.
+                        </MudAlert>
+                    }
                     <div Class="d-flex flex-column gap-2">
-                        @if (ticket.Status == 0) // Received
+                        @if (ticket.Status == 0) // Received — chưa gán, ai cũng có thể gán
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                                        OnClick="AssignTechnician" Size="Size.Small">
@@ -214,7 +222,7 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status == 1) // Diagnosing
+                        @if (CanInteract && ticket.Status == 1) // Diagnosing
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                                        OnClick="RecordDiagnosis" Size="Size.Small">
@@ -226,7 +234,7 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status == 1 && ticket.ResolutionType == 4) // Diagnosing & PaidRepair
+                        @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 4) // Diagnosing & PaidRepair
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                                        OnClick="CreateQuotation" Size="Size.Small">
@@ -234,7 +242,7 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status == 1 && ticket.ResolutionType == 1) // Warranty internal repair
+                        @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 1) // Warranty internal repair
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
                                        OnClick="StartRepair" Size="Size.Small">
@@ -242,7 +250,7 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status == 1 && ticket.ResolutionType == 2) // RMA
+                        @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 2) // RMA
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
                                        OnClick="CreateRmaShipment" Size="Size.Small">
@@ -250,7 +258,7 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status == 1 && ticket.ResolutionType == 3) // 1-1 swap
+                        @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 3) // 1-1 swap
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
                                        OnClick="PerformSwap" Size="Size.Small">
@@ -258,7 +266,7 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status == 5) // InRepair
+                        @if (CanInteract && ticket.Status == 5) // InRepair
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
                                        OnClick="CompleteRepair" Size="Size.Small">
@@ -270,7 +278,7 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status == 4) // WaitingParts
+                        @if (CanInteract && ticket.Status == 4) // WaitingParts
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                                        OnClick="ResumeRepair" Size="Size.Small">
@@ -278,7 +286,7 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status == 6) // SentToRMA
+                        @if (CanInteract && ticket.Status == 6) // SentToRMA
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                                        OnClick="RecordRmaResolution" Size="Size.Small">
@@ -286,7 +294,15 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status == 9 && ticket.ResolutionType == 4 && ticket.Invoice == null) // Completed & PaidRepair
+                        @if (CanInteract && ticket.Status == 7) // ReceivedFromManufacturer
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                                       OnClick="CompleteRepair" Size="Size.Small">
+                                Hoàn Thành
+                            </MudButton>
+                        }
+
+                        @if (CanInteract && ticket.Status == 9 && ticket.ResolutionType == 4 && ticket.Invoice == null) // Completed & PaidRepair
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
                                        OnClick="IssueInvoice" Size="Size.Small">
@@ -294,7 +310,7 @@
                             </MudButton>
                         }
 
-                        @if (ticket.Status < 9 && ticket.Status != 3 && ticket.Status != 10) // Not terminal
+                        @if (CanInteract && ticket.Status < 9 && ticket.Status != 3 && ticket.Status != 10)
                         {
                             <MudButton Variant="Variant.Outlined" Color="Color.Error" FullWidth="true"
                                        OnClick="CancelTicket" Size="Size.Small">
@@ -330,9 +346,26 @@
     public int Id { get; set; }
 
     private ServiceTicketDetailDto? ticket;
+    private Guid _currentUserId;
+    private bool _isAdmin;
+
+    // Có quyền tương tác: Admin, hoặc chưa ai được gán, hoặc chính là người được gán
+    private bool CanInteract =>
+        _isAdmin ||
+        ticket?.AssignedEmployeeId == null ||
+        ticket.AssignedEmployeeId == _currentUserId;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var idStr = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(idStr, out var id))
+                _currentUserId = id;
+            _isAdmin = user.IsInRole("Admin");
+        }
         await LoadTicket();
     }
 

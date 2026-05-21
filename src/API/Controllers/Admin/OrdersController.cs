@@ -58,12 +58,63 @@ namespace PBL3.API.Controllers.Admin
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
+            if (User.IsInRole("Customer"))
+            {
+                var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!Guid.TryParse(userIdStr, out var userId))
+                    return Unauthorized(ApiResult<OrderDetailDto>.Fail("Không thể xác thực thông tin người dùng."));
+
+                var myResult = await _orderService.GetMyOrderByIdAsync(id, userId);
+                if (!myResult.Success) return NotFound(myResult);
+                return Ok(myResult);
+            }
+
             var result = await _orderService.GetByIdAsync(id);
             if (!result.Success)
             {
                 return NotFound(result);
             }
             return Ok(result);
+        }
+
+        [HttpPut("my/{id}/cancel")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> CancelMyOrder(int id, [FromBody] CancelOrderRequest request)
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdStr, out var userId))
+                return Unauthorized(ApiResult<bool>.Fail("Không thể xác thực thông tin người dùng."));
+
+            try
+            {
+                var result = await _orderService.CancelMyOrderAsync(id, userId, request?.CancelReason ?? string.Empty);
+                if (!result.Success) return BadRequest(result);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
+        }
+
+        [HttpPut("my/{id}/confirm-received")]
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> ConfirmReceived(int id)
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdStr, out var userId))
+                return Unauthorized(ApiResult<bool>.Fail("Không thể xác thực thông tin người dùng."));
+
+            try
+            {
+                var result = await _orderService.ConfirmReceivedByCustomerAsync(id, userId);
+                if (!result.Success) return BadRequest(result);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
         }
 
         [HttpGet]

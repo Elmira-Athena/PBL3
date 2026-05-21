@@ -32,6 +32,7 @@ namespace PBL3.Infrastructure.Repositories
             return await _dbContext.Orders.AsNoTracking()
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Variant)
+                        .ThenInclude(v => v.Images)
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.OrderSerials)
                         .ThenInclude(os => os.Serial)

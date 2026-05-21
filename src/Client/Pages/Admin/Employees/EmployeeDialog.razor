@@ -1,5 +1,6 @@
 @using PBL3.Shared.DTOs.Employees
 @using Client.Services.Employee
+@using FluentValidation
 @inject IEmployeeClientService EmployeeService
 @inject IImageClientService ImageService
 @inject ISnackbar Snackbar
@@ -7,7 +8,7 @@
 <MudDialog>
     <DialogContent>
         <EditForm Model="@_model" OnValidSubmit="HandleSubmit">
-            <FluentValidationValidator />
+            <FluentValidationValidator Validator="@_formValidator" />
 
             <MudGrid>
                 @if (IsEditMode)
@@ -179,11 +180,45 @@
     private bool _isUploadingAvatar;
     private bool _showPassword;
     private bool _showConfirmPassword;
+    private AbstractValidator<DialogFormModel> _formValidator = null!;
 
     protected override void OnInitialized()
     {
+        _formValidator = new DialogFormModelValidator(IsEditMode);
         if (IsEditMode && InitialData != null)
             LoadData(InitialData);
+    }
+
+    private sealed class DialogFormModelValidator : AbstractValidator<DialogFormModel>
+    {
+        public DialogFormModelValidator(bool isEditMode)
+        {
+            RuleFor(x => x.FullName)
+                .NotEmpty().WithMessage("Họ tên không được để trống.")
+                .MaximumLength(100).WithMessage("Họ tên không được vượt quá 100 ký tự.");
+
+            if (!isEditMode)
+            {
+                RuleFor(x => x.Email)
+                    .NotEmpty().WithMessage("Email không được để trống.")
+                    .EmailAddress().WithMessage("Email không đúng định dạng.");
+
+                RuleFor(x => x.PhoneNumber)
+                    .NotEmpty().WithMessage("Số điện thoại không được để trống.")
+                    .Matches(@"^0[3-9][0-9]{8}$").WithMessage("Số điện thoại không hợp lệ.");
+
+                RuleFor(x => x.Password)
+                    .NotEmpty().WithMessage("Mật khẩu không được để trống.")
+                    .MinimumLength(8).WithMessage("Mật khẩu phải có ít nhất 8 ký tự.")
+                    .Matches("[A-Z]").WithMessage("Mật khẩu phải có ít nhất 1 chữ hoa.")
+                    .Matches("[a-z]").WithMessage("Mật khẩu phải có ít nhất 1 chữ thường.")
+                    .Matches("[0-9]").WithMessage("Mật khẩu phải có ít nhất 1 chữ số.");
+
+                RuleFor(x => x.ConfirmPassword)
+                    .NotEmpty().WithMessage("Xác nhận mật khẩu không được để trống.")
+                    .Equal(x => x.Password).WithMessage("Xác nhận mật khẩu không khớp.");
+            }
+        }
     }
 
     public void LoadData(EmployeeListDto employee)
@@ -208,7 +243,7 @@
         if (url != null)
             _model.AvatarUrl = url;
         else
-            Snackbar.Add("Upload ảnh đại diện thất bại. Vui lòng thử lại.", Severity.Error);
+            Snackbar.Add("Upload ảnh đại diện thất bại. Vui lòng thử lại.", MudBlazor.Severity.Error);
 
         _isUploadingAvatar = false;
         StateHasChanged();
@@ -234,12 +269,12 @@
                 var result = await EmployeeService.UpdateAsync(InitialId!.Value, request);
                 if (result.Success)
                 {
-                    Snackbar.Add("Cập nhật thành công!", Severity.Success);
+                    Snackbar.Add("Cập nhật thành công!", MudBlazor.Severity.Success);
                     MudDialog.Close(DialogResult.Ok(true));
                 }
                 else
                 {
-                    Snackbar.Add(result.Message ?? "Có lỗi xảy ra.", Severity.Error);
+                    Snackbar.Add(result.Message ?? "Có lỗi xảy ra.", MudBlazor.Severity.Error);
                 }
             }
             else
@@ -260,18 +295,18 @@
                 var result = await EmployeeService.CreateAsync(request);
                 if (result.Success)
                 {
-                    Snackbar.Add("Tạo nhân viên thành công!", Severity.Success);
+                    Snackbar.Add("Tạo nhân viên thành công!", MudBlazor.Severity.Success);
                     MudDialog.Close(DialogResult.Ok(true));
                 }
                 else
                 {
-                    Snackbar.Add(result.Message ?? "Có lỗi xảy ra.", Severity.Error);
+                    Snackbar.Add(result.Message ?? "Có lỗi xảy ra.", MudBlazor.Severity.Error);
                 }
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Lỗi thao tác: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Lỗi thao tác: {ex.Message}", MudBlazor.Severity.Error);
         }
         finally
         {

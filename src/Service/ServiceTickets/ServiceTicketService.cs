@@ -228,11 +228,13 @@ namespace PBL3.Service.ServiceTickets
             return true;
         }
 
-        public async Task<bool> RecordDiagnosisAsync(int ticketId, ServiceTicketDiagnosisDto request, Guid userId)
+        public async Task<bool> RecordDiagnosisAsync(int ticketId, ServiceTicketDiagnosisDto request, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)1)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Đang chẩn đoán.");
@@ -246,11 +248,13 @@ namespace PBL3.Service.ServiceTickets
             return true;
         }
 
-        public async Task<bool> ChooseBranchAsync(int ticketId, ServiceTicketBranchDto request, Guid userId)
+        public async Task<bool> ChooseBranchAsync(int ticketId, ServiceTicketBranchDto request, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)1)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Đang chẩn đoán.");
@@ -272,11 +276,13 @@ namespace PBL3.Service.ServiceTickets
             return true;
         }
 
-        public async Task<QuotationDetailDto?> CreateQuotationAsync(int ticketId, QuotationCreateDto request, Guid userId)
+        public async Task<QuotationDetailDto?> CreateQuotationAsync(int ticketId, QuotationCreateDto request, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             // Issue #10: Check ticket status is Diagnosing
             if (ticket.Status != (byte)1)
@@ -349,11 +355,13 @@ namespace PBL3.Service.ServiceTickets
             }
         }
 
-        public async Task<bool> AcceptQuotationAsync(int ticketId, int quotationId, QuotationAcceptDto request, Guid userId)
+        public async Task<bool> AcceptQuotationAsync(int ticketId, int quotationId, QuotationAcceptDto request, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignmentOrCustomer(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)2)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Chờ duyệt báo giá.");
@@ -402,11 +410,13 @@ namespace PBL3.Service.ServiceTickets
             }
         }
 
-        public async Task<bool> RejectQuotationAsync(int ticketId, int quotationId, QuotationRejectDto request, Guid userId)
+        public async Task<bool> RejectQuotationAsync(int ticketId, int quotationId, QuotationRejectDto request, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignmentOrCustomer(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)2)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Chờ duyệt báo giá.");
@@ -448,11 +458,13 @@ namespace PBL3.Service.ServiceTickets
             }
         }
 
-        public async Task<RmaShipmentDetailDto?> CreateRmaShipmentAsync(int ticketId, RmaShipmentCreateDto request, Guid userId)
+        public async Task<RmaShipmentDetailDto?> CreateRmaShipmentAsync(int ticketId, RmaShipmentCreateDto request, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.ResolutionType != (byte)2)
                 throw new InvalidOperationException("Phiếu phải chọn nhánh RMA.");
@@ -509,7 +521,7 @@ namespace PBL3.Service.ServiceTickets
             }
         }
 
-        public async Task<bool> RecordRmaResolutionAsync(int ticketId, RmaResolutionUpdateDto request, Guid userId)
+        public async Task<bool> RecordRmaResolutionAsync(int ticketId, RmaResolutionUpdateDto request, Guid userId, bool isAdmin = false)
         {
             var rma = await _rmaRepository.GetByTicketIdAsync(ticketId);
             if (rma == null)
@@ -519,7 +531,14 @@ namespace PBL3.Service.ServiceTickets
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
-            byte toStatus = request.ManufacturerResolution == (byte)2 ? (byte)8 : (byte)7;
+            CheckAssignment(ticket, userId, isAdmin);
+
+            byte toStatus = request.ManufacturerResolution switch
+            {
+                2 => (byte)8,
+                3 => (byte)1,
+                _ => (byte)7
+            };
             ValidateTransition(ticket.Status, toStatus);
 
             await _unitOfWork.BeginTransactionAsync();
@@ -599,7 +618,7 @@ namespace PBL3.Service.ServiceTickets
                 }
                 else
                 {
-                    ticket.Status = (byte)7;
+                    ticket.Status = request.ManufacturerResolution == (byte)3 ? (byte)1 : (byte)7;
                 }
 
                 await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
@@ -609,9 +628,12 @@ namespace PBL3.Service.ServiceTickets
                     ToStatus = ticket.Status,
                     ChangedByEmployeeId = userId,
                     ChangedAt = now,
-                    Note = request.ManufacturerResolution == (byte)2
-                        ? "Hãng thay thế, chuyển sang Đã đổi 1-1"
-                        : "Nhận lại từ hãng"
+                    Note = request.ManufacturerResolution switch
+                    {
+                        2 => "Hãng thay thế, chuyển sang Đã đổi 1-1",
+                        3 => "Hãng từ chối, quay lại chẩn đoán",
+                        _ => "Nhận lại từ hãng"
+                    }
                 });
 
                 await _unitOfWork.SaveChangesAsync();
@@ -632,11 +654,13 @@ namespace PBL3.Service.ServiceTickets
             }
         }
 
-        public async Task<bool> Perform1For1SwapAsync(int ticketId, int newSerialId, Guid userId)
+        public async Task<bool> Perform1For1SwapAsync(int ticketId, int newSerialId, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)1 && ticket.Status != (byte)7)
                 throw new InvalidOperationException("Trạng thái phiếu không cho phép đổi 1-1.");
@@ -750,11 +774,13 @@ namespace PBL3.Service.ServiceTickets
             }
         }
 
-        public async Task<bool> MarkInternalRepairCompletedAsync(int ticketId, ServiceTicketCompleteDto request, Guid userId)
+        public async Task<bool> MarkInternalRepairCompletedAsync(int ticketId, ServiceTicketCompleteDto request, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             if (!new[] { (byte)5, (byte)7, (byte)8 }.Contains(ticket.Status))
                 throw new InvalidOperationException("Phiếu phải ở trạng thái sửa chữa hoặc đã nhận từ hãng.");
@@ -806,11 +832,13 @@ namespace PBL3.Service.ServiceTickets
             }
         }
 
-        public async Task<bool> MarkWaitingPartsAsync(int ticketId, Guid userId)
+        public async Task<bool> MarkWaitingPartsAsync(int ticketId, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)5)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Đang sửa.");
@@ -834,11 +862,13 @@ namespace PBL3.Service.ServiceTickets
             return true;
         }
 
-        public async Task<bool> ResumeRepairAsync(int ticketId, Guid userId)
+        public async Task<bool> ResumeRepairAsync(int ticketId, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)4)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Chờ phụ tùng.");
@@ -862,11 +892,13 @@ namespace PBL3.Service.ServiceTickets
             return true;
         }
 
-        public async Task<bool> StartRepairAsync(int ticketId, Guid userId)
+        public async Task<bool> StartRepairAsync(int ticketId, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.ResolutionType != (byte)1)
                 throw new InvalidOperationException("Chỉ áp dụng cho phiếu sửa chữa bảo hành nội bộ.");
@@ -890,11 +922,13 @@ namespace PBL3.Service.ServiceTickets
             return true;
         }
 
-        public async Task<ServiceInvoiceDetailDto?> IssueServiceInvoiceAsync(int ticketId, ServiceInvoiceCreateDto request, Guid userId)
+        public async Task<ServiceInvoiceDetailDto?> IssueServiceInvoiceAsync(int ticketId, ServiceInvoiceCreateDto request, Guid userId, bool isAdmin = false)
         {
             var ticket = await _ticketRepository.GetByIdWithDetailsAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
+
+            CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)9)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Hoàn tất.");
@@ -1106,6 +1140,20 @@ namespace PBL3.Service.ServiceTickets
             }).ToList();
         }
 
+        private static void CheckAssignment(ServiceTicket ticket, Guid userId, bool isAdmin)
+        {
+            if (!isAdmin && ticket.AssignedEmployeeId.HasValue && ticket.AssignedEmployeeId != userId)
+                throw new UnauthorizedAccessException("Bạn không phải kỹ thuật viên được giao phó cho phiếu này.");
+        }
+
+        private static void CheckAssignmentOrCustomer(ServiceTicket ticket, Guid userId, bool isAdmin)
+        {
+            if (isAdmin) return;
+            if (ticket.CustomerId.HasValue && ticket.CustomerId == userId) return;
+            if (ticket.AssignedEmployeeId.HasValue && ticket.AssignedEmployeeId != userId)
+                throw new UnauthorizedAccessException("Bạn không phải kỹ thuật viên được giao phó cho phiếu này.");
+        }
+
         private void ValidateTransition(byte currentStatus, byte targetStatus)
         {
             var validTransitions = new[]
@@ -1115,7 +1163,7 @@ namespace PBL3.Service.ServiceTickets
                 (2, 4), (2, 5), (2, 3), (2, 10),
                 (4, 5), (4, 10),
                 (5, 4), (5, 9), (5, 10),
-                (6, 7), (6, 10),
+                (6, 1), (6, 7), (6, 10),
                 (7, 9), (7, 8), (7, 10),
                 (8, 9), (8, 10)
             };
