@@ -17,6 +17,13 @@ namespace PBL3.Service.Storefront
             _reviewRepo = reviewRepo;
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ PHỤ TRỢ: Lập bản đồ đánh giá trung bình (Rating Map) tối ưu hóa hiệu năng.
+        /// Sử dụng kỹ thuật GroupBy và Aggregate trên Database thông qua EF Core để:
+        /// 1. Gom nhóm toàn bộ bình luận (ProductReviews) theo mã sản phẩm (ProductId).
+        /// 2. Tính toán đồng thời Rating trung bình và Tổng số lượt đánh giá trong một câu lệnh đơn lẻ.
+        /// 3. Trả về dưới dạng Dictionary để tra cứu O(1) trong RAM, triệt tiêu lỗi N+1 Query.
+        /// </summary>
         private async Task<Dictionary<int, (double Avg, int Count)>> GetRatingMapAsync(List<int> productIds)
         {
             if (productIds.Count == 0) return new();
@@ -28,6 +35,10 @@ namespace PBL3.Service.Storefront
                 .ToDictionaryAsync(x => x.ProductId, x => (x.Avg, x.Count));
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Truy vấn danh mục sản phẩm đang hiển thị (Active Categories).
+        /// Lọc bỏ các danh mục bị ẩn (IsVisible == false) hoặc đã bị xóa logic (IsDeleted == true).
+        /// </summary>
         public async Task<ApiResult<List<CategoryMenuResponse>>> GetActiveCategoriesAsync()
         {
             var categories = await _context.Categories
@@ -47,6 +58,17 @@ namespace PBL3.Service.Storefront
             return ApiResult<List<CategoryMenuResponse>>.Ok(categories);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Truy vấn sản phẩm nổi bật (Featured Products) theo danh mục.
+        /// ── CƠ CHẾ TÍNH TOÁN KHOẢNG GIÁ & CHIẾT KHẤU ĐỘNG ──
+        /// 1. Lọc sản phẩm đang hiển thị (Status == 1) và không bị xóa logic.
+        /// 2. Với mỗi sản phẩm, nạp các biến thể đang hoạt động (ActiveVariants).
+        /// 3. Xác định Giá bán hiện hành (CurrentPrice) = Giá nhỏ nhất trong tất cả biến thể (Min Price).
+        ///    - Giúp hiển thị mức giá hấp dẫn nhất "Chỉ từ X.000đ" trên giao diện Storefront.
+        /// 4. Xác định Giá cũ/gốc (OldPrice) = Giá niêm yết lớn nhất trong các biến thể (Max Price).
+        /// 5. Tính toán Tỷ lệ giảm giá tương đối (DiscountPercent) của cả dòng sản phẩm dựa trên khoảng chênh lệch Min Price và Max Original Price.
+        /// 6. Nạp thông tin Rating trung bình từ Dictionary Rating Map đã tối ưu.
+        /// </summary>
         public async Task<ApiResult<List<ProductCardResponse>>> GetFeaturedProductsAsync(int? categoryId, int take = 5)
         {
             var query = _context.Products
@@ -122,6 +144,14 @@ namespace PBL3.Service.Storefront
             return ApiResult<List<ProductCardResponse>>.Ok(result);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Truy vấn chi tiết sản phẩm dành cho trang bán lẻ (Product Detail).
+        /// 1. Tìm sản phẩm dựa trên định danh SEO-Friendly (Slug) đang hoạt động.
+        /// 2. Nạp cấu trúc đa tầng dữ liệu: Nhà sản xuất, Danh mục, Biến thể đang bán và bộ ảnh thực tế.
+        /// 3. Tổng hợp danh sách ảnh (Distinct) từ toàn bộ ảnh của các biến thể để làm Slider ảnh lớn.
+        /// 4. Trích xuất thông số kỹ thuật (Specifications) mặc định từ biến thể có giá thấp nhất để hiển thị nhanh.
+        /// 5. Tính toán các điểm số đánh giá và thống kê lượt review phục vụ hiển thị uy tín sản phẩm.
+        /// </summary>
         public async Task<ApiResult<ProductDetailResponse>> GetProductDetailAsync(string slug)
         {
             var product = await _context.Products
@@ -196,6 +226,11 @@ namespace PBL3.Service.Storefront
             return ApiResult<ProductDetailResponse>.Ok(response);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Lấy danh sách sản phẩm liên quan (Related Products) hiển thị ở cuối trang chi tiết.
+        /// Hệ thống đề xuất các sản phẩm thuộc cùng Danh mục (CategoryId), loại trừ chính nó và giới hạn tối đa 5 sản phẩm.
+        /// Áp dụng cơ chế ánh xạ giá động (Min/Max) tương đương trang chủ để đảm bảo tính đồng nhất giao diện.
+        /// </summary>
         public async Task<ApiResult<List<ProductCardResponse>>> GetRelatedProductsAsync(string slug)
         {
             var currentProduct = await _context.Products
@@ -272,6 +307,9 @@ namespace PBL3.Service.Storefront
             return ApiResult<List<ProductCardResponse>>.Ok(result);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Lấy thông tin chi tiết của danh mục phục vụ bộ lọc tìm kiếm sản phẩm.
+        /// </summary>
         public async Task<ApiResult<CategoryDetailResponse>> GetCategoryBySlugAsync(string slug)
         {
             var category = await _context.Categories
@@ -294,6 +332,12 @@ namespace PBL3.Service.Storefront
             return ApiResult<CategoryDetailResponse>.Ok(category);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Tìm kiếm nâng cao và lọc sản phẩm linh hoạt trên giao diện Storefront.
+        /// Hỗ trợ tìm kiếm từ khóa không dấu/có dấu, lọc phân cấp theo danh mục và lọc theo khoảng giá bán:
+        /// - Lọc PriceMin/PriceMax: Chỉ trả về các sản phẩm chứa ít nhất một biến thể (Variant) có giá nằm trong tầm lọc của người tiêu dùng.
+        /// - Áp dụng phân trang hiệu năng cao ở tầng Database để giảm tải lượng dữ liệu vận chuyển qua Network.
+        /// </summary>
         public async Task<ApiResult<PagedResult<ProductCardResponse>>> SearchProductsAsync(
             string? keyword, int? categoryId, decimal? priceMin, decimal? priceMax,
             int page, int pageSize)
@@ -391,6 +435,19 @@ namespace PBL3.Service.Storefront
             return ApiResult<PagedResult<ProductCardResponse>>.Ok(pagedResult);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ CỰC KỲ QUAN TRỌNG: Truy vấn toàn bộ sản phẩm thuộc một danh mục cụ thể và mọi danh mục con đệ quy của nó.
+        /// ── GIẢI PHÁP TỐI ƯU HÓA TRUY VẤN CÂY PHÂN CẤP (BFS ON RAM) ──
+        /// Điển hình, để lấy sản phẩm thuộc danh mục cha (Ví dụ: "Điện thoại") gồm cả danh mục con ("iPhone", "Samsung"), ta phải truy vấn đệ quy DB.
+        /// Việc dùng đệ quy SQL (Common Table Expressions - CTE) rất tốn kém tài nguyên và không tương thích linh động giữa các DBMS (SQL Server, MySQL, PostgreSQL).
+        /// Giải pháp thay thế xuất sắc:
+        /// Step 1: Tìm ID danh mục gốc theo slug.
+        /// Step 2: Nạp toàn bộ danh sách danh mục phẳng đang hoạt động (chỉ cột Id và ParentId cực kỳ nhẹ) vào bộ nhớ RAM một lần duy nhất.
+        /// Step 3: Thực thi giải thuật Duyệt theo chiều rộng (Breadth-First Search - BFS) sử dụng cấu trúc hàng đợi Queue trong RAM.
+        ///        - Thu gom toàn bộ ID danh mục con cháu trong vòng vài micro giây mà không phát sinh thêm bất kỳ câu truy vấn cơ sở dữ liệu đệ quy nào.
+        /// Step 4: Sử dụng toán tử 'IN' trên SQL (WHERE CategoryId IN (categoryIds)) để truy xuất phân trang toàn bộ sản phẩm tương ứng.
+        /// Step 5: Thực hiện gộp giá bán, chiết khấu và liên kết bản đồ đánh giá xếp hạng tương tự các bộ lọc khác.
+        /// </summary>
         public async Task<ApiResult<PagedResult<ProductCardResponse>>> GetProductsByCategoryAsync(
             string categorySlug, int page, int pageSize)
         {

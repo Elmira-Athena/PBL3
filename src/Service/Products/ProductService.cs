@@ -24,9 +24,17 @@ namespace PBL3.Service.Products
         // ========================================================
         // GET LIST — Danh sách sản phẩm (phân trang + filter)
         // ========================================================
+        /// <summary>
+        /// NGHIỆP VỤ: Truy vấn danh sách sản phẩm phân trang kết hợp bộ lọc linh hoạt (tên, hãng, giá, trạng thái).
+        /// ĐẶC BIỆT (Recursive Category Scoping): Khi khách hàng lọc theo một danh mục cụ thể, 
+        /// hệ thống không chỉ hiển thị các sản phẩm thuộc trực tiếp danh mục đó, mà sẽ tự động đệ quy 
+        /// để quét và lấy toàn bộ các sản phẩm thuộc tất cả danh mục con/cháu bên dưới cấp bậc đó, 
+        /// giúp tối đa hóa cơ hội tiếp cận sản phẩm của khách hàng trên giao diện catalogue.
+        /// </summary>
         public async Task<ApiResult<PagedResult<ProductListDto>>> GetListAsync(ProductFilterRequest request)
         {
             // Nếu filter theo CategoryId → lấy cả category con (đệ quy)
+            // LƯU Ý NGHIỆP VỤ: Truy vấn đệ quy cây danh mục để mở rộng phạm vi hiển thị hàng hóa
             List<int>? categoryIds = null;
             if (request.CategoryId.HasValue)
             {
@@ -75,6 +83,15 @@ namespace PBL3.Service.Products
         // ========================================================
         // CREATE — Tạo mới sản phẩm (Transaction)
         // ========================================================
+        /// <summary>
+        /// NGHIỆP VỤ: Khởi tạo sản phẩm mới cùng danh sách các phiên bản đa biến thể (Variants) đi kèm.
+        /// Toàn bộ quá trình thực thi trong một Transaction đảm bảo tính toàn vẹn dữ liệu:
+        /// 1. Xác thực sự tồn tại của Nhà sản xuất và Danh mục hàng hóa được liên kết.
+        /// 2. Kiểm tra tính độc bản của mã SKU (Stock Keeping Unit) trên 2 cấp độ:
+        ///    - Đối chiếu toàn cục với hệ thống cơ sở dữ liệu.
+        ///    - Kiểm tra chéo trùng lặp nội bộ ngay giữa các biến thể gửi kèm trong yêu cầu.
+        /// 3. Tự động sinh URL Slug chuẩn SEO phục vụ định tuyến hệ thống và tối ưu hóa trên công cụ tìm kiếm.
+        /// </summary>
         public async Task<ApiResult<ProductDetailDto>> CreateAsync(CreateProductRequest request)
         {
             // Validate: Manufacturer tồn tại
@@ -86,6 +103,7 @@ namespace PBL3.Service.Products
                 return ApiResult<ProductDetailDto>.Fail("Danh mục không tồn tại.");
 
             // Validate: SKU unique cho tất cả Variants
+            // LƯU Ý NGHIỆP VỤ: Kiểm tra trùng mã SKU toàn cục trong cơ sở dữ liệu để tránh xung đột mã định danh sản phẩm
             foreach (var variant in request.Variants)
             {
                 if (await _productRepo.IsSkuExistsAsync(variant.SKU))
@@ -93,11 +111,13 @@ namespace PBL3.Service.Products
             }
 
             // Check duplicate SKU trong cùng request
+            // LƯU Ý NGHIỆP VỤ: Kiểm tra chéo giữa các biến thể gửi kèm trong cùng một request để tránh trùng lặp nội bộ
             var skus = request.Variants.Select(v => v.SKU.ToUpper()).ToList();
             if (skus.Distinct().Count() != skus.Count)
                 return ApiResult<ProductDetailDto>.Fail("Các phiên bản trong cùng sản phẩm không được trùng mã SKU.");
 
             // Build Entity
+            // Tự động sinh Product Slug từ tên để làm URL tĩnh thân thiện SEO ở cấp độ sản phẩm cha
             var product = new Product
             {
                 Name = request.Name,
@@ -378,24 +398,32 @@ namespace PBL3.Service.Products
         }
 
         /// <summary>
-        /// Sinh slug từ tên sản phẩm + SKU.
-        /// VD: "Dell XPS 15" + "DELL-XPS-16GB" → "dell-xps-15-dell-xps-16gb"
+        /// NGHIỆP VỤ & THUẬT TOÁN: Sinh đường dẫn tĩnh (URL Slug) thân thiện SEO cho từng biến thể sản phẩm (Variant).
+        /// Kết hợp tên sản phẩm và mã SKU để đảm bảo tính độc bản cao nhất trên URL định tuyến.
+        /// 1. Chuẩn hóa chuỗi Unicode dưới dạng FormD để tách rời ký tự gốc và các dấu thanh tiếng Việt.
+        /// 2. Quét qua từng ký tự và lọc bỏ các dấu thanh/dấu phụ (thuộc nhóm NonSpacingMark).
+        /// 3. Tái tổ hợp chuỗi sạch dấu về Unicode FormC tiêu chuẩn để xử lý tiếp.
+        /// 4. Chuyển chữ thường, dùng Regex loại bỏ ký tự đặc biệt, thay thế khoảng trắng và chuỗi gạch ngang liên tiếp bằng một dấu gạch (-) duy nhất.
         /// </summary>
         private static string GenerateSlug(string productName, string sku)
         {
             var combined = $"{productName} {sku}";
             // Remove diacritics (dấu tiếng Việt)
+            // Phân rã ký tự tiếng Việt có dấu thành dạng tổ hợp (ví dụ: á -> a + dấu sắc)
             var normalized = combined.Normalize(NormalizationForm.FormD);
             var sb = new StringBuilder();
             foreach (var c in normalized)
             {
                 var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+                // Bỏ qua các dấu thanh và dấu phụ (NonSpacingMark)
                 if (unicodeCategory != UnicodeCategory.NonSpacingMark)
                     sb.Append(c);
             }
+            // Tái tổ hợp về Unicode FormC gốc để xử lý chuỗi không còn dấu tiếng Việt
             var noDiacritics = sb.ToString().Normalize(NormalizationForm.FormC);
 
             // Convert to lowercase, replace spaces and special chars with dashes
+            // Chuyển chữ thường, dùng Regex loại ký tự đặc biệt và dồn các khoảng trắng/gạch ngang thành 1 dấu gạch duy nhất
             var slug = Regex.Replace(noDiacritics.ToLower(), @"[^a-z0-9\s-]", "");
             slug = Regex.Replace(slug, @"[\s-]+", "-").Trim('-');
 
@@ -403,22 +431,28 @@ namespace PBL3.Service.Products
         }
 
         /// <summary>
-        /// Sinh slug từ tên sản phẩm.
+        /// NGHIỆP VỤ & THUẬT TOÁN: Sinh đường dẫn tĩnh (URL Slug) chuẩn SEO cấp độ sản phẩm cha (Product).
+        /// Áp dụng cơ chế loại bỏ hoàn toàn dấu tiếng Việt thông qua phân rã Unicode FormD và lọc bỏ NonSpacingMark,
+        /// chuẩn hóa thành định dạng đường dẫn URL viết thường, ngăn cách bằng dấu gạch ngang thân thiện.
         /// </summary>
         private static string GenerateProductSlug(string productName)
         {
             // Remove diacritics (dấu tiếng Việt)
+            // Phân rã ký tự tiếng Việt có dấu thành dạng tổ hợp
             var normalized = productName.Normalize(NormalizationForm.FormD);
             var sb = new StringBuilder();
             foreach (var c in normalized)
             {
                 var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+                // Bỏ qua các dấu thanh và dấu phụ
                 if (unicodeCategory != UnicodeCategory.NonSpacingMark)
                     sb.Append(c);
             }
+            // Tái tổ hợp chuỗi Unicode FormC sạch dấu
             var noDiacritics = sb.ToString().Normalize(NormalizationForm.FormC);
 
             // Convert to lowercase, replace spaces and special chars with dashes
+            // Chuẩn hóa chữ thường, lọc ký tự đặc biệt và tối ưu hóa dấu nối (-)
             var slug = Regex.Replace(noDiacritics.ToLower(), @"[^a-z0-9\s-]", "");
             slug = Regex.Replace(slug, @"[\s-]+", "-").Trim('-');
 
