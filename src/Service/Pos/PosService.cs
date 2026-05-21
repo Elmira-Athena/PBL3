@@ -76,7 +76,10 @@ namespace PBL3.Service.Pos
             }
 
             var variant = serial.Variant;
-            var product = variant.Product;
+            var product = variant?.Product;
+
+            if (variant == null || product == null)
+                return ApiResult<PosScanResponse>.Fail("Không thể lấy thông tin sản phẩm. Biến thể hoặc sản phẩm không còn tồn tại trong hệ thống.");
 
             return ApiResult<PosScanResponse>.Ok(new PosScanResponse
             {
@@ -292,8 +295,8 @@ namespace PBL3.Service.Pos
                 OrderType = (byte)OrderType.POS,     // Đơn bán tại quầy POS
                 ShipName = customerName ?? "Khách vãng lai",
                 ShipPhone = request.CustomerPhone ?? "",
-                ShipAddress = "Tại quầy",
-                ShipCity = "Tại quầy",
+                ShipAddress = !string.IsNullOrWhiteSpace(request.ShipAddress) ? request.ShipAddress : "Tại quầy",
+                ShipCity = !string.IsNullOrWhiteSpace(request.ShipCity) ? request.ShipCity : "Tại quầy",
                 SubTotal = subTotal,
                 ShippingFee = 0, // Bán trực tiếp không tính phí vận chuyển
                 DiscountAmount = discountAmount,

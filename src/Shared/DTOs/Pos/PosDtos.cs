@@ -28,6 +28,8 @@ namespace PBL3.Shared.DTOs.Pos
         public string? VoucherCode { get; set; }
         public byte PaymentMethod { get; set; } // 0: Cash, 1: Banking, 2: Card
         public string? EmployeeNote { get; set; }
+        public string? ShipAddress { get; set; }
+        public string? ShipCity { get; set; }
         public List<PosCheckoutItemRequest> Items { get; set; } = new();
     }
 

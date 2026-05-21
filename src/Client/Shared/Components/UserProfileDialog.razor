@@ -75,7 +75,8 @@
                           Label="Họ và tên"
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
-                          Class="mb-3" />
+                          Class="mb-3"
+                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "name" })" />
             <MudSelect T="byte" @bind-Value="_profileModel.Gender"
                        Label="Giới tính"
                        Variant="Variant.Outlined"
@@ -95,12 +96,14 @@
                           Label="Địa chỉ"
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
-                          Class="mb-3" />
+                          Class="mb-3"
+                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "street-address" })" />
             <MudTextField @bind-Value="_profileModel.City"
                           Label="Thành phố"
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
-                          Class="mb-4" />
+                          Class="mb-4"
+                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "address-level2" })" />
             <MudButton OnClick="SaveProfile"
                        Variant="Variant.Filled"
                        Color="Color.Primary"
@@ -123,13 +126,15 @@
                           Variant="Variant.Outlined"
                           InputType="InputType.Password"
                           Margin="Margin.Dense"
-                          Class="mb-3" />
+                          Class="mb-3"
+                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "off" })" />
             <MudTextField @bind-Value="_pwModel.NewPassword"
                           Label="Mật khẩu mới"
                           Variant="Variant.Outlined"
                           InputType="InputType.Password"
                           Margin="Margin.Dense"
-                          Class="mb-3" />
+                          Class="mb-3"
+                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "new-password" })" />
             <MudTextField @bind-Value="_pwModel.ConfirmPassword"
                           Label="Xác nhận mật khẩu mới"
                           Variant="Variant.Outlined"
@@ -137,7 +142,8 @@
                           Margin="Margin.Dense"
                           Error="@_confirmError"
                           ErrorText="Mật khẩu xác nhận không khớp."
-                          Class="mb-3" />
+                          Class="mb-3"
+                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "new-password" })" />
             <MudButton OnClick="SubmitChangePassword"
                        Variant="Variant.Outlined"
                        Color="Color.Warning"

@@ -19,13 +19,7 @@
         {
             <MudIcon Icon="@Icons.Material.Filled.ImageNotSupported" Size="Size.Large" Color="Color.Surface" />
         }
-        @if (!Product.IsAvailable)
-        {
-            <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.55); display: flex; justify-content: center; padding: 4px;">
-                <MudText Typo="Typo.caption" Style="color: white; font-weight: 700;">Hết hàng</MudText>
-            </div>
-        }
-        <div style="position: absolute; top: 0; left: 0; z-index: 2;" @onclick:stopPropagation="true">
+<div style="position: absolute; top: 0; left: 0; z-index: 2;" @onclick:stopPropagation="true">
             <MudTooltip Text="@(ComparisonService.Contains(Product.Id) ? "Bỏ khỏi so sánh" : "Thêm vào so sánh")">
                 <MudIconButton Icon="@(ComparisonService.Contains(Product.Id) ? Icons.Material.Filled.CompareArrows : Icons.Material.Outlined.CompareArrows)"
                                Size="Size.Small"

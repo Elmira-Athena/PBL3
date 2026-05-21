@@ -1,7 +1,12 @@
 @page "/pos"
 @using PBL3.Shared.DTOs.Pos
+@using PBL3.Shared.DTOs.Vouchers
 @using Client.Services
+@using Client.Services.Voucher
+@using System.Text.Json.Serialization
 @inject IPosClientService PosService
+@inject IVoucherClientService VoucherService
+@inject IHttpClientFactory HttpClientFactory
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -24,15 +29,15 @@
     <MudGrid Spacing="6">
         <!-- Cột trái: Giỏ hàng -->
         <MudItem xs="12" md="8">
-            <MudPaper Class="pa-6" Elevation="0" 
+            <MudPaper Class="pa-6" Elevation="0"
                       Style="border-radius: 20px; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3); height: 100%; min-height: 600px;">
-                
+
                 <div class="d-flex align-center mb-6 pa-2 rounded-xl" style="background: white; border: 1px solid #eee;">
                     <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Color="Color.Primary" Class="ml-3 mr-2" />
-                    <MudTextField @bind-Value="_barcodeInput" Placeholder="Quét hoặc nhập mã Serial sản phẩm..." 
-                                  Variant="Variant.Text" Margin="Margin.None" Underline="false" 
+                    <MudTextField @bind-Value="_barcodeInput" Placeholder="Quét hoặc nhập mã Serial sản phẩm..."
+                                  Variant="Variant.Text" Margin="Margin.None" Underline="false"
                                   AutoFocus="true" OnKeyDown="HandleKeyPress" Class="mt-1" />
-                    <MudButton Variant="Variant.Filled" Color="Color.Error" Class="rounded-pill px-6 ml-4" 
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" Class="rounded-pill px-6 ml-4"
                                Style="height: 44px; text-transform: none; font-weight: 600;" OnClick="AddItemByBarcode">Thêm SP</MudButton>
                 </div>
 
@@ -70,16 +75,49 @@
                     </NoRecordsContent>
                 </MudTable>
 
+                <!-- Voucher combobox -->
                 <div class="d-flex justify-space-between align-center mt-auto pa-4 rounded-xl" style="background: #fdfdfd; border: 1px solid #f0f0f0;">
-                    <div class="d-flex align-center">
-                        <MudTextField @bind-Value="_voucherCode" Placeholder="Nhập mã ưu đãi..." 
-                                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="rounded-lg" 
-                                      Style="background: white; width: 220px;" Adornment="Adornment.End" 
-                                      AdornmentIcon="@Icons.Material.Filled.LocalOffer" AdornmentColor="Color.Primary" />
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-2 rounded-lg" 
-                                   Style="height: 40px; text-transform: none; box-shadow: none;" OnClick="ApplyVoucher">Áp dụng</MudButton>
-                    </div>
-                    <div class="text-right">
+                    <MudSelect T="VoucherAvailabilityDto?"
+                               Label="Chọn mã giảm giá"
+                               Value="_selectedVoucher"
+                               ValueChanged="OnVoucherSelected"
+                               ToStringFunc="@(v => v == null ? "" : $"{v.Code} — -{v.EstimatedDiscount:N0}đ")"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Clearable="true"
+                               OnOpen="LoadVouchersAsync"
+                               Style="background: white; min-width: 280px;"
+                               AnchorOrigin="Origin.BottomCenter">
+                        @if (_isLoadingVouchers)
+                        {
+                            <MudSelectItem T="VoucherAvailabilityDto?" Value="@((VoucherAvailabilityDto?)null)" Disabled="true">Đang tải danh sách voucher...</MudSelectItem>
+                        }
+                        else if (!_availableVouchers.Any())
+                        {
+                            <MudSelectItem T="VoucherAvailabilityDto?" Value="@((VoucherAvailabilityDto?)null)" Disabled="true">Không có voucher khả dụng</MudSelectItem>
+                        }
+                        else
+                        {
+                            @foreach (var v in _availableVouchers)
+                            {
+                                <MudSelectItem T="VoucherAvailabilityDto?" Value="v" Disabled="!v.IsApplicable">
+                                    <div style="@(!v.IsApplicable ? "opacity:0.5" : "")">
+                                        <span style="font-weight:600">@v.Code</span> — @v.Name
+                                        @if (v.IsApplicable)
+                                        {
+                                            <span style="color:#27ae60; margin-left:6px">-@v.EstimatedDiscount.ToString("N0")đ</span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color:#999; font-size:0.75rem; margin-left:6px">(@v.NotApplicableReason)</span>
+                                        }
+                                    </div>
+                                </MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+
+                    <div class="text-right ml-4">
                         <MudText Typo="Typo.h5" Style="font-weight: 900; color: var(--mud-palette-primary);">@_subTotal.ToString("N0") đ</MudText>
                         <MudText Style="color: #27ae60; font-size: 0.8rem; font-weight: 600;">
                             <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" Class="mr-1" />
@@ -99,11 +137,11 @@
                         <MudText Typo="Typo.h6" Style="font-weight: 700;">Khách hàng</MudText>
                         <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Style="text-transform: none;" OnClick="AddNewCustomer">Khách mới</MudButton>
                     </div>
-                    
+
                     <MudTextField @bind-Value="_customer.PhoneNumber" Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4"
-                                  Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" OnAdornmentClick="SearchCustomer" 
+                                  Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" OnAdornmentClick="SearchCustomer"
                                   placeholder="Nhập SĐT khách..." />
-                    
+
                     @if (!string.IsNullOrWhiteSpace(_customer.FullName))
                     {
                         <div class="pa-4 rounded-lg mb-4" style="background: #eef2ff; border-left: 4px solid var(--mud-palette-primary);">
@@ -112,13 +150,65 @@
                         </div>
                     }
 
-                    <MudTextField @bind-Value="_customerAddress" Label="Địa chỉ xuất kho/giao hàng" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                    <!-- Địa chỉ giao hàng: OpenProvince cascade dropdown -->
+                    <MudSelect T="ProvinceItem?"
+                               Label="Tỉnh / Thành phố"
+                               Value="_selectedProvince"
+                               ValueChanged="OnProvinceChanged"
+                               ToStringFunc="@(p => p?.Name ?? string.Empty)"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Clearable="true"
+                               Disabled="_isLoadingProvinces"
+                               AnchorOrigin="Origin.BottomCenter">
+                        @if (_isLoadingProvinces)
+                        {
+                            <MudSelectItem T="ProvinceItem?" Value="@((ProvinceItem?)null)" Disabled="true">Đang tải...</MudSelectItem>
+                        }
+                        else
+                        {
+                            @foreach (var p in _provinces)
+                            {
+                                <MudSelectItem T="ProvinceItem?" Value="p">@p.Name</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="WardItem?"
+                               Label="Phường / Xã"
+                               @bind-Value="_selectedWard"
+                               ToStringFunc="@(w => w?.Name ?? string.Empty)"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               Clearable="true"
+                               Class="mt-2"
+                               Disabled="@(_selectedProvince == null || _isLoadingWards)"
+                               AnchorOrigin="Origin.BottomCenter">
+                        @if (_isLoadingWards)
+                        {
+                            <MudSelectItem T="WardItem?" Value="@((WardItem?)null)" Disabled="true">Đang tải...</MudSelectItem>
+                        }
+                        else
+                        {
+                            @foreach (var w in _wards)
+                            {
+                                <MudSelectItem T="WardItem?" Value="w">@w.Name</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+
+                    <MudTextField @bind-Value="_street"
+                                  Label="Số nhà, tên đường"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Class="mt-2"
+                                  Placeholder="VD: 123 Đường Lê Lợi" />
                 </MudPaper>
 
                 <!-- Tóm tắt dòng tiền -->
                 <MudPaper Class="pa-6" Elevation="0" Style="border-radius: 20px; background: white;">
                     <MudText Typo="Typo.h6" Style="font-weight: 700;" Class="mb-4">Tóm tắt thanh toán</MudText>
-                    
+
                     <div class="d-flex justify-space-between mb-2">
                         <MudText Style="color: #666;">Tổng tiền hàng</MudText>
                         <MudText Style="font-weight: 600;">@_subTotal.ToString("N0") đ</MudText>
@@ -140,8 +230,8 @@
                         <MudRadio Value="@((byte)2)" Color="Color.Primary">Quẹt thẻ ngân hàng</MudRadio>
                     </MudRadioGroup>
 
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="py-4 rounded-pill" 
-                               Style="text-transform: none; font-weight: 800; font-size: 1.1rem; box-shadow: 0 8px 16px rgba(var(--mud-palette-primary-rgb), 0.3);" 
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="py-4 rounded-pill"
+                               Style="text-transform: none; font-weight: 800; font-size: 1.1rem; box-shadow: 0 8px 16px rgba(var(--mud-palette-primary-rgb), 0.3);"
                                OnClick="ProcessPayment">
                         HOÀN TẤT ĐƠN HÀNG
                     </MudButton>
@@ -153,15 +243,40 @@
 
 @code {
     private string _barcodeInput = "";
-    private string _voucherCode = "";
-    private string _customerAddress = "";
     private byte _paymentMethod = 0;
     private List<PosScanResponse> _cartItems = new();
     private PosCustomerDto _customer = new();
-    
+
     private decimal _subTotal => _cartItems.Sum(x => x.Price);
     private decimal _discountAmount = 0;
     private decimal _totalAmount => _subTotal - _discountAmount;
+
+    // Voucher
+    private VoucherAvailabilityDto? _selectedVoucher;
+    private List<VoucherAvailabilityDto> _availableVouchers = new();
+    private bool _isLoadingVouchers;
+
+    // Address (OpenProvince)
+    private List<ProvinceItem> _provinces = new();
+    private List<WardItem> _wards = new();
+    private ProvinceItem? _selectedProvince;
+    private WardItem? _selectedWard;
+    private string _street = "";
+    private bool _isLoadingProvinces;
+    private bool _isLoadingWards;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoadingProvinces = true;
+        try
+        {
+            var http = HttpClientFactory.CreateClient("ProvincesAPI");
+            var list = await http.GetFromJsonAsync<List<ProvinceItem>>("api/v2/p/");
+            _provinces = list ?? new();
+        }
+        catch { /* địa chỉ là tuỳ chọn, không chặn trang nếu API province lỗi */ }
+        finally { _isLoadingProvinces = false; }
+    }
 
     private async Task HandleKeyPress(KeyboardEventArgs e)
     {
@@ -181,6 +296,10 @@
                 _cartItems.Add(result.Data);
                 _barcodeInput = "";
                 Snackbar.Add("Đã thêm: " + result.Data.ProductName, Severity.Success);
+                // Reset voucher khi giỏ hàng thay đổi (subTotal thay đổi)
+                _selectedVoucher = null;
+                _discountAmount = 0;
+                _availableVouchers = new();
             }
         }
         else Snackbar.Add(result.Message, Severity.Error);
@@ -189,6 +308,9 @@
     private void RemoveItem(PosScanResponse item)
     {
         _cartItems.Remove(item);
+        _selectedVoucher = null;
+        _discountAmount = 0;
+        _availableVouchers = new();
         Snackbar.Add("Gỡ sản phẩm thành công", Severity.Info);
     }
 
@@ -204,16 +326,48 @@
         else Snackbar.Add(result.Message, Severity.Warning);
     }
 
-    private async Task ApplyVoucher()
+    private async Task LoadVouchersAsync()
     {
-        if (string.IsNullOrWhiteSpace(_voucherCode)) return;
-        var result = await PosService.ValidateVoucherAsync(_voucherCode, _subTotal);
-        if (result.Success && result.Data != null)
+        if (_isLoadingVouchers) return;
+        _isLoadingVouchers = true;
+        StateHasChanged();
+        try
         {
-            _discountAmount = result.Data.DiscountAmount;
-            Snackbar.Add("Áp dụng mã giảm giá thành công", Severity.Success);
+            var result = await VoucherService.GetAvailableForOrderAsync(
+                new GetAvailableVouchersRequest { SubTotal = _subTotal, IsOnlineOrder = false });
+            if (result.Success && result.Data != null)
+                _availableVouchers = result.Data;
         }
-        else Snackbar.Add(result.Message, Severity.Error);
+        finally
+        {
+            _isLoadingVouchers = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnVoucherSelected(VoucherAvailabilityDto? voucher)
+    {
+        _selectedVoucher = voucher;
+        _discountAmount = voucher?.EstimatedDiscount ?? 0;
+    }
+
+    private async Task OnProvinceChanged(ProvinceItem? province)
+    {
+        _selectedProvince = province;
+        _selectedWard = null;
+        _wards = new();
+        if (province == null) return;
+
+        _isLoadingWards = true;
+        StateHasChanged();
+        try
+        {
+            var http = HttpClientFactory.CreateClient("ProvincesAPI");
+            var detail = await http.GetFromJsonAsync<ProvinceDetail>($"api/v2/p/{province.Code}?depth=2");
+            _wards = detail?.Wards ?? new();
+        }
+        catch { }
+        finally { _isLoadingWards = false; StateHasChanged(); }
     }
 
     private async Task SaveDraft()
@@ -237,7 +391,6 @@
         var result = await PosService.GetDraftsAsync();
         if (result.Success && result.Data != null)
         {
-            // Tạm thời log ra, thực tế sẽ hiện Popup list để chọn
             Snackbar.Add($"Tìm thấy {result.Data.Count} đơn chờ.", Severity.Info);
         }
     }
@@ -246,19 +399,27 @@
     {
         _cartItems.Clear();
         _customer = new();
-        _voucherCode = "";
+        _selectedVoucher = null;
         _discountAmount = 0;
-        _customerAddress = "";
+        _availableVouchers = new();
+        _street = "";
+        _selectedProvince = null;
+        _selectedWard = null;
+        _wards = new();
         StateHasChanged();
     }
 
     private PosCheckoutRequest GetCheckoutRequest()
     {
+        var shipAddress = string.IsNullOrWhiteSpace(_street) ? null
+            : $"{_street}{(_selectedWard != null ? ", " + _selectedWard.Name : "")}";
         return new PosCheckoutRequest
         {
             CustomerPhone = _customer.PhoneNumber,
-            VoucherCode = _voucherCode,
+            VoucherCode = _selectedVoucher?.Code,
             PaymentMethod = _paymentMethod,
+            ShipAddress = shipAddress,
+            ShipCity = _selectedProvince?.Name,
             Items = _cartItems.Select(x => new PosCheckoutItemRequest { SerialId = x.SerialId }).ToList()
         };
     }
@@ -281,4 +442,24 @@
     }
 
     private void AddNewCustomer() => Snackbar.Add("Chức năng thêm khách mới đang được tích hợp", Severity.Info);
+
+    // ===== PROVINCES API v2 MODELS =====
+    private class ProvinceItem
+    {
+        [JsonPropertyName("code")] public int Code { get; set; }
+        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    }
+
+    private class ProvinceDetail
+    {
+        [JsonPropertyName("code")] public int Code { get; set; }
+        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+        [JsonPropertyName("wards")] public List<WardItem> Wards { get; set; } = new();
+    }
+
+    private class WardItem
+    {
+        [JsonPropertyName("code")] public int Code { get; set; }
+        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    }
 }

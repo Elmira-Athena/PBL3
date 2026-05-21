@@ -77,7 +77,8 @@
                 <MudGrid Spacing="3">
                     <MudItem xs="12">
                         <MudTextField @bind-Value="_model.FullName" Label="Họ và tên" Variant="Variant.Outlined"
-                                      Margin="Margin.Dense" Required="true" />
+                                      Margin="Margin.Dense" Required="true"
+                                      UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "name" })" />
                     </MudItem>
 
                     <MudItem xs="12" sm="6">
@@ -95,12 +96,14 @@
 
                     <MudItem xs="12">
                         <MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined"
-                                      Margin="Margin.Dense" />
+                                      Margin="Margin.Dense"
+                                      UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "street-address" })" />
                     </MudItem>
 
                     <MudItem xs="12">
                         <MudTextField @bind-Value="_model.City" Label="Thành phố" Variant="Variant.Outlined"
-                                      Margin="Margin.Dense" />
+                                      Margin="Margin.Dense"
+                                      UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "address-level2" })" />
                     </MudItem>
 
                     <!-- Read-only info -->

@@ -23,7 +23,10 @@ namespace Client.Services.Pos
                 var request = new PosScanRequest { SerialNumber = serialNumber };
                 var response = await _httpClient.PostAsJsonAsync($"/api/pos/scan", request);
                 if (!response.IsSuccessStatusCode)
-                    return ApiResult<PosScanResponse>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                {
+                    var err = await response.Content.ReadFromJsonAsync<ApiResult<PosScanResponse>>();
+                    return err ?? ApiResult<PosScanResponse>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                }
                 return await response.Content.ReadFromJsonAsync<ApiResult<PosScanResponse>>()
                     ?? ApiResult<PosScanResponse>.Fail("Lỗi hệ thống khi quét mã.");
             }
@@ -35,7 +38,7 @@ namespace Client.Services.Pos
 
         public async Task<ApiResult<PosCustomerDto>> SearchCustomerByPhoneAsync(string phone)
         {
-            var response = await _httpClient.GetAsync($"/api/pos/customer/{phone}");
+            var response = await _httpClient.GetAsync($"/api/pos/customer?phone={Uri.EscapeDataString(phone)}");
             if (!response.IsSuccessStatusCode) return new ApiResult<PosCustomerDto> { Success = false, Message = "Không tìm thấy khách hàng." };
             return await response.Content.ReadFromJsonAsync<ApiResult<PosCustomerDto>>()
                 ?? ApiResult<PosCustomerDto>.Fail("Lỗi hệ thống khi tìm kiếm khách hàng.");
@@ -43,8 +46,9 @@ namespace Client.Services.Pos
 
         public async Task<ApiResult<VoucherValidationDto>> ValidateVoucherAsync(string code, decimal subTotal)
         {
-            var response = await _httpClient.GetAsync($"/api/pos/voucher/validate?code={code}&subTotal={subTotal}");
-             if (!response.IsSuccessStatusCode) return new ApiResult<VoucherValidationDto> { Success = false, Message = "Lỗi khi kiểm tra voucher." };
+            var response = await _httpClient.PostAsync(
+                $"/api/pos/voucher/validate?code={Uri.EscapeDataString(code)}&subTotal={subTotal}", null);
+            if (!response.IsSuccessStatusCode) return new ApiResult<VoucherValidationDto> { Success = false, Message = "Lỗi khi kiểm tra voucher." };
             return await response.Content.ReadFromJsonAsync<ApiResult<VoucherValidationDto>>()
                 ?? ApiResult<VoucherValidationDto>.Fail("Lỗi hệ thống khi kiểm tra voucher.");
         }
@@ -55,7 +59,10 @@ namespace Client.Services.Pos
             {
                 var response = await _httpClient.PostAsJsonAsync("/api/pos/checkout", request);
                 if (!response.IsSuccessStatusCode)
-                    return ApiResult<PosOrderDto>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                {
+                    var err = await response.Content.ReadFromJsonAsync<ApiResult<PosOrderDto>>();
+                    return err ?? ApiResult<PosOrderDto>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
+                }
                 return await response.Content.ReadFromJsonAsync<ApiResult<PosOrderDto>>()
                     ?? ApiResult<PosOrderDto>.Fail("Lỗi hệ thống khi thanh toán.");
             }
