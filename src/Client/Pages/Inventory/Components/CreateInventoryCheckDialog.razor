@@ -1,0 +1,181 @@
+@using Client.Services.Inventory
+@using Client.Services.Category
+@using PBL3.Shared.DTOs.Inventory
+@using PBL3.Shared.DTOs.Categories
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.FactCheck" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Tạo phiếu kiểm kê mới</MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_isLoadingCategories)
+        {
+            <MudStack Spacing="3" Class="pa-4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="56px" />
+            </MudStack>
+        }
+        else
+        {
+            <MudForm @ref="_form" Model="_model">
+                <MudStack Spacing="3" Class="pt-2">
+                    <div>
+                        <MudText Typo="Typo.body2" Class="mb-2" Style="font-weight: 500;">Phạm vi kiểm kê</MudText>
+                        <MudRadioGroup T="byte" @bind-Value="_model.ScopeType">
+                            <MudRadio T="byte" Value="@((byte)0)" Color="Color.Primary">
+                                Toàn kho — kiểm tất cả sản phẩm
+                            </MudRadio>
+                            <MudRadio T="byte" Value="@((byte)1)" Color="Color.Primary">
+                                Theo danh mục
+                            </MudRadio>
+                        </MudRadioGroup>
+                    </div>
+
+                    @if (_model.ScopeType == 1)
+                    {
+                        <MudSelect T="int?"
+                                   @bind-Value="_model.ScopeCategoryId"
+                                   Label="Chọn danh mục kiểm kê"
+                                   Variant="Variant.Outlined"
+                                   Required="true"
+                                   RequiredError="Vui lòng chọn danh mục."
+                                   AnchorOrigin="Origin.BottomCenter">
+                            @foreach (var item in _flatCategories)
+                            {
+                                <MudSelectItem T="int?" Value="@item.Id">
+                                    @item.DisplayName
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+
+                    <MudTextField @bind-Value="_model.Note"
+                                  Label="Ghi chú (tùy chọn)"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="500"
+                                  Counter="500"
+                                  Lines="3"
+                                  Placeholder="VD: Kiểm kê định kỳ tháng 5/2026" />
+                </MudStack>
+            </MudForm>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3 rounded-lg" Variant="Variant.Filled">
+                    @_errorMessage
+                </MudAlert>
+            }
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default" Style="text-transform: none;">
+            Hủy
+        </MudButton>
+        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(_isSaving || _isLoadingCategories)"
+                   Style="text-transform: none; border-radius: 8px;">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Tạo phiếu &amp; chốt snapshot
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private IInventoryCheckClientService CheckService { get; set; } = null!;
+    [Inject] private ICategoryClientService CategoryService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    private MudForm _form = null!;
+    private FormModel _model = new();
+    private bool _isSaving;
+    private bool _isLoadingCategories = true;
+    private string? _errorMessage;
+    private List<FlatCategoryItem> _flatCategories = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await CategoryService.GetTreeAsync();
+        if (result.Success && result.Data != null)
+            _flatCategories = FlattenTree(result.Data, 0);
+        _isLoadingCategories = false;
+    }
+
+    private static List<FlatCategoryItem> FlattenTree(List<CategoryTreeDto> nodes, int depth)
+    {
+        var list = new List<FlatCategoryItem>();
+        foreach (var node in nodes)
+        {
+            var prefix = depth > 0 ? new string('—', depth) + " " : string.Empty;
+            list.Add(new FlatCategoryItem { Id = node.Id, DisplayName = prefix + node.Name });
+            if (node.Children?.Count > 0)
+                list.AddRange(FlattenTree(node.Children, depth + 1));
+        }
+        return list;
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        if (_model.ScopeType == 1 && (!_model.ScopeCategoryId.HasValue || _model.ScopeCategoryId.Value <= 0))
+        {
+            _errorMessage = "Vui lòng chọn danh mục kiểm kê.";
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new CreateInventoryCheckRequest
+            {
+                ScopeType = _model.ScopeType,
+                ScopeCategoryId = _model.ScopeType == 1 ? _model.ScopeCategoryId : null,
+                Note = string.IsNullOrWhiteSpace(_model.Note) ? null : _model.Note.Trim()
+            };
+
+            var result = await CheckService.CreateAsync(request);
+            if (result.Success && result.Data != null)
+            {
+                Snackbar.Add($"Đã tạo phiếu {result.Data.CheckCode} và chốt snapshot thành công!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(result.Data.Id));
+            }
+            else
+            {
+                _errorMessage = result.Message ?? "Không thể tạo phiếu kiểm kê.";
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private class FormModel
+    {
+        public byte ScopeType { get; set; } = 0;
+        public int? ScopeCategoryId { get; set; }
+        public string? Note { get; set; }
+    }
+
+    private class FlatCategoryItem
+    {
+        public int Id { get; set; }
+        public string DisplayName { get; set; } = string.Empty;
+    }
+}

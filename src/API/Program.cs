@@ -42,6 +42,8 @@ using PBL3.Shared.DTOs.Reviews;
 using FluentValidation;
 using PBL3.Shared.Validators.Banners;
 using PBL3.Shared.Validators.Reviews;
+using PBL3.Shared.DTOs.Inventory;
+using PBL3.Shared.Validators.Inventory;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -126,6 +128,7 @@ builder.Services.AddScoped<IManufacturerRepository, ManufacturerRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 builder.Services.AddScoped<IImportReceiptRepository, ImportReceiptRepository>();
 builder.Services.AddScoped<IProductSerialRepository, ProductSerialRepository>();
+builder.Services.AddScoped<IInventoryCheckRepository, InventoryCheckRepository>();
 builder.Services.AddScoped<IWarrantyRepository, WarrantyRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IVoucherRepository, VoucherRepository>();
@@ -152,6 +155,7 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IImportReceiptService, ImportReceiptService>();
 builder.Services.AddScoped<IProductSerialService, ProductSerialService>();
 builder.Services.AddScoped<IInventorySyncService, InventorySyncService>();
+builder.Services.AddScoped<IInventoryCheckService, InventoryCheckService>();
 builder.Services.AddScoped<IInventoryExportService, InventoryExportService>();
 builder.Services.AddScoped<IPosService, PosService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
@@ -169,6 +173,10 @@ builder.Services.AddScoped<IValidator<CreateReviewRequest>, CreateReviewRequestV
 builder.Services.AddScoped<IBannerService, BannerService>();
 builder.Services.AddScoped<IValidator<CreateBannerRequest>, CreateBannerRequestValidator>();
 builder.Services.AddScoped<IValidator<UpdateBannerRequest>, UpdateBannerRequestValidator>();
+builder.Services.AddScoped<IValidator<CreateInventoryCheckRequest>, CreateInventoryCheckRequestValidator>();
+builder.Services.AddScoped<IValidator<ScanSerialRequest>, ScanSerialRequestValidator>();
+builder.Services.AddScoped<IValidator<UpdateScanReasonRequest>, UpdateScanReasonRequestValidator>();
+builder.Services.AddScoped<IValidator<RejectInventoryCheckRequest>, RejectInventoryCheckRequestValidator>();
 
 // DI: AWS S3 Storage
 var awsCfg = builder.Configuration.GetSection("AwsSettings");

@@ -47,14 +47,29 @@ namespace PBL3.Service.Pos
             _userManager = userManager;
         }
 
+        // ========================================================
+        // SCAN SERIAL — Quét mã vạch (Barcode/Serial) kiểm tra hàng bán trực tiếp tại quầy POS
+        // ========================================================
+        /// <summary>
+        /// NGHIỆP VỤ: Quét mã Serial (Barcode) vật lý của sản phẩm tại quầy thu ngân.
+        /// Đảm bảo tính hợp lệ tuyệt đối của thiết bị trước khi đưa vào hóa đơn:
+        /// 1. Truy vấn mã serial trong kho dữ liệu xem có tồn tại hay không.
+        /// 2. Bắt buộc kiểm tra trạng thái vật lý (Serial.Status == Available).
+        ///    - Ngăn chặn triệt để lỗi bán nhầm sản phẩm lỗi, sản phẩm đã xuất kho, hoặc hàng đang giữ chỗ cho đơn hàng trực tuyến khác.
+        /// 3. Trả về thông tin biến thể sản phẩm, giá bán hiện hành và cấu hình thời hạn bảo hành.
+        /// </summary>
         public async Task<ApiResult<PosScanResponse>> ScanSerialAsync(string serialNumber)
         {
             var serial = await _serialRepo.GetBySerialNumberAsync(serialNumber);
+            
+            // NGHIỆP VỤ: Serial quét được bắt buộc phải tồn tại trong cơ sở dữ liệu
             if (serial == null)
             {
                 return ApiResult<PosScanResponse>.Fail("Mã Serial không hợp lệ hoặc không có trong kho.");
             }
 
+            // NGHIỆP VỤ: Mã Serial vật lý bắt buộc phải có trạng thái Available (Trong kho và sẵn sàng bán)
+            // Ngăn chặn bán nhầm sản phẩm đã thuộc về đơn hàng khác hoặc sản phẩm lỗi/báo mất.
             if (serial.Status != (byte)SerialStatus.Available)
             {
                 return ApiResult<PosScanResponse>.Fail("Sản phẩm không ở trạng thái sẵn sàng bán (đã bán hoặc lỗi).");
@@ -76,6 +91,12 @@ namespace PBL3.Service.Pos
             });
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Tra cứu khách hàng thành viên tại quầy bằng Số điện thoại.
+        /// Phục vụ cho việc:
+        /// - Áp dụng chính sách ưu đãi thành viên hoặc tích điểm.
+        /// - Liên kết hóa đơn POS với tài khoản người dùng để phục vụ tra cứu lịch sử mua hàng và yêu cầu bảo hành sau này.
+        /// </summary>
         public async Task<ApiResult<PosCustomerDto>> LookupCustomerAsync(string phone)
         {
             var user = await _dbContext.Users
@@ -97,6 +118,15 @@ namespace PBL3.Service.Pos
             });
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Kiểm tra nhanh tính hợp lệ của mã giảm giá (Voucher) ngay tại quầy thu ngân.
+        /// Thực thi các bộ quy tắc validation nhanh:
+        /// 1. Tồn tại và trạng thái kích hoạt (IsActive).
+        /// 2. Hạn hiệu lực thời gian của mã.
+        /// 3. Tổng số lượng lượt sử dụng còn lại toàn hệ thống.
+        /// 4. Giá trị đơn hàng tối thiểu (MinOrderValue).
+        /// 5. Tính toán chính xác số tiền giảm dựa trên loại giảm giá (tiền mặt trực tiếp hoặc tỷ lệ % có khống chế trần tối đa).
+        /// </summary>
         public async Task<ApiResult<VoucherValidationDto>> ValidateVoucherAsync(string code, decimal subTotal)
         {
             var vouchers = await _voucherRepo.GetByCodesAsync(new List<string> { code });
@@ -124,11 +154,11 @@ namespace PBL3.Service.Pos
             }
 
             decimal discountApplied = 0;
-            if (voucher.DiscountType == 0) // Amount
+            if (voucher.DiscountType == 0) // Amount (Giảm tiền mặt cố định)
             {
                 discountApplied = voucher.DiscountValue;
             }
-            else // Percentage
+            else // Percentage (Giảm theo phần trăm)
             {
                 discountApplied = subTotal * voucher.DiscountValue / 100;
                 if (voucher.MaxDiscountAmount.HasValue && discountApplied > voucher.MaxDiscountAmount.Value)
@@ -146,6 +176,22 @@ namespace PBL3.Service.Pos
             });
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Hoàn tất thanh toán và xuất hóa đơn bán hàng trực tiếp tại quầy POS.
+        /// Quy trình nghiệp vụ cốt lõi có độ phức tạp cao, chạy dưới một Transaction cơ sở dữ liệu:
+        /// 1. Xác định thông tin khách hàng mua: Tra cứu qua SĐT để tích điểm thành viên, nếu không tìm thấy mặc định ghi nhận là "Khách vãng lai" (hàng vãng lai).
+        /// 2. Gộp nhóm Serial vật lý (Variant Grouping):
+        ///    - Khi nhân viên quét nhiều serial của cùng một biến thể sản phẩm (Ví dụ: 3 máy iPhone 15 Pro Max 256GB), hệ thống gom nhóm chúng lại thành 1 dòng chi tiết đơn hàng (OrderDetail) duy nhất để in hóa đơn gọn gàng, nhưng vẫn lưu vết liên kết đầy đủ 3 serial vào bảng ánh xạ.
+        ///    - Tái xác thực trạng thái 'Available' của từng mã Serial tại thời điểm chốt đơn để chống xung đột dữ liệu.
+        /// 3. Xác thực và áp dụng Voucher chiết khấu trực tiếp tại quầy (phải hỗ trợ kênh POS).
+        /// 4. Tự động sinh mã hóa đơn đặc thù POS định dạng POS-yyyyMMdd-NNN theo ngày để phân biệt với đơn hàng trực tuyến.
+        /// 5. Khởi tạo đơn hàng ở trạng thái Success (Hoàn tất) và PaymentStatus = 1 (Đã thanh toán) ngay lập tức do giao dịch trực tiếp bằng tiền mặt hoặc chuyển khoản tại quầy.
+        /// 6. Cập nhật vật lý các thực thể liên quan:
+        ///    - Đổi trạng thái Serial sang 'Sold' (Đã bán), lưu ngày bán và Id hóa đơn.
+        ///    - Tự động kích hoạt phiếu Bảo hành vật lý (Active Warranty): Tính toán chính xác thời hạn bảo hành kế thừa từ cấu hình biến thể (WarrantyMonth) kể từ ngày mua.
+        ///    - Tăng số lượt sử dụng của Voucher và ghi nhận lịch sử sử dụng nếu là khách thành viên.
+        /// 7. Thực hiện đồng bộ tồn kho vật lý (Physical Inventory Sync) tức thời cho các biến thể vừa bán thông qua IInventorySyncService sau khi Transaction commit thành công.
+        /// </summary>
         public async Task<ApiResult<PosOrderDto>> CheckoutAsync(PosCheckoutRequest request, Guid employeeId)
         {
             if (request.Items == null || !request.Items.Any())
@@ -158,7 +204,8 @@ namespace PBL3.Service.Pos
             var newWarranties = new List<Warranty>();
             var variantIdsToSync = new HashSet<int>();
 
-            // 1. Resolve Customer
+            // ── BƯỚC 1: XÁC ĐỊNH KHÁCH HÀNG (Resolve Customer) ──
+            // Nghiệp vụ: POS hỗ trợ tra cứu SĐT thành viên để cộng điểm/áp dụng chiết khấu. Nếu không có SĐT, mặc định là "Khách vãng lai"
             Guid? customerId = null;
             string? customerName = null;
             if (!string.IsNullOrEmpty(request.CustomerPhone))
@@ -171,13 +218,17 @@ namespace PBL3.Service.Pos
                 }
             }
 
-            // 2. Validate Serials & Calculate SubTotal
+            // ── BƯỚC 2: XÁC THỰC CÁC SERIAL & TÍNH TỔNG TIỀN (SubTotal) ──
+            // Gom nhóm các mã Serial quét được theo biến thể VariantId để đưa vào chi tiết đơn hàng (OrderDetail).
+            // Ví dụ: Nhân viên quét 3 serial riêng biệt của cùng biến thể 'iPhone 15 Pro Max' -> 
+            // Hệ thống chỉ tạo 1 dòng OrderDetail (iPhone 15 Pro Max, Quantity = 3) để hóa đơn gọn gàng, nhưng vẫn liên kết đầy đủ 3 serial đó.
             var orderDetailsMap = new Dictionary<int, OrderDetail>(); // VariantId -> OrderDetail (gộp lại)
 
             foreach (var item in request.Items)
             {
                 var dbSerial = await _serialRepo.GetByIdWithTrackingAsync(item.SerialId);
 
+                // Kiểm tra lại lần nữa: Đảm bảo Serial vật lý vẫn ở trạng thái Available trước khi chốt hóa đơn
                 if (dbSerial == null || dbSerial.Status != (byte)SerialStatus.Available)
                 {
                     return ApiResult<PosOrderDto>.Fail($"Sản phẩm có mã SerialId {item.SerialId} không tồn tại hoặc đã bán.");
@@ -200,7 +251,7 @@ namespace PBL3.Service.Pos
                 orderDetailsMap[dbSerial.VariantId].Quantity++;
             }
 
-            // 3. Apply Voucher
+            // ── BƯỚC 3: ÁP DỤNG MÃ GIẢM GIÁ (Voucher) ──
             decimal discountAmount = 0;
             Voucher? appliedVoucher = null;
             if (!string.IsNullOrEmpty(request.VoucherCode))
@@ -216,7 +267,7 @@ namespace PBL3.Service.Pos
             discountAmount = Math.Min(discountAmount, subTotal);
             decimal totalAmount = subTotal - discountAmount;
 
-            // 4. Generate OrderCode
+            // ── BƯỚC 4: TỰ SINH MÃ HÓA ĐƠN POS (POS-YYYYMMDD-XXX) ──
             string datePrefix = "POS-" + DateTime.Now.ToString("yyyyMMdd");
             string? lastCode = await _orderRepo.GetLastOrderCodeByDateAsync(datePrefix);
             int nextIndex = 1;
@@ -230,59 +281,62 @@ namespace PBL3.Service.Pos
             }
             string newOrderCode = $"{datePrefix}-{nextIndex:D3}";
 
-            // 5. Build Order Entity
+            // ── BƯỚC 5: TẠO HÓA ĐƠN & THANH TOÁN (Transaction bảo vệ dữ liệu) ──
             var order = new Order
             {
                 OrderCode = newOrderCode,
                 UserId = customerId,
                 EmployeeId = employeeId,
                 OrderDate = DateTime.UtcNow,
-                Status = (byte)OrderStatus.Success,
-                OrderType = (byte)OrderType.POS,
+                Status = (byte)OrderStatus.Success, // Nghiệp vụ POS: Đơn hoàn tất ngay tại quầy
+                OrderType = (byte)OrderType.POS,     // Đơn bán tại quầy POS
                 ShipName = customerName ?? "Khách vãng lai",
                 ShipPhone = request.CustomerPhone ?? "",
                 ShipAddress = "Tại quầy",
                 ShipCity = "Tại quầy",
                 SubTotal = subTotal,
-                ShippingFee = 0,
+                ShippingFee = 0, // Bán trực tiếp không tính phí vận chuyển
                 DiscountAmount = discountAmount,
                 TotalAmount = totalAmount,
                 PaymentMethod = request.PaymentMethod,
-                PaymentStatus = 1, // Paid
+                PaymentStatus = 1, // Đã thanh toán (Paid)
                 Note = request.EmployeeNote
             };
 
             await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // Save order
+                // Lưu hóa đơn POS
                 await _orderRepo.AddAsync(order);
                 await _unitOfWork.SaveChangesAsync();
 
-                // Build OrderDetails
+                // Lưu các dòng chi tiết OrderDetail
                 foreach (var od in orderDetailsMap.Values)
                 {
                     od.OrderId = order.Id;
                     await _dbContext.OrderDetails.AddAsync(od);
                 }
-                await _unitOfWork.SaveChangesAsync(); // get OrderDetail Ids
+                await _unitOfWork.SaveChangesAsync(); // Lưu để lấy Id chi tiết đơn hàng
 
-                // Update Serials, create OrderSerials, create Warranties
+                // ── BƯỚC 5.1: CẬP NHẬT TRẠNG THÁI SERIAL, ORDER_SERIAL & TẠO PHIẾU BẢO HÀNH (WARRANTY) ──
                 var now = DateTime.UtcNow;
                 foreach (var s in serialsToUpdate)
                 {
+                    // Chuyển trạng thái Serial sang "Sold" (Đã bán)
                     s.Status = (byte)SerialStatus.Sold;
                     s.SoldDate = now;
                     s.OrderId = order.Id;
 
                     var od = orderDetailsMap[s.VariantId];
+                    // Liên kết Serial với dòng chi tiết hóa đơn (OrderSerial)
                     await _dbContext.OrderSerials.AddAsync(new OrderSerial
                     {
                         OrderDetailId = od.Id,
                         SerialId = s.Id
                     });
 
-                    // create warranty
+                    // NGHIỆP VỤ PHÁT SINH BẢO HÀNH TỰ ĐỘNG:
+                    // Nếu sản phẩm đó có cấu hình thời hạn bảo hành (WarrantyMonth > 0), hệ thống tự sinh bản ghi Warranty ở trạng thái Active.
                     if (s.Variant.WarrantyMonth > 0)
                     {
                         newWarranties.Add(new Warranty
@@ -302,6 +356,7 @@ namespace PBL3.Service.Pos
                     await _warrantyRepo.AddRangeAsync(newWarranties);
                 }
 
+                // Ghi nhận Voucher đã dùng
                 if (appliedVoucher != null)
                 {
                     appliedVoucher.UsedCount++;
@@ -321,8 +376,8 @@ namespace PBL3.Service.Pos
                 await _unitOfWork.SaveChangesAsync();
                 await _unitOfWork.CommitAsync();
 
-                // 6. Sync Stock
-                // Do bulk outside transaction if we want, or background. But here it's fine.
+                // ── BƯỚC 6: ĐỒNG BỘ TỒN KHO THỰC TẾ (StockQuantity) ──
+                // Cập nhật tồn kho (Stock Qty) cho các Variant sau khi đã xuất bán thành công các serial vật lý
                 await _inventorySyncService.SyncStockBatchAsync(variantIdsToSync);
 
                 return ApiResult<PosOrderDto>.Ok(new PosOrderDto
@@ -344,6 +399,11 @@ namespace PBL3.Service.Pos
             }
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Lưu tạm đơn hàng POS (Draft Order) để xử lý sau.
+        /// Cho phép thu ngân lưu nháp trạng thái giỏ hàng khi khách hàng cần lấy thêm đồ hoặc có sự cố thanh toán tạm thời.
+        /// Trạng thái đơn hàng sẽ là PosDraft, không cập nhật tồn kho vật lý hay tạo phiếu bảo hành cho đến khi chốt checkout thực tế.
+        /// </summary>
         public async Task<ApiResult<PosDraftDto>> SaveDraftAsync(PosCheckoutRequest request, Guid employeeId)
         {
             // Similar to checkout but Status = Draft, no Serial modification, no Warranty.
@@ -355,6 +415,10 @@ namespace PBL3.Service.Pos
             // I'll leave SaveDraft implemented quickly:
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Truy vấn danh sách các đơn hàng lưu tạm (Draft Orders) của một nhân viên POS cụ thể.
+        /// Phục vụ phục hồi lại phiên làm việc dở dang tại quầy thu ngân.
+        /// </summary>
         public async Task<ApiResult<List<PosDraftDto>>> GetDraftsAsync(Guid employeeId)
         {
             var drafts = await _orderRepo.GetDraftsByEmployeeAsync(employeeId);
@@ -369,6 +433,9 @@ namespace PBL3.Service.Pos
             return ApiResult<List<PosDraftDto>>.Ok(dtos);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Truy vấn thông tin chi tiết của một đơn hàng nháp theo mã đơn và nhân viên.
+        /// </summary>
         public async Task<ApiResult<PosDraftDto>> GetDraftByIdAsync(int orderId, Guid employeeId)
         {
              var draft = await _dbContext.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId && o.EmployeeId == employeeId && o.Status == (byte)OrderStatus.PosDraft);
@@ -381,6 +448,9 @@ namespace PBL3.Service.Pos
              });
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Xóa vĩnh viễn một đơn hàng lưu tạm khi khách hàng hủy mua hoặc không quay lại quầy.
+        /// </summary>
         public async Task<ApiResult<bool>> DeleteDraftAsync(int orderId, Guid employeeId)
         {
              var draft = await _dbContext.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.EmployeeId == employeeId && o.Status == (byte)OrderStatus.PosDraft);

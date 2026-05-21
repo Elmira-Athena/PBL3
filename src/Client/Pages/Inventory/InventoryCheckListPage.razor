@@ -1,0 +1,198 @@
+@page "/inventory/audit"
+@attribute [Authorize(Roles = "Admin,Employee")]
+
+@using Client.Services.Inventory
+@using PBL3.Shared.DTOs.Inventory
+@using Client.Pages.Inventory.Components
+
+@inject IInventoryCheckClientService CheckService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+
+<PageTitle>Kiểm kê kho hàng - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+
+    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
+        <div>
+            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
+                Kiểm kê kho hàng
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                Quản lý và theo dõi các phiếu kiểm kê định kỳ
+            </MudText>
+        </div>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateDialog"
+                   Style="text-transform: none; border-radius: 8px; font-weight: 600;">
+            Tạo phiếu kiểm kê
+        </MudButton>
+    </MudPaper>
+
+    @* ===== FILTER BAR ===== *@
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
+        <MudTextField Value="_filter.Keyword"
+                      ValueChanged="@((string s) => { _filter.Keyword = s; _table?.ReloadServerData(); })"
+                      Label="Tìm theo mã phiếu..."
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Style="max-width: 240px;"
+                      Adornment="Adornment.End"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      DebounceInterval="400"
+                      Immediate="true" />
+
+        <MudSelect T="byte?"
+                   Value="_filter.Status"
+                   ValueChanged="@((byte? v) => { _filter.Status = v; _table?.ReloadServerData(); })"
+                   Label="Trạng thái"
+                   Clearable="true"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Style="max-width: 200px;"
+                   AnchorOrigin="Origin.BottomCenter">
+            <MudSelectItem T="byte?" Value="@null">Tất cả</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte)0)">Nháp</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte)1)">Chờ duyệt</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte)2)">Hoàn tất</MudSelectItem>
+            <MudSelectItem T="byte?" Value="@((byte)3)">Đã hủy</MudSelectItem>
+        </MudSelect>
+
+        <MudDatePicker Date="_filter.FromDate"
+                       DateChanged="@((DateTime? d) => { _filter.FromDate = d; _table?.ReloadServerData(); })"
+                       Label="Từ ngày"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy"
+                       Clearable="true"
+                       Style="max-width: 160px;" />
+
+        <MudDatePicker Date="_filter.ToDate"
+                       DateChanged="@((DateTime? d) => { _filter.ToDate = d; _table?.ReloadServerData(); })"
+                       Label="Đến ngày"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy"
+                       Clearable="true"
+                       Style="max-width: 160px;" />
+    </MudPaper>
+
+    @* ===== TABLE ===== *@
+    <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<InventoryCheckListItemDto>>>(ServerReload))"
+              Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1" Class="rounded-lg" @ref="_table">
+        <HeaderContent>
+            <MudTh>Mã phiếu</MudTh>
+            <MudTh>Phạm vi</MudTh>
+            <MudTh>Ngày chốt</MudTh>
+            <MudTh>Nhân viên</MudTh>
+            <MudTh Style="text-align: center;">Trạng thái</MudTh>
+            <MudTh Style="text-align: center;">Số variant</MudTh>
+            <MudTh Style="text-align: center;">Hành động</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Mã phiếu">
+                <MudText Typo="Typo.body2" Style="font-weight: 600; font-family: monospace;">@context.CheckCode</MudText>
+            </MudTd>
+            <MudTd DataLabel="Phạm vi">
+                <MudText Typo="Typo.body2">
+                    @(context.ScopeType == 0 ? "Toàn kho" : $"Danh mục: {context.ScopeCategoryName}")
+                </MudText>
+            </MudTd>
+            <MudTd DataLabel="Ngày chốt">
+                <MudText Typo="Typo.body2">@context.SnapshotAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+            </MudTd>
+            <MudTd DataLabel="Nhân viên">
+                <MudText Typo="Typo.body2">@context.EmployeeName</MudText>
+            </MudTd>
+            <MudTd DataLabel="Trạng thái" Style="text-align: center;">
+                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)" Variant="Variant.Filled">
+                    @GetStatusLabel(context.Status)
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Số variant" Style="text-align: center;">
+                <MudText Typo="Typo.body2">@context.TotalVariants variant</MudText>
+            </MudTd>
+            <MudTd DataLabel="Hành động" Style="text-align: center;">
+                <MudTooltip Text="Xem chi tiết">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                   Color="Color.Info"
+                                   Size="Size.Small"
+                                   OnClick="@(() => Navigation.NavigateTo($"/inventory/audit/{context.Id}"))" />
+                </MudTooltip>
+                <AuthorizeView Roles="Admin" Context="authState">
+                    @if (context.Status == 1)
+                    {
+                        <MudTooltip Text="Phê duyệt">
+                            <MudIconButton Icon="@Icons.Material.Filled.RateReview"
+                                           Color="Color.Warning"
+                                           Size="Size.Small"
+                                           OnClick="@(() => Navigation.NavigateTo($"/admin/inventory-audit/{context.Id}"))" />
+                        </MudTooltip>
+                    }
+                </AuthorizeView>
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText Class="pa-4">Không tìm thấy phiếu kiểm kê nào.</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText Class="pa-4">Đang tải dữ liệu...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+        </PagerContent>
+    </MudTable>
+</MudContainer>
+
+@code {
+    private MudTable<InventoryCheckListItemDto>? _table;
+    private InventoryCheckFilterRequest _filter = new();
+
+    private async Task<TableData<InventoryCheckListItemDto>> ServerReload(TableState state, CancellationToken cancellationToken)
+    {
+        _filter.PageNumber = state.Page + 1;
+        _filter.PageSize = state.PageSize;
+
+        var result = await CheckService.GetListAsync(_filter, cancellationToken);
+
+        if (result.Success && result.Data != null)
+            return new TableData<InventoryCheckListItemDto> { TotalItems = result.Data.TotalCount, Items = result.Data.Items };
+
+        if (!result.Success && !string.IsNullOrEmpty(result.Message))
+            Snackbar.Add(result.Message, Severity.Error);
+
+        return new TableData<InventoryCheckListItemDto> { TotalItems = 0, Items = new List<InventoryCheckListItemDto>() };
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<CreateInventoryCheckDialog>("Tạo phiếu kiểm kê mới", options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled && result.Data is int newId)
+            Navigation.NavigateTo($"/inventory/audit/{newId}");
+        else if (result != null && !result.Canceled)
+            await _table!.ReloadServerData();
+    }
+
+    private static Color GetStatusColor(byte status) => status switch
+    {
+        0 => Color.Default,
+        1 => Color.Warning,
+        2 => Color.Success,
+        3 => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetStatusLabel(byte status) => status switch
+    {
+        0 => "Nháp",
+        1 => "Chờ duyệt",
+        2 => "Hoàn tất",
+        3 => "Đã hủy",
+        _ => "?"
+    };
+}

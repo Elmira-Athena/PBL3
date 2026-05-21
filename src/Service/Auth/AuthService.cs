@@ -30,16 +30,31 @@ namespace PBL3.Service.Auth
         // =====================================================================
         // LOGIN
         // =====================================================================
+        /// <summary>
+        /// NGHIỆP VỤ: Đăng nhập bảo mật vào hệ thống.
+        /// Quản lý luồng kiểm tra thông tin đăng nhập, bảo vệ chống tấn công Brute-force và cấp phát cặp Token (Access Token &amp; Refresh Token).
+        /// Quy trình nghiệp vụ:
+        /// 1. Tìm kiếm người dùng theo Email đã đăng ký.
+        /// 2. Xác thực trạng thái kích hoạt (Active) để đảm bảo tài khoản không bị vô hiệu hóa hoặc đình chỉ bởi quản trị viên.
+        /// 3. Xác thực phòng ngừa Brute-force (kiểm tra tài khoản có đang trong trạng thái khóa tạm thời Lockout do đăng nhập sai quá nhiều lần liên tục hay không).
+        /// 4. Kiểm tra tính hợp lệ của mật khẩu. Nếu không hợp lệ, kích hoạt tăng số lần đăng nhập sai (AccessFailedAsync) nhằm tự động khóa tài khoản khi vượt ngưỡng quy định.
+        /// 5. Nếu mật khẩu hợp lệ, reset bộ đếm thất bại về 0 để mở khóa hoàn toàn tài khoản.
+        /// 6. Sinh Access Token dạng JWT chứa đầy đủ thông tin định danh cơ bản cùng danh sách toàn bộ các vai trò (Roles) và quyền hạn (Claims) của người dùng.
+        /// 7. Sinh Refresh Token ngẫu nhiên có độ an toàn mã hóa cực cao (Cryptographically Secure Pseudo-Random).
+        /// 8. Thực hiện băm một chiều Refresh Token bằng thuật toán SHA256 trước khi lưu trữ trong cơ sở dữ liệu để bảo vệ chống rò rỉ, thiết lập thời hạn hết hạn.
+        /// 9. Trả về cặp Token thành công.
+        /// </summary>
         public async Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest request)
         {
             // 1. Tìm User theo Email
+            // LƯU Ý NGHIỆP VỤ: Email đóng vai trò định danh duy nhất trong hệ thống cho tài khoản AppUser
             var user = await _userManager.FindByEmailAsync(request.Email);
             if (user == null)
             {
                 return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
             }
 
-            // 2. Kiểm tra IsActive (Tài khoản bị vô hiệu hóa bởi Admin) — trước khi check password
+            // 2. Kiểm tra IsActive (Tài khoản bị vô hiệu hóa bởi Admin) — thực hiện trước khi check password để tối ưu hiệu năng
             if (!user.IsActive)
             {
                 var reason = !string.IsNullOrEmpty(user.LockReason) ? user.LockReason : "Vui lòng liên hệ quản trị viên.";
@@ -47,6 +62,7 @@ namespace PBL3.Service.Auth
             }
 
             // 3. Kiểm tra tài khoản bị khóa (Lockout do brute-force)
+            // LƯU Ý BẢO MẬT: Ngăn chặn tự động dò quét mật khẩu từ các công cụ tấn công bên ngoài bằng cách tạm khóa IP/tài khoản
             if (await _userManager.IsLockedOutAsync(user))
             {
                 return ApiResult<TokenResponse>.Fail(
@@ -57,27 +73,29 @@ namespace PBL3.Service.Auth
             var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
             if (!passwordValid)
             {
-                // Tăng số lần đăng nhập sai (Lockout counter)
+                // Tăng số lần đăng nhập sai (Lockout counter) trong cấu hình của Identity framework
                 await _userManager.AccessFailedAsync(user);
                 return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
             }
 
             // 5. Reset lockout counter khi đăng nhập đúng
+            // Trả lại tài khoản về trạng thái an toàn tuyệt đối
             await _userManager.ResetAccessFailedCountAsync(user);
 
-            // 6. Sinh Access Token (JWT) với đầy đủ Claims
+            // 6. Sinh Access Token (JWT) với đầy đủ Claims để duy trì phiên làm việc phi trạng thái (stateless)
             var accessToken = await GenerateJwtTokenAsync(user);
 
-            // 7. Sinh Refresh Token ngẫu nhiên
+            // 7. Sinh Refresh Token ngẫu nhiên phục vụ cơ chế xoay vòng token khi access token hết hạn
             var refreshToken = GenerateRefreshToken();
 
             // 8. Lưu Refresh Token vào DB
+            // LƯU Ý BẢO MẬT: Chỉ lưu trữ mã băm SHA256 một chiều của Refresh Token thay vì lưu text trần để phòng ngừa rò rỉ dữ liệu DB
             var refreshTokenExpirationDays = _configuration.GetValue<int>("JwtSettings:RefreshTokenExpirationDays");
             user.RefreshToken = HashToken(refreshToken);
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(refreshTokenExpirationDays);
             await _userManager.UpdateAsync(user);
 
-            // 9. Trả về cặp Token
+            // 9. Trả về cặp Token cho thiết bị Client
             return ApiResult<TokenResponse>.Ok(new TokenResponse
             {
                 AccessToken = accessToken,
@@ -88,9 +106,25 @@ namespace PBL3.Service.Auth
         // =====================================================================
         // REFRESH TOKEN
         // =====================================================================
+        /// <summary>
+        /// NGHIỆP VỤ: Làm mới mã truy cập (Cơ chế Token Rotation bảo mật).
+        /// Cho phép người dùng gia hạn phiên làm việc khi Access Token hết hiệu lực bằng cách sử dụng một Refresh Token hợp lệ còn hạn.
+        /// Quy trình nghiệp vụ:
+        /// 1. Bóc tách thông tin Claims từ Access Token đã hết hạn (chấp nhận hết hạn thời gian) để định danh người dùng sở hữu token đó (UserId).
+        /// 2. Truy vấn thực thể AppUser từ Database để kiểm tra sự tồn tại.
+        /// 3. Xác thực trạng thái kích hoạt (Active) của người dùng để kịp thời ngắt quyền truy cập đối với các tài khoản bị khóa trong thời gian thực.
+        /// 4. Thực hiện mã hóa SHA256 Refresh Token do Client gửi lên và so sánh trực tiếp với mã băm lưu trong DB nhằm tránh giả mạo.
+        /// 5. Xác thực thời gian hết hạn của Refresh Token. Nếu hết hạn, cưỡng chế phiên làm việc phải đăng nhập lại hoàn toàn.
+        /// 6. Kích hoạt cơ chế bảo mật Xoay vòng Token (Token Rotation):
+        ///    - Khởi tạo Access Token mới.
+        ///    - Khởi tạo Refresh Token ngẫu nhiên hoàn toàn mới.
+        /// 7. Vô hiệu hóa triệt để Refresh Token cũ bằng cách ghi đè mã băm của Refresh Token mới vào DB (giúp phòng ngừa đòn tấn công replay mã token bị đánh cắp).
+        /// 8. Trả về cặp Token mới an toàn.
+        /// </summary>
         public async Task<ApiResult<TokenResponse>> RefreshTokenAsync(RefreshTokenRequest request)
         {
             // 1. Bóc tách Access Token (dù đã hết hạn) để lấy UserId
+            // LƯU Ý NGHIỆP VỤ: Client gửi Access Token hết hạn cùng Refresh Token lên để yêu cầu gia hạn phiên làm việc
             var principal = GetPrincipalFromExpiredToken(request.AccessToken);
             if (principal == null)
             {
@@ -103,7 +137,7 @@ namespace PBL3.Service.Auth
                 return ApiResult<TokenResponse>.Fail("Không thể xác định người dùng từ Token.");
             }
 
-            // 2. Tìm User trong DB
+            // 2. Tìm User trong DB để đối chiếu
             var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
             {
@@ -111,6 +145,7 @@ namespace PBL3.Service.Auth
             }
 
             // 3. Kiểm tra tài khoản còn hoạt động không (trước khi check token)
+            // LƯU Ý BẢO MẬT: Giúp phát hiện nhanh các tài khoản bị Quản trị viên vô hiệu hóa nóng trong lúc phiên làm việc đang chạy
             if (!user.IsActive)
             {
                 var reason = !string.IsNullOrEmpty(user.LockReason) ? user.LockReason : "Vui lòng liên hệ quản trị viên.";
@@ -118,6 +153,7 @@ namespace PBL3.Service.Auth
             }
 
             // 4. Kiểm tra Refresh Token có khớp và còn hạn không
+            // So khớp mã băm SHA256 một chiều để bảo toàn tính xác thực
             var hashedToken = HashToken(request.RefreshToken);
             if (user.RefreshToken != hashedToken)
             {
@@ -129,11 +165,12 @@ namespace PBL3.Service.Auth
                 return ApiResult<TokenResponse>.Fail("Refresh Token đã hết hạn. Vui lòng đăng nhập lại.");
             }
 
-            // 5. Sinh cặp Token MỚI (Token Rotation)
+            // 5. Sinh cặp Token MỚI (Cơ chế Token Rotation)
             var newAccessToken = await GenerateJwtTokenAsync(user);
             var newRefreshToken = GenerateRefreshToken();
 
-            // 6. Lưu Refresh Token mới vào DB (Invalidate cái cũ)
+            // 6. Lưu Refresh Token mới vào DB (Vô hiệu hóa cái cũ)
+            // LƯU Ý NGHIỆP VỤ: Xoay vòng Token liên tục sau mỗi lượt refresh giúp bảo vệ tài khoản khách hàng khỏi nguy cơ bị nghe lén và sử dụng lại token cũ
             var refreshTokenExpirationDays = _configuration.GetValue<int>("JwtSettings:RefreshTokenExpirationDays");
             user.RefreshToken = HashToken(newRefreshToken);
             user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(refreshTokenExpirationDays);
@@ -149,9 +186,13 @@ namespace PBL3.Service.Auth
         // =====================================================================
         // PRIVATE: Sinh JWT Access Token
         // =====================================================================
+        /// <summary>
+        /// NGHIỆP VỤ (BẢO MẬT): Khởi tạo mã truy cập dạng JWT Access Token cho phiên làm việc phi trạng thái (stateless session).
+        /// Thu thập toàn bộ thông tin định danh và quyền hạn của người dùng, đóng gói vào Payload dưới dạng các Claims để Client gửi đính kèm trong mỗi yêu cầu API tiếp theo.
+        /// </summary>
         private async Task<string> GenerateJwtTokenAsync(AppUser user)
         {
-            // Đọc cấu hình từ appsettings.json — KHÔNG BAO GIỜ HARDCODE
+            // Đọc cấu hình từ appsettings.json — Đảm bảo tính linh động, KHÔNG BAO GIỜ HARDCODE khóa mật hoặc thời hạn
             var secretKey = _configuration["JwtSettings:SecretKey"]
                 ?? throw new InvalidOperationException("JwtSettings:SecretKey chưa được cấu hình.");
             var issuer = _configuration["JwtSettings:Issuer"];
@@ -161,8 +202,7 @@ namespace PBL3.Service.Auth
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            // Claims chuẩn: NameIdentifier (UserId), Email
-            // Load FullName từ UserProfile
+            // Claims chuẩn bảo mật: NameIdentifier (UserId), Email, Name (Họ tên đầy đủ từ UserProfile)
             var profile = await _context.UserProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == user.Id);
             var fullName = profile?.FullName ?? string.Empty;
 
@@ -171,17 +211,17 @@ namespace PBL3.Service.Auth
                 new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new(ClaimTypes.Email, user.Email ?? string.Empty),
                 new(ClaimTypes.Name, fullName),
-                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()) // Thêm JTI định danh duy nhất cho từng Token chống trùng lặp
             };
 
-            // Duyệt vòng lặp để add TOÀN BỘ Roles của User
+            // Duyệt vòng lặp để nạp TOÀN BỘ Roles (Vai trò phân quyền) của User phục vụ Middleware Authorize trong ứng dụng
             var roles = await _userManager.GetRolesAsync(user);
             foreach (var role in roles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
 
-            // ⚠️ TUYỆT ĐỐI KHÔNG nhét Password hay thông tin nhạy cảm vào Claims!
+            // ⚠️ LƯU Ý BẢO MẬT CỰC KỲ QUAN TRỌNG: TUYỆT ĐỐI KHÔNG nhét Password hay thông tin nhạy cảm vào Claims vì dữ liệu JWT chỉ được mã hóa Base64 và có thể bị bóc mở dễ dàng ở phía Client!
 
             var token = new JwtSecurityToken(
                 issuer: issuer,
@@ -197,6 +237,10 @@ namespace PBL3.Service.Auth
         // =====================================================================
         // PRIVATE: Sinh chuỗi Refresh Token ngẫu nhiên (cryptographically secure)
         // =====================================================================
+        /// <summary>
+        /// NGHIỆP VỤ (BẢO MẬT): Sinh chuỗi Refresh Token ngẫu nhiên có độ an toàn mã hóa cực cao.
+        /// Sử dụng RandomNumberGenerator của hệ điều hành để tạo ra chuỗi byte ngẫu nhiên chất lượng mã hóa cao, loại bỏ hoàn toàn khả năng bị suy đoán số học.
+        /// </summary>
         private static string GenerateRefreshToken()
         {
             var randomBytes = new byte[64];
@@ -208,6 +252,10 @@ namespace PBL3.Service.Auth
         // =====================================================================
         // PRIVATE: Hash Token bằng SHA256
         // =====================================================================
+        /// <summary>
+        /// NGHIỆP VỤ (BẢO MẬT): Băm chuỗi Token bằng thuật toán SHA256 một chiều để lưu giữ an toàn trong DB.
+        /// Sử dụng hàm băm một chiều SHA256 để lưu trữ token. Nếu cơ sở dữ liệu bị tấn công và rò rỉ dữ liệu, hacker cũng không thể dùng mã băm này để làm Refresh Token truy cập hệ thống.
+        /// </summary>
         private static string HashToken(string token)
         {
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
@@ -217,6 +265,11 @@ namespace PBL3.Service.Auth
         // =====================================================================
         // PRIVATE: Bóc tách Access Token đã hết hạn để lấy Claims
         // =====================================================================
+        /// <summary>
+        /// NGHIỆP VỤ (BẢO MẬT): Trích xuất thông tin định danh (Claims) từ Access Token đã hết hạn.
+        /// Cấu hình tham số kiểm soát bắt buộc bỏ qua thời gian hết hạn (ValidateLifetime = false) để lấy lại UserId của phiên cũ phục vụ luồng Refresh Token,
+        /// tuy nhiên vẫn duy trì kiểm định tính toàn vẹn chữ ký ký số (Signature) và thuật toán ký ban đầu (HmacSha256) nhằm phòng chống token giả.
+        /// </summary>
         private ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
         {
             var secretKey = _configuration["JwtSettings:SecretKey"]
@@ -230,7 +283,7 @@ namespace PBL3.Service.Auth
                 ValidIssuer = _configuration["JwtSettings:Issuer"],
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
-                ValidateLifetime = false // ← Quan trọng: Chấp nhận token đã hết hạn
+                ValidateLifetime = false // ← Đặc biệt quan trọng: Chấp nhận token đã hết hạn thời gian hiệu lực
             };
 
             try
@@ -238,7 +291,7 @@ namespace PBL3.Service.Auth
                 var tokenHandler = new JwtSecurityTokenHandler();
                 var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
 
-                // Kiểm tra thuật toán ký có đúng HmacSha256 không (chống token giả)
+                // LƯU Ý BẢO MẬT: Kiểm tra thuật toán ký mã hóa có khớp HmacSha256 ban đầu hay không để chặn các cuộc tấn công thay đổi thuật toán chữ ký JWT (Algorithm Confusion Attack)
                 if (securityToken is not JwtSecurityToken jwtToken ||
                     !jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256,
                         StringComparison.InvariantCultureIgnoreCase))
@@ -250,7 +303,7 @@ namespace PBL3.Service.Auth
             }
             catch
             {
-                return null; // Token không hợp lệ hoặc bị tamper
+                return null; // Token không hợp lệ về mặt chữ ký hoặc cấu trúc đã bị thay đổi (tampered)
             }
         }
 
@@ -278,9 +331,22 @@ namespace PBL3.Service.Auth
         // =====================================================================
         // REGISTER (UC001: Khách hàng tự đăng ký)
         // =====================================================================
+        /// <summary>
+        /// NGHIỆP VỤ: Đăng ký tài khoản Khách hàng mới (UC001: Khách hàng tự đăng ký).
+        /// Khởi tạo hồ sơ định danh duy nhất cho khách hàng, thiết lập bảo mật mật khẩu, hồ sơ chi tiết cá nhân và phân quyền mặc định.
+        /// Quy trình nghiệp vụ:
+        /// 1. Kiểm tra tính duy nhất của địa chỉ Email trên toàn hệ thống để tránh trùng lặp tài khoản đăng nhập.
+        /// 2. Kiểm tra tính duy nhất của Số điện thoại trong cơ sở dữ liệu để làm cơ sở liên hệ giao nhận hàng hóa chuẩn xác.
+        /// 3. Khởi tạo thực thể AppUser: mặc định kích hoạt (IsActive = true), loại tài khoản Customer (Type = 2), và lưu thời gian tạo tài khoản.
+        /// 4. Sử dụng ASP.NET Core Identity để băm mật khẩu bảo mật trước khi ghi nhận lưu trữ vật lý vào cơ sở dữ liệu.
+        /// 5. Tạo bản ghi hồ sơ chi tiết (UserProfile) để lưu trữ các thông tin hiển thị (Họ và Tên) liên kết trực tiếp tới tài khoản mới.
+        /// 6. Gán vai trò (Role) mặc định "Customer" để người dùng có đầy đủ quyền thao tác mua sắm và quản lý đơn hàng của riêng mình trên hệ thống.
+        /// 7. Trả về kết quả hoàn tất đăng ký tài khoản thành công.
+        /// </summary>
         public async Task<ApiResult<bool>> RegisterAsync(RegisterCustomerRequest request)
         {
             // 1. Kiểm tra Email đã tồn tại chưa
+            // LƯU Ý NGHIỆP VỤ: Email đóng vai trò định danh đăng nhập bắt buộc duy nhất
             var existingUser = await _userManager.FindByEmailAsync(request.Email);
             if (existingUser != null)
             {
@@ -288,13 +354,14 @@ namespace PBL3.Service.Auth
             }
 
             // 2. Kiểm tra SĐT đã tồn tại chưa
+            // LƯU Ý NGHIỆP VỤ: Ràng buộc duy nhất số điện thoại phục vụ mục đích bảo mật tài khoản và xác minh giao dịch
             var existingPhone = _context.Users.Any(u => u.PhoneNumber == request.PhoneNumber);
             if (existingPhone)
             {
                 return ApiResult<bool>.Fail("Số điện thoại này đã được sử dụng.");
             }
 
-            // 3. Tạo AppUser
+            // 3. Tạo AppUser mới
             var user = new AppUser
             {
                 Id = Guid.NewGuid(),
@@ -302,11 +369,12 @@ namespace PBL3.Service.Auth
                 Email = request.Email,
                 PhoneNumber = request.PhoneNumber,
                 IsActive = true,
-                Type = 2, // Customer
+                Type = 2, // Phân loại tài khoản: 2 tương ứng với loại Customer (Khách mua hàng)
                 CreatedDate = DateTime.UtcNow,
                 IsDeleted = false
             };
 
+            // Thực thi tạo tài khoản cùng thuật toán băm mật khẩu nội bộ của Identity
             var createResult = await _userManager.CreateAsync(user, request.Password);
             if (!createResult.Succeeded)
             {
@@ -314,7 +382,7 @@ namespace PBL3.Service.Auth
                 return ApiResult<bool>.Fail("Đăng ký thất bại: " + errors);
             }
 
-            // 4. Tạo UserProfile
+            // 4. Tạo UserProfile liên kết để lưu thông tin phi định danh hiển thị
             _context.UserProfiles.Add(new UserProfile
             {
                 UserId = user.Id,
@@ -322,7 +390,8 @@ namespace PBL3.Service.Auth
             });
             await _context.SaveChangesAsync();
 
-            // 5. Assign role
+            // 5. Gán vai trò (Assign role) mặc định cho tài khoản
+            // LƯU Ý NGHIỆP VỤ: Thiết lập quyền cơ bản nhất để bảo vệ các tài nguyên hệ thống, chỉ cấp phép những API thuộc nhóm Customer
             await _userManager.AddToRoleAsync(user, "Customer");
 
             return ApiResult<bool>.Ok(true, "Đăng ký tài khoản thành công. Vui lòng đăng nhập.");

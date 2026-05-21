@@ -27,6 +27,8 @@ namespace PBL3.Infrastructure.Data
         public DbSet<ProductSerial> ProductSerials { get; set; }
         public DbSet<InventoryCheck> InventoryChecks { get; set; }
         public DbSet<InventoryCheckDetail> InventoryCheckDetails { get; set; }
+        public DbSet<InventoryCheckDetailSerial> InventoryCheckDetailSerials { get; set; }
+        public DbSet<InventoryAdjustmentLog> InventoryAdjustmentLogs { get; set; }
 
         // Sale
         public DbSet<Voucher> Vouchers { get; set; }
@@ -165,10 +167,88 @@ namespace PBL3.Infrastructure.Data
                 entity.Property(e => e.ImportPrice).HasColumnType("decimal(18,2)");
             });
 
+            modelBuilder.Entity<InventoryCheck>(entity =>
+            {
+                entity.HasQueryFilter(c => !c.IsDeleted);
+                entity.HasIndex(c => c.CheckCode).IsUnique();
+                entity.HasIndex(c => c.Status);
+                entity.HasIndex(c => c.CheckDate);
+
+                entity.HasOne(c => c.ScopeCategory)
+                      .WithMany()
+                      .HasForeignKey(c => c.ScopeCategoryId)
+                      .OnDelete(DeleteBehavior.NoAction);
+            });
+
             modelBuilder.Entity<InventoryCheckDetail>(entity =>
             {
+                entity.HasIndex(d => d.CheckId);
+                entity.HasIndex(d => d.VariantId);
+
                 entity.Property(e => e.Difference)
                       .HasComputedColumnSql("([ActualQuantity] - [SystemQuantity])");
+            });
+
+            modelBuilder.Entity<InventoryCheckDetailSerial>(entity =>
+            {
+                entity.HasIndex(s => s.CheckId);
+                entity.HasIndex(s => new { s.CheckId, s.ScanStatus });
+
+                // Chống quét trùng trong cùng 1 phiếu
+                entity.HasIndex(s => new { s.CheckId, s.SerialNumberRaw })
+                      .IsUnique()
+                      .HasDatabaseName("UQ_InventoryCheckDetailSerials_CheckId_SerialNumberRaw");
+
+                // FK: CheckId → InventoryChecks (cascade delete: xóa phiếu thì xóa serials)
+                entity.HasOne(s => s.Check)
+                      .WithMany(c => c.DetailSerials)
+                      .HasForeignKey(s => s.CheckId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // FK: DetailId → InventoryCheckDetails (NoAction: detail serial có thể null khi UnknownSurplus)
+                entity.HasOne(s => s.Detail)
+                      .WithMany(d => d.DetailSerials)
+                      .HasForeignKey(s => s.DetailId)
+                      .OnDelete(DeleteBehavior.NoAction);
+
+                // FK: SerialId → ProductSerials (NoAction: tránh multiple cascade qua ProductSerial)
+                entity.HasOne(s => s.Serial)
+                      .WithMany()
+                      .HasForeignKey(s => s.SerialId)
+                      .OnDelete(DeleteBehavior.NoAction);
+
+                // FK: VariantId → ProductVariants (NoAction)
+                entity.HasOne(s => s.Variant)
+                      .WithMany()
+                      .HasForeignKey(s => s.VariantId)
+                      .OnDelete(DeleteBehavior.NoAction);
+            });
+
+            modelBuilder.Entity<InventoryAdjustmentLog>(entity =>
+            {
+                entity.HasIndex(l => l.AuditCheckId);
+                entity.HasIndex(l => l.AdjustedDate);
+                entity.HasIndex(l => l.SerialId);
+
+                entity.Property(e => e.CostImpact).HasColumnType("decimal(18,2)");
+
+                // FK: AuditCheckId → InventoryChecks (NoAction: log phải tồn tại độc lập với phiếu)
+                entity.HasOne(l => l.AuditCheck)
+                      .WithMany()
+                      .HasForeignKey(l => l.AuditCheckId)
+                      .OnDelete(DeleteBehavior.NoAction);
+
+                // FK: SerialId → ProductSerials (NoAction)
+                entity.HasOne(l => l.Serial)
+                      .WithMany()
+                      .HasForeignKey(l => l.SerialId)
+                      .OnDelete(DeleteBehavior.NoAction);
+
+                // FK: VariantId → ProductVariants (NoAction)
+                entity.HasOne(l => l.Variant)
+                      .WithMany()
+                      .HasForeignKey(l => l.VariantId)
+                      .OnDelete(DeleteBehavior.NoAction);
             });
 
             // --- SALE ---

@@ -39,14 +39,31 @@ namespace PBL3.Service.Orders
             _productSerialRepo = productSerialRepo;
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Thực hiện quy trình đặt hàng trực tuyến (Online Checkout).
+        /// Hỗ trợ đặt hàng từ giỏ hàng hiện tại (Cart) hoặc mua nhanh trực tiếp (Buy Now) từ trang chi tiết sản phẩm.
+        /// Tiến trình được quản lý chặt chẽ dưới một Transaction dữ liệu để đảm bảo tính toàn vẹn:
+        /// 1. Xác định nguồn hàng mua: Nếu mua ngay, lấy thông tin biến thể trực tiếp; nếu mua từ giỏ hàng, nạp giỏ hàng của người dùng.
+        /// 2. Xác thực địa chỉ giao nhận hợp lệ của người dùng.
+        /// 3. Kiểm tra Tồn kho ảo (Virtual Inventory Validation):
+        ///    - Tồn khả dụng bán (Real Available) = Số serial Available thực tế trong kho - Số lượng đang được giữ chỗ trong các đơn hàng online đang xử lý (Pending/Confirmed/Shipping).
+        ///    - Chặn giao dịch ngay lập tức nếu tồn ảo không đủ đáp ứng, ngăn ngừa triệt để tình trạng bán vượt quá số lượng tồn kho vật lý thực tế khi có nhiều giao dịch đồng thời.
+        /// 4. Áp dụng mã giảm giá (Vouchers): Chạy quy trình kiểm định điều kiện áp dụng mã voucher và tính toán giá trị chiết khấu hợp lệ.
+        /// 5. Tạo đơn hàng (Order): Khởi tạo bản ghi đơn hàng ở trạng thái mặc định Pending (Chờ duyệt), tự động sinh mã đơn hàng ORD-yyyyMMdd-NNN độc bản theo ngày.
+        /// 6. Tạo chi tiết đơn hàng (OrderDetails) liên kết các sản phẩm.
+        /// 7. Ghi nhận lịch sử sử dụng voucher (VoucherUsages) và tăng số lượt đã dùng của mã voucher.
+        /// 8. Giải phóng/Xóa giỏ hàng cũ của khách hàng nếu mua từ giỏ hàng.
+        /// 9. Lưu mọi thay đổi thành công và Commit Transaction.
+        /// </summary>
         public async Task<ApiResult<CheckoutResponse>> CheckoutAsync(CheckoutRequest request, Guid userId)
         {
-            // Step 1: Data Source (Cart vs Buy Now)
+            // ── BƯỚC 1: XÁC ĐỊNH NGUỒN DỮ LIỆU ĐẶT HÀNG (Cart vs Buy Now) ──
             var checkoutItems = new List<(int VariantId, int Quantity, decimal Price)>();
             List<PBL3.Core.Entities.Cart>? cartsToRemove = null;
 
             if (request.IsBuyNow)
             {
+                // Mua ngay từ trang sản phẩm (không thông qua giỏ hàng)
                 if (!request.BuyNowVariantId.HasValue || !request.BuyNowQuantity.HasValue || request.BuyNowQuantity.Value <= 0)
                 {
                     return ApiResult<CheckoutResponse>.Fail("Thông tin mua ngay không hợp lệ.");
@@ -62,6 +79,7 @@ namespace PBL3.Service.Orders
             }
             else
             {
+                // Checkout từ giỏ hàng hiện tại của khách hàng
                 var carts = await _cartRepo.GetCartItemsWithTrackingAsync(userId);
                 if (!carts.Any())
                 {
@@ -69,10 +87,10 @@ namespace PBL3.Service.Orders
                 }
 
                 checkoutItems = carts.Select(c => (c.VariantId, c.Quantity, c.Variant.Price)).ToList();
-                cartsToRemove = carts;
+                cartsToRemove = carts; // Lưu vết để xóa khỏi giỏ sau khi đặt hàng thành công
             }
 
-            // Step 2: Address & Inventory Validation
+            // ── BƯỚC 2: XÁC THỰC ĐỊA CHỈ & KIỂM TRA TỒN KHO ẢO (Virtual Inventory) ──
             var address = await _userAddressRepo.GetByIdAsync(request.UserAddressId);
             if (address == null || address.UserId != userId)
             {
@@ -81,13 +99,15 @@ namespace PBL3.Service.Orders
 
             var variantIds = checkoutItems.Select(x => x.VariantId).Distinct().ToList();
             
-            // Batch Query: Count available serials
+            // Lấy tổng số Serial đang Available trong kho
             var availableSerialsMap = await _productSerialRepo.CountAvailableByVariantIdsAsync(variantIds);
             
-            // Batch Query: Sum quantities in active orders
+            // Lấy tổng số lượng sản phẩm đang được giữ chỗ trong các đơn hàng online đang xử lý (Pending/Confirmed/Shipping)
             var activeOrderQuantitiesMap = await _orderRepo.GetActiveOrderQuantitiesByVariantIdsAsync(variantIds);
 
-            // Check Virtual Inventory
+            // KIỂM TRA TỒN KHO ẢO (VIRTUAL STOCK):
+            // Số lượng tồn thực tế để bán (Real Available) = Số lượng Available trong kho - Số lượng đang được giữ chỗ cho các đơn hàng chưa hoàn tất.
+            // Ví dụ: Có 5 serial Available, nhưng có 3 đơn hàng đang "Chờ duyệt" chứa sản phẩm này -> Tồn ảo chỉ còn 2. Nếu khách mua 3 -> Báo hết hàng.
             foreach (var item in checkoutItems)
             {
                 var availableSerials = availableSerialsMap.ContainsKey(item.VariantId) ? availableSerialsMap[item.VariantId] : 0;
@@ -100,23 +120,27 @@ namespace PBL3.Service.Orders
                 }
             }
 
-            // Step 3: Voucher & Price Calculation
+            // ── BƯỚC 3: TÍNH TOÁN GIÁ & ÁP DỤNG MÃ GIẢM GIÁ (Voucher) ──
             decimal subTotal = checkoutItems.Sum(x => x.Price * x.Quantity);
 
             var itemCategoryIds = (request.VoucherCodes != null && request.VoucherCodes.Any())
                 ? await _productRepo.GetCategoryIdsByVariantIdsAsync(variantIds)
                 : null;
 
+            // Thực thi luồng kiểm tra và áp dụng voucher
             var (usages, totalDiscount) = await ApplyVouchersAsync(
                 subTotal, request.VoucherCodes, userId, isOnlineOrder: true, itemCategoryIds);
+            
+            // Đảm bảo số tiền giảm giá không vượt quá tổng giá trị đơn hàng trước ship
             totalDiscount = Math.Min(totalDiscount, subTotal);
 
             decimal totalAmount = subTotal + request.ShippingFee - totalDiscount;
 
-            // Step 4: Create Order (within Transaction)
+            // ── BƯỚC 4: TẠO ĐƠN HÀNG (Chạy trong Transaction đảm bảo tính toàn vẹn) ──
             await _unitOfWork.BeginTransactionAsync();
             try
             {
+                // Tự sinh mã đơn hàng định dạng ORD-YYYYMMDD-XXX (Ví dụ: ORD-20260521-001)
                 string datePrefix = "ORD-" + DateTime.Now.ToString("yyyyMMdd");
                 string? lastCode = await _orderRepo.GetLastOrderCodeByDateAsync(datePrefix);
                 int nextIndex = 1;
@@ -130,7 +154,7 @@ namespace PBL3.Service.Orders
                 }
                 string newOrderCode = $"{datePrefix}-{nextIndex:D3}";
 
-                // Tất cả đơn hàng online đều bắt đầu ở Pending (chờ duyệt), dù COD hay chuyển khoản.
+                // Tất cả đơn hàng online đều bắt đầu ở Pending (chờ duyệt), dù COD hay chuyển khoản trực tuyến.
                 byte orderStatus = (byte)OrderStatus.Pending;
 
                 var order = new Order
@@ -148,15 +172,15 @@ namespace PBL3.Service.Orders
                     ShipAddress = address.AddressLine,
                     ShipCity = address.City,
                     PaymentMethod = request.PaymentMethod,
-                    PaymentStatus = (byte)(request.PaymentMethod == 0 ? 0 : 1),
-                    OrderType = 0, // Online
+                    PaymentStatus = (byte)(request.PaymentMethod == 0 ? 0 : 1), // 0: COD (Chưa trả), 1: Online Payment (Đã trả)
+                    OrderType = 0, // 0: Đơn đặt hàng Online
                     Note = request.Note
                 };
 
                 await _orderRepo.AddAsync(order);
-                await _unitOfWork.SaveChangesAsync(); // To get order.Id
+                await _unitOfWork.SaveChangesAsync(); // Lưu trước để phát sinh Id đơn hàng phục vụ bảng chi tiết
 
-                // Insert OrderDetails
+                // Thêm chi tiết đơn hàng (OrderDetail)
                 foreach (var item in checkoutItems)
                 {
                     order.OrderDetails.Add(new OrderDetail
@@ -168,7 +192,7 @@ namespace PBL3.Service.Orders
                     });
                 }
 
-                // Apply voucher usages
+                // Ghi nhận lịch sử sử dụng Voucher (VoucherUsages) và tăng số lượt đã dùng của mã
                 foreach (var usage in usages)
                 {
                     usage.OrderId = order.Id;
@@ -187,7 +211,7 @@ namespace PBL3.Service.Orders
                     }
                 }
 
-                // Step 5: Cleanup & Commit
+                // Dọn dẹp giỏ hàng sau khi đặt hàng thành công
                 if (!request.IsBuyNow && cartsToRemove != null)
                 {
                     _cartRepo.RemoveRange(cartsToRemove);
@@ -203,7 +227,7 @@ namespace PBL3.Service.Orders
                     TotalAmount = order.TotalAmount,
                     Status = order.Status,
                     PaymentMethod = order.PaymentMethod,
-                    PaymentUrl = null // TODO: Generate MoMo/VNPay URL if PaymentMethod == 1
+                    PaymentUrl = null // TODO: Kết nối đối tác MoMo/VNPay để sinh link thanh toán nếu PaymentMethod == 1
                 };
 
                 return ApiResult<CheckoutResponse>.Ok(response, "Đặt hàng thành công!");
@@ -337,6 +361,22 @@ namespace PBL3.Service.Orders
             }
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Kiểm định tính hợp lệ và áp dụng danh sách mã giảm giá (Voucher) cho đơn hàng.
+        /// Triển khai cơ chế kiểm tra điều kiện áp dụng đa tiêu chí cực kỳ chặt chẽ:
+        /// 1. Kiểm tra tính tồn tại và kích hoạt của từng mã giảm giá.
+        /// 2. Ràng buộc khả năng cộng dồn (IsStackable): Nếu áp dụng nhiều voucher, tất cả mã phải cấu hình cho phép cộng dồn chéo.
+        /// 3. Xác thực 9 bước kiểm định cho từng Voucher đơn lẻ:
+        ///    - Trạng thái hoạt động (IsActive == true).
+        ///    - Hạn hiệu lực thời gian (StartDate &lt;= Hiện tại &lt;= EndDate).
+        ///    - Tổng số lượng phát hành của hệ thống (UsedCount &lt; Quantity).
+        ///    - Giá trị đơn hàng tối thiểu (subTotal &gt;= MinOrderValue).
+        ///    - Kênh bán hàng áp dụng (Phân biệt đơn đặt hàng trực tuyến Online vs đơn bán trực tiếp tại POS).
+        ///    - Danh mục sản phẩm được áp dụng (VoucherCategories): Đơn hàng bắt buộc phải chứa ít nhất một sản phẩm tương thích.
+        ///    - Giới hạn số lần sử dụng của cá nhân từng khách hàng (MaxUsesPerUser) để ngăn ngừa lạm dụng trục lợi voucher.
+        /// 4. Tính toán số tiền chiết khấu thực tế: Theo số tiền cố định hoặc tỷ lệ phần trăm (đối với phần trăm có áp dụng khống chế mức trần tối đa MaxDiscountAmount).
+        /// 5. Trích xuất danh sách VoucherUsage và tổng tiền giảm giá để cập nhật đơn hàng.
+        /// </summary>
         private async Task<(List<VoucherUsage> Usages, decimal TotalDiscount)> ApplyVouchersAsync(
             decimal subTotal,
             List<string>? voucherCodes,
@@ -355,34 +395,41 @@ namespace PBL3.Service.Orders
             if (invalidCodes.Any())
                 throw new Exception($"Mã giảm giá không tồn tại: {string.Join(", ", invalidCodes)}");
 
-            // IsStackable: nếu dùng nhiều voucher mà có voucher không cho phép dùng chung → reject
+            // NGHIỆP VỤ: Kiểm tra khả năng dùng chung (IsStackable).
+            // Nếu khách hàng nhập từ 2 voucher trở lên, nhưng có ít nhất 1 voucher cấu hình "Không cho phép cộng dồn", ta từ chối giao dịch.
             if (vouchers.Count > 1 && vouchers.Any(v => !v.IsStackable))
                 throw new Exception("Một hoặc nhiều mã giảm giá không thể được sử dụng cùng lúc với mã khác.");
 
             var now = DateTime.UtcNow;
             foreach (var voucher in vouchers)
             {
+                // 1. Kiểm tra trạng thái hoạt động của Voucher
                 if (!voucher.IsActive)
                     throw new Exception($"Mã '{voucher.Code}' đã bị vô hiệu hóa.");
 
+                // 2. Kiểm tra hiệu lực thời gian
                 if (now < voucher.StartDate || now > voucher.EndDate)
                     throw new Exception($"Mã '{voucher.Code}' đã hết hạn hoặc chưa đến thời gian sử dụng.");
 
+                // 3. Kiểm tra số lượng phát hành của hệ thống
                 if (voucher.Quantity.HasValue && voucher.UsedCount >= voucher.Quantity.Value)
                     throw new Exception($"Mã '{voucher.Code}' đã hết lượt sử dụng.");
 
+                // 4. Kiểm tra giá trị đơn hàng tối thiểu để được áp dụng mã
                 if (subTotal < voucher.MinOrderValue)
                     throw new Exception(
                         $"Mã '{voucher.Code}' yêu cầu đơn hàng tối thiểu {voucher.MinOrderValue:#,0}đ " +
                         $"(đơn hiện tại: {subTotal:#,0}đ).");
 
-                // Kiểm tra kênh áp dụng
+                // 5. Kiểm tra kênh áp dụng (Kênh Online vs Kênh Tại quầy POS)
+                // ApplyFor = 1: Chỉ áp dụng Online, ApplyFor = 2: Chỉ áp dụng tại quầy POS, ApplyFor = 0: Áp dụng cả hai
                 if (isOnlineOrder && voucher.ApplyFor == 2)
                     throw new Exception($"Mã '{voucher.Code}' chỉ áp dụng tại quầy, không áp dụng cho đơn online.");
                 if (!isOnlineOrder && voucher.ApplyFor == 1)
                     throw new Exception($"Mã '{voucher.Code}' chỉ áp dụng cho đơn online, không áp dụng tại quầy.");
 
-                // Kiểm tra danh mục sản phẩm áp dụng
+                // 6. Kiểm tra danh mục sản phẩm được áp dụng
+                // Nếu voucher có cấu hình danh sách Category, thì đơn hàng bắt buộc phải chứa ít nhất một sản phẩm thuộc các danh mục đó.
                 if (voucher.VoucherCategories.Any() && orderItemCategoryIds != null && orderItemCategoryIds.Any())
                 {
                     var voucherCategoryIds = voucher.VoucherCategories.Select(vc => vc.CategoryId).ToHashSet();
@@ -391,7 +438,7 @@ namespace PBL3.Service.Orders
                 }
             }
 
-            // Kiểm tra MaxUsesPerUser bằng count (hỗ trợ MaxUsesPerUser > 1)
+            // 7. Kiểm tra giới hạn số lần sử dụng của mỗi khách hàng (MaxUsesPerUser)
             var voucherIds = vouchers.Select(v => v.Id).ToList();
             var usageCounts = await _voucherRepo.GetUserVoucherUsageCountsAsync(userId, voucherIds);
             foreach (var voucher in vouchers)
@@ -402,7 +449,7 @@ namespace PBL3.Service.Orders
                         $"Bạn đã sử dụng mã '{voucher.Code}' {currentCount} lần " +
                         $"(tối đa {voucher.MaxUsesPerUser} lần/khách).");
 
-                // Tương thích ngược: nếu MaxUsesPerUser null và không stackable, giữ logic "dùng 1 lần"
+                // Tương thích ngược: nếu MaxUsesPerUser null và không stackable, giữ mặc định mỗi khách chỉ dùng tối đa 1 lần
                 if (!voucher.MaxUsesPerUser.HasValue && !voucher.IsStackable && currentCount >= 1)
                     throw new Exception(
                         $"Bạn đã sử dụng mã giảm giá '{voucher.Code}'. Mỗi mã chỉ được sử dụng 1 lần.");
@@ -410,15 +457,16 @@ namespace PBL3.Service.Orders
 
             decimal totalDiscount = 0;
 
+            // 8. TÍNH TOÁN SỐ TIỀN GIẢM GIÁ
             foreach (var voucher in vouchers)
             {
                 decimal discountApplied;
 
-                if (voucher.DiscountType == 0) // Tiền cố định
+                if (voucher.DiscountType == 0) // Loại 0: Giảm tiền cố định (Ví dụ: Giảm 50.000đ)
                 {
                     discountApplied = voucher.DiscountValue;
                 }
-                else // Phần trăm
+                else // Loại 1: Giảm theo tỷ lệ phần trăm (Ví dụ: Giảm 10%, giới hạn tối đa 200.000đ)
                 {
                     discountApplied = subTotal * voucher.DiscountValue / 100;
                     if (voucher.MaxDiscountAmount.HasValue && discountApplied > voucher.MaxDiscountAmount.Value)
@@ -551,6 +599,11 @@ namespace PBL3.Service.Orders
             return ApiResult<PagedResult<OrderSummaryResponse>>.Ok(result);
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Quản lý hủy đơn hàng (Quyền Admin/Nhân viên).
+        /// Ràng buộc nghiêm ngặt: Tuyệt đối cấm hủy đơn khi đơn hàng đã chuyển giao cho đơn vị vận chuyển ở trạng thái Đang giao (Shipping / Status = 2).
+        /// Khi đơn hàng ở trạng thái hợp lệ (Pending hoặc Confirmed), chuyển trạng thái sang Cancelled (Status = 4) và ghi nhận lý do hủy từ quản trị viên.
+        /// </summary>
         public async Task<ApiResult<bool>> CancelOrderAsync(int id, CancelOrderRequest request)
         {
             var order = await _orderRepo.GetByIdAsync(id);
@@ -576,6 +629,11 @@ namespace PBL3.Service.Orders
             return ApiResult<bool>.Ok(true, "Hủy đơn hàng thành công.");
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Xác nhận hoàn tất giao hàng (Quyền Admin/Nhân viên).
+        /// Chỉ cho phép xác nhận thành công đối với các đơn hàng đang trong trạng thái Đang giao (Shipping / Status = 2).
+        /// Chuyển trạng thái đơn sang Success (Status = 3) để ghi nhận doanh thu và chấm dứt vòng đời đơn hàng.
+        /// </summary>
         public async Task<ApiResult<bool>> CompleteOrderAsync(int id)
         {
             var order = await _orderRepo.GetByIdAsync(id);
@@ -594,6 +652,11 @@ namespace PBL3.Service.Orders
             return ApiResult<bool>.Ok(true, "Đơn hàng đã được đánh dấu hoàn thành.");
         }
 
+        /// <summary>
+        /// NGHIỆP VỤ: Duyệt đơn hàng trực tuyến (Quyền Admin/Nhân viên).
+        /// Chỉ cho phép duyệt những đơn hàng đang ở trạng thái Chờ duyệt (Pending / Status = 0) sang trạng thái Đã xác nhận (Confirmed / Status = 1).
+        /// Đây là bước tiền đề để bộ phận kho tiến hành quét serial xuất kho vật lý.
+        /// </summary>
         public async Task<ApiResult<bool>> ConfirmOrderAsync(int id)
         {
             var order = await _orderRepo.GetByIdAsync(id);

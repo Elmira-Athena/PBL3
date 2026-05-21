@@ -1,0 +1,118 @@
+@using Client.Services.Inventory
+@using PBL3.Shared.DTOs.Inventory
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" />
+            <MudText Typo="Typo.h6">Từ chối phiếu kiểm kê</MudText>
+        </MudStack>
+    </TitleContent>
+
+    <DialogContent>
+        <MudStack Spacing="3" Class="pt-2">
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="rounded-lg">
+                Bạn đang từ chối phiếu <b>@CheckCode</b>. Vui lòng điền lý do và chọn hướng xử lý.
+            </MudAlert>
+
+            <MudTextField @bind-Value="_reason"
+                          Label="Lý do từ chối"
+                          Variant="Variant.Outlined"
+                          Required="true"
+                          MaxLength="500"
+                          Counter="500"
+                          Lines="3"
+                          Placeholder="VD: Dữ liệu quét chưa đầy đủ, cần quét thêm..." />
+
+            <div>
+                <MudText Typo="Typo.body2" Class="mb-2" Style="font-weight: 500;">Hướng xử lý sau khi từ chối</MudText>
+                <MudRadioGroup T="bool" @bind-Value="_returnToDraft">
+                    <MudRadio T="bool" Value="true" Color="Color.Warning">
+                        Trả về Nháp — cho phép nhân viên quét lại
+                    </MudRadio>
+                    <MudRadio T="bool" Value="false" Color="Color.Error">
+                        Hủy phiếu hoàn toàn — không thể khôi phục
+                    </MudRadio>
+                </MudRadioGroup>
+            </div>
+        </MudStack>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3 rounded-lg" Variant="Variant.Filled">
+                @_errorMessage
+            </MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default" Style="text-transform: none;">
+            Quay lại
+        </MudButton>
+        <MudButton OnClick="Submit" Variant="Variant.Filled"
+                   Color="@(_returnToDraft ? Color.Warning : Color.Error)"
+                   Disabled="_isSaving"
+                   Style="text-transform: none; border-radius: 8px;">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(_returnToDraft ? "Trả về Nháp" : "Hủy phiếu")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Inject] private IInventoryCheckClientService CheckService { get; set; } = null!;
+    [Inject] private ISnackbar Snackbar { get; set; } = null!;
+
+    [Parameter] public int CheckId { get; set; }
+    [Parameter] public string CheckCode { get; set; } = string.Empty;
+
+    private string _reason = string.Empty;
+    private bool _returnToDraft = true;
+    private bool _isSaving;
+    private string? _errorMessage;
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(_reason))
+        {
+            _errorMessage = "Vui lòng nhập lý do từ chối.";
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new RejectInventoryCheckRequest
+            {
+                Reason = _reason.Trim(),
+                ReturnToDraft = _returnToDraft
+            };
+
+            var result = await CheckService.RejectAsync(CheckId, request);
+            if (result.Success)
+            {
+                var msg = _returnToDraft ? "Phiếu đã được trả về trạng thái Nháp." : "Phiếu đã bị hủy.";
+                Snackbar.Add(msg, Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                _errorMessage = result.Message ?? "Không thể từ chối phiếu.";
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

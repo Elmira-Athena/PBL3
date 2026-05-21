@@ -1,0 +1,631 @@
+@page "/inventory/audit/{Id:int}"
+@attribute [Authorize(Roles = "Admin,Employee")]
+
+@using Client.Services.Inventory
+@using PBL3.Shared.DTOs.Inventory
+@using Client.Pages.Inventory.Components
+
+@inject IInventoryCheckClientService CheckService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+
+<PageTitle>Chi tiết kiểm kê - HushStore</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-2">
+
+    <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Color="Color.Default" Class="mb-4"
+               OnClick="@(() => Navigation.NavigateTo("/inventory/audit"))">
+        Quay lại danh sách
+    </MudButton>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center mt-8">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        </div>
+    }
+    else if (_check != null)
+    {
+        @* ===== HEADER PANEL ===== *@
+        <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
+            <MudGrid Spacing="3" AlignItems="AlignItems.Center">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Mã phiếu</MudText>
+                    <MudText Typo="Typo.h6" Style="font-weight: 700; font-family: monospace;">@_check.CheckCode</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="2">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Trạng thái</MudText>
+                    <MudChip T="string" Size="Size.Medium" Color="@GetStatusColor(_check.Status)" Variant="Variant.Filled" Class="mt-1">
+                        @_check.StatusName
+                    </MudChip>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="2">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Ngày chốt snapshot</MudText>
+                    <MudText Typo="Typo.body1">@_check.SnapshotAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="2">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Nhân viên</MudText>
+                    <MudText Typo="Typo.body1">@_check.EmployeeName</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Phạm vi</MudText>
+                    <MudText Typo="Typo.body1">
+                        @(_check.ScopeType == 0 ? "Toàn kho" : $"Danh mục: {_check.ScopeCategoryName}")
+                    </MudText>
+                </MudItem>
+
+                @if (!string.IsNullOrWhiteSpace(_check.Note))
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Ghi chú</MudText>
+                        <MudText Typo="Typo.body2">@_check.Note</MudText>
+                    </MudItem>
+                }
+
+                @if (_check.Status == 3 && !string.IsNullOrWhiteSpace(_check.RejectReason))
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">
+                            <b>Lý do từ chối:</b> @_check.RejectReason
+                        </MudAlert>
+                    </MudItem>
+                }
+
+                @if (_check.Status == 2 && _check.ApprovedByEmployeeName != null)
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="text-transform: uppercase; letter-spacing: 0.05em;">Phê duyệt bởi</MudText>
+                        <MudText Typo="Typo.body2">@_check.ApprovedByEmployeeName — @_check.ApprovedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+
+            @* ACTION BUTTONS *@
+            <MudDivider Class="my-4" />
+            <div class="d-flex gap-2 flex-wrap">
+                @if (_check.Status == 0)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Send"
+                               OnClick="HandleSubmit"
+                               Disabled="_isActioning"
+                               Style="text-transform: none; border-radius: 8px;">
+                        @if (_isActioning) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                        Gửi duyệt
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.Cancel"
+                               OnClick="HandleCancel"
+                               Disabled="_isActioning"
+                               Style="text-transform: none; border-radius: 8px;">
+                        Hủy phiếu
+                    </MudButton>
+                }
+                @if (_check.Status == 1)
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="rounded-lg">
+                        Phiếu đang chờ Admin phê duyệt.
+                    </MudAlert>
+                    <AuthorizeView Roles="Admin" Context="authState">
+                        <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.RateReview"
+                                   OnClick="@(() => Navigation.NavigateTo($"/admin/inventory-audit/{Id}"))"
+                                   Style="text-transform: none; border-radius: 8px;">
+                            Đi đến trang phê duyệt
+                        </MudButton>
+                    </AuthorizeView>
+                }
+            </div>
+        </MudPaper>
+
+        @* ===== DASHBOARD SUMMARY ===== *@
+        @if (_dashboard != null)
+        {
+            <MudGrid Spacing="2" Class="mb-4">
+                <MudItem xs="6" sm="4" md="2">
+                    <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                        <MudText Typo="Typo.h5" Class="fw-bold">@_dashboard.TotalSystem</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Tổng snapshot</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" sm="4" md="2">
+                    <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                        <MudText Typo="Typo.h5" Class="fw-bold">@_dashboard.TotalScanned</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Đã quét (@_dashboard.PercentComplete%)</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" sm="4" md="2">
+                    <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                        <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-success);">@_dashboard.MatchedCount</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Khớp</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" sm="4" md="2">
+                    <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                        <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-error);">@_dashboard.MissingCount</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Thiếu</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" sm="4" md="2">
+                    <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                        <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-warning);">@(_dashboard.SurplusCount + _dashboard.UnknownSurplusCount)</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Thừa</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" sm="4" md="2">
+                    <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                        <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-secondary);">@_dashboard.DefectiveCount</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Lỗi</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+
+        @* ===== SCAN PANEL (only when Draft) ===== *@
+        @if (_check.Status == 0)
+        {
+            <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">
+                    <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Class="mr-2" />
+                    Quét Serial
+                </MudText>
+
+                <MudGrid Spacing="3" AlignItems="AlignItems.Center">
+                    <MudItem xs="12" sm="8" md="6">
+                        <MudTextField @bind-Value="_scanInput"
+                                      Label="Nhập / quét mã Serial"
+                                      Variant="Variant.Outlined"
+                                      Placeholder="Đặt con trỏ vào đây rồi quét..."
+                                      @ref="_scanField"
+                                      OnKeyUp="OnScanKeyUp"
+                                      Disabled="_isScanning"
+                                      Immediate="true"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@Icons.Material.Filled.QrCodeScanner" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4" md="3">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   OnClick="ExecuteScan"
+                                   Disabled="_isScanning || string.IsNullOrWhiteSpace(_scanInput)"
+                                   FullWidth="true"
+                                   Style="text-transform: none; border-radius: 8px; height: 56px;">
+                            @if (_isScanning)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>Đang quét...</span>
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.DocumentScanner" Class="mr-2" />
+                                <span>Quét (Enter)</span>
+                            }
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+
+                @* Scan result feedback *@
+                @if (_lastScanResult != null)
+                {
+                    <MudAlert Severity="@GetScanAlertSeverity(_lastScanResult)" Variant="Variant.Filled" Class="mt-3 rounded-lg">
+                        <b>@_lastScanResult.SerialNumberRaw</b> — @_lastScanResult.Message
+                        @if (!string.IsNullOrEmpty(_lastScanResult.FoundVariantName))
+                        {
+                            <span> | Variant: <b>@_lastScanResult.FoundVariantName</b></span>
+                        }
+                        @if (!string.IsNullOrEmpty(_lastScanResult.SurplusNote))
+                        {
+                            <br /><span class="mud-text-secondary" style="font-size:0.85em;">@_lastScanResult.SurplusNote</span>
+                        }
+                    </MudAlert>
+
+                    @if (_lastScanResult.RequiresVariantInput)
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-2 rounded-lg">
+                            Serial này không tồn tại trong hệ thống. Nếu muốn ghi nhận, vui lòng quét lại và chọn Variant tương ứng từ bảng Serial bên dưới.
+                        </MudAlert>
+                    }
+                }
+            </MudPaper>
+        }
+
+        @* ===== TABS: Variant detail | Serial list ===== *@
+        <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-0" Class="rounded-lg">
+            <MudTabPanel Text="Theo Variant" Icon="@Icons.Material.Outlined.ViewList">
+                <MudPaper Elevation="0" Class="pa-4">
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">Chi tiết theo biến thể sản phẩm</MudText>
+                    @if (_check.Details?.Count > 0)
+                    {
+                        <MudTable Items="@_check.Details"
+                                  Dense="true" Hover="true" Bordered="false" Striped="false"
+                                  Elevation="0" Class="rounded-lg"
+                                  Style="border: 1px solid var(--mud-palette-lines-default);">
+                            <HeaderContent>
+                                <MudTh>SKU</MudTh>
+                                <MudTh>Biến thể</MudTh>
+                                <MudTh Style="text-align: center;">Hệ thống</MudTh>
+                                <MudTh Style="text-align: center;">Thực tế</MudTh>
+                                <MudTh Style="text-align: center;">Chênh lệch</MudTh>
+                                <MudTh Style="text-align: center;">Khớp</MudTh>
+                                <MudTh Style="text-align: center;">Thiếu</MudTh>
+                                <MudTh Style="text-align: center;">Thừa</MudTh>
+                                <MudTh Style="text-align: center;">Lỗi</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="SKU">
+                                    <MudText Typo="Typo.body2" Style="font-family: monospace; font-size: 0.8rem;">@context.SKU</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Biến thể">
+                                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@context.VariantName</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Hệ thống" Style="text-align: center;">@context.SystemQuantity</MudTd>
+                                <MudTd DataLabel="Thực tế" Style="text-align: center;">@context.ActualQuantity</MudTd>
+                                <MudTd DataLabel="Chênh lệch" Style="text-align: center;">
+                                    <MudText Typo="Typo.body2" Style="@GetDifferenceStyle(context.Difference)">
+                                        @(context.Difference > 0 ? $"+{context.Difference}" : context.Difference.ToString())
+                                    </MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Khớp" Style="text-align: center; color: var(--mud-palette-success);">@context.MatchedQuantity</MudTd>
+                                <MudTd DataLabel="Thiếu" Style="text-align: center; color: var(--mud-palette-error);">@context.MissingQuantity</MudTd>
+                                <MudTd DataLabel="Thừa" Style="text-align: center; color: var(--mud-palette-warning);">@context.SurplusQuantity</MudTd>
+                                <MudTd DataLabel="Lỗi" Style="text-align: center; color: var(--mud-palette-secondary);">@context.DefectiveQuantity</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Không có dữ liệu chi tiết.</MudAlert>
+                    }
+                </MudPaper>
+            </MudTabPanel>
+
+            <MudTabPanel Text="Danh sách Serial" Icon="@Icons.Material.Outlined.QrCode2">
+                <MudPaper Elevation="0" Class="pa-4">
+                    @* Serial filter bar *@
+                    <div class="d-flex gap-3 mb-4 align-center flex-wrap">
+                        <MudSelect T="byte?"
+                                   Value="_serialFilter.ScanStatus"
+                                   ValueChanged="@((byte? v) => { _serialFilter.ScanStatus = v; _serialTable?.ReloadServerData(); })"
+                                   Label="Lọc theo trạng thái"
+                                   Clearable="true"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   Style="max-width: 200px;"
+                                   AnchorOrigin="Origin.BottomCenter">
+                            <MudSelectItem T="byte?" Value="@null">Tất cả</MudSelectItem>
+                            <MudSelectItem T="byte?" Value="@((byte)0)">Chờ quét</MudSelectItem>
+                            <MudSelectItem T="byte?" Value="@((byte)1)">Khớp</MudSelectItem>
+                            <MudSelectItem T="byte?" Value="@((byte)2)">Thiếu</MudSelectItem>
+                            <MudSelectItem T="byte?" Value="@((byte)3)">Thừa</MudSelectItem>
+                            <MudSelectItem T="byte?" Value="@((byte)4)">Thừa không rõ</MudSelectItem>
+                            <MudSelectItem T="byte?" Value="@((byte)5)">Lỗi</MudSelectItem>
+                        </MudSelect>
+                    </div>
+
+                    <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<InventoryCheckSerialDto>>>(LoadSerials))"
+                              Dense="true" Hover="true" Bordered="false" Striped="false"
+                              Elevation="0" Class="rounded-lg"
+                              Style="border: 1px solid var(--mud-palette-lines-default);"
+                              @ref="_serialTable">
+                        <HeaderContent>
+                            <MudTh>Serial</MudTh>
+                            <MudTh>Variant</MudTh>
+                            <MudTh Style="text-align: center;">Trạng thái gốc</MudTh>
+                            <MudTh Style="text-align: center;">Kết quả quét</MudTh>
+                            <MudTh>Ghi chú</MudTh>
+                            @if (_check.Status == 0)
+                            {
+                                <MudTh Style="text-align: center;">Thao tác</MudTh>
+                            }
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Serial">
+                                <MudText Typo="Typo.body2" Style="font-family: monospace; font-weight: 600;">@context.SerialNumberRaw</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Variant">
+                                <MudText Typo="Typo.body2">@(context.VariantName ?? "—")</MudText>
+                                @if (!string.IsNullOrEmpty(context.SKU))
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-family: monospace;">@context.SKU</MudText>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Trạng thái gốc" Style="text-align: center;">
+                                @if (context.OriginalStatus.HasValue)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="@GetSerialStatusColor(context.OriginalStatus.Value)" Variant="Variant.Outlined">
+                                        @(context.OriginalStatusName ?? "?")
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">—</MudText>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Kết quả quét" Style="text-align: center;">
+                                <MudChip T="string" Size="Size.Small" Color="@GetScanStatusColor(context.ScanStatus)" Variant="Variant.Filled">
+                                    @context.ScanStatusName
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Ghi chú">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@(context.Note ?? "—")</MudText>
+                                @if (!string.IsNullOrEmpty(context.ProposedActionNote))
+                                {
+                                    <br /><MudText Typo="Typo.caption" Style="color: var(--mud-palette-info);">→ @context.ProposedActionNote</MudText>
+                                }
+                            </MudTd>
+                            @if (_check.Status == 0)
+                            {
+                                <MudTd DataLabel="Thao tác" Style="text-align: center;">
+                                    @if (context.ScanStatus == 1)
+                                    {
+                                        <MudTooltip Text="Đánh dấu hàng lỗi">
+                                            <MudIconButton Icon="@Icons.Material.Filled.ReportProblem"
+                                                           Color="Color.Warning"
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => HandleMarkDefective(context.Id))" />
+                                        </MudTooltip>
+                                    }
+                                    @if (context.ScanStatus is 2 or 3 or 4)
+                                    {
+                                        <MudTooltip Text="Cập nhật lý do">
+                                            <MudIconButton Icon="@Icons.Material.Filled.EditNote"
+                                                           Color="Color.Info"
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => OpenUpdateReasonDialog(context))" />
+                                        </MudTooltip>
+                                    }
+                                </MudTd>
+                            }
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText Class="pa-4">Không có serial nào.</MudText>
+                        </NoRecordsContent>
+                        <LoadingContent>
+                            <MudText Class="pa-4">Đang tải...</MudText>
+                        </LoadingContent>
+                        <PagerContent>
+                            <MudTablePager PageSizeOptions="new int[] { 20, 50, 100 }" />
+                        </PagerContent>
+                    </MudTable>
+                </MudPaper>
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private InventoryCheckDto? _check;
+    private InventoryCheckDashboardDto? _dashboard;
+    private bool _isLoading = true;
+    private bool _isActioning;
+
+    private string _scanInput = string.Empty;
+    private bool _isScanning;
+    private ScanResultDto? _lastScanResult;
+    private MudTextField<string>? _scanField;
+
+    private MudTable<InventoryCheckSerialDto>? _serialTable;
+    private InventoryCheckSerialFilterRequest _serialFilter = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAll();
+    }
+
+    private async Task LoadAll()
+    {
+        _isLoading = true;
+
+        var checkResult = await CheckService.GetByIdAsync(Id);
+        if (!checkResult.Success || checkResult.Data == null)
+        {
+            Snackbar.Add(checkResult.Message ?? "Không tìm thấy phiếu kiểm kê.", Severity.Error);
+            Navigation.NavigateTo("/inventory/audit");
+            return;
+        }
+        _check = checkResult.Data;
+
+        var dashResult = await CheckService.GetDashboardAsync(Id);
+        if (dashResult.Success && dashResult.Data != null)
+            _dashboard = dashResult.Data;
+
+        _isLoading = false;
+    }
+
+    private async Task<TableData<InventoryCheckSerialDto>> LoadSerials(TableState state, CancellationToken ct)
+    {
+        _serialFilter.PageNumber = state.Page + 1;
+        _serialFilter.PageSize = state.PageSize;
+
+        var result = await CheckService.GetSerialsAsync(Id, _serialFilter, ct);
+        if (result.Success && result.Data != null)
+            return new TableData<InventoryCheckSerialDto> { TotalItems = result.Data.TotalCount, Items = result.Data.Items };
+
+        if (!result.Success && !string.IsNullOrEmpty(result.Message))
+            Snackbar.Add(result.Message, Severity.Error);
+
+        return new TableData<InventoryCheckSerialDto> { TotalItems = 0, Items = new List<InventoryCheckSerialDto>() };
+    }
+
+    private async Task OnScanKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_scanInput))
+            await ExecuteScan();
+    }
+
+    private async Task ExecuteScan()
+    {
+        if (string.IsNullOrWhiteSpace(_scanInput) || _isScanning) return;
+
+        _isScanning = true;
+        _lastScanResult = null;
+        StateHasChanged();
+
+        var request = new ScanSerialRequest { SerialNumber = _scanInput.Trim() };
+        var result = await CheckService.ScanSerialAsync(Id, request);
+
+        _lastScanResult = result.Data;
+
+        if (result.Success || result.Data != null)
+        {
+            if (result.Data?.MiniDashboard != null)
+                _dashboard = result.Data.MiniDashboard;
+
+            _scanInput = string.Empty;
+            await _serialTable!.ReloadServerData();
+
+            if (!result.Success && !string.IsNullOrEmpty(result.Message))
+                Snackbar.Add(result.Message, Severity.Warning);
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi khi quét serial.", Severity.Error);
+        }
+
+        _isScanning = false;
+        StateHasChanged();
+    }
+
+    private async Task HandleMarkDefective(int detailSerialId)
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Xác nhận đánh dấu lỗi",
+            "Bạn có chắc muốn đánh dấu serial này là hàng lỗi vật lý?",
+            yesText: "Đánh dấu lỗi", cancelText: "Hủy");
+
+        if (confirm != true) return;
+
+        _isActioning = true;
+        var result = await CheckService.MarkDefectiveAsync(Id, detailSerialId);
+        _isActioning = false;
+
+        if (result.Success)
+        {
+            Snackbar.Add("Đã đánh dấu hàng lỗi.", Severity.Success);
+            await _serialTable!.ReloadServerData();
+            var dashResult = await CheckService.GetDashboardAsync(Id);
+            if (dashResult.Success && dashResult.Data != null)
+                _dashboard = dashResult.Data;
+            StateHasChanged();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi khi đánh dấu hàng lỗi.", Severity.Error);
+        }
+    }
+
+    private async Task OpenUpdateReasonDialog(InventoryCheckSerialDto serial)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(UpdateReasonDialog.CheckId), Id },
+            { nameof(UpdateReasonDialog.DetailSerialId), serial.Id },
+            { nameof(UpdateReasonDialog.SerialNumber), serial.SerialNumberRaw },
+            { nameof(UpdateReasonDialog.ExistingReason), serial.Note },
+            { nameof(UpdateReasonDialog.ExistingProposedAction), serial.ProposedActionNote }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<UpdateReasonDialog>("Cập nhật lý do", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+            await _serialTable!.ReloadServerData();
+    }
+
+    private async Task HandleSubmit()
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Xác nhận gửi duyệt",
+            "Sau khi gửi duyệt, bạn không thể quét thêm serial. Tiếp tục?",
+            yesText: "Gửi duyệt", cancelText: "Hủy");
+
+        if (confirm != true) return;
+
+        _isActioning = true;
+        var result = await CheckService.SubmitAsync(Id);
+        _isActioning = false;
+
+        if (result.Success)
+        {
+            Snackbar.Add("Phiếu đã được gửi duyệt thành công.", Severity.Success);
+            await LoadAll();
+            await _serialTable!.ReloadServerData();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi khi gửi duyệt.", Severity.Error);
+        }
+    }
+
+    private async Task HandleCancel()
+    {
+        bool? confirm = await DialogService.ShowMessageBox(
+            "Xác nhận hủy phiếu",
+            "Phiếu kiểm kê sẽ bị hủy và không thể khôi phục. Tiếp tục?",
+            yesText: "Hủy phiếu", cancelText: "Quay lại");
+
+        if (confirm != true) return;
+
+        _isActioning = true;
+        var result = await CheckService.CancelAsync(Id);
+        _isActioning = false;
+
+        if (result.Success)
+        {
+            Snackbar.Add("Đã hủy phiếu kiểm kê.", Severity.Info);
+            Navigation.NavigateTo("/inventory/audit");
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi khi hủy phiếu.", Severity.Error);
+        }
+    }
+
+    // ===== HELPERS =====
+
+    private static Color GetStatusColor(byte status) => status switch
+    {
+        0 => Color.Default,
+        1 => Color.Warning,
+        2 => Color.Success,
+        3 => Color.Error,
+        _ => Color.Default
+    };
+
+    private static Color GetScanStatusColor(byte status) => status switch
+    {
+        0 => Color.Default,
+        1 => Color.Success,
+        2 => Color.Error,
+        3 => Color.Warning,
+        4 => Color.Warning,
+        5 => Color.Secondary,
+        _ => Color.Default
+    };
+
+    private static Color GetSerialStatusColor(byte status) => status switch
+    {
+        0 => Color.Success,
+        1 => Color.Warning,
+        2 => Color.Info,
+        3 => Color.Error,
+        4 => Color.Secondary,
+        5 => Color.Dark,
+        _ => Color.Default
+    };
+
+    private static Severity GetScanAlertSeverity(ScanResultDto result) => result.ScanStatus switch
+    {
+        1 => Severity.Success,
+        3 or 4 => Severity.Warning,
+        _ when result.IsDuplicateScan => Severity.Warning,
+        _ when !result.Success => Severity.Error,
+        _ => Severity.Info
+    };
+
+    private static string GetDifferenceStyle(int diff) =>
+        diff < 0 ? "color: var(--mud-palette-error); font-weight: 600;"
+        : diff > 0 ? "color: var(--mud-palette-warning); font-weight: 600;"
+        : string.Empty;
+}
