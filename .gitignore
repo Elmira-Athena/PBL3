@@ -88,6 +88,7 @@ Infrastructure/db/.env
 src/API/appsettings.Production.json
 
 # Claude Code tooling
+.agents/
 skills-lock.json
 scratch/
 infra/resources*.env
