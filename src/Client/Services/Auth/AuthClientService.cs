@@ -98,5 +98,32 @@ namespace Client.Services.Auth
                 return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
             }
         }
+
+        public async Task RefreshSessionAsync()
+        {
+            try
+            {
+                var accessToken = (await _localStorage.GetItemAsStringAsync(TokenKey))?.Trim('"');
+                var refreshToken = (await _localStorage.GetItemAsStringAsync(RefreshTokenKey))?.Trim('"');
+                if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(refreshToken))
+                    return;
+
+                var response = await _httpClient.PostAsJsonAsync($"{BaseUrl}/refresh-token",
+                    new RefreshTokenRequest { AccessToken = accessToken, RefreshToken = refreshToken });
+
+                if (!response.IsSuccessStatusCode) return;
+
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>();
+                if (result?.Success != true || result.Data == null) return;
+
+                await _localStorage.SetItemAsStringAsync(TokenKey, result.Data.AccessToken);
+                await _localStorage.SetItemAsStringAsync(RefreshTokenKey, result.Data.RefreshToken);
+                ((JwtAuthenticationStateProvider)_authStateProvider).NotifyAuthStateChanged();
+            }
+            catch
+            {
+                // Refresh thất bại — không làm gián đoạn luồng chính
+            }
+        }
     }
 }

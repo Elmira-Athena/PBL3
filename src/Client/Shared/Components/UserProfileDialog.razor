@@ -103,7 +103,7 @@
                           Variant="Variant.Outlined"
                           Margin="Margin.Dense"
                           Class="mb-4"
-                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "address-level2" })" />
+                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "off" })" />
             <MudButton OnClick="SaveProfile"
                        Variant="Variant.Filled"
                        Color="Color.Primary"
@@ -118,6 +118,12 @@
             </MudButton>
 
             <MudDivider Class="mb-4" />
+
+            @* Honeypot: absorbs browser credential-manager autofill before the password fields *@
+            <div aria-hidden="true" style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;">
+                <input type="text" tabindex="-1" autocomplete="username" />
+                <input type="password" tabindex="-1" autocomplete="current-password" />
+            </div>
 
             @* ===== Change Password ===== *@
             <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-2">Đổi mật khẩu</MudText>
@@ -252,6 +258,7 @@
         {
             _displayName = _profileModel.FullName;
             Snackbar.Add("Cập nhật thông tin thành công!", Severity.Success);
+            await AuthService.RefreshSessionAsync();
         }
         else
         {

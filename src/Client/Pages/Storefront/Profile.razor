@@ -2,8 +2,10 @@
 @attribute [Authorize(Roles = "Customer")]
 @using Microsoft.AspNetCore.Authorization
 @using PBL3.Shared.DTOs.Customers
+@using Client.Services.Auth
 @using Client.Services.Customer
 @using Client.Services.Image
+@inject IAuthClientService AuthService
 @inject ICustomerClientService CustomerService
 @inject IImageClientService ImageService
 @inject ISnackbar Snackbar
@@ -204,6 +206,7 @@
         {
             _profile = result.Data;
             Snackbar.Add("Cập nhật thông tin thành công!", Severity.Success);
+            await AuthService.RefreshSessionAsync();
         }
         else
         {
