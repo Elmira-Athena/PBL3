@@ -59,7 +59,8 @@
                         {
                             <div class="cart-item-row pa-4">
                                 <MudGrid Class="align-center">
-                                    <MudItem xs="12" sm="6" Class="d-flex">
+                                    <MudItem xs="12" sm="6" Class="d-flex" Style="cursor:pointer"
+                                             @onclick="@(() => NavigationManager.NavigateTo($"/product/{item.ProductSlug}"))">
                                         <MudImage Src="@item.ImageUrl" Width="80" Height="80" ObjectFit="ObjectFit.Cover" Class="rounded mr-4 border" />
                                         <div class="d-flex flex-column justify-center">
                                             <MudText Typo="Typo.subtitle1" Class="fw-bold line-clamp-2 mb-1">@item.ProductName</MudText>

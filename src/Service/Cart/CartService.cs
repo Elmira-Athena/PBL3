@@ -41,7 +41,8 @@ namespace PBL3.Service.Cart
                     UnitPrice = cart.Variant.Price,
                     Quantity = cart.Quantity,
                     SubTotal = cart.Variant.Price * cart.Quantity,
-                    StockQuantity = cart.Variant.StockQuantity
+                    StockQuantity = cart.Variant.StockQuantity,
+                    ProductSlug = cart.Variant.Product.Slug
                 });
             }
 
