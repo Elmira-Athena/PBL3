@@ -45,6 +45,7 @@ namespace PBL3.Infrastructure.Repositories
             var query = _context.InventoryChecks
                 .AsNoTracking()
                 .Include(c => c.ScopeCategory)
+                .Include(c => c.Details)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(keyword))
