@@ -15,6 +15,7 @@ public class AuthHeaderHandler : DelegatingHandler
     private readonly NavigationManager _navigationManager;
     private const string TokenKey = "authToken";
     private const string RefreshTokenKey = "refreshToken";
+    private static readonly SemaphoreSlim _refreshSemaphore = new(1, 1);
 
     public AuthHeaderHandler(
         ILocalStorageService localStorage,
@@ -39,6 +40,7 @@ public class AuthHeaderHandler : DelegatingHandler
             token = token.Trim('"');
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
+        var sentToken = token?.Trim('"');
 
         var response = await base.SendAsync(request, cancellationToken);
 
@@ -61,7 +63,7 @@ public class AuthHeaderHandler : DelegatingHandler
         if (response.StatusCode == HttpStatusCode.Unauthorized &&
             !(request.RequestUri?.AbsolutePath.Contains("/api/auth/") ?? false))
         {
-            var (newToken, refreshError) = await TryRefreshAsync(cancellationToken);
+            var (newToken, refreshError) = await TryRefreshAsync(sentToken, cancellationToken);
             if (newToken != null)
             {
                 // Token mới → retry request gốc, user không bị gián đoạn
@@ -88,51 +90,65 @@ public class AuthHeaderHandler : DelegatingHandler
         return response;
     }
 
-    private async Task<(string? Token, string? ErrorMessage)> TryRefreshAsync(CancellationToken cancellationToken)
+    private async Task<(string? Token, string? ErrorMessage)> TryRefreshAsync(
+        string? sentToken, CancellationToken cancellationToken)
     {
-        var accessToken = (await _localStorage.GetItemAsStringAsync(TokenKey))?.Trim('"');
-        var refreshToken = (await _localStorage.GetItemAsStringAsync(RefreshTokenKey))?.Trim('"');
-
-        if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(refreshToken))
-            return (null, null);
-
+        await _refreshSemaphore.WaitAsync(cancellationToken);
         try
         {
-            var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
-            req.Content = JsonContent.Create(new RefreshTokenRequest
-            {
-                AccessToken = accessToken,
-                RefreshToken = refreshToken
-            });
+            // Nếu một concurrent call đã refresh trước → dùng token mới ngay, không gọi API
+            var currentToken = (await _localStorage.GetItemAsStringAsync(TokenKey))?.Trim('"');
+            if (currentToken != null && currentToken != sentToken)
+                return (currentToken, null);
 
-            var res = await base.SendAsync(req, cancellationToken);
-            if (!res.IsSuccessStatusCode)
+            var accessToken = currentToken;
+            var refreshToken = (await _localStorage.GetItemAsStringAsync(RefreshTokenKey))?.Trim('"');
+
+            if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(refreshToken))
+                return (null, null);
+
+            try
             {
-                string? errorMessage = null;
-                try
+                var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh-token");
+                req.Content = JsonContent.Create(new RefreshTokenRequest
                 {
-                    var errResult = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>(
-                        cancellationToken: cancellationToken);
-                    errorMessage = errResult?.Message;
+                    AccessToken = accessToken,
+                    RefreshToken = refreshToken
+                });
+
+                var res = await base.SendAsync(req, cancellationToken);
+                if (!res.IsSuccessStatusCode)
+                {
+                    string? errorMessage = null;
+                    try
+                    {
+                        var errResult = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>(
+                            cancellationToken: cancellationToken);
+                        errorMessage = errResult?.Message;
+                    }
+                    catch { }
+                    return (null, errorMessage);
                 }
-                catch { }
-                return (null, errorMessage);
+
+                var result = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>(
+                    cancellationToken: cancellationToken);
+
+                if (result?.Success != true || result.Data == null) return (null, result?.Message);
+
+                await _localStorage.SetItemAsStringAsync(TokenKey, result.Data.AccessToken);
+                await _localStorage.SetItemAsStringAsync(RefreshTokenKey, result.Data.RefreshToken);
+                _authStateProvider.NotifyAuthStateChanged();
+
+                return (result.Data.AccessToken, null);
             }
-
-            var result = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>(
-                cancellationToken: cancellationToken);
-
-            if (result?.Success != true || result.Data == null) return (null, result?.Message);
-
-            await _localStorage.SetItemAsStringAsync(TokenKey, result.Data.AccessToken);
-            await _localStorage.SetItemAsStringAsync(RefreshTokenKey, result.Data.RefreshToken);
-            _authStateProvider.NotifyAuthStateChanged();
-
-            return (result.Data.AccessToken, null);
+            catch
+            {
+                return (null, null);
+            }
         }
-        catch
+        finally
         {
-            return (null, null);
+            _refreshSemaphore.Release();
         }
     }
 

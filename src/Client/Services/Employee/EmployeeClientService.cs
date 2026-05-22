@@ -51,6 +51,19 @@ namespace Client.Services.Employee
             }
         }
 
+        public async Task<ApiResult<EmployeeListDto>> GetByIdAsync(Guid id)
+        {
+            try
+            {
+                var result = await _httpClient.GetFromJsonAsync<ApiResult<EmployeeListDto>>($"{BaseUrl}/{id}");
+                return result ?? ApiResult<EmployeeListDto>.Fail("Không tìm thấy nhân viên.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<EmployeeListDto>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
         public async Task<ApiResult<EmployeeListDto>> CreateAsync(CreateEmployeeRequest request)
         {
             try

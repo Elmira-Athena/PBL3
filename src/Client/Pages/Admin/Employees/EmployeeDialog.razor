@@ -49,7 +49,7 @@
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="6">
-                    <MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" Margin="Margin.Dense" DisableToolbar="true" />
+                    <MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" Margin="Margin.Dense" DisableToolbar="true" MaxDate="DateTime.Today" />
                 </MudItem>
 
                 <MudItem xs="12">
@@ -218,6 +218,10 @@
                     .NotEmpty().WithMessage("Xác nhận mật khẩu không được để trống.")
                     .Equal(x => x.Password).WithMessage("Xác nhận mật khẩu không khớp.");
             }
+
+            RuleFor(x => x.DateOfBirth)
+                .LessThan(DateTime.Today).WithMessage("Ngày sinh phải nhỏ hơn ngày hiện tại.")
+                .When(x => x.DateOfBirth.HasValue);
         }
     }
 

@@ -91,6 +91,15 @@ namespace PBL3.API.Controllers.Admin
             return Ok(result);
         }
 
+        [HttpGet("{id:guid}")]
+        [ProducesResponseType(typeof(ApiResult<EmployeeListDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetById(Guid id)
+        {
+            var result = await _employeeService.GetByIdAsync(id);
+            if (!result.Success) return NotFound(result);
+            return Ok(result);
+        }
+
         [AllowAnonymous]
         [HttpGet("technicians")]
         [ProducesResponseType(typeof(ApiResult<List<EmployeeDto>>), StatusCodes.Status200OK)]

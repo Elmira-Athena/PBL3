@@ -12,8 +12,9 @@
 
 <MudText Typo="Typo.h5" Class="mb-4" Style="font-weight: 700;">Khách hàng</MudText>
 
-<MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<CustomerDto>>>(ServerReload))"
-          Dense="true" Hover="true" @ref="_table" Elevation="2" Class="mb-4" Loading="@_isLoading">
+<MudTable T="CustomerDto" ServerData="@(new Func<TableState, CancellationToken, Task<TableData<CustomerDto>>>(ServerReload))"
+          Dense="true" Hover="true" @ref="_table" Elevation="2" Class="mb-4" Loading="@_isLoading"
+          OnRowClick="OnRowClick" RowStyle="cursor: pointer;">
     <ToolBarContent>
         <MudTextField T="string"
                       ValueChanged="@(s => OnSearch(s))"
@@ -130,6 +131,8 @@
     private bool? _filterIsActive;
     private byte? _filterGender;
     private bool _isLoading;
+    private DateTime _lastClickTime;
+    private Guid _lastClickId = Guid.Empty;
 
     private async Task<TableData<CustomerDto>> ServerReload(TableState state, CancellationToken cancellationToken)
     {
@@ -245,8 +248,15 @@
         }
     }
 
-    private void NavigateToDetail(Guid customerId)
-    {
+    private void NavigateToDetail(Guid customerId) =>
         Navigation.NavigateTo($"/admin/customers/{customerId}");
+
+    private void OnRowClick(TableRowClickEventArgs<CustomerDto> args)
+    {
+        var now = DateTime.Now;
+        if (_lastClickId == args.Item.Id && (now - _lastClickTime).TotalMilliseconds < 400)
+            NavigateToDetail(args.Item.Id);
+        _lastClickTime = now;
+        _lastClickId = args.Item.Id;
     }
 }

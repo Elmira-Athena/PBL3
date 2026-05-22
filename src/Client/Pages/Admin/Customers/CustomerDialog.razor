@@ -1,6 +1,7 @@
 @using PBL3.Shared.DTOs.Customers
 @using PBL3.Shared.DTOs.Common
 @using MudBlazor
+@using FluentValidation
 @inject ICustomerClientService CustomerService
 @inject IImageClientService ImageService
 @inject ISnackbar Snackbar
@@ -8,7 +9,7 @@
 <MudDialog>
     <DialogContent>
         <EditForm Model="@_model" OnValidSubmit="HandleSubmit">
-            <FluentValidationValidator />
+            <FluentValidationValidator Validator="@_formValidator" />
             
             <MudGrid>
                 @if (IsEditMode)
@@ -49,7 +50,7 @@
                     </MudSelect>
                 </MudItem>
                 <MudItem xs="6">
-                    <MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" Margin="Margin.Dense" DisableToolbar="true" />
+                    <MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" Margin="Margin.Dense" DisableToolbar="true" MaxDate="DateTime.Today" />
                 </MudItem>
 
                 <MudItem xs="12">
@@ -140,6 +141,7 @@
     }
 
     private DialogFormModel _model = new();
+    private AbstractValidator<DialogFormModel> _formValidator = null!;
 
     // Để giữ info hiển thị ReadOnly khi Edit
     private string Email { get; set; } = string.Empty;
@@ -149,8 +151,41 @@
     private bool _isSaving = false;
     private bool _isUploadingAvatar = false;
 
+    private sealed class DialogFormModelValidator : AbstractValidator<DialogFormModel>
+    {
+        public DialogFormModelValidator(bool isEditMode)
+        {
+            RuleFor(x => x.FullName)
+                .NotEmpty().WithMessage("Họ tên không được để trống.")
+                .MaximumLength(100).WithMessage("Họ tên không được vượt quá 100 ký tự.");
+
+            RuleFor(x => x.Address)
+                .MaximumLength(255).WithMessage("Địa chỉ không được vượt quá 255 ký tự.");
+
+            RuleFor(x => x.City)
+                .MaximumLength(255).WithMessage("Thành phố không được vượt quá 255 ký tự.");
+
+            RuleFor(x => x.DateOfBirth)
+                .LessThan(DateTime.Today).WithMessage("Ngày sinh phải nhỏ hơn ngày hiện tại.")
+                .When(x => x.DateOfBirth.HasValue);
+
+            if (!isEditMode)
+            {
+                RuleFor(x => x.Email)
+                    .NotEmpty().WithMessage("Email không được để trống.")
+                    .EmailAddress().WithMessage("Email không đúng định dạng.")
+                    .MaximumLength(256).WithMessage("Email không được vượt quá 256 ký tự.");
+
+                RuleFor(x => x.PhoneNumber)
+                    .NotEmpty().WithMessage("Số điện thoại không được để trống.")
+                    .Matches(@"^0[3-9][0-9]{8}$").WithMessage("Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam gồm 10 chữ số (bắt đầu bằng 03x, 05x, 07x, 08x, 09x).");
+            }
+        }
+    }
+
     protected override void OnInitialized()
     {
+        _formValidator = new DialogFormModelValidator(IsEditMode);
         if (IsEditMode && InitialData != null)
             LoadData(InitialData);
     }
@@ -178,7 +213,7 @@
         if (url != null)
             _model.AvatarUrl = url;
         else
-            Snackbar.Add("Upload ảnh đại diện thất bại. Vui lòng thử lại.", Severity.Error);
+            Snackbar.Add("Upload ảnh đại diện thất bại. Vui lòng thử lại.", MudBlazor.Severity.Error);
 
         _isUploadingAvatar = false;
         StateHasChanged();
@@ -221,17 +256,17 @@
 
             if (result != null && result.Success)
             {
-                Snackbar.Add(IsEditMode ? "Cập nhật thành công!" : "Tạo khách hàng thành công!", Severity.Success);
+                Snackbar.Add(IsEditMode ? "Cập nhật thành công!" : "Tạo khách hàng thành công!", MudBlazor.Severity.Success);
                 MudDialog.Close(DialogResult.Ok(true));
             }
             else
             {
-                Snackbar.Add(result?.Message ?? "Có lỗi xảy ra.", Severity.Error);
+                Snackbar.Add(result?.Message ?? "Có lỗi xảy ra.", MudBlazor.Severity.Error);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Lỗi thao tác: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Lỗi thao tác: {ex.Message}", MudBlazor.Severity.Error);
         }
         finally
         {

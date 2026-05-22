@@ -6,6 +6,7 @@ using PBL3.Core.Interfaces;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Employees;
 using PBL3.Shared.DTOs.Products;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -76,6 +77,11 @@ namespace PBL3.Service.Employees
             var existing = await _userManager.FindByEmailAsync(request.Email);
             if (existing != null)
                 return ApiResult<EmployeeListDto>.Fail("Email đã được sử dụng.");
+
+            var phoneExists = await _userManager.Users
+                .AnyAsync(u => u.PhoneNumber == request.PhoneNumber && !u.IsDeleted);
+            if (phoneExists)
+                return ApiResult<EmployeeListDto>.Fail("Số điện thoại đã được sử dụng.");
 
             var user = new AppUser
             {

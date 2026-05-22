@@ -6,6 +6,7 @@ using PBL3.Core.Interfaces;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
 using PBL3.Shared.DTOs.Products;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -116,9 +117,15 @@ namespace PBL3.Service.Customers
             {
                 var existingUserByEmail = await _userManager.FindByEmailAsync(request.Email);
                 if (existingUserByEmail != null)
-                {
                     return ApiResult<CustomerDto>.Fail("Email đã được sử dụng.");
-                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+            {
+                var phoneExists = await _userManager.Users
+                    .AnyAsync(u => u.PhoneNumber == request.PhoneNumber && !u.IsDeleted);
+                if (phoneExists)
+                    return ApiResult<CustomerDto>.Fail("Số điện thoại đã được sử dụng.");
             }
 
             // Create user

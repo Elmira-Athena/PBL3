@@ -6,13 +6,15 @@
 @inject IEmployeeClientService EmployeeService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
 
 <PageTitle>Quản lý nhân viên</PageTitle>
 
 <MudText Typo="Typo.h5" Class="mb-4" Style="font-weight: 700;">Nhân viên</MudText>
 
-<MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<EmployeeListDto>>>(ServerReload))"
-          Dense="true" Hover="true" @ref="_table" Elevation="2" Class="mb-4" Loading="@_isLoading">
+<MudTable T="EmployeeListDto" ServerData="@(new Func<TableState, CancellationToken, Task<TableData<EmployeeListDto>>>(ServerReload))"
+          Dense="true" Hover="true" @ref="_table" Elevation="2" Class="mb-4" Loading="@_isLoading"
+          OnRowClick="OnRowClick" RowStyle="cursor: pointer;">
     <ToolBarContent>
         <MudTextField T="string"
                       ValueChanged="@(s => OnSearch(s))"
@@ -100,6 +102,8 @@
             }
         </MudTd>
         <MudTd DataLabel="Thao tác" Style="text-align: center;">
+            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" Size="Size.Small"
+                           OnClick="@(() => NavigateToDetail(context.Id))" />
             <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Warning" Size="Size.Small"
                            OnClick="@(() => OpenUpdateDialog(context))" />
             @if (context.IsActive)
@@ -131,6 +135,8 @@
     private bool? _filterIsActive;
     private byte? _filterGender;
     private bool _isLoading;
+    private DateTime _lastClickTime;
+    private Guid _lastClickId = Guid.Empty;
 
     private async Task<TableData<EmployeeListDto>> ServerReload(TableState state, CancellationToken cancellationToken)
     {
@@ -237,5 +243,17 @@
                 Snackbar.Add(res.Message ?? "Mở khóa thất bại.", Severity.Error);
             }
         }
+    }
+
+    private void NavigateToDetail(Guid id) =>
+        Navigation.NavigateTo($"/admin/employees/{id}");
+
+    private void OnRowClick(TableRowClickEventArgs<EmployeeListDto> args)
+    {
+        var now = DateTime.Now;
+        if (_lastClickId == args.Item.Id && (now - _lastClickTime).TotalMilliseconds < 400)
+            NavigateToDetail(args.Item.Id);
+        _lastClickTime = now;
+        _lastClickId = args.Item.Id;
     }
 }
