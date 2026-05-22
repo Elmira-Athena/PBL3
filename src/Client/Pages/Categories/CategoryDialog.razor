@@ -247,7 +247,7 @@
 
     private void AutoGenerateSlug()
     {
-        if (string.IsNullOrWhiteSpace(_model.Name) || !string.IsNullOrEmpty(_model.Slug))
+        if (string.IsNullOrWhiteSpace(_model.Name))
             return;
 
         _model.Slug = GenerateSlug(_model.Name);

@@ -34,16 +34,15 @@
 
     @* ===== FILTER BAR ===== *@
     <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
-        <MudTextField Value="_filter.Keyword"
-                      ValueChanged="@((string s) => { _filter.Keyword = s; _table?.ReloadServerData(); })"
-                      Label="Tìm theo mã phiếu..."
+        <MudTextField @bind-Value="_filter.Keyword"
+                      Label="Tìm theo mã phiếu... (Enter để tìm)"
                       Variant="Variant.Outlined"
                       Margin="Margin.Dense"
                       Style="max-width: 240px;"
                       Adornment="Adornment.End"
                       AdornmentIcon="@Icons.Material.Filled.Search"
-                      DebounceInterval="400"
-                      Immediate="true" />
+                      Immediate="true"
+                      OnKeyUp="SearchOnEnter" />
 
         <MudSelect T="byte?"
                    Value="_filter.Status"
@@ -165,6 +164,12 @@
             Snackbar.Add(result.Message, Severity.Error);
 
         return new TableData<InventoryCheckListItemDto> { TotalItems = 0, Items = new List<InventoryCheckListItemDto>() };
+    }
+
+    private void SearchOnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            _table?.ReloadServerData();
     }
 
     private async Task OpenCreateDialog()

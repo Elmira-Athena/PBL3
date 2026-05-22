@@ -35,14 +35,13 @@
         <MudGrid>
             <MudItem xs="12" sm="6" md="4">
                 <MudTextField @bind-Value="_keyword"
-                              Placeholder="Tìm theo mã hoặc tên voucher..."
+                              Placeholder="Tìm theo mã hoặc tên voucher... (Enter để tìm)"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Filled.Search"
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
                               Immediate="true"
-                              DebounceInterval="400"
-                              OnDebounceIntervalElapsed="OnSearchChanged"
+                              OnKeyUp="SearchOnEnter"
                               Style="border-radius: 8px;" />
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
@@ -105,7 +104,6 @@
                   Bordered="false"
                   Loading="_isLoading"
                   LoadingProgressColor="Color.Primary"
-                  RowsPerPage="10"
                   Class="rounded-lg">
 
             <HeaderContent>
@@ -291,7 +289,6 @@
     private async Task<TableData<VoucherDto>> LoadServerData(TableState state, CancellationToken ct)
     {
         _isLoading = true;
-        StateHasChanged();
 
         var request = new VoucherFilterRequest
         {
@@ -311,7 +308,6 @@
         if (result.Success && result.Data != null)
         {
             _totalCount = result.Data.TotalCount;
-            StateHasChanged();
             return new TableData<VoucherDto>
             {
                 Items      = result.Data.Items,
@@ -327,6 +323,12 @@
     {
         _keyword = value;
         _table?.ReloadServerData();
+    }
+
+    private void SearchOnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            _table?.ReloadServerData();
     }
 
     private Task OnStatusChanged(bool? value)

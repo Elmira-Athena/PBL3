@@ -24,16 +24,15 @@
         @* ===== TAB 1: ĐƠN CHỜ XUẤT ===== *@
         <MudTabPanel Text="Đơn chờ xuất" Icon="@Icons.Material.Outlined.PendingActions">
             <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
-                <MudTextField Value="_pendingFilter.Keyword"
-                              ValueChanged="@((string s) => { _pendingFilter.Keyword = s; _pendingTable?.ReloadServerData(); })"
-                              Label="Tìm theo SĐT / Mã đơn"
+                <MudTextField @bind-Value="_pendingFilter.Keyword"
+                              Label="Tìm theo SĐT / Mã đơn (Enter để tìm)"
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
                               Style="max-width: 260px;"
                               Adornment="Adornment.End"
                               AdornmentIcon="@Icons.Material.Filled.Search"
-                              DebounceInterval="400"
-                              Immediate="true" />
+                              Immediate="true"
+                              OnKeyUp="PendingSearchOnEnter" />
 
                 <MudDatePicker Date="_pendingFilter.FromDate"
                                DateChanged="@((DateTime? d) => { _pendingFilter.FromDate = d; _pendingTable?.ReloadServerData(); })"
@@ -117,16 +116,15 @@
         @* ===== TAB 2: LỊCH SỬ XUẤT KHO ===== *@
         <MudTabPanel Text="Lịch sử xuất kho" Icon="@Icons.Material.Outlined.History">
             <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
-                <MudTextField Value="_historyFilter.Keyword"
-                              ValueChanged="@((string s) => { _historyFilter.Keyword = s; _historyTable?.ReloadServerData(); })"
-                              Label="Tìm theo SĐT / Mã đơn"
+                <MudTextField @bind-Value="_historyFilter.Keyword"
+                              Label="Tìm theo SĐT / Mã đơn (Enter để tìm)"
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
                               Style="max-width: 260px;"
                               Adornment="Adornment.End"
                               AdornmentIcon="@Icons.Material.Filled.Search"
-                              DebounceInterval="400"
-                              Immediate="true" />
+                              Immediate="true"
+                              OnKeyUp="HistorySearchOnEnter" />
 
                 <MudDatePicker Date="_historyFilter.FromDate"
                                DateChanged="@((DateTime? d) => { _historyFilter.FromDate = d; _historyTable?.ReloadServerData(); })"
@@ -255,6 +253,18 @@
             TotalItems = result.TotalCount,
             Items = result.Items ?? new List<OrderSummaryResponse>()
         };
+    }
+
+    private void PendingSearchOnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            _pendingTable?.ReloadServerData();
+    }
+
+    private void HistorySearchOnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            _historyTable?.ReloadServerData();
     }
 
     private void OnHistoryStatusChanged(string key)

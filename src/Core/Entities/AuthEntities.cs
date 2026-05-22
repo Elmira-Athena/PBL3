@@ -36,7 +36,7 @@ namespace PBL3.Core.Entities
         public Guid UserId { get; set; }
 
         [Required]
-        [MaxLength(100)]
+        [MaxLength(110)]
         public string FullName { get; set; } = string.Empty;
         public byte Gender { get; set; } // 0: Male, 1: Female, 2: Other
         public DateTime? DateOfBirth { get; set; }

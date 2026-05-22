@@ -10,7 +10,7 @@ namespace PBL3.Shared.Validators.Employees
         {
             RuleFor(x => x.FullName)
                 .NotEmpty().WithMessage("Họ tên không được để trống.")
-                .MaximumLength(100).WithMessage("Họ tên không được vượt quá 100 ký tự.");
+                .MaximumLength(110).WithMessage("Họ tên không được vượt quá 110 ký tự.");
 
             RuleFor(x => x.Email)
                 .NotEmpty().WithMessage("Email không được để trống.")
@@ -50,7 +50,7 @@ namespace PBL3.Shared.Validators.Employees
         {
             RuleFor(x => x.FullName)
                 .NotEmpty().WithMessage("Họ tên không được để trống.")
-                .MaximumLength(100).WithMessage("Họ tên không được vượt quá 100 ký tự.");
+                .MaximumLength(110).WithMessage("Họ tên không được vượt quá 110 ký tự.");
 
             RuleFor(x => x.Address)
                 .MaximumLength(255).WithMessage("Địa chỉ không được vượt quá 255 ký tự.");

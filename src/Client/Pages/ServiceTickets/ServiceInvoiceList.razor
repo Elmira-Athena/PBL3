@@ -21,16 +21,15 @@
     </MudPaper>
 
     <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
-        <MudTextField Value="keyword"
-                      ValueChanged="@((string s) => { keyword = s; table?.ReloadServerData(); })"
-                      Label="Tìm Mã Hóa Đơn"
+        <MudTextField @bind-Value="keyword"
+                      Label="Tìm Mã Hóa Đơn (Enter để tìm)"
                       Variant="Variant.Outlined"
                       Margin="Margin.Dense"
                       Style="max-width: 250px;"
                       Adornment="Adornment.End"
                       AdornmentIcon="@Icons.Material.Filled.Search"
-                      DebounceInterval="400"
-                      Immediate="true" />
+                      Immediate="true"
+                      OnKeyUp="SearchOnEnter" />
 
         <MudSelect T="byte?"
                    Value="paymentStatusFilter"
@@ -153,6 +152,12 @@
             Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
             return new TableData<ServiceInvoiceListDto> { Items = new List<ServiceInvoiceListDto>(), TotalItems = 0 };
         }
+    }
+
+    private void SearchOnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            table?.ReloadServerData();
     }
 
     private void GoToDetail(int invoiceId) => NavManager.NavigateTo($"/admin/service-invoices/{invoiceId}");

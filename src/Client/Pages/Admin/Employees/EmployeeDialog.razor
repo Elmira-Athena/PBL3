@@ -195,7 +195,7 @@
         {
             RuleFor(x => x.FullName)
                 .NotEmpty().WithMessage("Họ tên không được để trống.")
-                .MaximumLength(100).WithMessage("Họ tên không được vượt quá 100 ký tự.");
+                .MaximumLength(110).WithMessage("Họ tên không được vượt quá 110 ký tự.");
 
             if (!isEditMode)
             {

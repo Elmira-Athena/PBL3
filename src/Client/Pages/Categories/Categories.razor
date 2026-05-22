@@ -27,14 +27,13 @@
         <MudGrid>
             <MudItem xs="12" sm="6" md="4">
                 <MudTextField @bind-Value="_searchString"
-                              Placeholder="Tìm kiếm danh mục..."
+                              Placeholder="Tìm kiếm danh mục... (Enter để tìm)"
                               Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Filled.Search"
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
                               Immediate="true"
-                              DebounceInterval="300"
-                              OnDebounceIntervalElapsed="OnSearchChanged"
+                              OnKeyUp="SearchOnEnter"
                               Style="border-radius: 8px;" />
             </MudItem>
             <MudItem xs="12" sm="6" md="8" Class="d-flex align-center justify-end gap-2">
@@ -83,6 +82,12 @@
         {
             <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="rounded-lg">
                 <MudText>Chưa có danh mục nào. Hãy tạo danh mục đầu tiên!</MudText>
+            </MudAlert>
+        }
+        else if (_noSearchResults)
+        {
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="rounded-lg">
+                <MudText>Không tìm thấy danh mục nào phù hợp với "<strong>@_searchString</strong>".</MudText>
             </MudAlert>
         }
         else
@@ -174,6 +179,7 @@
     private IReadOnlyCollection<TreeItemData<CategoryTreeDto>>? _treeItems;
     private bool _isLoading = true;
     private string _searchString = string.Empty;
+    private bool _noSearchResults = false;
 
     // Trạng thái expand cho từng node
     private Dictionary<int, BoolReference> _expandedState = new();
@@ -193,6 +199,8 @@
         if (result.Success && result.Data != null)
         {
             _categories = result.Data;
+            _searchString = string.Empty;
+            _noSearchResults = false;
             _expandedState.Clear();
             BuildTreeItems();
         }
@@ -277,22 +285,26 @@
 
     // ===== SEARCH =====
 
-    private void OnSearchChanged(string value)
+    private void SearchOnEnter(KeyboardEventArgs e)
     {
-        _searchString = value;
+        if (e.Key == "Enter")
+            OnSearchChanged();
+    }
 
+    private void OnSearchChanged()
+    {
         if (_categories == null) return;
 
         if (string.IsNullOrWhiteSpace(_searchString))
         {
-            // Reset - thu gọn tất cả
+            _noSearchResults = false;
             SetExpandedRecursive(_categories, false);
         }
         else
         {
-            // Tìm kiếm: đánh dấu expand cho các node cha có chứa kết quả
             SetExpandedRecursive(_categories, false);
-            ExpandMatchingNodes(_categories);
+            bool anyMatch = ExpandMatchingNodes(_categories);
+            _noSearchResults = !anyMatch;
         }
 
         BuildTreeItems();

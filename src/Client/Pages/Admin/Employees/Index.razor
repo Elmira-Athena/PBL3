@@ -16,17 +16,16 @@
           Dense="true" Hover="true" @ref="_table" Elevation="2" Class="mb-4" Loading="@_isLoading"
           OnRowClick="OnRowClick" RowStyle="cursor: pointer;">
     <ToolBarContent>
-        <MudTextField T="string"
-                      ValueChanged="@(s => OnSearch(s))"
-                      Placeholder="Tìm theo tên, email, SĐT"
+        <MudTextField @bind-Value="_searchString"
+                      Placeholder="Tìm theo tên, email, SĐT (Enter để tìm)"
                       Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search"
                       IconSize="Size.Medium"
                       Class="mt-0 mr-3"
                       Variant="Variant.Outlined"
                       Margin="Margin.Dense"
-                      DebounceInterval="400"
-                      OnDebounceIntervalElapsed="@(s => OnSearch(s))" />
+                      Immediate="true"
+                      OnKeyUp="SearchOnEnter" />
 
         <MudSelect T="bool?"
                    Value="_filterIsActive"
@@ -168,10 +167,10 @@
         }
     }
 
-    private void OnSearch(string text)
+    private void SearchOnEnter(KeyboardEventArgs e)
     {
-        _searchString = text;
-        _table.ReloadServerData();
+        if (e.Key == "Enter")
+            _table.ReloadServerData();
     }
 
     private async Task OpenCreateDialog()

@@ -71,6 +71,9 @@ public class AuthHeaderHandler : DelegatingHandler
                 return await base.SendAsync(retry, cancellationToken);
             }
 
+            // Nếu request bị cancel (component disposed/navigate away) thì không redirect
+            if (cancellationToken.IsCancellationRequested) return response;
+
             // Refresh thất bại → xóa session, về trang đăng nhập
             await _localStorage.RemoveItemAsync(TokenKey);
             await _localStorage.RemoveItemAsync(RefreshTokenKey);
@@ -93,7 +96,7 @@ public class AuthHeaderHandler : DelegatingHandler
     private async Task<(string? Token, string? ErrorMessage)> TryRefreshAsync(
         string? sentToken, CancellationToken cancellationToken)
     {
-        await _refreshSemaphore.WaitAsync(cancellationToken);
+        await _refreshSemaphore.WaitAsync(CancellationToken.None);
         try
         {
             // Nếu một concurrent call đã refresh trước → dùng token mới ngay, không gọi API
@@ -116,22 +119,20 @@ public class AuthHeaderHandler : DelegatingHandler
                     RefreshToken = refreshToken
                 });
 
-                var res = await base.SendAsync(req, cancellationToken);
+                var res = await base.SendAsync(req, CancellationToken.None);
                 if (!res.IsSuccessStatusCode)
                 {
                     string? errorMessage = null;
                     try
                     {
-                        var errResult = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>(
-                            cancellationToken: cancellationToken);
+                        var errResult = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>();
                         errorMessage = errResult?.Message;
                     }
                     catch { }
                     return (null, errorMessage);
                 }
 
-                var result = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>(
-                    cancellationToken: cancellationToken);
+                var result = await res.Content.ReadFromJsonAsync<ApiResult<TokenResponse>>();
 
                 if (result?.Success != true || result.Data == null) return (null, result?.Message);
 
