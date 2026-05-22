@@ -11,7 +11,7 @@ namespace Client.Services.ServiceTickets
             string? keyword, byte? status, DateTime? fromDate, DateTime? toDate,
             int pageNumber, int pageSize, string? sortBy, bool sortDescending);
         Task<ApiResult<PagedResult<ServiceTicketListDto>>> GetMyTicketsAsync(
-            string? keyword, int pageNumber, int pageSize, string? sortBy, bool sortDescending);
+            string? keyword, byte? status, int pageNumber, int pageSize, string? sortBy, bool sortDescending);
         Task<ApiResult<ServiceTicketDetailDto>> GetByIdAsync(int id);
         Task<ApiResult<bool>> AssignTechnicianAsync(int ticketId, AssignTechnicianRequest request);
         Task<ApiResult<bool>> RecordDiagnosisAsync(int ticketId, RecordDiagnosisRequest request);

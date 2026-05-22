@@ -24,7 +24,7 @@ namespace Client.Shared.Components.ServiceTickets
         {
             0 => Color.Info,       // Received - Blue
             1 => Color.Warning,    // Diagnosing - Orange
-            2 => Color.Primary,    // QuoteSent - Purple
+            2 => Color.Dark,       // QuoteSent - Dark
             3 => Color.Error,      // QuoteRejected - Red
             4 => Color.Dark,       // WaitingParts - Gray
             5 => Color.Warning,    // InRepair - Orange

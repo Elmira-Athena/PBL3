@@ -82,13 +82,15 @@ namespace Client.Services.ServiceTickets
         }
 
         public async Task<ApiResult<PagedResult<ServiceTicketListDto>>> GetMyTicketsAsync(
-            string? keyword, int pageNumber, int pageSize, string? sortBy, bool sortDescending)
+            string? keyword, byte? status, int pageNumber, int pageSize, string? sortBy, bool sortDescending)
         {
             try
             {
                 var url = $"api/service-tickets/my?pageNumber={pageNumber}&pageSize={pageSize}";
                 if (!string.IsNullOrEmpty(keyword))
                     url += $"&keyword={Uri.EscapeDataString(keyword)}";
+                if (status.HasValue)
+                    url += $"&status={status.Value}";
                 if (!string.IsNullOrEmpty(sortBy))
                     url += $"&sortBy={Uri.EscapeDataString(sortBy)}&sortDescending={sortDescending}";
 

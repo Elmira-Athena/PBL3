@@ -12,7 +12,7 @@ namespace PBL3.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/service-tickets")]
-    [Authorize(Roles = "Admin, Employee")]
+    [Authorize]
     public class ServiceTicketsController : ControllerBase
     {
         private readonly IServiceTicketService _service;
@@ -58,6 +58,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<ServiceTicketDetailDto>> CreateTicket([FromBody] ServiceTicketIntakeRequestDto request)
         {
             try
@@ -78,6 +79,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<PagedResult<ServiceTicketListDto>>> GetTickets(
             [FromQuery] string? keyword,
             [FromQuery] byte? status,
@@ -172,6 +174,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPut("{id}/assign")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<bool>> AssignTechnician(int id, [FromBody] ServiceTicketAssignDto request)
         {
             try
@@ -192,6 +195,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPut("{id}/diagnosis")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<bool>> RecordDiagnosis(int id, [FromBody] ServiceTicketDiagnosisDto request)
         {
             try
@@ -216,6 +220,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPut("{id}/branch")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<bool>> ChooseBranch(int id, [FromBody] ServiceTicketBranchDto request)
         {
             try
@@ -240,6 +245,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost("{id}/quotation")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<QuotationDetailDto>> CreateQuotation(int id, [FromBody] QuotationCreateDto request)
         {
             try
@@ -314,6 +320,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost("{id}/rma")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<RmaShipmentDetailDto>> CreateRmaShipment(int id, [FromBody] RmaShipmentCreateDto request)
         {
             try
@@ -338,6 +345,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPut("{id}/rma/resolution")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<bool>> UpdateRmaResolution(int id, [FromBody] RmaResolutionUpdateDto request)
         {
             try
@@ -362,6 +370,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost("{id}/start-repair")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<bool>> StartRepair(int id)
         {
             try
@@ -386,6 +395,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost("{id}/swap")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<bool>> Perform1For1Swap(int id, [FromBody] Perform1For1SwapDto request)
         {
             try
@@ -410,6 +420,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost("{id}/waiting-parts")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<bool>> MarkWaitingParts(int id)
         {
             try
@@ -434,6 +445,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost("{id}/resume-repair")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<bool>> ResumeRepair(int id)
         {
             try
@@ -458,6 +470,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost("{id}/complete")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<bool>> CompleteTicket(int id, [FromBody] ServiceTicketCompleteDto request)
         {
             try
@@ -482,6 +495,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost("{id}/invoice")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<ServiceInvoiceDetailDto>> IssueServiceInvoice(int id, [FromBody] ServiceInvoiceCreateDto request)
         {
             try
@@ -543,6 +557,7 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpGet("serials/{serialNumber}/repair-history")]
+        [Authorize(Roles = "Admin, Employee")]
         public async Task<ApiResult<List<SerialRepairHistoryDto>>> GetSerialRepairHistory(string serialNumber)
         {
             try

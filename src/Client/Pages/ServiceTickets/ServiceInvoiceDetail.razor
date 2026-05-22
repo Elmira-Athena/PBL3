@@ -105,8 +105,15 @@
 
             <!-- Actions -->
             <div Class="mt-6 d-flex gap-2">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PrintInvoice"
-                           StartIcon="@Icons.Material.Filled.Print" Class="flex-grow-1">
+                @if (invoice.PaymentStatus == 0)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="MarkAsPaid"
+                               StartIcon="@Icons.Material.Filled.CheckCircle" Class="flex-grow-1">
+                        Xác Nhận Đã Thanh Toán
+                    </MudButton>
+                }
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="PrintInvoice"
+                           StartIcon="@Icons.Material.Filled.Print">
                     In Hóa Đơn
                 </MudButton>
             </div>
@@ -135,6 +142,20 @@
             return;
         }
         invoice = result.Data;
+    }
+
+    private async Task MarkAsPaid()
+    {
+        var result = await ServiceInvoiceService.MarkInvoicePaidAsync(Id);
+        if (result.Success)
+        {
+            Snackbar.Add("Đã xác nhận thanh toán.", Severity.Success);
+            await LoadInvoice();
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi xác nhận thanh toán.", Severity.Error);
+        }
     }
 
     private void PrintInvoice()

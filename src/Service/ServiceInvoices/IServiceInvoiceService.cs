@@ -9,5 +9,6 @@ namespace PBL3.Service.ServiceInvoices
         Task<(List<ServiceInvoiceListDto> Items, int TotalCount)> GetPagedListAsync(
             string? keyword, byte? paymentStatus, DateTime? fromDate, DateTime? toDate,
             int pageNumber, int pageSize, string? sortBy, bool sortDescending);
+        Task MarkInvoicePaidAsync(int id);
     }
 }

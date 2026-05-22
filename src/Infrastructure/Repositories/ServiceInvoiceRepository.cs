@@ -66,6 +66,12 @@ namespace PBL3.Infrastructure.Repositories
                 .FirstOrDefaultAsync(i => i.Id == id);
         }
 
+        public async Task<ServiceInvoice?> GetByIdWithTrackingAsync(int id)
+        {
+            return await _dbContext.ServiceInvoices
+                .FirstOrDefaultAsync(i => i.Id == id);
+        }
+
         public async Task<ServiceInvoice?> GetByTicketIdAsync(int ticketId)
         {
             return await _dbContext.ServiceInvoices
