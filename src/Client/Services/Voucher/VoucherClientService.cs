@@ -22,8 +22,8 @@ namespace Client.Services.Voucher
 
                 if (!string.IsNullOrWhiteSpace(request.Keyword))
                     queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
-                if (request.IsActive.HasValue)
-                    queryParams.Add($"IsActive={request.IsActive.Value}");
+                if (!string.IsNullOrWhiteSpace(request.StatusFilter))
+                    queryParams.Add($"StatusFilter={Uri.EscapeDataString(request.StatusFilter)}");
                 if (request.FromDate.HasValue)
                     queryParams.Add($"FromDate={Uri.EscapeDataString(request.FromDate.Value.ToString("o"))}");
                 if (request.ToDate.HasValue)

@@ -32,7 +32,7 @@ namespace PBL3.Service.Vouchers
             // Thực hiện truy vấn cơ sở dữ liệu có phân trang và áp dụng các tiêu chí lọc
             var (items, totalCount) = await _voucherRepo.GetPagedListAsync(
                 filter.Keyword,
-                filter.IsActive,
+                filter.StatusFilter,
                 filter.FromDate,
                 filter.ToDate,
                 filter.PageNumber,

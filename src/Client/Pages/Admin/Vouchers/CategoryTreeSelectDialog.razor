@@ -1,0 +1,136 @@
+@using PBL3.Shared.DTOs.Categories
+@using MudBlazor
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Outlined.Category" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Chọn danh mục áp dụng</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Chọn danh mục sản phẩm được áp dụng voucher. Bỏ trống = áp dụng toàn bộ sản phẩm.
+        </MudText>
+
+        @* Toolbar *@
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+            <MudTextField @bind-Value="_search"
+                          Placeholder="Tìm danh mục..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Immediate="true"
+                          Style="flex: 1;" />
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="SelectAll" Color="Color.Primary">Chọn tất cả</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="ClearAll" Color="Color.Default">Bỏ chọn</MudButton>
+        </MudStack>
+
+        @* Selected count *@
+        @if (_selected.Count > 0)
+        {
+            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined" Class="mb-2">
+                Đã chọn @_selected.Count danh mục
+            </MudChip>
+        }
+
+        @* Tree *@
+        <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--mud-palette-lines-default); border-radius: 8px; padding: 4px;">
+            @if (TreeData.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary pa-4">Không có danh mục nào.</MudText>
+            }
+            else
+            {
+                @RenderNodes(TreeData, 0)
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel" Style="text-transform: none;">Hủy</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Confirm" Style="text-transform: none; min-width: 100px;">
+            Xác nhận
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public List<CategoryTreeDto> TreeData { get; set; } = new();
+    [Parameter] public IEnumerable<int> InitialSelectedIds { get; set; } = new HashSet<int>();
+
+    private HashSet<int> _selected = new();
+    private string _search = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        _selected = new HashSet<int>(InitialSelectedIds);
+    }
+
+    private RenderFragment RenderNodes(List<CategoryTreeDto> nodes, int depth) => builder =>
+    {
+        foreach (var node in nodes)
+        {
+            if (!NodeMatchesSearch(node)) continue;
+
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "style", $"padding-left: {depth * 16}px;");
+
+            builder.OpenComponent<MudCheckBox<bool>>(2);
+            builder.AddAttribute(3, "Value", _selected.Contains(node.Id));
+            builder.AddAttribute(4, "ValueChanged", EventCallback.Factory.Create<bool>(this, v => ToggleNode(node, v)));
+            builder.AddAttribute(5, "Label", node.Name);
+            builder.AddAttribute(6, "Color", Color.Primary);
+            builder.AddAttribute(7, "Dense", true);
+            builder.CloseComponent();
+
+            builder.CloseElement();
+
+            if (node.Children.Count > 0)
+            {
+                builder.AddContent(8, RenderNodes(node.Children, depth + 1));
+            }
+        }
+    };
+
+    private bool NodeMatchesSearch(CategoryTreeDto node)
+    {
+        if (string.IsNullOrWhiteSpace(_search)) return true;
+        var kw = _search.Trim().ToLowerInvariant();
+        if (node.Name.ToLowerInvariant().Contains(kw)) return true;
+        return node.Children.Any(NodeMatchesSearch);
+    }
+
+    private void ToggleNode(CategoryTreeDto node, bool isChecked)
+    {
+        if (isChecked)
+            _selected.Add(node.Id);
+        else
+            _selected.Remove(node.Id);
+    }
+
+    private void SelectAll()
+    {
+        CollectAllIds(TreeData, _selected, add: true);
+    }
+
+    private void ClearAll()
+    {
+        _selected.Clear();
+    }
+
+    private static void CollectAllIds(List<CategoryTreeDto> nodes, HashSet<int> set, bool add)
+    {
+        foreach (var node in nodes)
+        {
+            if (add) set.Add(node.Id);
+            else set.Remove(node.Id);
+            CollectAllIds(node.Children, set, add);
+        }
+    }
+
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(_selected));
+    private void Cancel() => MudDialog.Cancel();
+}
