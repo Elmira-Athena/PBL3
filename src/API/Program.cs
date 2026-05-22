@@ -117,7 +117,7 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
         ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero // Không cho phép sai lệch thời gian
+        ClockSkew = TimeSpan.FromMinutes(1)
     };
 });
 

@@ -7,6 +7,9 @@
     <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(StorefrontLayout)">
+                <Authorizing>
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Style="position:fixed;top:0;left:0;right:0;z-index:9999;" />
+                </Authorizing>
                 <NotAuthorized>
                     @if (context.User.Identity?.IsAuthenticated == true)
                     {
