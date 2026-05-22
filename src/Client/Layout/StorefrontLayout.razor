@@ -56,51 +56,64 @@
         @* -- Search Bar -- *@
         <MudPaper Elevation="0" Class="d-flex align-center rounded-lg px-3 flex-grow-1"
                   Style="background-color: white; max-width: 600px;">
-            <MudAutocomplete T="ProductCardResponse"
-                             @bind-Text="_searchKeyword"
-                             ValueChanged="OnProductSelected"
-                             SearchFunc="SearchSuggestionsAsync"
-                             ToStringFunc="@(p => p?.Name ?? string.Empty)"
-                             Placeholder="Nhập từ khóa tìm kiếm..."
-                             Variant="Variant.Text"
-                             Class="flex-grow-1"
-                             Style="font-size: 0.9rem;"
-                             Margin="Margin.Dense"
-                             Adornment="Adornment.End"
-                             AdornmentIcon="@Icons.Material.Filled.Search"
-                             AdornmentColor="Color.Error"
-                             OnAdornmentClick="PerformSearch"
-                             OnKeyDown="OnSearchKeyDown"
-                             DebounceInterval="400"
-                             MinCharacters="2"
-                             MaxItems="8"
-                             Dense="true"
-                             ResetValueOnEmptyText="true"
-                             CoerceText="false"
-                             CoerceValue="false">
-                <ItemTemplate Context="product">
-                    <div class="d-flex align-center gap-2 py-1 px-1">
-                        @if (!string.IsNullOrEmpty(product.ThumbnailUrl))
-                        {
-                            <img src="@product.ThumbnailUrl" style="width:36px;height:36px;object-fit:contain;flex-shrink:0;" alt="" />
-                        }
-                        else
-                        {
-                            <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Style="width:36px;opacity:0.4;" />
-                        }
-                        <div class="d-flex flex-column flex-grow-1 overflow-hidden">
-                            <MudText Typo="Typo.body2" Style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">@product.Name</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@product.ManufacturerName</MudText>
-                        </div>
-                        <MudText Typo="Typo.body2" Color="Color.Error" Style="white-space:nowrap;font-weight:600;margin-left:8px;">
-                            @product.CurrentPrice.ToString("N0")₫
-                        </MudText>
+            <div class="flex-grow-1" style="position:relative;" @onfocusout="@(() => _showSuggestions = false)">
+                <MudTextField T="string"
+                              Value="@_searchKeyword"
+                              ValueChanged="OnSearchInputChanged"
+                              Placeholder="Nhập từ khóa tìm kiếm..."
+                              Variant="Variant.Text"
+                              Class="flex-grow-1"
+                              Style="font-size: 0.9rem;"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              AdornmentColor="Color.Error"
+                              OnAdornmentClick="PerformSearch"
+                              OnKeyDown="OnSearchKeyDown"
+                              Immediate="true" />
+
+                @if (_showSuggestions && _suggestions?.Count > 0)
+                {
+                    <div class="mud-elevation-8"
+                         style="position:absolute;top:100%;left:-12px;right:-12px;z-index:2000;
+                                border-radius:0 0 4px 4px;overflow:hidden;
+                                background-color:var(--mud-palette-surface);"
+                         @onmousedown:preventDefault>
+                        <MudList T="ProductCardResponse" Dense="true" Class="pa-0">
+                            @foreach (var product in _suggestions)
+                            {
+                                <MudListItem T="ProductCardResponse" OnClick="@(() => OnProductSelected(product))">
+                                    <div class="d-flex align-center gap-2 py-1">
+                                        @if (!string.IsNullOrEmpty(product.ThumbnailUrl))
+                                        {
+                                            <img src="@product.ThumbnailUrl"
+                                                 style="width:36px;height:36px;object-fit:contain;flex-shrink:0;" alt="" />
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Inventory2"
+                                                     Size="Size.Small" Style="width:36px;opacity:0.4;" />
+                                        }
+                                        <div class="d-flex flex-column flex-grow-1 overflow-hidden">
+                                            <MudText Typo="Typo.body2"
+                                                     Style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                                @product.Name
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @product.ManufacturerName
+                                            </MudText>
+                                        </div>
+                                        <MudText Typo="Typo.body2" Color="Color.Error"
+                                                 Style="white-space:nowrap;font-weight:600;margin-left:8px;">
+                                            @product.CurrentPrice.ToString("N0")₫
+                                        </MudText>
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
                     </div>
-                </ItemTemplate>
-                <NoItemsTemplate>
-                    <MudText Typo="Typo.body2" Class="px-4 py-2" Color="Color.Secondary">Không tìm thấy sản phẩm phù hợp</MudText>
-                </NoItemsTemplate>
-            </MudAutocomplete>
+                }
+            </div>
         </MudPaper>
         <MudSpacer />
 
@@ -161,6 +174,9 @@
 @code {
     private string _searchKeyword = string.Empty;
     private List<CategoryMenuResponse> _menuCategories = new();
+    private List<ProductCardResponse>? _suggestions;
+    private bool _showSuggestions;
+    private CancellationTokenSource? _suggestCts;
 
     protected override void OnInitialized()
     {
@@ -170,12 +186,19 @@
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         _searchKeyword = string.Empty;
+        _showSuggestions = false;
+        _suggestions = null;
+        _suggestCts?.Cancel();
+        _suggestCts?.Dispose();
+        _suggestCts = null;
         InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
     {
         Navigation.LocationChanged -= OnLocationChanged;
+        _suggestCts?.Cancel();
+        _suggestCts?.Dispose();
     }
 
     protected override async Task OnInitializedAsync()
@@ -209,22 +232,35 @@
         }
     }
 
-    private async Task<IEnumerable<ProductCardResponse>> SearchSuggestionsAsync(string keyword, CancellationToken cancellationToken)
+    private async Task OnSearchInputChanged(string value)
     {
-        if (string.IsNullOrWhiteSpace(keyword) || keyword.Length < 2)
-            return [];
+        _searchKeyword = value;
+        _suggestCts?.Cancel();
+        _suggestCts?.Dispose();
+        _suggestCts = null;
+        if (string.IsNullOrWhiteSpace(value) || value.Length < 2)
+        {
+            _suggestions = null;
+            _showSuggestions = false;
+            return;
+        }
+        _suggestCts = new CancellationTokenSource();
         try
         {
-            var result = await StorefrontService.SearchProductsAsync(keyword, null, null, null, 1, 8);
+            await Task.Delay(400, _suggestCts.Token);
+            var result = await StorefrontService.SearchProductsAsync(value, null, null, null, 1, 8);
             if (result.Success && result.Data != null)
-                return result.Data.Items;
+            {
+                _suggestions = result.Data.Items.ToList();
+                _showSuggestions = _suggestions.Count > 0;
+            }
         }
-        catch { }
-        return [];
+        catch (OperationCanceledException) { }
     }
 
     private void OnProductSelected(ProductCardResponse? product)
     {
+        _showSuggestions = false;
         if (product != null)
             Navigation.NavigateTo($"/product/{product.Slug}");
     }
@@ -233,10 +269,13 @@
     {
         if (args.Key == "Enter")
             PerformSearch();
+        else if (args.Key == "Escape")
+            _showSuggestions = false;
     }
 
     private void PerformSearch()
     {
+        _showSuggestions = false;
         if (!string.IsNullOrWhiteSpace(_searchKeyword))
             Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(_searchKeyword.Trim())}");
     }
