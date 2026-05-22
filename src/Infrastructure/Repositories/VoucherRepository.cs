@@ -24,7 +24,7 @@ namespace PBL3.Infrastructure.Repositories
 
         public async Task<(List<Voucher> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,
-            bool? isActive,
+            string? statusFilter,
             DateTime? fromDate,
             DateTime? toDate,
             int pageNumber,
@@ -32,7 +32,6 @@ namespace PBL3.Infrastructure.Repositories
             string? sortBy,
             bool sortDescending)
         {
-            // Global Query Filter tự động lọc IsDeleted
             var query = _dbContext.Vouchers.AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(keyword))
@@ -43,8 +42,20 @@ namespace PBL3.Infrastructure.Repositories
                     v.Name.ToLower().Contains(kw));
             }
 
-            if (isActive.HasValue)
-                query = query.Where(v => v.IsActive == isActive.Value);
+            if (!string.IsNullOrWhiteSpace(statusFilter))
+            {
+                var now = DateTime.UtcNow;
+                query = statusFilter.ToLower() switch
+                {
+                    "active"    => query.Where(v => v.IsActive && v.StartDate <= now && v.EndDate >= now
+                                       && (v.Quantity == null || v.UsedCount < v.Quantity)),
+                    "upcoming"  => query.Where(v => v.IsActive && v.StartDate > now),
+                    "expired"   => query.Where(v => v.EndDate < now),
+                    "exhausted" => query.Where(v => v.Quantity.HasValue && v.UsedCount >= v.Quantity),
+                    "paused"    => query.Where(v => !v.IsActive),
+                    _           => query
+                };
+            }
 
             if (fromDate.HasValue)
                 query = query.Where(v => v.EndDate >= fromDate.Value);

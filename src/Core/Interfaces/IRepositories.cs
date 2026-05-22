@@ -269,7 +269,7 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<(List<Voucher> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,
-            bool? isActive,
+            string? statusFilter,
             DateTime? fromDate,
             DateTime? toDate,
             int pageNumber,

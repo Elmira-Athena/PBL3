@@ -131,11 +131,11 @@
                                             <MudNumericField T="decimal?"
                                                              @bind-Value="_maxDiscountAmount"
                                                              Label="Giảm tối đa (đ)"
-                                                             Min="0"
                                                              Variant="Variant.Outlined"
                                                              Adornment="Adornment.End"
                                                              AdornmentText="đ"
                                                              HideSpinButtons="true"
+                                                             Validation="@(new Func<decimal?, string?>(ValidateMaxDiscountAmount))"
                                                              HelperText="Áp dụng cho voucher giảm %." />
                                         </MudItem>
                                     }
@@ -226,27 +226,62 @@
                                         <MudCheckBox @bind-Value="_applyOnline" Label="Online" Color="Color.Primary" />
                                         <MudCheckBox @bind-Value="_applyPos" Label="Tại quầy" Color="Color.Primary" />
                                     </MudStack>
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                        Chọn nơi voucher được phép sử dụng.
-                                    </MudText>
+                                    @if (!_applyOnline && !_applyPos)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Error">
+                                            Phải chọn ít nhất một kênh bán hàng.
+                                        </MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                            Chọn nơi voucher được phép sử dụng.
+                                        </MudText>
+                                    }
                                 </div>
 
                                 @* Phạm vi áp dụng (categories) *@
-                                <MudSelect T="int"
-                                           Label="Phạm vi áp dụng"
-                                           MultiSelection="true"
-                                           @bind-SelectedValues="_selectedCategoryIds"
-                                           Variant="Variant.Outlined"
-                                           HelperText="Chọn danh mục áp dụng. Bỏ trống = toàn bộ sản phẩm."
-                                           Clearable="true"
-                                           ToStringFunc="@(id => _categoryNameMap.GetValueOrDefault(id, id.ToString()))">
-                                    @foreach (var cat in _flatCategories)
+                                <div>
+                                    <MudText Typo="Typo.body2" Class="mb-1" Style="font-weight: 500;">Phạm vi áp dụng</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-2" Style="display: block;">
+                                        Chọn danh mục áp dụng. Bỏ trống = toàn bộ sản phẩm.
+                                    </MudText>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                        <MudButton Variant="Variant.Outlined"
+                                                   Color="Color.Primary"
+                                                   Size="Size.Small"
+                                                   StartIcon="@Icons.Material.Outlined.AccountTree"
+                                                   OnClick="OpenCategoryDialog"
+                                                   Style="text-transform: none;">
+                                            @(_selectedCategoryIds.Any() ? $"Đã chọn {_selectedCategoryIds.Count()} danh mục" : "Chọn danh mục")
+                                        </MudButton>
+                                        @if (_selectedCategoryIds.Any())
+                                        {
+                                            <MudButton Variant="Variant.Text"
+                                                       Color="Color.Default"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => _selectedCategoryIds = new HashSet<int>())"
+                                                       Style="text-transform: none;">
+                                                Bỏ chọn tất cả
+                                            </MudButton>
+                                        }
+                                    </MudStack>
+                                    @if (_selectedCategoryIds.Any())
                                     {
-                                        <MudSelectItem T="int" Value="cat.Id">
-                                            @(cat.Level > 0 ? new string(' ', cat.Level * 4) + cat.Name : cat.Name)
-                                        </MudSelectItem>
+                                        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1">
+                                            @foreach (var id in _selectedCategoryIds)
+                                            {
+                                                <MudChip T="string"
+                                                         Size="Size.Small"
+                                                         Color="Color.Primary"
+                                                         Variant="Variant.Outlined"
+                                                         OnClose="@(() => RemoveCategory(id))">
+                                                    @_categoryNameMap.GetValueOrDefault(id, id.ToString())
+                                                </MudChip>
+                                            }
+                                        </MudStack>
                                     }
-                                </MudSelect>
+                                </div>
 
                                 @* Toggle stackable & Status *@
                                 <MudGrid>
@@ -457,6 +492,7 @@
     [Inject] private ICategoryClientService CategoryService { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
     [Inject] private NavigationManager Nav { get; set; } = null!;
+    [Inject] private IDialogService DialogService { get; set; } = null!;
 
     private bool IsEditMode => Id > 0;
 
@@ -487,6 +523,7 @@
     private string? _description;
 
     // Category data
+    private List<CategoryTreeDto> _categoryTree = new();
     private List<FlatCategory> _flatCategories = new();
     private Dictionary<int, string> _categoryNameMap = new();
 
@@ -541,6 +578,7 @@
         var result = await CategoryService.GetTreeAsync();
         if (result.Success && result.Data != null)
         {
+            _categoryTree = result.Data;
             _flatCategories = FlattenTree(result.Data, 0);
             _categoryNameMap = _flatCategories.ToDictionary(c => c.Id, c => c.Name);
         }
@@ -587,10 +625,41 @@
 
     private static string? ValidateCode(string code)
     {
-        if (string.IsNullOrWhiteSpace(code)) return null; // Required handles empty
+        if (string.IsNullOrWhiteSpace(code)) return null;
         if (!System.Text.RegularExpressions.Regex.IsMatch(code, "^[A-Z0-9_-]+$"))
             return "Mã voucher chỉ được dùng chữ IN HOA, số và ký tự - _.";
         return null;
+    }
+
+    private static string? ValidateMaxDiscountAmount(decimal? value)
+    {
+        if (value.HasValue && value.Value <= 0)
+            return "Số tiền giảm tối đa phải lớn hơn 0.";
+        return null;
+    }
+
+    private async Task OpenCategoryDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(CategoryTreeSelectDialog.TreeData), _categoryTree },
+            { nameof(CategoryTreeSelectDialog.InitialSelectedIds), _selectedCategoryIds }
+        };
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<CategoryTreeSelectDialog>("Chọn danh mục", parameters, options);
+        var result = await dialog.Result;
+        if (!result.Canceled && result.Data is HashSet<int> selected)
+        {
+            _selectedCategoryIds = selected;
+            StateHasChanged();
+        }
+    }
+
+    private void RemoveCategory(int id)
+    {
+        var set = new HashSet<int>(_selectedCategoryIds);
+        set.Remove(id);
+        _selectedCategoryIds = set;
     }
 
     private string? ValidateDiscountValue(decimal value)
@@ -614,6 +683,12 @@
     {
         await _form.Validate();
         if (!_form.IsValid) return;
+
+        if (!_applyOnline && !_applyPos)
+        {
+            _errorMessage = "Voucher phải áp dụng cho ít nhất một kênh bán hàng (Online hoặc Tại quầy).";
+            return;
+        }
 
         _isSaving = true;
         _errorMessage = null;
