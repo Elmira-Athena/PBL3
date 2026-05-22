@@ -380,7 +380,11 @@
         // Revenue trend line chart
         if (_trend?.Points?.Count > 0)
         {
-            _trendLabels = _trend.Points.Select(p => p.Label).ToArray();
+            var allLabels = _trend.Points.Select(p => p.Label).ToArray();
+            // Thin out x-axis labels when there are too many to avoid crowding
+            const int MaxXLabels = 10;
+            int step = allLabels.Length <= MaxXLabels ? 1 : (int)Math.Ceiling((double)allLabels.Length / MaxXLabels);
+            _trendLabels = allLabels.Select((l, i) => i % step == 0 ? l : "").ToArray();
             _revenueSeries = new List<ChartSeries>
             {
                 new ChartSeries { Name = "Doanh thu (₫)", Data = _trend.Points.Select(p => (double)p.Revenue).ToArray() },
@@ -412,23 +416,27 @@
         // Channel donut
         if (_channels != null)
         {
+            var chTotal = (double)(_channels.OnlineCount + _channels.PosCount);
+            string ChPct(int v) => chTotal > 0 ? $"{v * 100.0 / chTotal:F0}%" : "0%";
             _channelData = new double[] { _channels.OnlineCount, _channels.PosCount };
             _channelLabels = new[]
             {
-                "Online (" + _channels.OnlineCount + ")",
-                "POS (" + _channels.PosCount + ")"
+                $"Online ({_channels.OnlineCount} - {ChPct(_channels.OnlineCount)})",
+                $"POS ({_channels.PosCount} - {ChPct(_channels.PosCount)})"
             };
         }
 
         // Payment donut
         if (_summary != null)
         {
+            var pmTotal = (double)(_summary.PayCod + _summary.PayBanking + _summary.PayVnPay);
+            string PmPct(int v) => pmTotal > 0 ? $"{v * 100.0 / pmTotal:F0}%" : "0%";
             _paymentData = new double[] { _summary.PayCod, _summary.PayBanking, _summary.PayVnPay };
             _paymentLabels = new[]
             {
-                "COD (" + _summary.PayCod + ")",
-                "Banking (" + _summary.PayBanking + ")",
-                "VNPay (" + _summary.PayVnPay + ")"
+                $"COD ({_summary.PayCod} - {PmPct(_summary.PayCod)})",
+                $"Banking ({_summary.PayBanking} - {PmPct(_summary.PayBanking)})",
+                $"VNPay ({_summary.PayVnPay} - {PmPct(_summary.PayVnPay)})"
             };
         }
     }
