@@ -56,6 +56,28 @@ namespace PBL3.API.Controllers.Admin
             }
         }
 
+        [HttpPatch("{id:int}/mark-paid")]
+        public async Task<ApiResult<bool>> MarkInvoicePaid(int id)
+        {
+            try
+            {
+                if (id <= 0)
+                    return ApiResult<bool>.Fail("ID hóa đơn không hợp lệ.");
+
+                await _service.MarkInvoicePaidAsync(id);
+                return ApiResult<bool>.Ok(true, "Đã xác nhận thanh toán hóa đơn.");
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiResult<bool>.Fail(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi xác nhận thanh toán hóa đơn {InvoiceId}.", id);
+                return ApiResult<bool>.Fail("Lỗi khi xác nhận thanh toán.");
+            }
+        }
+
         [HttpGet("{id:int}")]
         public async Task<ApiResult<ServiceInvoiceDetailDto>> GetById(int id)
         {

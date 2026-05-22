@@ -42,6 +42,7 @@ namespace PBL3.Shared.DTOs.Cart
         public int Quantity { get; set; }
         public decimal SubTotal { get; set; }
         public int StockQuantity { get; set; }
+        public string ProductSlug { get; set; } = string.Empty;
     }
 
     /// <summary>

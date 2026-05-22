@@ -149,6 +149,11 @@ namespace PBL3.Core.Interfaces
         Task<string?> GetLastInvoiceCodeByDateAsync(string datePrefix);
 
         /// <summary>
+        /// Lấy hóa đơn theo Id, với tracking để update.
+        /// </summary>
+        Task<ServiceInvoice?> GetByIdWithTrackingAsync(int id);
+
+        /// <summary>
         /// Kiểm tra phiếu đã có hóa đơn chưa.
         /// </summary>
         Task<bool> InvoiceExistsForTicketAsync(int ticketId);

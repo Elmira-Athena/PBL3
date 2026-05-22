@@ -315,7 +315,7 @@ namespace PBL3.Service.ServiceTickets
         /// </summary>
         public async Task<QuotationDetailDto?> CreateQuotationAsync(int ticketId, QuotationCreateDto request, Guid userId, bool isAdmin = false)
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
+            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -370,7 +370,8 @@ namespace PBL3.Service.ServiceTickets
                         VariantId = item.VariantId,
                         Description = item.Description,
                         Quantity = item.Quantity,
-                        UnitPrice = item.UnitPrice
+                        UnitPrice = item.UnitPrice,
+                        LineTotal = item.Quantity * item.UnitPrice
                     });
                 }
 
@@ -401,7 +402,7 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> AcceptQuotationAsync(int ticketId, int quotationId, QuotationAcceptDto request, Guid userId, bool isAdmin = false)
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
+            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -459,7 +460,7 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> RejectQuotationAsync(int ticketId, int quotationId, QuotationRejectDto request, Guid userId, bool isAdmin = false)
         {
-            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
+            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -1082,7 +1083,8 @@ namespace PBL3.Service.ServiceTickets
                         VariantId = qItem.VariantId,
                         Description = qItem.Description,
                         Quantity = qItem.Quantity,
-                        UnitPrice = qItem.UnitPrice
+                        UnitPrice = qItem.UnitPrice,
+                        LineTotal = qItem.Quantity * qItem.UnitPrice
                     });
                 }
 
@@ -1300,7 +1302,13 @@ namespace PBL3.Service.ServiceTickets
                         ToStatusLabel = GetStatusLabel(h.ToStatus),
                         ChangedAt = h.ChangedAt,
                         Note = h.Note
-                    }).ToList() ?? new List<ServiceTicketStatusHistoryDto>()
+                    }).ToList() ?? new List<ServiceTicketStatusHistoryDto>(),
+                Quotations = ticket.Quotations?
+                    .OrderByDescending(q => q.IssuedDate)
+                    .Select(q => MapQuotationToDto(q))
+                    .ToList() ?? new(),
+                RmaShipment = ticket.RmaShipment != null ? MapRmaShipmentToDto(ticket.RmaShipment) : null,
+                Invoice = ticket.Invoice != null ? MapServiceInvoiceToDto(ticket.Invoice) : null
             };
         }
 

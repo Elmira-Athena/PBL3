@@ -182,16 +182,64 @@
                         <MudTabPanel Text="Hóa Đơn">
                             <MudPaper Class="pa-4 mt-4" Elevation="0">
                                 <MudGrid Spacing="2">
-                                    <MudItem xs="12">
+                                    <MudItem xs="6">
                                         <MudText><strong>Mã Hóa Đơn:</strong> @ticket.Invoice.InvoiceCode</MudText>
                                     </MudItem>
-                                    <MudItem xs="12">
-                                        <MudText><strong>Ngày Phát Hành:</strong> @ticket.Invoice.IssuedDate.ToString("dd/MM/yyyy")</MudText>
+                                    <MudItem xs="6">
+                                        <MudText><strong>Ngày Phát Hành:</strong> @ticket.Invoice.IssuedDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
                                     </MudItem>
-                                    <MudItem xs="12">
-                                        <MudText><strong>Tổng Cộng:</strong> @ticket.Invoice.GrandTotal.ToString("N0") đ</MudText>
+                                    <MudItem xs="6">
+                                        <MudText><strong>Thanh Toán:</strong> @ticket.Invoice.PaymentMethodLabel</MudText>
                                     </MudItem>
+                                    <MudItem xs="6">
+                                        <MudText><strong>Trạng Thái:</strong> @ticket.Invoice.PaymentStatusLabel</MudText>
+                                    </MudItem>
+                                    @if (!string.IsNullOrEmpty(ticket.Invoice.Note))
+                                    {
+                                        <MudItem xs="12">
+                                            <MudText><strong>Ghi Chú:</strong> @ticket.Invoice.Note</MudText>
+                                        </MudItem>
+                                    }
                                 </MudGrid>
+
+                                @if (ticket.Invoice.Items?.Any() == true)
+                                {
+                                    <MudText Typo="Typo.subtitle2" Class="fw-bold mt-4 mb-2">Linh Kiện & Dịch Vụ</MudText>
+                                    <MudTable Items="@ticket.Invoice.Items" Dense="true" Hover="true" Class="mb-4">
+                                        <HeaderContent>
+                                            <MudTh>Mô Tả</MudTh>
+                                            <MudTh Align="Align.Right">Số Lượng</MudTh>
+                                            <MudTh Align="Align.Right">Đơn Giá</MudTh>
+                                            <MudTh Align="Align.Right">Thành Tiền</MudTh>
+                                        </HeaderContent>
+                                        <RowTemplate>
+                                            <MudTd DataLabel="Mô Tả">@context.Description</MudTd>
+                                            <MudTd DataLabel="Số Lượng" Align="Align.Right">@context.Quantity</MudTd>
+                                            <MudTd DataLabel="Đơn Giá" Align="Align.Right">@context.UnitPrice.ToString("N0") đ</MudTd>
+                                            <MudTd DataLabel="Thành Tiền" Align="Align.Right">@context.LineTotal.ToString("N0") đ</MudTd>
+                                        </RowTemplate>
+                                    </MudTable>
+                                }
+
+                                <MudPaper Elevation="0" Class="pa-3 rounded-lg" Style="background-color: rgba(0,0,0,0.02);">
+                                    <MudGrid Spacing="0">
+                                        <MudItem xs="12" Class="d-flex justify-space-between mb-1">
+                                            <MudText>Công Lao Động:</MudText>
+                                            <MudText>@ticket.Invoice.LaborCost.ToString("N0") đ</MudText>
+                                        </MudItem>
+                                        <MudItem xs="12" Class="d-flex justify-space-between mb-1">
+                                            <MudText>Linh Kiện:</MudText>
+                                            <MudText>@ticket.Invoice.PartsTotal.ToString("N0") đ</MudText>
+                                        </MudItem>
+                                        <MudDivider Class="my-2" />
+                                        <MudItem xs="12" Class="d-flex justify-space-between">
+                                            <MudText Typo="Typo.subtitle2" Class="fw-bold">Tổng Cộng:</MudText>
+                                            <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: var(--mud-palette-primary);">
+                                                @ticket.Invoice.GrandTotal.ToString("N0") đ
+                                            </MudText>
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudPaper>
                             </MudPaper>
                         </MudTabPanel>
                     }
@@ -239,6 +287,18 @@
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                                        OnClick="CreateQuotation" Size="Size.Small">
                                 Tạo Báo Giá
+                            </MudButton>
+                        }
+
+                        @if (CanInteract && ticket.Status == 2) // Chờ duyệt báo giá
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                                       OnClick="@(() => AcceptQuotation(5))" Size="Size.Small">
+                                Chấp Nhận (Bắt Đầu Sửa)
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Error" FullWidth="true"
+                                       OnClick="RejectQuotation" Size="Size.Small">
+                                Từ Chối Báo Giá
                             </MudButton>
                         }
 
@@ -618,6 +678,43 @@
             var request = new IssueServiceInvoiceRequest { PaymentMethod = paymentMethod, Note = note };
             var apiResult = await ServiceTicketService.IssueServiceInvoiceAsync(Id, request);
             Snackbar.Add(apiResult.Success ? "Đã xuất hóa đơn." : apiResult.Message ?? "Thất bại.",
+                         apiResult.Success ? Severity.Success : Severity.Error);
+            if (apiResult.Success) await LoadTicket();
+        }
+    }
+
+    private async Task AcceptQuotation(byte nextStatus)
+    {
+        var quotation = ticket?.Quotations?.FirstOrDefault(q => q.Status == 0);
+        if (quotation == null)
+        {
+            Snackbar.Add("Không tìm thấy báo giá đang chờ duyệt.", Severity.Error);
+            return;
+        }
+        var request = new AcceptQuotationRequest { NextStatus = nextStatus };
+        var apiResult = await ServiceTicketService.AcceptQuotationAsync(Id, quotation.Id, request);
+        Snackbar.Add(apiResult.Success ? "Đã chấp nhận báo giá." : apiResult.Message ?? "Thất bại.",
+                     apiResult.Success ? Severity.Success : Severity.Error);
+        if (apiResult.Success) await LoadTicket();
+    }
+
+    private async Task RejectQuotation()
+    {
+        var quotation = ticket?.Quotations?.FirstOrDefault(q => q.Status == 0);
+        if (quotation == null)
+        {
+            Snackbar.Add("Không tìm thấy báo giá đang chờ duyệt.", Severity.Error);
+            return;
+        }
+        var dialog = await DialogService.ShowAsync<RejectQuotationDialog>("Từ Chối Báo Giá",
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            var reason = (string)(result.Data ?? string.Empty);
+            var request = new RejectQuotationRequest { Reason = reason };
+            var apiResult = await ServiceTicketService.RejectQuotationAsync(Id, quotation.Id, request);
+            Snackbar.Add(apiResult.Success ? "Đã từ chối báo giá." : apiResult.Message ?? "Thất bại.",
                          apiResult.Success ? Severity.Success : Severity.Error);
             if (apiResult.Success) await LoadTicket();
         }

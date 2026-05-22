@@ -38,6 +38,18 @@ namespace PBL3.Service.ServiceInvoices
             return (dtos, totalCount);
         }
 
+        public async Task MarkInvoicePaidAsync(int id)
+        {
+            var invoice = await _repository.GetByIdWithTrackingAsync(id);
+            if (invoice == null)
+                throw new InvalidOperationException("Không tìm thấy hóa đơn dịch vụ.");
+            if (invoice.PaymentStatus == 1)
+                throw new InvalidOperationException("Hóa đơn đã được thanh toán trước đó.");
+
+            invoice.PaymentStatus = 1;
+            await _repository.SaveChangesAsync();
+        }
+
         private ServiceInvoiceDetailDto MapToDetailDto(dynamic invoice)
         {
             var items = new List<ServiceInvoiceItemDto>();

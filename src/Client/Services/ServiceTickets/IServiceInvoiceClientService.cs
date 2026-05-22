@@ -9,5 +9,6 @@ namespace Client.Services.ServiceTickets
             string? keyword, byte? paymentStatus, DateTime? fromDate, DateTime? toDate,
             int pageNumber, int pageSize, string? sortBy, bool sortDescending);
         Task<ApiResult<ServiceInvoiceDetailDto>> GetByIdAsync(int id);
+        Task<ApiResult<bool>> MarkInvoicePaidAsync(int id);
     }
 }

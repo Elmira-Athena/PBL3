@@ -157,34 +157,6 @@ else
 
     </MudContainer>
 
-    <!-- Footer -->
-    <MudPaper Elevation="0" Class="pa-8 mt-16" Style="background-color: #f5f5f5;">
-        <MudContainer MaxWidth="MaxWidth.Large">
-            <MudGrid>
-                <MudItem xs="12" md="4">
-                    <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold mb-4">HUSH STORE</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2">CÔNG TY TNHH HUSH STORE</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2 d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />123 Nguyễn Lương Bằng, Đà Nẵng</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2 d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Phone" Size="Size.Small" Class="mr-2" />0236.3636367</MudText>
-                    <MudText Typo="Typo.body2" Class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Email" Size="Size.Small" Class="mr-2" />hotro@hushstore.vn</MudText>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudText Typo="Typo.h6" Class="fw-bold mb-4">SOCIAL</MudText>
-                    <div class="d-flex gap-4">
-                        <MudIconButton Icon="@Icons.Custom.Brands.Facebook" Color="Color.Info" Size="Size.Large" />
-                        <MudIconButton Icon="@Icons.Custom.Brands.Twitter" Color="Color.Info" Size="Size.Large" />
-                    </div>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudText Typo="Typo.h6" Class="fw-bold mb-4">Hỗ trợ khách hàng</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách bảo mật</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách bảo hành</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách thanh toán</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="HandleComingSoon">Chính sách vận chuyển</MudText>
-                </MudItem>
-            </MudGrid>
-        </MudContainer>
-    </MudPaper>
 }
 
 @code {
@@ -251,8 +223,6 @@ else
         _expandedCategoryId = _expandedCategoryId == cat.Id ? (int?)null : cat.Id;
     }
 
-    private void HandleComingSoon() =>
-        Snackbar.Add("Tính năng đang phát triển", Severity.Info);
 
     private void NavigateToCategory(string slug) =>
         NavigationManager.NavigateTo($"/category/{slug}");

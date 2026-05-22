@@ -468,13 +468,13 @@
 
         _lastScanResult = result.Data;
 
-        if (result.Success || result.Data != null)
+        if (result.Success && result.Data != null)
         {
-            if (result.Data?.MiniDashboard != null)
+            if (result.Data.MiniDashboard != null)
                 _dashboard = result.Data.MiniDashboard;
 
             _scanInput = string.Empty;
-            await _serialTable!.ReloadServerData();
+            if (_serialTable != null) await _serialTable.ReloadServerData();
 
             if (!result.Success && !string.IsNullOrEmpty(result.Message))
                 Snackbar.Add(result.Message, Severity.Warning);
@@ -504,7 +504,7 @@
         if (result.Success)
         {
             Snackbar.Add("Đã đánh dấu hàng lỗi.", Severity.Success);
-            await _serialTable!.ReloadServerData();
+            if (_serialTable != null) await _serialTable.ReloadServerData();
             var dashResult = await CheckService.GetDashboardAsync(Id);
             if (dashResult.Success && dashResult.Data != null)
                 _dashboard = dashResult.Data;
@@ -530,7 +530,7 @@
         var dialog = await DialogService.ShowAsync<UpdateReasonDialog>("Cập nhật lý do", parameters, options);
         var result = await dialog.Result;
         if (result != null && !result.Canceled)
-            await _serialTable!.ReloadServerData();
+            if (_serialTable != null) await _serialTable.ReloadServerData();
     }
 
     private async Task HandleSubmit()
@@ -550,7 +550,7 @@
         {
             Snackbar.Add("Phiếu đã được gửi duyệt thành công.", Severity.Success);
             await LoadAll();
-            await _serialTable!.ReloadServerData();
+            if (_serialTable != null) await _serialTable.ReloadServerData();
         }
         else
         {

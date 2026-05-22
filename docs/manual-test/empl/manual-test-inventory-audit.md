@@ -1,34 +1,33 @@
 # Manual Test Guide — Kiểm kê kho hàng (UC015)
 
-> Thực hiện test với Swagger (`https://localhost:7010/swagger`) hoặc Frontend (`https://localhost:7107`).
-> Cần 2 tài khoản: **Employee** (tạo & quét) và **Admin** (phê duyệt).
+> Test thông qua Frontend: `https://localhost:7107`
+> 
+> Cần 2 tài khoản: **Employee** (đăng nhập, tạo & quét phiếu) và **Admin** (phê duyệt phiếu).
 
 ---
 
 ## Thiết lập trước khi test
 
-| Bước | Lệnh / Hành động |
-|------|-----------------|
+| Bước | Hành động |
+|------|----------|
 | Khởi động DB | `docker-compose up -d` (từ thư mục `Infrastructure/db/`) |
 | Chạy migration | `dotnet ef database update --project src/Infrastructure --startup-project src/API` |
 | Chạy API | `dotnet run --project src/API/API.csproj` |
 | Chạy Client | `dotnet run --project src/Client/Client.csproj` |
-| Lấy JWT Employee | `POST /api/auth/login` với tài khoản Employee |
-| Lấy JWT Admin | `POST /api/auth/login` với tài khoản Admin |
+| Đăng nhập Employee | Truy cập Frontend, login bằng tài khoản Employee |
+| Đăng nhập Admin (sau) | Dùng browser khác hoặc tab ẩn danh, login bằng tài khoản Admin |
 
 ---
 
 ## Flow 1 — Tạo phiếu toàn kho (Happy Path)
 
-**Mục tiêu:** Tạo phiếu kiểm kê phạm vi AllStore, xác nhận snapshot chốt đúng.
+**Mục tiêu:** Tạo phiếu kiểm kê phạm vi AllStore.
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | `POST /api/inventory-checks` body: `{ "scopeType": 0 }` (Employee JWT) | HTTP 201, trả về `InventoryCheckDto` với `status=0` (Nháp), `checkCode` dạng `KK-yyyyMMdd-NNN` |
-| 2 | Kiểm tra DB: bảng `InventoryChecks` | 1 record mới, `ScopeType=0`, `SnapshotAt` ≈ thời điểm tạo |
-| 3 | Kiểm tra DB: bảng `InventoryCheckDetails` | N records — 1 record / variant có serial Available |
-| 4 | Kiểm tra DB: bảng `InventoryCheckDetailSerials` | M records — 1 record / serial Available, `ScanStatus=0` (Pending) |
-| 5 | `GET /api/inventory-checks/{id}` | Trả về đầy đủ header + `Details` list |
+| 1 | Truy cập `/inventory/audit` → Click "Tạo phiếu" | Dialog tạo phiếu hiện ra |
+| 2 | Chọn radio "Toàn kho" → Click "Tạo" | Phiếu mới được tạo, chuyển sang trang chi tiết phiếu |
+| 3 | Kiểm tra UI | Dashboard hiển thị: "Mã phiếu" dạng `KK-yyyyMMdd-NNN`, trạng thái "Nháp", tổng số serial cần quét |
 
 ---
 
@@ -36,34 +35,33 @@
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | `POST /api/inventory-checks` body: `{ "scopeType": 1, "scopeCategoryId": <id danh mục có con> }` | HTTP 201, `ScopeCategoryId` và `ScopeCategoryName` có giá trị |
-| 2 | Kiểm tra `InventoryCheckDetails` | Chỉ chứa các variant thuộc danh mục đó **và toàn bộ danh mục con** (đệ quy) |
+| 1 | Truy cập `/inventory/audit` → Click "Tạo phiếu" | Dialog tạo phiếu hiện ra |
+| 2 | Chọn radio "Theo danh mục" → Chọn 1 danh mục từ dropdown | Dropdown hiển thị cây danh mục phân cấp |
+| 3 | Click "Tạo" | Phiếu được tạo, dashboard hiển thị "Danh mục: [tên danh mục chọn]" |
 
 ---
 
 ## Flow 3 — Quét Serial: Matched
 
-**Điều kiện:** Phiếu ở trạng thái Nháp, serial có `Status=Available` và thuộc phạm vi phiếu.
+**Điều kiện:** Phiếu ở trạng thái Nháp, tìm 1 serial hợp lệ để quét.
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | `POST /api/inventory-checks/{id}/scan` body: `{ "serialNumber": "<serial hợp lệ>" }` | HTTP 200, `scanStatus=1` (Matched), `message` có nội dung xác nhận |
-| 2 | `GET /api/inventory-checks/{id}/dashboard` | `matchedCount` tăng 1, `percentComplete` tăng |
-| 3 | Kiểm tra `InventoryCheckDetailSerials` | Row tương ứng `ScanStatus=1`, `ScannedAt` ≠ null, `ScannedByEmployeeId` đúng |
-| 4 | Kiểm tra `InventoryCheckDetails` | `ActualQuantity` tăng 1, `MatchedQuantity` tăng 1 |
-| 5 | `ProductSerial.Status` trong DB | **KHÔNG** thay đổi (vẫn là Available) |
+| 1 | Tại trang chi tiết phiếu, nhập serial hợp lệ vào ô tìm kiếm → Nhấn Enter | Alert xanh hiện ra với thông báo quét thành công |
+| 2 | Kiểm tra dashboard | "Quét được" tăng 1, % hoàn thành tăng |
+| 3 | Kiểm tra Tab "Danh sách Serial" | Serial vừa quét hiển thị trong danh sách, trạng thái "Khớp" |
 
 ---
 
 ## Flow 4 — Quét Serial: Surplus — Serial đã bán (A1)
 
-**Điều kiện:** Trong snapshot có serial `Available`, nhưng giữa lúc đó serial đã bị bán qua POS/Order (trước khi quét).
+**Điều kiện:** Serial được quét nhưng đã bị bán (ngoài scope quét).
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | Đổi trực tiếp trong DB: `UPDATE ProductSerials SET Status=2 WHERE SerialNumber='<target>'` | — |
-| 2 | `POST /api/inventory-checks/{id}/scan` với serial đó | `scanStatus=3` (Surplus), `surplusNote` chứa "Đã bán tại Đơn hàng..." hoặc ghi chú tương ứng |
-| 3 | `GET /api/inventory-checks/{id}/dashboard` | `surplusCount` tăng 1 |
+| 1 | Nhập serial đã bán vào ô quét → Nhấn Enter | Alert vàng hiện ra, thông báo "Serial đã bán tại..." |
+| 2 | Kiểm tra dashboard | "Thừa/Ngoài scope" tăng 1 |
+| 3 | Kiểm tra Tab "Danh sách Serial" | Serial hiển thị với trạng thái "Thừa" |
 
 ---
 
@@ -71,8 +69,8 @@
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | Đổi DB: `UPDATE ProductSerials SET Status=1 WHERE SerialNumber='<target>'` | — |
-| 2 | `POST /api/inventory-checks/{id}/scan` với serial đó | `scanStatus=3`, note "Đã giữ chỗ cho Đơn hàng..." |
+| 1 | Nhập serial đang reserved (giữ chỗ) vào ô quét → Nhấn Enter | Alert vàng hiện ra, thông báo "Serial đã giữ chỗ cho Đơn hàng..." |
+| 2 | Kiểm tra dashboard | "Thừa/Ngoài scope" tăng 1 |
 
 ---
 
@@ -80,22 +78,20 @@
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | `POST /api/inventory-checks/{id}/scan` body: `{ "serialNumber": "FAKE-XXXX-9999" }` | `scanStatus=4` (UnknownSurplus), `requiresVariantInput=true` |
-| 2 | Kiểm tra `InventoryCheckDetailSerials` | 1 row mới với `SerialId=null`, `DetailId=null`, `SerialNumberRaw="FAKE-XXXX-9999"` |
-| 3 | Quét lại với `variantIdForUnknown=<id variant>` | Row được gắn `VariantId` |
+| 1 | Nhập serial fake (không tồn tại trong DB) vào ô quét → Nhấn Enter | Dialog hiện ra yêu cầu chọn "Sản phẩm" để ghi nhận hàng thừa |
+| 2 | Chọn 1 sản phẩm từ dropdown trong dialog → Click "Xác nhận" | Alert thông báo "Ghi nhận hàng thừa thành công" |
+| 3 | Kiểm tra Tab "Danh sách Serial" | Serial fake hiển thị với trạng thái "Thừa" + sản phẩm vừa chọn |
 
 ---
 
 ## Flow 7 — Đánh dấu hàng lỗi (A5)
 
-**Điều kiện:** Serial đã quét và ở trạng thái Matched (ScanStatus=1).
+**Điều kiện:** Serial đã quét và ở trạng thái "Khớp".
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | `PUT /api/inventory-checks/{id}/serials/{detailSerialId}/mark-defective` | HTTP 200, `success=true` |
-| 2 | Kiểm tra `InventoryCheckDetailSerials` | `ScanStatus=5` (Defective) |
-| 3 | `GET /api/inventory-checks/{id}/dashboard` | `matchedCount` giảm 1, `defectiveCount` tăng 1 |
-| 4 | `ProductSerial.Status` | **KHÔNG** thay đổi — chỉ thay đổi khi approve |
+| 1 | Tại Tab "Danh sách Serial", tìm serial có trạng thái "Khớp" → Click icon "Đánh dấu lỗi" (🛠 hoặc tương tự) | Serial chuyển sang trạng thái "Lỗi" |
+| 2 | Kiểm tra dashboard | "Quét được" giảm 1, "Hàng lỗi" tăng 1 |
 
 ---
 
@@ -103,38 +99,36 @@
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | `PUT /api/inventory-checks/{id}/serials/{detailSerialId}/reason` body: `{ "reason": "Serial bị mất khi vận chuyển nội bộ", "proposedActionNote": "Kiến nghị ghi thất thoát" }` | HTTP 200 |
-| 2 | Kiểm tra `InventoryCheckDetailSerials` | `Note` và `ProposedActionNote` đã được cập nhật |
+| 1 | Tại Tab "Danh sách Serial", tìm serial "Mất" hoặc "Thừa" → Click icon "Cập nhật lý do" (📝 hoặc tương tự) | Dialog/form hiện ra cho phép nhập lý do |
+| 2 | Nhập lý do ("Serial bị mất khi vận chuyển nội bộ") → Click "Lưu" | Dialog đóng, thông báo cập nhật thành công |
+| 3 | Kiểm tra lại row serial | Lý do được hiển thị/lưu |
 
 ---
 
 ## Flow 9 — Gửi duyệt (Submit)
 
-**Điều kiện:** Phiếu ở trạng thái Nháp (Status=0).
+**Điều kiện:** Phiếu ở trạng thái Nháp.
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | `POST /api/inventory-checks/{id}/submit` | HTTP 200, `success=true` |
-| 2 | `GET /api/inventory-checks/{id}` | `status=1` (AwaitingApproval) |
-| 3 | Kiểm tra `InventoryCheckDetailSerials` | Tất cả row `ScanStatus=0` (Pending) → đổi thành `ScanStatus=2` (Missing) |
-| 4 | Kiểm tra `InventoryCheckDetails` | `MissingQuantity` được tính đúng (= số serial Pending chưa quét) |
-| 5 | Thử quét thêm serial | HTTP 400 — phiếu không còn ở trạng thái Nháp |
+| 1 | Tại trang chi tiết phiếu, Click nút "Gửi duyệt" | Dialog xác nhận hiện ra |
+| 2 | Click "Xác nhận" | Phiếu chuyển sang trạng thái "Chờ phê duyệt", panel quét ẩn |
+| 3 | Thử quét thêm serial (test) | Alert lỗi hiện ra, không cho quét nữa |
+| 4 | Kiểm tra dashboard | Cập nhật "Mất" = số serial chưa quét, dashboard chuyển sang chế độ xem (không quét) |
 
 ---
 
 ## Flow 10 — Phê duyệt (Approve) — Happy Path
 
-**Điều kiện:** Phiếu Status=1 (AwaitingApproval), dùng Admin JWT.
+**Điều kiện:** Phiếu ở trạng thái "Chờ phê duyệt", dùng tài khoản Admin.
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | `POST /api/inventory-checks/{id}/approve` (Admin JWT) | HTTP 200 |
-| 2 | `GET /api/inventory-checks/{id}` | `status=2` (Completed), `approvedAt` ≠ null, `approvedByEmployeeName` đúng |
-| 3 | Kiểm tra `ProductSerials` với `ScanStatus=Missing` | `Status=5` (Lost) |
-| 4 | Kiểm tra `ProductSerials` với `ScanStatus=Defective` | `Status=3` (Defective) |
-| 5 | Kiểm tra `ProductSerials` với `ScanStatus=Matched` | `Status=0` (Available) — không đổi |
-| 6 | Kiểm tra `InventoryAdjustmentLogs` | Có các record với `AdjustmentType=1` (Lost) / `AdjustmentType=2` (Defective) tương ứng |
-| 7 | Kiểm tra `ProductVariants.StockQuantity` | Đã được sync lại đúng (= số serial Available còn lại) |
+| 1 | Đăng nhập bằng tài khoản Admin | Truy cập `/admin/inventory-audit` hoặc danh sách phiếu chờ duyệt |
+| 2 | Tìm phiếu vừa submit → Click vào phiếu hoặc nút "Chi tiết" | Trang chi tiết phiếu hiện ra, hiển thị Tab duyệt với nút "Phê duyệt" |
+| 3 | Click nút "Phê duyệt" | Dialog xác nhận hiện ra (cảnh báo: hàng mất sẽ đổi status), click "Xác nhận" |
+| 4 | Kiểm tra kết quả | Phiếu chuyển sang trạng thái "Hoàn thành", hiển thị tên người phê duyệt và thời gian |
+| 5 | Quay lại trang listing → refresh | Phiếu cập nhật status thành "Hoàn thành" trong danh sách |
 
 ---
 
@@ -142,13 +136,11 @@
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | Submit phiếu (Status → 1) | — |
-| 2 | `POST /api/inventory-checks/{id}/reject` (Admin JWT) body: `{ "reason": "Dữ liệu chưa đủ", "returnToDraft": true }` | HTTP 200 |
-| 3 | `GET /api/inventory-checks/{id}` | `status=0` (Nháp), `rejectReason` = "Dữ liệu chưa đủ" |
-| 4 | Kiểm tra `InventoryCheckDetailSerials` | Tất cả row Missing → trở về Pending; các row Surplus/UnknownSurplus bị xóa |
-| 5 | Kiểm tra `InventoryCheckDetails` | Các count (Missing, Surplus...) được reset về 0 |
-| 6 | Quét lại serial | Hoạt động bình thường (phiếu trở về Draft) |
-| 7 | `ProductSerial.Status` | **KHÔNG** thay đổi gì cả |
+| 1 | Tạo & submit phiếu (không quét bất kỳ serial nào) | Phiếu ở trạng thái "Chờ phê duyệt" |
+| 2 | Đăng nhập Admin → Tại trang chi tiết phiếu, Click "Từ chối" | Dialog từ chối hiện ra với 2 option: "Trả về Nháp" / "Hủy phiếu" |
+| 3 | Chọn "Trả về Nháp" → Nhập lý do từ chối → Click "Xác nhận" | Phiếu quay về trạng thái "Nháp", panel quét hiện lại |
+| 4 | Kiểm tra UI | Tất cả serial chưa quét quay về "Chờ quét" (Pending), giao diện quét hoạt động bình thường |
+| 5 | Thử quét lại serial | Quét bình thường như phiếu mới |
 
 ---
 
@@ -156,10 +148,10 @@
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | Submit phiếu | — |
-| 2 | `POST /api/inventory-checks/{id}/reject` body: `{ "reason": "Sai phạm vi", "returnToDraft": false }` (Admin JWT) | HTTP 200 |
-| 3 | `GET /api/inventory-checks/{id}` | `status=3` (Cancelled), dữ liệu serial giữ nguyên để audit |
-| 4 | `ProductSerial.Status` | **KHÔNG** thay đổi |
+| 1 | Tạo & submit phiếu | Phiếu ở trạng thái "Chờ phê duyệt" |
+| 2 | Đăng nhập Admin → Click "Từ chối" | Dialog hiện ra với 2 option |
+| 3 | Chọn "Hủy phiếu" → Nhập lý do ("Sai phạm vi") → Click "Xác nhận" | Phiếu chuyển sang trạng thái "Đã hủy" |
+| 4 | Kiểm tra UI | Danh sách serial vẫn hiển thị (để audit), không có action button nào |
 
 ---
 
@@ -167,23 +159,23 @@
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | `POST /api/inventory-checks/{id}/cancel` (Employee JWT, phiếu của chính họ, Status=0) | HTTP 200 |
-| 2 | `GET /api/inventory-checks/{id}` | `status=3` (Cancelled) |
+| 1 | Tạo phiếu nhưng chưa submit → Click nút "Hủy phiếu" | Dialog xác nhận hiện ra |
+| 2 | Click "Xác nhận hủy" | Phiếu chuyển sang trạng thái "Đã hủy", quay về danh sách |
+| 3 | Thử hủy phiếu của người khác (Employee B hủy phiếu của Employee A) | Alert lỗi: "Bạn không có quyền hủy phiếu này" |
 
 ---
 
 ## Flow 14 — Business Continuity (BR1): Serial được bán trong cửa sổ kiểm kê
 
-**Kịch bản:** Serial trong snapshot là Pending (chưa quét), nhưng trong thời gian chờ duyệt, serial đó được bán.
+**Kịch bản:** Serial nằm trong snapshot nhưng chưa quét, khi chờ Admin duyệt thì serial đó được bán (Status đổi thành Sold).
 
 | # | Hành động | Kết quả mong đợi |
 |---|-----------|-----------------|
-| 1 | Tạo phiếu, submit (không quét serial X) | Serial X ở Missing sau submit |
-| 2 | Trước khi approve: đổi DB `UPDATE ProductSerials SET Status=2 WHERE SerialNumber='X'` | Giả lập bán trong cửa sổ |
-| 3 | `POST /api/inventory-checks/{id}/approve` (Admin JWT) | HTTP 200 |
-| 4 | Kiểm tra `InventoryCheckDetailSerials` row của serial X | `ResolvedDuringApproval=true`, `Note` chứa thông tin giải thích |
-| 5 | Kiểm tra `ProductSerial X.Status` | **KHÔNG** bị đổi thành Lost (vẫn là Sold=2) |
-| 6 | Kiểm tra `InventoryAdjustmentLogs` | **KHÔNG** có record cho serial X |
+| 1 | Tạo phiếu, submit (không quét bất kỳ serial nào) | Phiếu ở "Chờ phê duyệt" |
+| 2 | Trong lúc chờ duyệt, một serial trong phiếu được bán ngoài (mô phỏng: đơn đặt hàng khác quét serial & thanh toán) | — |
+| 3 | Đăng nhập Admin → Click "Phê duyệt" phiếu | Phiếu vẫn được duyệt thành công |
+| 4 | Kiểm tra trang chi tiết phiếu → Tab "Danh sách Serial" | Serial vừa bị bán hiển thị với ghi chú "Đã được bán khi đang chờ duyệt" (hoặc tương tự) |
+| 5 | Kiểm tra trang danh sách phiếu | Phiếu chuyển sang "Hoàn thành", không có lỗi |
 
 ---
 
@@ -193,18 +185,19 @@
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| Quét serial S lần 1 → Matched | OK |
-| Quét lại serial S lần 2 | HTTP 400, `message` = "Serial đã được quét trong phiếu này", `isDuplicateScan=true` |
+| Quét serial S lần 1 | Serial chuyển sang "Khớp" |
+| Quét lại serial S lần 2 | Alert lỗi: "Serial đã được quét trong phiếu này" |
 
 ---
 
-### EC-2: Quét serial không thuộc phạm vi Category
+### EC-2: Quét serial ngoài phạm vi Category
 
-**Điều kiện:** Phiếu ScopeType=Category, serial thuộc danh mục khác.
+**Điều kiện:** Phiếu tạo theo danh mục X, quét serial thuộc danh mục Y.
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| Quét serial của variant ngoài scope | `scanStatus=3` (Surplus), note "Ngoài phạm vi kiểm kê" |
+| Quét serial ngoài danh mục scope | Alert vàng: "Serial ngoài phạm vi kiểm kê" |
+| Kiểm tra Tab "Danh sách Serial" | Serial hiển thị với trạng thái "Ngoài scope" |
 
 ---
 
@@ -212,8 +205,7 @@
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| `POST /submit` khi 0 serial đã quét | HTTP 200 — cho phép submit (business requirement: toàn bộ chuyển Missing) |
-| Sau submit: `MissingCount` | = tổng số serial trong snapshot |
+| Tạo phiếu → ngay lập tức Click "Gửi duyệt" | Phiếu được submit, dashboard hiển thị "Mất = tổng số serial" |
 
 ---
 
@@ -221,7 +213,7 @@
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| `POST /api/inventory-checks/{id}/approve` trên phiếu Status=2 | HTTP 400, message lỗi tiếng Việt |
+| Đăng nhập Admin → Trên phiếu Status "Hoàn thành", cố gọi lại "Phê duyệt" | Alert lỗi tiếng Việt, phiếu không đổi trạng thái |
 
 ---
 
@@ -229,16 +221,16 @@
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| `POST /api/inventory-checks/{id}/approve` trên phiếu Status=0 | HTTP 400 |
+| Phiếu chưa submit, cố tìm cách phê duyệt | Không thấy nút "Phê duyệt" (nút chỉ hiện khi "Chờ phê duyệt") hoặc alert lỗi |
 
 ---
 
-### EC-6: Employee gọi endpoint Admin-only
+### EC-6: Employee truy cập admin feature
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| `POST /approve` với Employee JWT | HTTP 403 Forbidden |
-| `POST /reject` với Employee JWT | HTTP 403 Forbidden |
+| Employee truy cập URL `/admin/inventory-audit` | Redirect hoặc hiển thị "Không có quyền truy cập" |
+| Employee cố click nút "Phê duyệt" (nếu có) | Nút disabled hoặc alert "Chỉ Admin" |
 
 ---
 
@@ -246,55 +238,55 @@
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| Employee A gọi `POST /cancel` trên phiếu của Employee B | HTTP 400, message "Bạn không có quyền hủy phiếu này" (hoặc tương đương) |
+| Employee B tạo/xem phiếu của Employee A → Click "Hủy phiếu" | Alert lỗi: "Bạn không có quyền hủy phiếu này" |
 
 ---
 
-### EC-8: Hủy phiếu đang AwaitingApproval (Employee)
+### EC-8: Employee hủy phiếu ở trạng thái Chờ phê duyệt
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| Employee gọi `POST /cancel` trên phiếu của mình khi Status=1 | HTTP 400 — chỉ Admin mới hủy được phiếu ở trạng thái này |
+| Phiếu của Employee, status "Chờ phê duyệt" → Click "Hủy phiếu" | Alert lỗi: "Chỉ Admin hoặc tác giả ở trạng thái Nháp mới hủy được" (hoặc tương tự) |
 
 ---
 
-### EC-9: Tạo phiếu ScopeType=Category mà không có ScopeCategoryId
+### EC-9: Tạo phiếu theo danh mục nhưng không chọn danh mục
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| `POST /api/inventory-checks` body: `{ "scopeType": 1 }` | HTTP 400, validation error "ScopeCategoryId bắt buộc khi kiểm kê theo danh mục" |
+| Dialog tạo phiếu → Chọn "Theo danh mục" nhưng bỏ trống dropdown → Click "Tạo" | Alert validation: "Vui lòng chọn danh mục" |
 
 ---
 
-### EC-10: Mark Defective trên serial không phải Matched
+### EC-10: Đánh dấu lỗi trên serial không phải Matched
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| `PUT /mark-defective` trên row có `ScanStatus=2` (Missing) | HTTP 400 — chỉ Matched mới được đánh dấu lỗi |
+| Tìm serial có trạng thái "Mất" → Cố click icon "Đánh dấu lỗi" | Icon disabled (không click được) hoặc alert lỗi "Chỉ serial Khớp mới có thể đánh dấu lỗi" |
 
 ---
 
-### EC-11: Submit phiếu không phải người tạo (Employee)
+### EC-11: Submit phiếu không phải người tạo
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| Employee B `POST /submit` trên phiếu của Employee A | HTTP 400, message lỗi phân quyền |
+| Employee B truy cập phiếu của Employee A → Click "Gửi duyệt" | Alert lỗi: "Chỉ tác giả phiếu mới được gửi duyệt" |
 
 ---
 
-### EC-12: Tạo 2 phiếu cùng lúc — CheckCode không trùng
+### EC-12: Mã phiếu không trùng lặp
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| Tạo phiếu liên tiếp trong cùng ngày | `KK-yyyyMMdd-001`, `KK-yyyyMMdd-002`, ... tăng dần, không có giá trị trùng |
+| Tạo 2 phiếu liên tiếp trong cùng ngày | Mã phiếu tự tăng: `KK-20260522-001`, `KK-20260522-002`, v.v., không trùng |
 
 ---
 
-### EC-13: Tạo phiếu khi không có serial Available trong scope
+### EC-13: Tạo phiếu danh mục không có serial Available
 
 | Hành động | Kết quả mong đợi |
 |-----------|-----------------|
-| `POST /api/inventory-checks` với scope Category không có serial Available | HTTP 201 nhưng `Details` = empty list, dashboard `totalSystem=0` |
+| Chọn danh mục không có sản phẩm/serial có sẵn → Tạo phiếu | Phiếu được tạo nhưng dashboard hiển thị "Tổng = 0", Tab "Danh sách Serial" trống |
 
 ---
 
@@ -312,17 +304,8 @@
 
 ---
 
-## Rollback / Clean Up
+## Lưu ý khi test
 
-Sau khi test xong, nếu cần reset data:
-
-```sql
--- Xóa toàn bộ dữ liệu kiểm kê (dev only)
-DELETE FROM InventoryAdjustmentLogs;
-DELETE FROM InventoryCheckDetailSerials;
-DELETE FROM InventoryCheckDetails;
-DELETE FROM InventoryChecks;
-
--- Khôi phục serial bị đổi status thủ công trong test
-UPDATE ProductSerials SET Status = 0 WHERE SerialNumber IN ('SERIAL-X', 'SERIAL-Y');
-```
+- **Browser khác cho Admin:** Dùng incognito/private window hoặc browser khác để đăng nhập Admin, tránh auto-logout Employee
+- **Làm mới trang:** Khi chuyển flow hoặc đổi tài khoản, nhấn F5 để sync UI với dữ liệu từ API
+- **Serial test:** Sử dụng các serial có sẵn trong DB (xem tại product listing nếu không biết mã serial)

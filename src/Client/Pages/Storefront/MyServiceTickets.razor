@@ -93,7 +93,7 @@
     {
         try
         {
-            var result = await ServiceTicketService.GetMyTicketsAsync(keyword, state.Page + 1, state.PageSize, "IntakeDate", true);
+            var result = await ServiceTicketService.GetMyTicketsAsync(keyword, statusFilter, state.Page + 1, state.PageSize, "IntakeDate", true);
 
             if (!result.Success || result.Data?.Items == null)
             {
@@ -101,16 +101,10 @@
                 return new TableData<ServiceTicketListDto> { Items = new List<ServiceTicketListDto>(), TotalItems = 0 };
             }
 
-            var filteredItems = result.Data.Items;
-            if (statusFilter.HasValue)
-            {
-                filteredItems = filteredItems.Where(x => x.Status == statusFilter.Value).ToList();
-            }
-
             return new TableData<ServiceTicketListDto>
             {
-                Items = filteredItems,
-                TotalItems = filteredItems.Count
+                Items = result.Data.Items,
+                TotalItems = result.Data.TotalCount
             };
         }
         catch (Exception ex)

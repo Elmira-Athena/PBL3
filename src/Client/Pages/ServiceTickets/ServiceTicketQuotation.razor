@@ -52,10 +52,21 @@
                         <MudTh Style="text-align: center;">Xóa</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd DataLabel="Mô Tả">@context.Description</MudTd>
-                        <MudTd DataLabel="Số Lượng" Align="Align.Right">@context.Quantity</MudTd>
-                        <MudTd DataLabel="Đơn Giá" Align="Align.Right">@context.UnitPrice.ToString("N0") đ</MudTd>
-                        <MudTd DataLabel="Thành Tiền" Align="Align.Right">@(context.Quantity * context.UnitPrice).ToString("N0") đ</MudTd>
+                        <MudTd DataLabel="Mô Tả">
+                            <MudTextField @bind-Value="context.Description" Placeholder="Nhập mô tả..."
+                                          Variant="Variant.Text" Margin="Margin.Dense" />
+                        </MudTd>
+                        <MudTd DataLabel="Số Lượng" Align="Align.Right">
+                            <MudNumericField @bind-Value="context.Quantity" Min="1"
+                                             Variant="Variant.Text" Margin="Margin.Dense" Style="width:80px" />
+                        </MudTd>
+                        <MudTd DataLabel="Đơn Giá" Align="Align.Right">
+                            <MudNumericField @bind-Value="context.UnitPrice" Min="0" Format="N0"
+                                             Variant="Variant.Text" Margin="Margin.Dense" Style="width:130px" />
+                        </MudTd>
+                        <MudTd DataLabel="Thành Tiền" Align="Align.Right">
+                            @((context.Quantity * context.UnitPrice).ToString("N0")) đ
+                        </MudTd>
                         <MudTd Style="text-align: center;">
                             <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
                                            OnClick="@(() => RemoveItem(context))" />
@@ -160,16 +171,34 @@
 
     private async Task SubmitQuotation()
     {
-        if (items.All(i => string.IsNullOrEmpty(i.Description)))
+        if (items.Count == 0 || items.All(i => string.IsNullOrEmpty(i.Description)))
         {
-            Snackbar.Add("Vui lòng thêm ít nhất một mục.", Severity.Warning);
+            Snackbar.Add("Vui lòng thêm ít nhất một mục và điền mô tả.", Severity.Warning);
             return;
         }
 
-        Snackbar.Add("Báo giá sẽ được lưu sau khi API được hoàn thiện.", Severity.Info);
-        // TODO: Implement API call once CreateQuotationRequest DTO is defined in Shared
-        // var result = await ServiceTicketService.CreateQuotationAsync(TicketId, request);
-        // if (result.Success) NavManager.NavigateTo($"/admin/service-tickets/{TicketId}");
+        var request = new CreateQuotationRequest
+        {
+            LaborCost = laborCost,
+            Items = items.Select(i => new QuotationItemCreateDto
+            {
+                VariantId = i.VariantId,
+                Description = i.Description,
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice
+            }).ToList()
+        };
+
+        var result = await ServiceTicketService.CreateQuotationAsync(TicketId, request);
+        if (result.Success)
+        {
+            Snackbar.Add("Tạo báo giá thành công.", Severity.Success);
+            NavManager.NavigateTo($"/admin/service-tickets/{TicketId}");
+        }
+        else
+        {
+            Snackbar.Add(result.Message ?? "Lỗi tạo báo giá.", Severity.Error);
+        }
     }
 
     private void GoBack() => NavManager.NavigateTo($"/admin/service-tickets/{TicketId}");

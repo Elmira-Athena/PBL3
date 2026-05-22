@@ -76,5 +76,29 @@ namespace Client.Services.ServiceTickets
                 return new ApiResult<ServiceInvoiceDetailDto> { Message = $"Lỗi: {ex.Message}" };
             }
         }
+
+        public async Task<ApiResult<bool>> MarkInvoicePaidAsync(int id)
+        {
+            try
+            {
+                var response = await _httpClient.PatchAsync($"api/service-invoices/{id}/mark-paid", null);
+                if (!response.IsSuccessStatusCode)
+                    return new ApiResult<bool> { Message = $"Lỗi HTTP {(int)response.StatusCode}." };
+
+                try
+                {
+                    return await response.Content.ReadFromJsonAsync<ApiResult<bool>>()
+                        ?? new ApiResult<bool> { Message = "Lỗi xác nhận thanh toán." };
+                }
+                catch
+                {
+                    return new ApiResult<bool> { Message = "Lỗi xác nhận thanh toán." };
+                }
+            }
+            catch (Exception ex)
+            {
+                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+            }
+        }
     }
 }

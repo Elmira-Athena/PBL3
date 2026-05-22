@@ -337,6 +337,7 @@
         {
             Snackbar.Add("Phiếu kiểm kê đã được phê duyệt. Tồn kho đã được cân bằng.", Severity.Success);
             await LoadAll();
+            if (_serialTable != null) await _serialTable.ReloadServerData();
         }
         else
         {
@@ -355,7 +356,10 @@
         var dialog = await DialogService.ShowAsync<RejectInventoryCheckDialog>("Từ chối phiếu", parameters, options);
         var result = await dialog.Result;
         if (result != null && !result.Canceled)
+        {
             await LoadAll();
+            if (_serialTable != null) await _serialTable.ReloadServerData();
+        }
     }
 
     // ===== HELPERS =====

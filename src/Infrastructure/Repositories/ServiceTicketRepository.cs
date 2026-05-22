@@ -135,8 +135,8 @@ namespace PBL3.Infrastructure.Repositories
 
         public async Task<bool> HasOpenTicketForSerialAsync(int serialId)
         {
-            // Terminal states: 3 = QuoteRejected, 9 = Completed, 10 = Cancelled
-            var terminalStates = new[] { (byte)3, (byte)9, (byte)10 };
+            // Terminal states: 3 = QuoteRejected, 8 = Swapped, 9 = Completed, 10 = Cancelled
+            var terminalStates = new[] { (byte)3, (byte)8, (byte)9, (byte)10 };
             return await _dbContext.ServiceTickets
                 .Where(t => t.SerialId == serialId && !terminalStates.Contains(t.Status))
                 .AnyAsync();

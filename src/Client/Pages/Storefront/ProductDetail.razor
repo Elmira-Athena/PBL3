@@ -98,7 +98,7 @@
                             @if (_currentVariant.OriginalPrice.HasValue)
                             {
                                 <div class="d-flex align-center gap-2 mb-1">
-                                    <MudText Typo="Typo.h6" Class="text-muted text-decoration-line-through">
+                                    <MudText Typo="Typo.h6" Style="text-decoration: line-through;" Class="text-muted">
                                         @_currentVariant.OriginalPrice.Value.ToString("N0") ₫
                                     </MudText>
                                     <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">

@@ -45,6 +45,7 @@ namespace PBL3.Infrastructure.Repositories
             var query = _context.InventoryChecks
                 .AsNoTracking()
                 .Include(c => c.ScopeCategory)
+                .Include(c => c.Details)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(keyword))
@@ -117,7 +118,8 @@ namespace PBL3.Infrastructure.Repositories
         {
             return await _context.InventoryCheckDetailSerials
                 .AnyAsync(s => s.CheckId == checkId &&
-                               s.SerialNumberRaw == serialNumberRaw);
+                               s.SerialNumberRaw == serialNumberRaw &&
+                               s.ScanStatus != 0); // Chỉ tính là trùng nếu đã thực sự được quét (không phải Pending)
         }
 
         public async Task<List<InventoryCheckDetailSerial>> GetPendingDetailSerialsAsync(int checkId)
