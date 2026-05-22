@@ -204,6 +204,7 @@
         if (result.Success && result.Data != null)
         {
             _totalCount = result.Data.TotalCount;
+            StateHasChanged();
             return new TableData<ManufacturerDto>
             {
                 Items      = result.Data.Items,
