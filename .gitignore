@@ -93,3 +93,12 @@ skills-lock.json
 scratch/
 infra/resources*.env
 infra/config.json
+
+# Local dev environment (mô phỏng EC2 — không commit)
+docker-compose.local.yml
+.env.local
+nginx/nginx.local.conf
+local-up.sh
+local-down.sh
+local-import-azure.sh
+local-dev/
