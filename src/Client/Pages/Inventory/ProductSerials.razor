@@ -169,9 +169,14 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (ProductIdQuery.HasValue)
-            _filter.ProductId = ProductIdQuery;
         await LoadStatisticsAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _filter.ProductId = ProductIdQuery;
+        if (_table != null)
+            await _table.ReloadServerData();
     }
 
     private async Task<TableData<ProductSerialListDto>> ServerReload(TableState state, CancellationToken cancellationToken)

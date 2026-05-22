@@ -413,7 +413,7 @@
             _productLabels = Array.Empty<string>();
         }
 
-        // Channel donut
+        // Channel donut — label chỉ chứa %, MudBlazor tự append "- {count}" → "Online (86%) - 6"
         if (_channels != null)
         {
             var chTotal = (double)(_channels.OnlineCount + _channels.PosCount);
@@ -421,12 +421,12 @@
             _channelData = new double[] { _channels.OnlineCount, _channels.PosCount };
             _channelLabels = new[]
             {
-                $"Online ({_channels.OnlineCount} - {ChPct(_channels.OnlineCount)})",
-                $"POS ({_channels.PosCount} - {ChPct(_channels.PosCount)})"
+                $"Online ({ChPct(_channels.OnlineCount)})",
+                $"POS ({ChPct(_channels.PosCount)})"
             };
         }
 
-        // Payment donut
+        // Payment donut — label chỉ chứa %, MudBlazor tự append "- {count}" → "COD (45%) - 3"
         if (_summary != null)
         {
             var pmTotal = (double)(_summary.PayCod + _summary.PayBanking + _summary.PayVnPay);
@@ -434,9 +434,9 @@
             _paymentData = new double[] { _summary.PayCod, _summary.PayBanking, _summary.PayVnPay };
             _paymentLabels = new[]
             {
-                $"COD ({_summary.PayCod} - {PmPct(_summary.PayCod)})",
-                $"Banking ({_summary.PayBanking} - {PmPct(_summary.PayBanking)})",
-                $"VNPay ({_summary.PayVnPay} - {PmPct(_summary.PayVnPay)})"
+                $"COD ({PmPct(_summary.PayCod)})",
+                $"Banking ({PmPct(_summary.PayBanking)})",
+                $"VNPay ({PmPct(_summary.PayVnPay)})"
             };
         }
     }
