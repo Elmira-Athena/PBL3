@@ -1,5 +1,5 @@
-@page "/inventory/audit"
-@attribute [Authorize(Roles = "Admin,Employee")]
+@page "/admin/inventory-audit"
+@attribute [Authorize(Roles = "Admin")]
 
 @using Client.Services.Inventory
 @using PBL3.Shared.DTOs.Inventory
@@ -115,12 +115,15 @@
                 <MudText Typo="Typo.body2">@context.TotalVariants variant</MudText>
             </MudTd>
             <MudTd DataLabel="Hành động" Style="text-align: center;">
-                <MudTooltip Text="Xem chi tiết">
-                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
-                                   Color="Color.Info"
-                                   Size="Size.Small"
-                                   OnClick="@(() => Navigation.NavigateTo($"/inventory/audit/{context.Id}"))" />
-                </MudTooltip>
+                @if (context.Status == 1)
+                {
+                    <MudTooltip Text="Phê duyệt">
+                        <MudIconButton Icon="@Icons.Material.Filled.RateReview"
+                                       Color="Color.Warning"
+                                       Size="Size.Small"
+                                       OnClick="@(() => Navigation.NavigateTo($"/admin/inventory-audit/{context.Id}"))" />
+                    </MudTooltip>
+                }
             </MudTd>
         </RowTemplate>
         <NoRecordsContent>

@@ -21,44 +21,50 @@
     </MudPaper>
 
     @* ===== STATISTICS CARDS ===== *@
-    <MudGrid Spacing="2" Class="mb-4">
-        <MudItem xs="6" sm="4" md="2">
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <div style="flex: 1 1 130px;">
             <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
                 <MudText Typo="Typo.h5" Class="fw-bold">@_stats.TotalCount</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Tổng cộng</MudText>
             </MudPaper>
-        </MudItem>
-        <MudItem xs="6" sm="4" md="2">
+        </div>
+        <div style="flex: 1 1 130px;">
             <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
                 <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-success);">@_stats.AvailableCount</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Trong kho</MudText>
             </MudPaper>
-        </MudItem>
-        <MudItem xs="6" sm="4" md="2">
+        </div>
+        <div style="flex: 1 1 130px;">
             <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
                 <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-warning);">@_stats.ReservedCount</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Đã đặt</MudText>
             </MudPaper>
-        </MudItem>
-        <MudItem xs="6" sm="4" md="2">
+        </div>
+        <div style="flex: 1 1 130px;">
             <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
                 <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-info);">@_stats.SoldCount</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Đã bán</MudText>
             </MudPaper>
-        </MudItem>
-        <MudItem xs="6" sm="4" md="2">
+        </div>
+        <div style="flex: 1 1 130px;">
             <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
                 <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-error);">@_stats.DefectiveCount</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Hàng lỗi</MudText>
             </MudPaper>
-        </MudItem>
-        <MudItem xs="6" sm="4" md="2">
+        </div>
+        <div style="flex: 1 1 130px;">
             <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
                 <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-secondary);">@_stats.ReturnedCount</MudText>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Đã trả</MudText>
             </MudPaper>
-        </MudItem>
-    </MudGrid>
+        </div>
+        <div style="flex: 1 1 130px;">
+            <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-error);">@_stats.LostCount</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Thất thoát</MudText>
+            </MudPaper>
+        </div>
+    </div>
 
     @* ===== FILTER BAR ===== *@
     <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg">
@@ -75,6 +81,7 @@
                     <MudSelectItem T="int?" Value="2">Đã bán</MudSelectItem>
                     <MudSelectItem T="int?" Value="3">Hàng lỗi</MudSelectItem>
                     <MudSelectItem T="int?" Value="4">Đã trả lại</MudSelectItem>
+                    <MudSelectItem T="int?" Value="5">Thất thoát</MudSelectItem>
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="6" md="2">
@@ -258,6 +265,7 @@
         2 => Color.Info,
         3 => Color.Error,
         4 => Color.Secondary,
+        5 => Color.Error,
         _ => Color.Default
     };
 
@@ -268,6 +276,7 @@
         2 => "Đã bán",
         3 => "Hàng lỗi",
         4 => "Đã trả lại",
+        5 => "Thất thoát",
         _ => "?"
     };
 }

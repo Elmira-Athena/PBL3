@@ -1,4 +1,4 @@
-@page "/admin/service-tickets/{TicketId:int}/quotation"
+@page "/service-tickets/{TicketId:int}/quotation"
 @using Client.Services.ServiceTickets
 @using PBL3.Shared.DTOs.ServiceTickets
 @using Client.Shared.Components.ServiceTickets
@@ -138,7 +138,7 @@
         if (!result.Success)
         {
             Snackbar.Add(result.Message ?? "Lỗi tải phiếu.", Severity.Error);
-            NavManager.NavigateTo("/admin/service-tickets");
+            NavManager.NavigateTo("/service-tickets");
             return;
         }
         ticket = result.Data;
@@ -193,7 +193,7 @@
         if (result.Success)
         {
             Snackbar.Add("Tạo báo giá thành công.", Severity.Success);
-            NavManager.NavigateTo($"/admin/service-tickets/{TicketId}");
+            NavManager.NavigateTo($"/service-tickets/{TicketId}");
         }
         else
         {
@@ -201,7 +201,7 @@
         }
     }
 
-    private void GoBack() => NavManager.NavigateTo($"/admin/service-tickets/{TicketId}");
+    private void GoBack() => NavManager.NavigateTo($"/service-tickets/{TicketId}");
 
     public class QuotationItem
     {

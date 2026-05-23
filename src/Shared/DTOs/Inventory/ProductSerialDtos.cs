@@ -65,6 +65,7 @@ namespace PBL3.Shared.DTOs.Inventory
         public int SoldCount { get; set; }
         public int DefectiveCount { get; set; }
         public int ReturnedCount { get; set; }
+        public int LostCount { get; set; }
         public int? ProductId { get; set; }
         public int? VariantId { get; set; }
     }
