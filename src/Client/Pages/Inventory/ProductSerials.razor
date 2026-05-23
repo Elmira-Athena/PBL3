@@ -58,6 +58,12 @@
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Đã trả</MudText>
             </MudPaper>
         </MudItem>
+        <MudItem xs="6" sm="4" md="2">
+            <MudPaper Elevation="1" Class="pa-3 rounded-lg text-center">
+                <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-error);">@_stats.LostCount</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Thất thoát</MudText>
+            </MudPaper>
+        </MudItem>
     </MudGrid>
 
     @* ===== FILTER BAR ===== *@
@@ -75,6 +81,7 @@
                     <MudSelectItem T="int?" Value="2">Đã bán</MudSelectItem>
                     <MudSelectItem T="int?" Value="3">Hàng lỗi</MudSelectItem>
                     <MudSelectItem T="int?" Value="4">Đã trả lại</MudSelectItem>
+                    <MudSelectItem T="int?" Value="5">Thất thoát</MudSelectItem>
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="6" md="2">
@@ -258,6 +265,7 @@
         2 => Color.Info,
         3 => Color.Error,
         4 => Color.Secondary,
+        5 => Color.Error,
         _ => Color.Default
     };
 
@@ -268,6 +276,7 @@
         2 => "Đã bán",
         3 => "Hàng lỗi",
         4 => "Đã trả lại",
+        5 => "Thất thoát",
         _ => "?"
     };
 }

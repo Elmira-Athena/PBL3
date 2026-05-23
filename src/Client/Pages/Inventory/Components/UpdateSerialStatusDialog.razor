@@ -87,6 +87,7 @@
         0 or 1 => [(3, "Hàng lỗi")],
         3 => [(4, "Đã trả lại"), (0, "Trong kho")],
         4 => [(0, "Trong kho")],
+        5 => [(4, "Đã trả lại")],
         _ => []
     };
 
@@ -117,6 +118,7 @@
         2 => Color.Info,
         3 => Color.Error,
         4 => Color.Secondary,
+        5 => Color.Error,
         _ => Color.Default
     };
 
@@ -127,6 +129,7 @@
         2 => "Đã bán",
         3 => "Hàng lỗi",
         4 => "Đã trả lại",
+        5 => "Thất thoát",
         _ => "?"
     };
 }

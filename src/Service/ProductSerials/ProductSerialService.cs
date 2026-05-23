@@ -128,6 +128,7 @@ namespace PBL3.Service.ProductSerials
                 SoldCount = counts.GetValueOrDefault((byte)SerialStatus.Sold, 0),
                 DefectiveCount = counts.GetValueOrDefault((byte)SerialStatus.Defective, 0),
                 ReturnedCount = counts.GetValueOrDefault((byte)SerialStatus.Returned, 0),
+                LostCount = counts.GetValueOrDefault((byte)SerialStatus.Lost, 0),
                 ProductId = productId,
                 VariantId = variantId
             };
@@ -188,6 +189,7 @@ namespace PBL3.Service.ProductSerials
                 (SerialStatus.Defective, SerialStatus.Returned)  => true,
                 (SerialStatus.Defective, SerialStatus.Available) => true,
                 (SerialStatus.Returned,  SerialStatus.Available) => true,
+                (SerialStatus.Lost,      SerialStatus.Returned)  => true,
                 _ => false
             };
 
@@ -203,6 +205,7 @@ namespace PBL3.Service.ProductSerials
             2 => "Đã bán",
             3 => "Hàng lỗi",
             4 => "Đã trả lại",
+            5 => "Thất thoát",
             _ => "Không xác định"
         };
     }
