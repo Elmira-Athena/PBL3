@@ -1,4 +1,4 @@
-@page "/admin/service-invoices"
+@page "/service-invoices"
 @using Client.Services.ServiceTickets
 @using PBL3.Shared.DTOs.ServiceTickets
 @using MudBlazor
@@ -25,7 +25,7 @@
                       Label="Tìm Mã Hóa Đơn (Enter để tìm)"
                       Variant="Variant.Outlined"
                       Margin="Margin.Dense"
-                      Style="max-width: 250px;"
+                      Style="max-width: 300px;"
                       Adornment="Adornment.End"
                       AdornmentIcon="@Icons.Material.Filled.Search"
                       Immediate="true"
@@ -160,5 +160,5 @@
             table?.ReloadServerData();
     }
 
-    private void GoToDetail(int invoiceId) => NavManager.NavigateTo($"/admin/service-invoices/{invoiceId}");
+    private void GoToDetail(int invoiceId) => NavManager.NavigateTo($"/service-invoices/{invoiceId}");
 }

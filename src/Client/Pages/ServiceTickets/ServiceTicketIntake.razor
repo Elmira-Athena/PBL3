@@ -1,4 +1,4 @@
-@page "/admin/service-tickets/intake"
+@page "/service-tickets/intake"
 @using Client.Services.ServiceTickets
 @using PBL3.Shared.DTOs.ServiceTickets
 @using MudBlazor
@@ -34,7 +34,7 @@
                            StartIcon="@Icons.Material.Filled.Search" Class="flex-grow-1">
                     Kiểm Tra
                 </MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Default" Href="/admin/service-tickets">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Href="/service-tickets">
                     Hủy
                 </MudButton>
             </div>
@@ -185,6 +185,6 @@
         }
 
         Snackbar.Add("Tiếp nhận sản phẩm thành công!", Severity.Success);
-        NavManager.NavigateTo($"/admin/service-tickets/{result.Data?.Id}");
+        NavManager.NavigateTo($"/service-tickets/{result.Data?.Id}");
     }
 }

@@ -23,6 +23,7 @@
             }
         </MudAlert>
 
+
         <MudGrid Spacing="2">
             @if (IsInWarranty)
             {
@@ -66,18 +67,21 @@
                 </MudItem>
             }
 
-            <MudItem xs="12">
-                <MudButton Variant="@(SelectedResolution == 4 ? Variant.Filled : Variant.Outlined)"
-                           Color="Color.Primary" FullWidth="true"
-                           OnClick="@(() => SelectedResolution = 4)" Class="text-left">
-                    <div Class="w-100">
-                        <MudText Typo="Typo.body2" Class="fw-bold">Sửa Tính Phí</MudText>
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                            Khách tự trả tiền sửa chữa
-                        </MudText>
-                    </div>
-                </MudButton>
-            </MudItem>
+            @if (!IsInWarranty)
+            {
+                <MudItem xs="12">
+                    <MudButton Variant="@(SelectedResolution == 4 ? Variant.Filled : Variant.Outlined)"
+                               Color="Color.Primary" FullWidth="true"
+                               OnClick="@(() => SelectedResolution = 4)" Class="text-left">
+                        <div Class="w-100">
+                            <MudText Typo="Typo.body2" Class="fw-bold">Sửa Tính Phí</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Khách tự trả tiền sửa chữa
+                            </MudText>
+                        </div>
+                    </MudButton>
+                </MudItem>
+            }
         </MudGrid>
     </DialogContent>
     <DialogActions>

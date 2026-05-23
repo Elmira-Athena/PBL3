@@ -1,4 +1,4 @@
-@page "/admin/service-invoices/{Id:int}"
+@page "/service-invoices/{Id:int}"
 @using Client.Services.ServiceTickets
 @using PBL3.Shared.DTOs.ServiceTickets
 @using MudBlazor
@@ -138,7 +138,7 @@
         if (!result.Success)
         {
             Snackbar.Add(result.Message ?? "Lỗi tải hóa đơn.", Severity.Error);
-            NavManager.NavigateTo("/admin/service-invoices");
+            NavManager.NavigateTo("/service-invoices");
             return;
         }
         invoice = result.Data;
@@ -163,5 +163,5 @@
         Snackbar.Add("Tính năng in sẽ được thêm sau.", Severity.Info);
     }
 
-    private void GoBack() => NavManager.NavigateTo("/admin/service-invoices");
+    private void GoBack() => NavManager.NavigateTo("/service-invoices");
 }

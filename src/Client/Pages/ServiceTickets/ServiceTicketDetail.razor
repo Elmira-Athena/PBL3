@@ -1,4 +1,4 @@
-@page "/admin/service-tickets/{Id:int}"
+@page "/service-tickets/{Id:int}"
 @using Client.Services.ServiceTickets
 @using PBL3.Shared.DTOs.ServiceTickets
 @using Client.Shared.Components.ServiceTickets
@@ -26,7 +26,7 @@
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">Serial: @ticket.SerialNumber</MudText>
             </div>
             <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack"
-                       Href="/admin/service-tickets">
+                       Href="/service-tickets">
                 Quay Lại
             </MudButton>
         </MudPaper>
@@ -276,6 +276,10 @@
                                        OnClick="RecordDiagnosis" Size="Size.Small">
                                 Ghi Kết Luận
                             </MudButton>
+                        }
+
+                        @if (CanInteract && ticket.Status == 1 && (ticket.WasInWarrantyAtIntake || ticket.ResolutionType == 0))
+                        {
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                                        OnClick="ChooseBranch" Size="Size.Small">
                                 Chọn Loại Sửa
@@ -435,7 +439,7 @@
         if (!result.Success)
         {
             Snackbar.Add(result.Message ?? "Lỗi tải phiếu.", Severity.Error);
-            NavManager.NavigateTo("/admin/service-tickets");
+            NavManager.NavigateTo("/service-tickets");
             return;
         }
         ticket = result.Data;
@@ -530,7 +534,7 @@
 
     private async Task CreateQuotation()
     {
-        NavManager.NavigateTo($"/admin/service-tickets/{Id}/quotation");
+        NavManager.NavigateTo($"/service-tickets/{Id}/quotation");
     }
 
     private async Task CompleteRepair()

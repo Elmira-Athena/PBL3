@@ -1,4 +1,4 @@
-@page "/admin/service-tickets"
+@page "/service-tickets"
 @using Client.Services.ServiceTickets
 @using PBL3.Shared.DTOs.ServiceTickets
 @using Client.Shared.Components.ServiceTickets
@@ -30,7 +30,7 @@
                       Label="Tìm Serial / Mã phiếu (Enter để tìm)"
                       Variant="Variant.Outlined"
                       Margin="Margin.Dense"
-                      Style="max-width: 250px;"
+                      Style="max-width: 340px;"
                       Adornment="Adornment.End"
                       AdornmentIcon="@Icons.Material.Filled.Search"
                       Immediate="true"
@@ -161,6 +161,6 @@
             table?.ReloadServerData();
     }
 
-    private void GoToIntake() => NavManager.NavigateTo("/admin/service-tickets/intake");
-    private void GoToDetail(int ticketId) => NavManager.NavigateTo($"/admin/service-tickets/{ticketId}");
+    private void GoToIntake() => NavManager.NavigateTo("/service-tickets/intake");
+    private void GoToDetail(int ticketId) => NavManager.NavigateTo($"/service-tickets/{ticketId}");
 }
