@@ -38,7 +38,7 @@ else if (_customer != null)
                     <div>
                         <MudText Typo="Typo.h5" Style="font-weight: 600;">@_customer.FullName</MudText>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
-                            Tham gia @_customer.CreatedDate.ToString("dd/MM/yyyy")
+                            Tham gia @_customer.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")
                         </MudText>
                         @if (!_customer.IsActive)
                         {
@@ -80,7 +80,7 @@ else if (_customer != null)
                         </HeaderContent>
                         <RowTemplate Context="order">
                             <MudTd DataLabel="Đơn hàng">#@order.OrderCode</MudTd>
-                            <MudTd DataLabel="Ngày mua hàng">@order.OrderDate.ToString("dd/MM/yyyy")</MudTd>
+                            <MudTd DataLabel="Ngày mua hàng">@order.OrderDate.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                             <MudTd DataLabel="Tổng tiền">@order.TotalAmount.ToString("N0") đ</MudTd>
                             <MudTd DataLabel="Trạng thái">
                                 @GetOrderStatusMarkup(order.Status)

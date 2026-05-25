@@ -100,7 +100,7 @@
                 <MudText Typo="Typo.body2">@ServiceTicketStatusHelper.GetResolutionLabel(context.ResolutionType)</MudText>
             </MudTd>
             <MudTd DataLabel="Ngày Tiếp Nhận">
-                <MudText Typo="Typo.body2">@context.IntakeDate.ToString("dd/MM/yyyy")</MudText>
+                <MudText Typo="Typo.body2">@context.IntakeDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
             </MudTd>
             <MudTd DataLabel="Hành động" Style="text-align: right;">
                 <MudTooltip Text="Xem chi tiết">

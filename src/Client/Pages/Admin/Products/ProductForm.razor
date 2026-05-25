@@ -287,7 +287,7 @@
                                 <strong>ID:</strong> @_editDetail.Id
                             </MudText>
                             <MudText Typo="Typo.body2" Class="mb-1">
-                                <strong>Ngày tạo:</strong> @_editDetail.CreatedDate.ToString("dd/MM/yyyy HH:mm")
+                                <strong>Ngày tạo:</strong> @_editDetail.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
                             </MudText>
                             <MudText Typo="Typo.body2">
                                 <strong>Số biến thể:</strong> @_editDetail.Variants.Count

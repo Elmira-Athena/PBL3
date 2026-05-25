@@ -110,7 +110,7 @@
                                     <MudText Typo="Typo.subtitle2" Class="fw-bold">@review.UserFullName</MudText>
                                     <div class="d-flex align-center gap-1">
                                         <MudText Typo="Typo.caption" Class="text-muted">
-                                            @review.CreatedDate.ToString("dd/MM/yyyy")
+                                            @review.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")
                                         </MudText>
                                         @if (review.UserId == _currentUserId)
                                         {

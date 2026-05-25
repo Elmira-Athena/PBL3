@@ -53,7 +53,7 @@
                 <MudText Typo="Typo.body2" Style="font-weight: 500; font-family: monospace;">@context.OrderCode</MudText>
             </MudTd>
             <MudTd DataLabel="Ngày đặt">
-                <MudText Typo="Typo.body2">@context.CreatedDate.ToString("dd/MM/yyyy")</MudText>
+                <MudText Typo="Typo.body2">@context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
             </MudTd>
             <MudTd DataLabel="Tổng tiền">
                 <MudText Typo="Typo.body2">@context.TotalAmount.ToString("N0") ₫</MudText>

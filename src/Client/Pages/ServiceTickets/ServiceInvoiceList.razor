@@ -82,7 +82,7 @@
                 <MudText Typo="Typo.body2">#@context.TicketId</MudText>
             </MudTd>
             <MudTd DataLabel="Ngày Phát Hành">
-                <MudText Typo="Typo.body2">@context.IssuedDate.ToString("dd/MM/yyyy")</MudText>
+                <MudText Typo="Typo.body2">@context.IssuedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
             </MudTd>
             <MudTd DataLabel="Tổng Tiền" Align="Align.Right">
                 <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.GrandTotal.ToString("N0") đ</MudText>

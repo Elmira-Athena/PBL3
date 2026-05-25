@@ -89,7 +89,7 @@
         </MudTd>
         <MudTd DataLabel="Số điện thoại">@context.PhoneNumber</MudTd>
         <MudTd DataLabel="Email">@context.Email</MudTd>
-        <MudTd DataLabel="Tham gia">@context.CreatedDate.ToString("dd/MM/yyyy")</MudTd>
+        <MudTd DataLabel="Tham gia">@context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
         <MudTd DataLabel="Trạng thái">
             @if (context.IsActive)
             {

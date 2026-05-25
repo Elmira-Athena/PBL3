@@ -40,7 +40,7 @@ else if (_employee != null)
                     <div>
                         <MudText Typo="Typo.h5" Style="font-weight: 600;">@_employee.FullName</MudText>
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
-                            Tham gia @_employee.CreatedDate.ToString("dd/MM/yyyy")
+                            Tham gia @_employee.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")
                         </MudText>
                         <div class="d-flex gap-2 mt-2">
                             @if (_employee.IsTechnician)

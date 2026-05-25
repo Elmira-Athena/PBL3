@@ -44,7 +44,7 @@
                                 </MudItem>
                                 <MudItem xs="12" sm="6">
                                     <MudText Typo="Typo.body2"><strong>Ngày Tiếp Nhận:</strong></MudText>
-                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.IntakeDate.ToString("dd/MM/yyyy HH:mm")</MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.IntakeDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
                                 </MudItem>
                                 <MudItem xs="12" sm="6">
                                     <MudText Typo="Typo.body2"><strong>Khách Hàng:</strong></MudText>
@@ -107,7 +107,7 @@
                                     <MudPaper Class="pa-3 mb-3" Elevation="1" Outlined="false">
                                         <MudGrid Spacing="2">
                                             <MudItem xs="12">
-                                                <MudText><strong>Ngày Tạo:</strong> @quotation.IssuedDate.ToString("dd/MM/yyyy")</MudText>
+                                                <MudText><strong>Ngày Tạo:</strong> @quotation.IssuedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
                                             </MudItem>
                                             <MudItem xs="12">
                                                 <MudTable Items="@quotation.Items" Dense="true" Hover="true">
@@ -160,12 +160,12 @@
                                         <MudText><strong>Mã Vận Đơn:</strong> @ticket.RmaShipment.TrackingCode</MudText>
                                     </MudItem>
                                     <MudItem xs="12">
-                                        <MudText><strong>Ngày Gửi:</strong> @ticket.RmaShipment.ShippedDate?.ToString("dd/MM/yyyy")</MudText>
+                                        <MudText><strong>Ngày Gửi:</strong> @ticket.RmaShipment.ShippedDate?.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
                                     </MudItem>
                                     @if (ticket.RmaShipment.ReceivedBackDate.HasValue)
                                     {
                                         <MudItem xs="12">
-                                            <MudText><strong>Ngày Nhận Lại:</strong> @ticket.RmaShipment.ReceivedBackDate.Value.ToString("dd/MM/yyyy")</MudText>
+                                            <MudText><strong>Ngày Nhận Lại:</strong> @ticket.RmaShipment.ReceivedBackDate.Value.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
                                         </MudItem>
                                         <MudItem xs="12">
                                             <MudText><strong>Kết Quả Từ Hãng:</strong> @ServiceTicketStatusHelper.GetManufacturerResolutionLabel(ticket.RmaShipment.ManufacturerResolution)</MudText>
@@ -394,7 +394,7 @@
                                     <strong>@ServiceTicketStatusHelper.GetLabel(history.ToStatus)</strong>
                                 </MudText>
                                 <MudText Typo="Typo.caption" Style="color: white; opacity: 0.8;">
-                                    @history.ChangedAt.ToString("HH:mm dd/MM/yyyy")
+                                    @history.ChangedAt.ToLocalTime().ToString("HH:mm dd/MM/yyyy")
                                 </MudText>
                             </MudTimelineItem>
                         }

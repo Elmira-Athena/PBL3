@@ -84,7 +84,7 @@
                         </div>
                     </MudTd>
                     <MudTd DataLabel="SĐT">@context.CustomerPhone</MudTd>
-                    <MudTd DataLabel="Ngày tạo">@context.CreatedDate.ToString("dd/MM/yyyy HH:mm")</MudTd>
+                    <MudTd DataLabel="Ngày tạo">@context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
                     <MudTd DataLabel="Tổng tiền">
                         <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.TotalAmount.ToString("N0") đ</MudText>
                     </MudTd>
@@ -187,7 +187,7 @@
                         </div>
                     </MudTd>
                     <MudTd DataLabel="SĐT">@context.CustomerPhone</MudTd>
-                    <MudTd DataLabel="Ngày xuất">@context.CreatedDate.ToString("dd/MM/yyyy HH:mm")</MudTd>
+                    <MudTd DataLabel="Ngày xuất">@context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
                     <MudTd DataLabel="Tổng tiền">
                         <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.TotalAmount.ToString("N0") đ</MudText>
                     </MudTd>
