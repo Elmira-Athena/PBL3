@@ -23,34 +23,37 @@
 
         @* ===== TAB 1: ĐƠN CHỜ XUẤT ===== *@
         <MudTabPanel Text="Đơn chờ xuất" Icon="@Icons.Material.Outlined.PendingActions">
-            <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
-                <MudTextField @bind-Value="_pendingFilter.Keyword"
-                              Label="Tìm theo SĐT / Mã đơn (Enter để tìm)"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense"
-                              Style="max-width: 340px;"
-                              Adornment="Adornment.End"
-                              AdornmentIcon="@Icons.Material.Filled.Search"
-                              Immediate="true"
-                              OnKeyUp="PendingSearchOnEnter" />
-
-                <MudDatePicker Date="_pendingFilter.FromDate"
-                               DateChanged="@((DateTime? d) => { _pendingFilter.FromDate = d; _pendingTable?.ReloadServerData(); })"
-                               Label="Từ ngày"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               DateFormat="dd/MM/yyyy"
-                               Clearable="true"
-                               Style="max-width: 160px;" />
-
-                <MudDatePicker Date="_pendingFilter.ToDate"
-                               DateChanged="@((DateTime? d) => { _pendingFilter.ToDate = d; _pendingTable?.ReloadServerData(); })"
-                               Label="Đến ngày"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               DateFormat="dd/MM/yyyy"
-                               Clearable="true"
-                               Style="max-width: 160px;" />
+            <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg">
+                <MudGrid>
+                    <MudItem xs="12" sm="6" md="6">
+                        <MudTextField @bind-Value="_pendingFilter.Keyword"
+                                      Label="Tìm theo SĐT / Mã đơn (Enter để tìm)"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true"
+                                      OnKeyUp="PendingSearchOnEnter" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudDatePicker Date="_pendingFilter.FromDate"
+                                       DateChanged="@((DateTime? d) => { _pendingFilter.FromDate = d; _pendingTable?.ReloadServerData(); })"
+                                       Label="Từ ngày"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       DateFormat="dd/MM/yyyy"
+                                       Clearable="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudDatePicker Date="_pendingFilter.ToDate"
+                                       DateChanged="@((DateTime? d) => { _pendingFilter.ToDate = d; _pendingTable?.ReloadServerData(); })"
+                                       Label="Đến ngày"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       DateFormat="dd/MM/yyyy"
+                                       Clearable="true" />
+                    </MudItem>
+                </MudGrid>
             </MudPaper>
 
             <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<OrderSummaryResponse>>>(PendingServerReload))"
@@ -115,47 +118,50 @@
 
         @* ===== TAB 2: LỊCH SỬ XUẤT KHO ===== *@
         <MudTabPanel Text="Lịch sử xuất kho" Icon="@Icons.Material.Outlined.History">
-            <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
-                <MudTextField @bind-Value="_historyFilter.Keyword"
-                              Label="Tìm theo SĐT / Mã đơn (Enter để tìm)"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense"
-                              Style="max-width: 340px;"
-                              Adornment="Adornment.End"
-                              AdornmentIcon="@Icons.Material.Filled.Search"
-                              Immediate="true"
-                              OnKeyUp="HistorySearchOnEnter" />
-
-                <MudDatePicker Date="_historyFilter.FromDate"
-                               DateChanged="@((DateTime? d) => { _historyFilter.FromDate = d; _historyTable?.ReloadServerData(); })"
-                               Label="Từ ngày"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               DateFormat="dd/MM/yyyy"
-                               Clearable="true"
-                               Style="max-width: 160px;" />
-
-                <MudDatePicker Date="_historyFilter.ToDate"
-                               DateChanged="@((DateTime? d) => { _historyFilter.ToDate = d; _historyTable?.ReloadServerData(); })"
-                               Label="Đến ngày"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               DateFormat="dd/MM/yyyy"
-                               Clearable="true"
-                               Style="max-width: 160px;" />
-
-                <MudSelect T="string"
-                           Value="_historyStatusKey"
-                           ValueChanged="OnHistoryStatusChanged"
-                           Label="Trạng thái"
-                           Variant="Variant.Outlined"
-                           Margin="Margin.Dense"
-                           Style="max-width: 200px;"
-                           AnchorOrigin="Origin.BottomCenter">
-                    <MudSelectItem T="string" Value="@("all")">Tất cả</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("exported")">Đã xuất kho</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("success")">Thành công</MudSelectItem>
-                </MudSelect>
+            <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg">
+                <MudGrid>
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudTextField @bind-Value="_historyFilter.Keyword"
+                                      Label="Tìm theo SĐT / Mã đơn (Enter để tìm)"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Immediate="true"
+                                      OnKeyUp="HistorySearchOnEnter" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudSelect T="string"
+                                   Value="_historyStatusKey"
+                                   ValueChanged="OnHistoryStatusChanged"
+                                   Label="Trạng thái"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"
+                                   AnchorOrigin="Origin.BottomCenter">
+                            <MudSelectItem T="string" Value="@("all")">Tất cả</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("exported")">Đã xuất kho</MudSelectItem>
+                            <MudSelectItem T="string" Value="@("success")">Thành công</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudDatePicker Date="_historyFilter.FromDate"
+                                       DateChanged="@((DateTime? d) => { _historyFilter.FromDate = d; _historyTable?.ReloadServerData(); })"
+                                       Label="Từ ngày"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       DateFormat="dd/MM/yyyy"
+                                       Clearable="true" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="2">
+                        <MudDatePicker Date="_historyFilter.ToDate"
+                                       DateChanged="@((DateTime? d) => { _historyFilter.ToDate = d; _historyTable?.ReloadServerData(); })"
+                                       Label="Đến ngày"
+                                       Variant="Variant.Outlined"
+                                       Margin="Margin.Dense"
+                                       DateFormat="dd/MM/yyyy"
+                                       Clearable="true" />
+                    </MudItem>
+                </MudGrid>
             </MudPaper>
 
             <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<OrderSummaryResponse>>>(HistoryServerReload))"

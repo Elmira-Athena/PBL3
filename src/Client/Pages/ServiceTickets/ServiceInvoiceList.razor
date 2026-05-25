@@ -20,47 +20,50 @@
         </div>
     </MudPaper>
 
-    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
-        <MudTextField @bind-Value="keyword"
-                      Label="Tìm Mã Hóa Đơn (Enter để tìm)"
-                      Variant="Variant.Outlined"
-                      Margin="Margin.Dense"
-                      Style="max-width: 300px;"
-                      Adornment="Adornment.End"
-                      AdornmentIcon="@Icons.Material.Filled.Search"
-                      Immediate="true"
-                      OnKeyUp="SearchOnEnter" />
-
-        <MudSelect T="byte?"
-                   Value="paymentStatusFilter"
-                   ValueChanged="@((byte? v) => { paymentStatusFilter = v; table?.ReloadServerData(); })"
-                   Label="Trạng thái thanh toán"
-                   Clearable="true"
-                   Variant="Variant.Outlined"
-                   Margin="Margin.Dense"
-                   Style="max-width: 200px;">
-            <MudSelectItem T="byte?" Value="@null">Tất cả</MudSelectItem>
-            <MudSelectItem T="byte?" Value="0">Chưa Thanh Toán</MudSelectItem>
-            <MudSelectItem T="byte?" Value="1">Đã Thanh Toán</MudSelectItem>
-        </MudSelect>
-
-        <MudDatePicker Date="fromDate"
-                       DateChanged="@((DateTime? d) => { fromDate = d; table?.ReloadServerData(); })"
-                       Label="Từ ngày"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       DateFormat="dd/MM/yyyy"
-                       Clearable="true"
-                       Style="max-width: 155px;" />
-
-        <MudDatePicker Date="toDate"
-                       DateChanged="@((DateTime? d) => { toDate = d; table?.ReloadServerData(); })"
-                       Label="Đến ngày"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       DateFormat="dd/MM/yyyy"
-                       Clearable="true"
-                       Style="max-width: 155px;" />
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="keyword"
+                              Label="Tìm Mã Hóa Đơn (Enter để tìm)"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true"
+                              OnKeyUp="SearchOnEnter" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudSelect T="byte?"
+                           Value="paymentStatusFilter"
+                           ValueChanged="@((byte? v) => { paymentStatusFilter = v; table?.ReloadServerData(); })"
+                           Label="Trạng thái thanh toán"
+                           Clearable="true"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense">
+                    <MudSelectItem T="byte?" Value="@null">Tất cả</MudSelectItem>
+                    <MudSelectItem T="byte?" Value="0">Chưa Thanh Toán</MudSelectItem>
+                    <MudSelectItem T="byte?" Value="1">Đã Thanh Toán</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker Date="fromDate"
+                               DateChanged="@((DateTime? d) => { fromDate = d; table?.ReloadServerData(); })"
+                               Label="Từ ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker Date="toDate"
+                               DateChanged="@((DateTime? d) => { toDate = d; table?.ReloadServerData(); })"
+                               Label="Đến ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true" />
+            </MudItem>
+        </MudGrid>
     </MudPaper>
 
     <MudTable T="ServiceInvoiceListDto" ServerData="ServerReload"
