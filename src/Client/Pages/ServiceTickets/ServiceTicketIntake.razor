@@ -72,7 +72,7 @@
                     </MudItem>
                     <MudItem xs="12">
                         <MudText Typo="Typo.body2">
-                            <strong>Ngày Bán:</strong> @evaluation.SoldDate?.ToString("dd/MM/yyyy")
+                            <strong>Ngày Bán:</strong> @evaluation.SoldDate?.ToLocalTime().ToString("dd/MM/yyyy")
                         </MudText>
                     </MudItem>
                     <MudItem xs="12">

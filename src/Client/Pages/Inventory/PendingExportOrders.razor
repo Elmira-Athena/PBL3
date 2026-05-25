@@ -13,35 +13,38 @@
         </MudText>
     </MudPaper>
 
-    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
-        <MudTextField Value="_filter.Keyword"
-                      ValueChanged="@((string s) => { _filter.Keyword = s; _table?.ReloadServerData(); })"
-                      Label="Tìm theo SĐT / Mã đơn"
-                      Variant="Variant.Outlined"
-                      Margin="Margin.Dense"
-                      Style="max-width: 260px;"
-                      Adornment="Adornment.End"
-                      AdornmentIcon="@Icons.Material.Filled.Search"
-                      DebounceInterval="400"
-                      Immediate="true" />
-
-        <MudDatePicker Date="_filter.FromDate"
-                       DateChanged="@((DateTime? d) => { _filter.FromDate = d; _table?.ReloadServerData(); })"
-                       Label="Từ ngày"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       DateFormat="dd/MM/yyyy"
-                       Clearable="true"
-                       Style="max-width: 160px;" />
-
-        <MudDatePicker Date="_filter.ToDate"
-                       DateChanged="@((DateTime? d) => { _filter.ToDate = d; _table?.ReloadServerData(); })"
-                       Label="Đến ngày"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       DateFormat="dd/MM/yyyy"
-                       Clearable="true"
-                       Style="max-width: 160px;" />
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="6">
+                <MudTextField Value="_filter.Keyword"
+                              ValueChanged="@((string s) => { _filter.Keyword = s; _table?.ReloadServerData(); })"
+                              Label="Tìm theo SĐT / Mã đơn"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              DebounceInterval="400"
+                              Immediate="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker Date="_filter.FromDate"
+                               DateChanged="@((DateTime? d) => { _filter.FromDate = d; _table?.ReloadServerData(); })"
+                               Label="Từ ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker Date="_filter.ToDate"
+                               DateChanged="@((DateTime? d) => { _filter.ToDate = d; _table?.ReloadServerData(); })"
+                               Label="Đến ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true" />
+            </MudItem>
+        </MudGrid>
     </MudPaper>
 
     <MudTable ServerData="@(new Func<TableState, CancellationToken, Task<TableData<OrderSummaryResponse>>>(ServerReload))"
@@ -68,7 +71,7 @@
                 </div>
             </MudTd>
             <MudTd DataLabel="SĐT">@context.CustomerPhone</MudTd>
-            <MudTd DataLabel="Ngày tạo">@context.CreatedDate.ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Ngày tạo">@context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
             <MudTd DataLabel="Tổng tiền">
                 <MudText Typo="Typo.body2" Style="font-weight: 600;">@context.TotalAmount.ToString("N0") đ</MudText>
             </MudTd>

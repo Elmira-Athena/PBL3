@@ -25,50 +25,53 @@
         </MudButton>
     </MudPaper>
 
-    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-3 align-center">
-        <MudTextField @bind-Value="keyword"
-                      Label="Tìm Serial / Mã phiếu (Enter để tìm)"
-                      Variant="Variant.Outlined"
-                      Margin="Margin.Dense"
-                      Style="max-width: 340px;"
-                      Adornment="Adornment.End"
-                      AdornmentIcon="@Icons.Material.Filled.Search"
-                      Immediate="true"
-                      OnKeyUp="SearchOnEnter" />
-
-        <MudSelect T="byte?"
-                   Value="statusFilter"
-                   ValueChanged="@((byte? v) => { statusFilter = v; table?.ReloadServerData(); })"
-                   Label="Trạng thái"
-                   Clearable="true"
-                   Variant="Variant.Outlined"
-                   Margin="Margin.Dense"
-                   Style="max-width: 190px;">
-            <MudSelectItem T="byte?" Value="@null">Tất cả</MudSelectItem>
-            <MudSelectItem T="byte?" Value="0">Đã tiếp nhận</MudSelectItem>
-            <MudSelectItem T="byte?" Value="1">Đang chẩn đoán</MudSelectItem>
-            <MudSelectItem T="byte?" Value="2">Đã gửi báo giá</MudSelectItem>
-            <MudSelectItem T="byte?" Value="5">Đang sửa chữa</MudSelectItem>
-            <MudSelectItem T="byte?" Value="9">Hoàn tất</MudSelectItem>
-        </MudSelect>
-
-        <MudDatePicker Date="fromDate"
-                       DateChanged="@((DateTime? d) => { fromDate = d; table?.ReloadServerData(); })"
-                       Label="Từ ngày"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       DateFormat="dd/MM/yyyy"
-                       Clearable="true"
-                       Style="max-width: 155px;" />
-
-        <MudDatePicker Date="toDate"
-                       DateChanged="@((DateTime? d) => { toDate = d; table?.ReloadServerData(); })"
-                       Label="Đến ngày"
-                       Variant="Variant.Outlined"
-                       Margin="Margin.Dense"
-                       DateFormat="dd/MM/yyyy"
-                       Clearable="true"
-                       Style="max-width: 155px;" />
+    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg">
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="keyword"
+                              Label="Tìm Serial / Mã phiếu (Enter để tìm)"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true"
+                              OnKeyUp="SearchOnEnter" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudSelect T="byte?"
+                           Value="statusFilter"
+                           ValueChanged="@((byte? v) => { statusFilter = v; table?.ReloadServerData(); })"
+                           Label="Trạng thái"
+                           Clearable="true"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense">
+                    <MudSelectItem T="byte?" Value="@null">Tất cả</MudSelectItem>
+                    <MudSelectItem T="byte?" Value="0">Đã tiếp nhận</MudSelectItem>
+                    <MudSelectItem T="byte?" Value="1">Đang chẩn đoán</MudSelectItem>
+                    <MudSelectItem T="byte?" Value="2">Đã gửi báo giá</MudSelectItem>
+                    <MudSelectItem T="byte?" Value="5">Đang sửa chữa</MudSelectItem>
+                    <MudSelectItem T="byte?" Value="9">Hoàn tất</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker Date="fromDate"
+                               DateChanged="@((DateTime? d) => { fromDate = d; table?.ReloadServerData(); })"
+                               Label="Từ ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudDatePicker Date="toDate"
+                               DateChanged="@((DateTime? d) => { toDate = d; table?.ReloadServerData(); })"
+                               Label="Đến ngày"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               DateFormat="dd/MM/yyyy"
+                               Clearable="true" />
+            </MudItem>
+        </MudGrid>
     </MudPaper>
 
     <MudTable T="ServiceTicketListDto" ServerData="ServerReload"
@@ -100,7 +103,7 @@
                 <MudText Typo="Typo.body2">@ServiceTicketStatusHelper.GetResolutionLabel(context.ResolutionType)</MudText>
             </MudTd>
             <MudTd DataLabel="Ngày Tiếp Nhận">
-                <MudText Typo="Typo.body2">@context.IntakeDate.ToString("dd/MM/yyyy")</MudText>
+                <MudText Typo="Typo.body2">@context.IntakeDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
             </MudTd>
             <MudTd DataLabel="Hành động" Style="text-align: right;">
                 <MudTooltip Text="Xem chi tiết">

@@ -138,7 +138,8 @@
                         <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Style="text-transform: none;" OnClick="AddNewCustomer">Khách mới</MudButton>
                     </div>
 
-                    <MudTextField @bind-Value="_customer.PhoneNumber" Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4"
+                    <MudTextField T="string" Value="@_customer.PhoneNumber" ValueChanged="@OnPhoneNumberChanged"
+                                  Label="Số điện thoại" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4"
                                   Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search" OnAdornmentClick="SearchCustomer"
                                   placeholder="Nhập SĐT khách..." />
 
@@ -312,6 +313,11 @@
         _discountAmount = 0;
         _availableVouchers = new();
         Snackbar.Add("Gỡ sản phẩm thành công", Severity.Info);
+    }
+
+    private void OnPhoneNumberChanged(string value)
+    {
+        _customer = new PosCustomerDto { PhoneNumber = value ?? string.Empty };
     }
 
     private async Task SearchCustomer()

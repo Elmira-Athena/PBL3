@@ -72,7 +72,7 @@
                         </div>
                         <div>
                             <MudText Typo="Typo.subtitle2" Style="font-weight: 600;">Ngày đặt</MudText>
-                            <MudText Typo="Typo.body2">@_order.OrderDate.ToString("dd/MM/yyyy HH:mm")</MudText>
+                            <MudText Typo="Typo.body2">@_order.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
                         </div>
                         <div>
                             <MudText Typo="Typo.subtitle2" Style="font-weight: 600;">Loại đơn</MudText>

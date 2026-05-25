@@ -36,7 +36,7 @@
                 <RowTemplate>
                     <MudTd DataLabel="Serial">@context.SerialNumber</MudTd>
                     <MudTd DataLabel="Sản Phẩm">@context.ProductName</MudTd>
-                    <MudTd DataLabel="Ngày Nhập">@context.CreatedDate.ToString("dd/MM/yyyy")</MudTd>
+                    <MudTd DataLabel="Ngày Nhập">@context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudTd>
                     <MudTd DataLabel="Tình Trạng">Sẵn sàng</MudTd>
                     <MudTd Style="text-align: center;">
                         <MudIconButton Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small"

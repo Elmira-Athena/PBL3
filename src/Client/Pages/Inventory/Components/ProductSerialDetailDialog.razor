@@ -27,13 +27,13 @@
                     </div>
                     <div class="d-flex justify-space-between mb-2">
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">Ngày nhập:</MudText>
-                        <MudText Typo="Typo.body2">@_dto.CreatedDate.ToString("dd/MM/yyyy HH:mm")</MudText>
+                        <MudText Typo="Typo.body2">@_dto.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
                     </div>
                     @if (_dto.SoldDate.HasValue)
                     {
                         <div class="d-flex justify-space-between">
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Ngày bán:</MudText>
-                            <MudText Typo="Typo.body2">@_dto.SoldDate.Value.ToString("dd/MM/yyyy HH:mm")</MudText>
+                            <MudText Typo="Typo.body2">@_dto.SoldDate.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
                         </div>
                     }
                 </MudItem>
@@ -91,7 +91,7 @@
                         </div>
                         <div class="d-flex justify-space-between mb-2">
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Ngày đặt:</MudText>
-                            <MudText Typo="Typo.body2">@_dto.OrderDate?.ToString("dd/MM/yyyy HH:mm")</MudText>
+                            <MudText Typo="Typo.body2">@_dto.OrderDate?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
                         </div>
                         <div class="d-flex justify-space-between">
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Trạng thái:</MudText>

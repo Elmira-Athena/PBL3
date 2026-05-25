@@ -29,7 +29,7 @@
                 <MudText Typo="Typo.h6" Class="fw-bold">HÓA ĐƠN DỊCH VỤ</MudText>
                 <MudText Typo="Typo.body1" Class="fw-bold mt-2">@invoice.InvoiceCode</MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
-                    Phát hành: @invoice.IssuedDate.ToString("dd/MM/yyyy")
+                    Phát hành: @invoice.IssuedDate.ToLocalTime().ToString("dd/MM/yyyy")
                 </MudText>
             </div>
 

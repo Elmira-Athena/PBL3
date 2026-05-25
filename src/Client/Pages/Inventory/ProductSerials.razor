@@ -129,7 +129,7 @@
                     <MudText Typo="Typo.body2">@context.ReceiptCode</MudText>
                 </MudTd>
                 <MudTd DataLabel="Ngày nhập">
-                    <MudText Typo="Typo.body2">@context.CreatedDate.ToString("dd/MM/yyyy")</MudText>
+                    <MudText Typo="Typo.body2">@context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
                 </MudTd>
                 <MudTd DataLabel="Trạng thái">
                     <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)" Variant="Variant.Filled">
