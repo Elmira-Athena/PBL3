@@ -95,34 +95,6 @@ namespace Client.Services.Product
             }
         }
 
-        public async Task<ApiResult<ProductVariantDto>> AddVariantAsync(int productId, SaveVariantRequest request)
-        {
-            try
-            {
-                var response = await _httpClient.PostAsJsonAsync($"{BaseUrl}/{productId}/variants", request);
-                var result = await response.Content.ReadFromJsonAsync<ApiResult<ProductVariantDto>>();
-                return result ?? ApiResult<ProductVariantDto>.Fail("Không thể lưu biến thể.");
-            }
-            catch (Exception ex)
-            {
-                return ApiResult<ProductVariantDto>.Fail($"Lỗi kết nối: {ex.Message}");
-            }
-        }
-
-        public async Task<ApiResult<bool>> UpdateProductImagesAsync(int productId, List<SaveImageRequest> images)
-        {
-            try
-            {
-                var response = await _httpClient.PutAsJsonAsync($"{BaseUrl}/{productId}/images", images);
-                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
-                return result ?? ApiResult<bool>.Fail("Không thể cập nhật ảnh sản phẩm.");
-            }
-            catch (Exception ex)
-            {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
-            }
-        }
-
         public async Task<ApiResult<bool>> DeleteAsync(int id)
         {
             try
@@ -130,6 +102,94 @@ namespace Client.Services.Product
                 var response = await _httpClient.DeleteAsync($"{BaseUrl}/{id}");
                 var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
                 return result ?? ApiResult<bool>.Fail("Không thể xóa sản phẩm.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
+        // ============= VARIANT ENDPOINTS =============
+
+        public async Task<ApiResult<ProductVariantDto>> GetVariantAsync(int variantId)
+        {
+            try
+            {
+                var result = await _httpClient
+                    .GetFromJsonAsync<ApiResult<ProductVariantDto>>($"{BaseUrl}/variants/{variantId}");
+                return result ?? ApiResult<ProductVariantDto>.Fail("Không tìm thấy phiên bản.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<ProductVariantDto>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResult<ProductVariantDto>> CreateVariantAsync(int productId, SaveVariantRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync($"{BaseUrl}/{productId}/variants", request);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<ProductVariantDto>>();
+                return result ?? ApiResult<ProductVariantDto>.Fail("Không thể tạo phiên bản.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<ProductVariantDto>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResult<ProductVariantDto>> UpdateVariantAsync(int variantId, UpdateVariantRequest request)
+        {
+            try
+            {
+                var response = await _httpClient.PutAsJsonAsync($"{BaseUrl}/variants/{variantId}", request);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<ProductVariantDto>>();
+                return result ?? ApiResult<ProductVariantDto>.Fail("Không thể cập nhật phiên bản.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<ProductVariantDto>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResult<bool>> UpdateVariantImagesAsync(int variantId, List<SaveImageRequest> images)
+        {
+            try
+            {
+                var body = new SaveVariantImagesRequest { Images = images };
+                var response = await _httpClient.PutAsJsonAsync($"{BaseUrl}/variants/{variantId}/images", body);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+                return result ?? ApiResult<bool>.Fail("Không thể cập nhật ảnh phiên bản.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResult<bool>> UpdateVariantSpecificationsAsync(int variantId, Dictionary<string, string> specifications)
+        {
+            try
+            {
+                var body = new SaveVariantSpecificationsRequest { Specifications = specifications };
+                var response = await _httpClient.PutAsJsonAsync($"{BaseUrl}/variants/{variantId}/specifications", body);
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+                return result ?? ApiResult<bool>.Fail("Không thể cập nhật thông số kỹ thuật.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+            }
+        }
+
+        public async Task<ApiResult<bool>> DeleteVariantAsync(int variantId)
+        {
+            try
+            {
+                var response = await _httpClient.DeleteAsync($"{BaseUrl}/variants/{variantId}");
+                var result = await response.Content.ReadFromJsonAsync<ApiResult<bool>>();
+                return result ?? ApiResult<bool>.Fail("Không thể xoá phiên bản.");
             }
             catch (Exception ex)
             {

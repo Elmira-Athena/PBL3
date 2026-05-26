@@ -53,7 +53,8 @@
                         <MudTd>
                             <div class="d-flex align-center">
                                 <div class="rounded-lg mr-4 pa-1" style="background: white; border: 1px solid #eee;">
-                                    <MudImage Src="https://via.placeholder.com/60" Width="64" Height="64" Alt="@context.ProductName" Class="rounded-lg" />
+                                    <MudImage Src="@(string.IsNullOrWhiteSpace(context.ThumbnailUrl) ? "https://placehold.co/60x60?text=No+Image" : context.ThumbnailUrl)"
+                                              Width="64" Height="64" Alt="@context.ProductName" Class="rounded-lg" ObjectFit="ObjectFit.Cover" />
                                 </div>
                                 <MudText Style="font-weight: 600;">@context.ProductName</MudText>
                             </div>

@@ -44,20 +44,32 @@
     {
         <!-- Main Info -->
         <MudGrid Class="mb-10">
-            <!-- Left: Gallery -->
+            <!-- Left: Gallery (đổi theo variant) -->
             <MudItem xs="12" md="5">
                 <MudCard Elevation="0" Class="rounded-lg overflow-hidden border mb-3 p-2">
-                    <MudImage Src="@_mainImage" Alt="@_product.Name" ObjectFit="ObjectFit.Contain" Style="width: 100%; height: 400px;" />
-                </MudCard>
-                <div class="d-flex flex-row overflow-x-auto gap-2 py-2">
-                    @foreach (var img in _product.Images)
+                    @if (!string.IsNullOrWhiteSpace(_mainImage))
                     {
-                        var isSelected = _mainImage == img;
-                        <MudImage Src="@img" Alt="Thumbnail" ObjectFit="ObjectFit.Cover" Width="80" Height="80" 
-                                  Class="@($"rounded cursor-pointer border {(isSelected ? "border-primary border-2" : "")}")" 
-                                  @onclick="@(() => ChangeMainImage(img))" />
+                        <MudImage Src="@_mainImage" Alt="@_product.Name" ObjectFit="ObjectFit.Contain" Style="width: 100%; height: 400px;" />
                     }
-                </div>
+                    else
+                    {
+                        <div class="d-flex align-center justify-center" style="width: 100%; height: 400px; background: var(--mud-palette-background-grey);">
+                            <MudIcon Icon="@Icons.Material.Filled.ImageNotSupported" Style="font-size: 64px; color: var(--mud-palette-text-disabled);" />
+                        </div>
+                    }
+                </MudCard>
+                @if (_currentVariantImages.Count > 0)
+                {
+                    <div class="d-flex flex-row overflow-x-auto gap-2 py-2">
+                        @foreach (var img in _currentVariantImages)
+                        {
+                            var isSelected = _mainImage == img;
+                            <MudImage Src="@img" Alt="Thumbnail" ObjectFit="ObjectFit.Cover" Width="80" Height="80"
+                                      Class="@($"rounded cursor-pointer border {(isSelected ? "border-primary border-2" : "")}")"
+                                      @onclick="@(() => ChangeMainImage(img))" />
+                        }
+                    </div>
+                }
             </MudItem>
 
             <!-- Right: Order Area -->
@@ -136,10 +148,20 @@
                                 <MudChip T="StorefrontVariantResponse" Value="@variant" Variant="Variant.Text" Color="Color.Primary"
                                          Disabled="!variant.IsAvailable"
                                          Class="@($"border {(variant.Id == _currentVariant?.Id ? "border-primary border-2 bg-light-primary" : "border-lines-default")}")">
-                                    @variant.VariantName
+                                    <div class="d-flex align-center gap-2">
+                                        @if (!string.IsNullOrWhiteSpace(variant.ThumbnailUrl))
+                                        {
+                                            <MudImage Src="@variant.ThumbnailUrl" Width="28" Height="28" ObjectFit="ObjectFit.Cover" Class="rounded" />
+                                        }
+                                        <span>@variant.VariantName</span>
+                                    </div>
                                 </MudChip>
                             }
                         </MudChipSet>
+                        @if (!string.IsNullOrWhiteSpace(_currentVariant?.SKU))
+                        {
+                            <MudText Typo="Typo.caption" Class="text-muted mt-1 d-block">Mã SKU: @_currentVariant.SKU · Bảo hành: @_currentVariant.WarrantyMonth tháng</MudText>
+                        }
                     </div>
                 }
 
@@ -289,6 +311,7 @@
     private ProductDetailResponse? _product;
     private List<ProductCardResponse>? _relatedProducts;
     private StorefrontVariantResponse? _currentVariant;
+    private List<string> _currentVariantImages = new();
     private string? _mainImage;
     private int _quantity = 1;
 
@@ -302,17 +325,28 @@
         _isLoading = true;
         _product = null;
         _relatedProducts = null;
-        
+
         var response = await StorefrontClientService.GetProductDetailAsync(Slug);
         if (response.Success && response.Data != null)
         {
             _product = response.Data;
-            _mainImage = _product.Images.FirstOrDefault();
-            
-            // Set default variant (first available or just the first one)
-            _currentVariant = _product.Variants.FirstOrDefault(v => v.IsAvailable) ?? _product.Variants.FirstOrDefault();
 
-            // Load related products
+            // Variant mặc định = variant chỉ định qua URL (?variant=<sku>) nếu hợp lệ,
+            // sau đó variant available đầu tiên, cuối cùng variant đầu tiên.
+            StorefrontVariantResponse? preferred = null;
+            var requestedSku = GetVariantSkuFromUrl();
+            if (!string.IsNullOrWhiteSpace(requestedSku))
+            {
+                preferred = _product.Variants.FirstOrDefault(
+                    v => string.Equals(v.SKU, requestedSku, StringComparison.OrdinalIgnoreCase));
+            }
+
+            _currentVariant = preferred
+                ?? _product.Variants.FirstOrDefault(v => v.IsAvailable)
+                ?? _product.Variants.FirstOrDefault();
+
+            ApplyVariantImages();
+
             var relatedResponse = await StorefrontClientService.GetRelatedProductsAsync(Slug);
             if (relatedResponse.Success && relatedResponse.Data != null)
             {
@@ -336,7 +370,42 @@
     {
         if (variant == null) return;
         _currentVariant = variant;
-        // In-memory UI update happens automatically due to bindings.
+        ApplyVariantImages();
+        SyncVariantToUrl(variant.SKU);
+    }
+
+    private void ApplyVariantImages()
+    {
+        if (_currentVariant?.Images != null && _currentVariant.Images.Count > 0)
+        {
+            _currentVariantImages = _currentVariant.Images;
+        }
+        else
+        {
+            // Fallback: nếu variant chưa có ảnh, dùng gallery cấp product.
+            _currentVariantImages = _product?.Images ?? new List<string>();
+        }
+        _mainImage = _currentVariantImages.FirstOrDefault();
+    }
+
+    private void SyncVariantToUrl(string sku)
+    {
+        if (string.IsNullOrWhiteSpace(sku)) return;
+        var newUrl = NavigationManager.GetUriWithQueryParameter("variant", sku);
+        NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
+    }
+
+    private string? GetVariantSkuFromUrl()
+    {
+        var uri = new Uri(NavigationManager.Uri);
+        if (string.IsNullOrEmpty(uri.Query)) return null;
+        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            if (parts.Length == 2 && parts[0].Equals("variant", StringComparison.OrdinalIgnoreCase))
+                return Uri.UnescapeDataString(parts[1]);
+        }
+        return null;
     }
 
     private bool IsCurrentVariantAvailable()

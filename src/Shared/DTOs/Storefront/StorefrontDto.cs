@@ -54,15 +54,25 @@ namespace PBL3.Shared.DTOs.Storefront
 
     /// <summary>
     /// Thông tin phân loại sản phẩm cho trang chi tiết.
+    /// Bao gồm ảnh + specs riêng cho mỗi variant.
+    /// </summary>
     public class StorefrontVariantResponse
     {
         public int Id { get; set; }
+        public string SKU { get; set; } = string.Empty;
         public string VariantName { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public decimal? OriginalPrice { get; set; }
+        public int WarrantyMonth { get; set; }
         public bool IsAvailable { get; set; }
         public int StockQuantity { get; set; }
         public Dictionary<string, string> Specifications { get; set; } = new();
+
+        /// <summary>Danh sách URL ảnh của variant này, đã sắp xếp (Main trước, rồi theo SortOrder).</summary>
+        public List<string> Images { get; set; } = new();
+
+        /// <summary>Ảnh chính của variant (ảnh đầu trong danh sách Images, có thể null nếu variant chưa có ảnh).</summary>
+        public string? ThumbnailUrl { get; set; }
     }
 
     /// <summary>

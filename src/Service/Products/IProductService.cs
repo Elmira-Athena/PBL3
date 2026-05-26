@@ -26,16 +26,6 @@ namespace PBL3.Service.Products
         Task<ApiResult<ProductDetailDto>> UpdateAsync(int id, UpdateProductRequest request);
 
         /// <summary>
-        /// Thêm Variant mới cho sản phẩm đã tồn tại.
-        /// </summary>
-        Task<ApiResult<ProductVariantDto>> AddVariantAsync(int productId, SaveVariantRequest request);
-
-        /// <summary>
-        /// Cập nhật danh sách ảnh cho tất cả variants của sản phẩm.
-        /// </summary>
-        Task<ApiResult<bool>> UpdateImagesAsync(int productId, List<SaveImageRequest> images);
-
-        /// <summary>
         /// Soft Delete sản phẩm.
         /// </summary>
         Task<ApiResult<bool>> DeleteAsync(int id);

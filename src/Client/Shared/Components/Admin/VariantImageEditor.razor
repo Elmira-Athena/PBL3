@@ -1,0 +1,138 @@
+@inject IImageClientService ImageService
+@inject ISnackbar Snackbar
+
+@* Editor ảnh cho 1 variant. Parent truyền `Images` (List<SaveImageRequest>) và lắng nghe `ImagesChanged`. *@
+<div>
+    @if (Images != null && Images.Count > 0)
+    {
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            @for (int i = 0; i < Images.Count; i++)
+            {
+                var imgIndex = i;
+                var img = Images[imgIndex];
+                <div style="position: relative; width: 90px; height: 90px; flex-shrink: 0;">
+                    <MudImage Src="@img.ImageUrl" Width="90" Height="90" ObjectFit="ObjectFit.Cover" Class="rounded" Style="display:block;" />
+                    @if (img.IsMain)
+                    {
+                        <span style="position:absolute; bottom:2px; left:2px; background:#1976d2; color:white; font-size:9px; border-radius:3px; padding:0 4px; line-height:16px;">Main</span>
+                    }
+                    else
+                    {
+                        <MudTooltip Text="Đặt làm ảnh chính">
+                            <MudIconButton Icon="@Icons.Material.Filled.Star"
+                                           Size="Size.Small"
+                                           Style="position:absolute; bottom:-6px; left:-6px; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.2); padding:2px; min-width:0; width:22px; height:22px; color:#bbb;"
+                                           OnClick="() => SetMain(imgIndex)" />
+                        </MudTooltip>
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   Style="position:absolute; top:-8px; right:-8px; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.2); padding:2px; min-width:0; width:20px; height:20px;"
+                                   OnClick="() => Remove(imgIndex)" />
+                </div>
+            }
+        </div>
+    }
+
+    <InputFile id="@_inputId" OnChange="HandleUpload" accept="image/*" multiple style="display:none" disabled="@_isUploading" />
+    <label for="@_inputId" style="cursor: @(_isUploading ? "not-allowed" : "pointer"); display: block;">
+        <MudPaper Outlined="true"
+                  Class="d-flex flex-column align-center justify-center pa-4 rounded-lg"
+                  Style="border-style: dashed; border-width: 2px; min-height: 100px; background: var(--mud-palette-background-grey);">
+            @if (_isUploading)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Đang upload...</MudText>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Medium" Color="Color.Default" />
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Thêm ảnh cho biến thể (tối đa 5 ảnh)</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">JPEG, PNG, WebP, GIF – tối đa 5MB/ảnh</MudText>
+            }
+        </MudPaper>
+    </label>
+</div>
+
+@code {
+    /// <summary>Danh sách ảnh hiện tại của variant. Parent truyền vào và component sẽ gọi <see cref="ImagesChanged"/> mỗi khi thay đổi.</summary>
+    [Parameter] public List<SaveImageRequest> Images { get; set; } = new();
+
+    [Parameter] public EventCallback<List<SaveImageRequest>> ImagesChanged { get; set; }
+
+    /// <summary>Định danh duy nhất để input file của mỗi variant không bị trùng `for=` với nhau.</summary>
+    [Parameter] public string EditorKey { get; set; } = Guid.NewGuid().ToString("N");
+
+    private string _inputId => $"variantImageInput_{EditorKey}";
+    private bool _isUploading;
+
+    private async Task HandleUpload(InputFileChangeEventArgs e)
+    {
+        _isUploading = true;
+        StateHasChanged();
+
+        foreach (var file in e.GetMultipleFiles(5))
+        {
+            var url = await ImageService.UploadAsync(file, "products");
+            if (url != null)
+            {
+                Images.Add(new SaveImageRequest
+                {
+                    ImageUrl = url,
+                    IsMain = Images.Count == 0,
+                    SortOrder = Images.Count
+                });
+            }
+            else
+            {
+                Snackbar.Add($"Upload ảnh \"{file.Name}\" thất bại.", Severity.Error);
+            }
+        }
+
+        _isUploading = false;
+        await NotifyChanged();
+    }
+
+    private async Task Remove(int index)
+    {
+        if (index < 0 || index >= Images.Count) return;
+        var wasMain = Images[index].IsMain;
+        Images.RemoveAt(index);
+
+        if (wasMain && Images.Count > 0)
+        {
+            Images[0].IsMain = true;
+        }
+
+        Reindex();
+        await NotifyChanged();
+    }
+
+    private async Task SetMain(int index)
+    {
+        if (index < 0 || index >= Images.Count) return;
+        for (int i = 0; i < Images.Count; i++)
+            Images[i].IsMain = (i == index);
+
+        // Đưa ảnh main lên đầu để hiển thị thống nhất với storefront
+        var main = Images[index];
+        Images.RemoveAt(index);
+        Images.Insert(0, main);
+        Reindex();
+        await NotifyChanged();
+    }
+
+    private void Reindex()
+    {
+        for (int i = 0; i < Images.Count; i++)
+            Images[i].SortOrder = i;
+    }
+
+    private async Task NotifyChanged()
+    {
+        if (ImagesChanged.HasDelegate)
+            await ImagesChanged.InvokeAsync(Images);
+        StateHasChanged();
+    }
+}

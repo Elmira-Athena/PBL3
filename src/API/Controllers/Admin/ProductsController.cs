@@ -87,50 +87,6 @@ namespace PBL3.API.Controllers.Admin
         }
 
         /// <summary>
-        /// Thêm phiên bản (Variant) mới cho sản phẩm đã tồn tại.
-        /// </summary>
-        [HttpPost("{id:int}/variants")]
-        [ProducesResponseType(typeof(ApiResult<ProductVariantDto>), StatusCodes.Status201Created)]
-        [ProducesResponseType(typeof(ApiResult<ProductVariantDto>), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiResult<ProductVariantDto>), StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> AddVariant(int id, [FromBody] SaveVariantRequest request)
-        {
-            var result = await _productService.AddVariantAsync(id, request);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return CreatedAtAction(nameof(GetById), new { id }, result);
-        }
-
-        /// <summary>
-        /// Cập nhật danh sách ảnh cho sản phẩm (thay toàn bộ ảnh của tất cả variants).
-        /// </summary>
-        [HttpPut("{id:int}/images")]
-        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> UpdateImages(int id, [FromBody] List<SaveImageRequest> images)
-        {
-            var result = await _productService.UpdateImagesAsync(id, images);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
-        }
-
-        /// <summary>
         /// Xóa mềm sản phẩm (Soft Delete).
         /// </summary>
         [HttpDelete("{id:int}")]

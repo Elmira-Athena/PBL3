@@ -1,0 +1,117 @@
+@* Editor key/value cho specs của 1 variant. Đồng bộ Dictionary qua EventCallback. *@
+<div>
+    <div class="d-flex align-center justify-space-between mb-2">
+        <MudText Typo="Typo.subtitle2" Style="font-weight: 600;">
+            <MudIcon Icon="@Icons.Material.Filled.Settings" Class="me-1" Size="Size.Small" />
+            Thông số kỹ thuật
+        </MudText>
+        <MudButton Variant="Variant.Text"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Size="Size.Small"
+                   OnClick="AddRow"
+                   Style="text-transform: none;">
+            Thêm thông số
+        </MudButton>
+    </div>
+
+    @if (_entries.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="rounded-lg">
+            Chưa có thông số nào cho biến thể này.
+        </MudAlert>
+    }
+    else
+    {
+        @for (int i = 0; i < _entries.Count; i++)
+        {
+            var index = i;
+            <MudGrid Class="mb-2" Spacing="2">
+                <MudItem xs="5">
+                    <MudTextField Value="_entries[index].Key"
+                                  ValueChanged="@(async (string v) => await UpdateKey(index, v))"
+                                  Placeholder="VD: Hãng CPU"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="5">
+                    <MudTextField Value="_entries[index].Value"
+                                  ValueChanged="@(async (string v) => await UpdateValue(index, v))"
+                                  Placeholder="VD: Intel"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="2" Class="d-flex align-center">
+                    <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => RemoveRow(index))" />
+                </MudItem>
+            </MudGrid>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>Dictionary specs hiện tại của variant.</summary>
+    [Parameter] public Dictionary<string, string>? Specifications { get; set; }
+
+    [Parameter] public EventCallback<Dictionary<string, string>> SpecificationsChanged { get; set; }
+
+    private List<SpecRow> _entries = new();
+
+    protected override void OnParametersSet()
+    {
+        var incoming = Specifications ?? new();
+
+        // Chỉ sync khi tập key/value khác — tránh re-bind ghi đè input đang gõ
+        var sameCount = incoming.Count == _entries.Count(e => !string.IsNullOrWhiteSpace(e.Key));
+        if (!sameCount)
+        {
+            _entries = incoming.Select(kvp => new SpecRow { Key = kvp.Key, Value = kvp.Value }).ToList();
+        }
+    }
+
+    private void AddRow()
+    {
+        _entries.Add(new SpecRow());
+    }
+
+    private async Task RemoveRow(int index)
+    {
+        if (index < 0 || index >= _entries.Count) return;
+        _entries.RemoveAt(index);
+        await NotifyChanged();
+    }
+
+    private async Task UpdateKey(int index, string value)
+    {
+        if (index < 0 || index >= _entries.Count) return;
+        _entries[index].Key = value;
+        await NotifyChanged();
+    }
+
+    private async Task UpdateValue(int index, string value)
+    {
+        if (index < 0 || index >= _entries.Count) return;
+        _entries[index].Value = value;
+        await NotifyChanged();
+    }
+
+    private async Task NotifyChanged()
+    {
+        var dict = _entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.Key))
+            .GroupBy(e => e.Key.Trim())
+            .ToDictionary(g => g.Key, g => g.Last().Value ?? string.Empty);
+
+        if (SpecificationsChanged.HasDelegate)
+            await SpecificationsChanged.InvokeAsync(dict);
+    }
+
+    private class SpecRow
+    {
+        public string Key { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+}

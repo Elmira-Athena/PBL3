@@ -170,26 +170,38 @@ namespace PBL3.Service.Storefront
 
             var activeVariants = product.Variants.ToList();
 
-            var images = activeVariants
-                .SelectMany(v => v.Images)
-                .OrderByDescending(i => i.IsMain)
-                .ThenBy(i => i.SortOrder)
-                .Select(i => i.ImageUrl)
-                .Distinct()
-                .ToList();
-
-            var variantResponses = activeVariants.Select(v => new StorefrontVariantResponse
+            var variantResponses = activeVariants.Select(v =>
             {
-                Id = v.Id,
-                VariantName = v.VariantName,
-                Price = v.Price,
-                OriginalPrice = v.OriginalPrice > v.Price ? v.OriginalPrice : null,
-                IsAvailable = v.StockQuantity > 0,
-                StockQuantity = v.StockQuantity,
-                Specifications = v.Specifications ?? new()
+                var orderedImages = v.Images
+                    .OrderByDescending(i => i.IsMain)
+                    .ThenBy(i => i.SortOrder)
+                    .Select(i => i.ImageUrl)
+                    .ToList();
+
+                return new StorefrontVariantResponse
+                {
+                    Id = v.Id,
+                    SKU = v.SKU,
+                    VariantName = v.VariantName,
+                    Price = v.Price,
+                    OriginalPrice = v.OriginalPrice > v.Price ? v.OriginalPrice : null,
+                    WarrantyMonth = v.WarrantyMonth,
+                    IsAvailable = v.StockQuantity > 0,
+                    StockQuantity = v.StockQuantity,
+                    Specifications = v.Specifications ?? new(),
+                    Images = orderedImages,
+                    ThumbnailUrl = orderedImages.FirstOrDefault()
+                };
             }).ToList();
 
+            // Gallery cấp product = ảnh của variant rẻ nhất (variant mặc định khi chưa chọn).
+            // Khi client đổi chip variant, gallery sẽ swap sang variant.Images tương ứng.
             var defaultVariant = activeVariants.OrderBy(v => v.Price).FirstOrDefault();
+            var defaultVariantResponse = defaultVariant == null
+                ? null
+                : variantResponses.FirstOrDefault(r => r.Id == defaultVariant.Id);
+            var images = defaultVariantResponse?.Images ?? new List<string>();
+
             string? specsJson = null;
             List<string> shortFeatures = new();
 
