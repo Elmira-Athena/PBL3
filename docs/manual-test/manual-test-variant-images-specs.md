@@ -38,15 +38,15 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Điền Tên sản phẩm, chọn Danh mục và Hãng | Không lỗi tức thì | ⬜ |
+| 1 | Điền Tên sản phẩm, chọn Danh mục và Hãng | Không lỗi tức thì | ✅ |
 | 2 | Nhấn **Thêm biến thể** lần 1; điền SKU = "VAR-A", Tên = "Phiên bản A", Giá = 10.000.000 | Khối Biến thể 1 xuất hiện | ⬜ |
 | 3 | Trong khối Biến thể 1, nhấn vùng upload ảnh → chọn `img_valid_A` | Ảnh preview xuất hiện **trong khối Biến thể 1**; badge **Main** tự gán; khối Biến thể 2 (chưa có) không bị ảnh hưởng | ⬜ |
-| 4 | Trong khối Biến thể 1, nhấn **Thêm thông số** → nhập Key = "CPU" / Value = "Intel i5" | Hàng spec xuất hiện **trong khối Biến thể 1** | ⬜ |
-| 5 | Nhấn **Thêm biến thể** lần 2; điền SKU = "VAR-B", Tên = "Phiên bản B", Giá = 12.000.000 | Khối Biến thể 2 xuất hiện; ảnh và spec của Biến thể 1 không bị xáo trộn | ⬜ |
+| 4 | Trong khối Biến thể 1, nhấn **Thêm thông số** → nhập Key = "CPU" / Value = "Intel i5" | Hàng spec xuất hiện **trong khối Biến thể 1** | ✅ |
+| 5 | Nhấn **Thêm biến thể** lần 2; điền SKU = "VAR-B", Tên = "Phiên bản B", Giá = 12.000.000 | Khối Biến thể 2 xuất hiện; ảnh và spec của Biến thể 1 không bị xáo trộn | ✅(Không confirm về ảnh) |
 | 6 | Trong khối Biến thể 2, upload `img_valid_B` | Ảnh xuất hiện **trong khối Biến thể 2**; khối Biến thể 1 vẫn hiện `img_valid_A` | ⬜ |
-| 7 | Trong khối Biến thể 2, thêm spec Key = "CPU" / Value = "AMD Ryzen 7" | Spec xuất hiện **trong khối Biến thể 2**; Biến thể 1 vẫn giữ "Intel i5" | ⬜ |
-| 8 | Nhấn **Tạo sản phẩm** | Snackbar thành công; chuyển về danh sách; cột **Biến thể** hiện "2" | ⬜ |
-| 9 | Vào trang edit sản phẩm vừa tạo | Biến thể 1 hiện đúng ảnh `img_valid_A` + spec "Intel i5"; Biến thể 2 hiện đúng ảnh `img_valid_B` + spec "AMD Ryzen 7"; **không bị lẫn** | ⬜ |
+| 7 | Trong khối Biến thể 2, thêm spec Key = "CPU" / Value = "AMD Ryzen 7" | Spec xuất hiện **trong khối Biến thể 2**; Biến thể 1 vẫn giữ "Intel i5" | ✅ |
+| 8 | Nhấn **Tạo sản phẩm** | Snackbar thành công; chuyển về danh sách; cột **Biến thể** hiện "2" | ✅ |
+| 9 | Vào trang edit sản phẩm vừa tạo | Biến thể 1 hiện đúng ảnh `img_valid_A` + spec "Intel i5"; Biến thể 2 hiện đúng ảnh `img_valid_B` + spec "AMD Ryzen 7"; **không bị lẫn** | ✅(Không confirm về ảnh) |
 
 ---
 
@@ -56,10 +56,10 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Điền thông tin sản phẩm và thêm 1 biến thể | Không lỗi | ⬜ |
-| 2 | Điền SKU, Tên, Giá cho biến thể nhưng **không upload ảnh** và **không thêm spec** | Không có lỗi tức thì trong UI | ⬜ |
-| 3 | Nhấn **Tạo sản phẩm** | Tạo thành công (ảnh và specs không bắt buộc) | ⬜ |
-| 4 | Vào trang edit | Phần ảnh của biến thể trống; phần specs hiện "*Chưa có thông số nào*" | ⬜ |
+| 1 | Điền thông tin sản phẩm và thêm 1 biến thể | Không lỗi | ✅ |
+| 2 | Điền SKU, Tên, Giá cho biến thể nhưng **không upload ảnh** và **không thêm spec** | Không có lỗi tức thì trong UI | ✅ |
+| 3 | Nhấn **Tạo sản phẩm** | Tạo thành công (ảnh và specs không bắt buộc) | ✅ |
+| 4 | Vào trang edit | Phần ảnh của biến thể trống; phần specs hiện "*Chưa có thông số nào*" | ✅ |
 
 ---
 
@@ -117,11 +117,11 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Mở trang edit `prod_2var` | `var_A` hiện spec "CPU: Intel i5"; `var_B` hiện spec "CPU: AMD Ryzen 7" | ⬜ |
-| 2 | Trong khối `var_A`, sửa Value của "CPU" thành "Intel i9" | Chỉ ô của `var_A` thay đổi | ⬜ |
-| 3 | Trong khối `var_A`, thêm spec mới Key = "RAM" / Value = "16GB" | Hàng xuất hiện **chỉ** trong khối `var_A` | ⬜ |
-| 4 | Nhấn **Cập nhật** | Thành công | ⬜ |
-| 5 | Reload trang edit | `var_A` có "CPU: Intel i9" + "RAM: 16GB"; `var_B` vẫn chỉ có "CPU: AMD Ryzen 7" — **không bị lẫn** | ⬜ |
+| 1 | Mở trang edit `prod_2var` | `var_A` hiện spec "CPU: Intel i5"; `var_B` hiện spec "CPU: AMD Ryzen 7" | ✅ |
+| 2 | Trong khối `var_A`, sửa Value của "CPU" thành "Intel i9" | Chỉ ô của `var_A` thay đổi | ✅ |
+| 3 | Trong khối `var_A`, thêm spec mới Key = "RAM" / Value = "16GB" | Hàng xuất hiện **chỉ** trong khối `var_A` | ✅ |
+| 4 | Nhấn **Cập nhật** | Thành công | ✅ |
+| 5 | Reload trang edit | `var_A` có "CPU: Intel i9" + "RAM: 16GB"; `var_B` vẫn chỉ có "CPU: AMD Ryzen 7" — **không bị lẫn** | ✅ |
 
 ---
 
@@ -131,9 +131,9 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Xóa từng spec của `var_A` bằng icon xóa | Mỗi hàng biến mất sau khi xóa; `var_B` không bị ảnh hưởng | ⬜ |
-| 2 | Nhấn **Cập nhật** | Thành công | ⬜ |
-| 3 | Reload trang edit | `var_A` hiện "*Chưa có thông số nào*"; `var_B` vẫn giữ specs cũ | ⬜ |
+| 1 | Xóa từng spec của `var_A` bằng icon xóa | Mỗi hàng biến mất sau khi xóa; `var_B` không bị ảnh hưởng | ✅ |
+| 2 | Nhấn **Cập nhật** | Thành công | ✅ |
+| 3 | Reload trang edit | `var_A` hiện "*Chưa có thông số nào*"; `var_B` vẫn giữ specs cũ | ✅ |
 
 ---
 
@@ -147,10 +147,10 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Nhấn **Thêm biến thể** | Khối "Biến thể 3" xuất hiện; ảnh và specs của 2 biến thể cũ không bị xáo trộn | ⬜ |
-| 2 | Điền SKU = "VAR-C", Tên = "Phiên bản C", Giá = 15.000.000 | Không lỗi | ⬜ |
+| 1 | Nhấn **Thêm biến thể** | Khối "Biến thể 3" xuất hiện; ảnh và specs của 2 biến thể cũ không bị xáo trộn | ✅(Không confirm về ảnh) |
+| 2 | Điền SKU = "VAR-C", Tên = "Phiên bản C", Giá = 15.000.000 | Không lỗi | ✅ |
 | 3 | Upload ảnh cho biến thể mới | Ảnh chỉ xuất hiện trong khối Biến thể 3 | ⬜ |
-| 4 | Nhấn **Cập nhật** | Thành công; cột Biến thể trong danh sách hiện "3" | ⬜ |
+| 4 | Nhấn **Cập nhật** | Thành công; cột Biến thể trong danh sách hiện "3" | ✅(Không confirm về ảnh) |
 
 ---
 
@@ -160,9 +160,9 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Nhấn icon xóa trên khối `var_B` | Dialog xác nhận xuất hiện hoặc khối biến mất khỏi UI | ⬜ |
-| 2 | Xác nhận xóa | `var_B` biến mất; `var_A` vẫn giữ nguyên ảnh + specs | ⬜ |
-| 3 | Nhấn **Cập nhật** | Thành công; cột Biến thể giảm xuống 1 | ⬜ |
+| 1 | Nhấn icon xóa trên khối `var_B` | Dialog xác nhận xuất hiện hoặc khối biến mất khỏi UI | ✅ |
+| 2 | Xác nhận xóa | `var_B` biến mất; `var_A` vẫn giữ nguyên ảnh + specs | ✅(Không confirm về ảnh) |
+| 3 | Nhấn **Cập nhật** | Thành công; cột Biến thể giảm xuống 1 | ✅ |
 
 ---
 
@@ -200,9 +200,9 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Quan sát bảng **Thông số kỹ thuật** | Hiện specs của `var_A` (VD: "CPU: Intel i5") | ⬜ |
-| 2 | Nhấn chip biến thể **VAR-B** | Bảng specs cập nhật thành specs của `var_B` (VD: "CPU: AMD Ryzen 7") — **không lẫn** với `var_A` | ⬜ |
-| 3 | Nhấn lại chip **VAR-A** | Bảng specs quay về của `var_A` | ⬜ |
+| 1 | Quan sát bảng **Thông số kỹ thuật** | Hiện specs của `var_A` (VD: "CPU: Intel i5") | ✅ |
+| 2 | Nhấn chip biến thể **VAR-B** | Bảng specs cập nhật thành specs của `var_B` (VD: "CPU: AMD Ryzen 7") — **không lẫn** với `var_A` | ✅ |
+| 3 | Nhấn lại chip **VAR-A** | Bảng specs quay về của `var_A` | ✅ |
 
 ---
 
@@ -212,9 +212,9 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Quan sát giá bán, số tháng bảo hành của `var_A` | Hiện đúng giá và bảo hành của `var_A` | ⬜ |
-| 2 | Nhấn chip **VAR-B** | Giá và bảo hành cập nhật theo `var_B`; **mô tả sản phẩm (Description) không thay đổi** | ⬜ |
-| 3 | Nhấn lại **VAR-A** | Giá và bảo hành trở về của `var_A`; Description vẫn giữ nguyên | ⬜ |
+| 1 | Quan sát giá bán, số tháng bảo hành của `var_A` | Hiện đúng giá và bảo hành của `var_A` | ✅ |
+| 2 | Nhấn chip **VAR-B** | Giá và bảo hành cập nhật theo `var_B`; **mô tả sản phẩm (Description) không thay đổi** | ✅ |
+| 3 | Nhấn lại **VAR-A** | Giá và bảo hành trở về của `var_A`; Description vẫn giữ nguyên | ✅ |
 
 ---
 
@@ -235,9 +235,9 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Vào trang detail `prod_noimg` | Gallery không crash; hiện placeholder ảnh hoặc ảnh mặc định thay vì màn hình trống/vỡ layout | ⬜ |
-| 2 | Bảng thông số kỹ thuật | Hiện "*Chưa có thông số nào*" hoặc ẩn bảng — không crash | ⬜ |
-| 3 | Nút **Thêm vào giỏ** vẫn khả dụng (nếu có tồn kho) | Người dùng vẫn có thể mua sản phẩm dù biến thể thiếu ảnh | ⬜ |
+| 1 | Vào trang detail `prod_noimg` | Gallery không crash; hiện placeholder ảnh hoặc ảnh mặc định thay vì màn hình trống/vỡ layout | ✅ |
+| 2 | Bảng thông số kỹ thuật | Hiện "*Chưa có thông số nào*" hoặc ẩn bảng — không crash | ✅ |
+| 3 | Nút **Thêm vào giỏ** vẫn khả dụng (nếu có tồn kho) | Người dùng vẫn có thể mua sản phẩm dù biến thể thiếu ảnh | ✅ |
 
 ---
 
@@ -251,9 +251,9 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Vào trang detail `prod_2var` (không có query param) | Biến thể mặc định được chọn; URL chưa có `?variant=` hoặc có `?variant=VAR-A` | ⬜ |
-| 2 | Nhấn chip **VAR-B** | URL cập nhật thành `…?variant=VAR-B` (kiểm tra thanh địa chỉ) | ⬜ |
-| 3 | Nhấn chip **VAR-A** | URL đổi thành `…?variant=VAR-A` | ⬜ |
+| 1 | Vào trang detail `prod_2var` (không có query param) | Biến thể mặc định được chọn; URL chưa có `?variant=` hoặc có `?variant=VAR-A` | ✅ |
+| 2 | Nhấn chip **VAR-B** | URL cập nhật thành `…?variant=VAR-B` (kiểm tra thanh địa chỉ) | ✅ |
+| 3 | Nhấn chip **VAR-A** | URL đổi thành `…?variant=VAR-A` | ✅ |
 
 ---
 
@@ -263,8 +263,8 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Mở URL `…?variant=VAR-B` trong tab mới | Trang load; chip **VAR-B** được chọn sẵn; gallery hiện ảnh của `var_B`; specs hiện của `var_B` | ⬜ |
-| 2 | Nhấn F5 (refresh trang) | Sau refresh vẫn giữ đúng `var_B` được chọn | ⬜ |
+| 1 | Mở URL `…?variant=VAR-B` trong tab mới | Trang load; chip **VAR-B** được chọn sẵn; gallery hiện ảnh của `var_B`; specs hiện của `var_B` | ✅ (không confirm về ảnh) |
+| 2 | Nhấn F5 (refresh trang) | Sau refresh vẫn giữ đúng `var_B` được chọn | ✅ |
 
 ---
 
@@ -274,8 +274,8 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Nhập thủ công URL `…?variant=INVALID-SKU-999` vào thanh địa chỉ | Trang không crash; fallback về biến thể mặc định (thường là biến thể rẻ nhất) | ⬜ |
-| 2 | Quan sát gallery và specs | Gallery và specs của biến thể mặc định được hiển thị bình thường | ⬜ |
+| 1 | Nhập thủ công URL `…?variant=INVALID-SKU-999` vào thanh địa chỉ | Trang không crash; fallback về biến thể mặc định (thường là biến thể rẻ nhất) | ✅ |
+| 2 | Quan sát gallery và specs | Gallery và specs của biến thể mặc định được hiển thị bình thường | ✅ |
 
 ---
 
@@ -300,7 +300,7 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Quét serial của biến thể **không có ảnh** | Hàng xuất hiện; cột ảnh hiện placeholder (VD: ô xám hoặc icon camera) — không crash, không URL gãy | ⬜ |
+| 1 | Quét serial của biến thể **không có ảnh** | Hàng xuất hiện; cột ảnh hiện placeholder (VD: ô xám hoặc icon camera) — không crash, không URL gãy | ✅ |
 
 ---
 
@@ -324,9 +324,9 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | # | Hành động | Kết quả mong đợi | KQ |
 |---|-----------|------------------|----|
-| 1 | Trên Admin, sửa spec của `var_B` (đổi giá trị CPU) → Cập nhật | Thành công | ⬜ |
-| 2 | Trên Storefront, vào trang detail, chọn chip **VAR-A** | Bảng specs hiện giá trị cũ của `var_A` — **không bị ghi đè bởi `var_B`** | ⬜ |
-| 3 | Chuyển sang chip **VAR-B** | Bảng specs hiện giá trị mới vừa sửa của `var_B` | ⬜ |
+| 1 | Trên Admin, sửa spec của `var_B` (đổi giá trị CPU) → Cập nhật | Thành công | ✅ |
+| 2 | Trên Storefront, vào trang detail, chọn chip **VAR-A** | Bảng specs hiện giá trị cũ của `var_A` — **không bị ghi đè bởi `var_B`** | ✅ |
+| 3 | Chuyển sang chip **VAR-B** | Bảng specs hiện giá trị mới vừa sửa của `var_B` | ✅(Sau khi reload lại trang) |
 
 ---
 
@@ -350,10 +350,10 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | ID | Mô tả | Bước thực hiện | Kết quả mong đợi | KQ |
 |----|-------|----------------|------------------|----|
-| TC-SPEC-E01 | Key rỗng, có Value | Thêm spec: Key trống, Value = "Intel" → Submit | Lỗi hoặc hàng bị bỏ qua — **ghi lại kết quả thực tế** | ⬜ |
-| TC-SPEC-E02 | Key và Value đều rỗng | Thêm spec: để trống cả 2 ô → Submit | Hàng bị bỏ qua hoặc báo lỗi; không lưu spec rỗng | ⬜ |
-| TC-SPEC-E03 | Key trùng trong cùng biến thể | Thêm 2 spec đều có Key = "CPU" → Submit | Ghi đè lên nhau hoặc báo lỗi trùng key — **ghi lại kết quả thực tế** | ⬜ |
-| TC-SPEC-E04 | Spec ở biến thể khác nhau có Key trùng | `var_A` có Key = "CPU"; `var_B` cũng có Key = "CPU" | Hợp lệ — mỗi biến thể có namespace specs riêng; cả 2 lưu thành công | ⬜ |
+| TC-SPEC-E01 | Key rỗng, có Value | Thêm spec: Key trống, Value = "Intel" → Submit | Lỗi hoặc hàng bị bỏ qua — **ghi lại kết quả thực tế** | ✅(Hàng bị bỏ qua) |
+| TC-SPEC-E02 | Key và Value đều rỗng | Thêm spec: để trống cả 2 ô → Submit | Hàng bị bỏ qua hoặc báo lỗi; không lưu spec rỗng | ✅(Hàng bị bỏ qua) |
+| TC-SPEC-E03 | Key trùng trong cùng biến thể | Thêm 2 spec đều có Key = "CPU" → Submit | Ghi đè lên nhau hoặc báo lỗi trùng key — **ghi lại kết quả thực tế** | ✅(Tự xóa hàng sau khi nhập CPU) |
+| TC-SPEC-E04 | Spec ở biến thể khác nhau có Key trùng | `var_A` có Key = "CPU"; `var_B` cũng có Key = "CPU" | Hợp lệ — mỗi biến thể có namespace specs riêng; cả 2 lưu thành công | ✅ |
 
 ---
 
@@ -362,8 +362,8 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 | ID | Mô tả | Bước thực hiện | Kết quả mong đợi | KQ |
 |----|-------|----------------|------------------|----|
 | TC-VAR-E01 | Xóa biến thể duy nhất | Trên trang edit `prod_1var`, nhấn xóa biến thể duy nhất | Bị ngăn: cảnh báo *"Sản phẩm phải có ít nhất 1 biến thể."* | ⬜ |
-| TC-VAR-E02 | SKU trùng trong cùng sản phẩm | Form tạo mới với 2 biến thể có cùng SKU → Submit | Lỗi trùng SKU (client-side hoặc server) | ⬜ |
-| TC-VAR-E03 | Xóa biến thể rồi hủy (không lưu) | Trang edit: xóa `var_B` khỏi UI → nhấn **Hủy** hoặc rời trang | Biến thể không bị xóa thật; reload lại trang edit vẫn thấy đủ 2 biến thể | ⬜ |
+| TC-VAR-E02 | SKU trùng trong cùng sản phẩm | Form tạo mới với 2 biến thể có cùng SKU → Submit | Lỗi trùng SKU (client-side hoặc server) | ✅ |
+| TC-VAR-E03 | Xóa biến thể rồi hủy (không lưu) | Trang edit: xóa `var_B` khỏi UI → nhấn **Hủy** hoặc rời trang | Biến thể không bị xóa thật; reload lại trang edit vẫn thấy đủ 2 biến thể | ✅ |
 
 ---
 
@@ -371,8 +371,8 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | ID | Mô tả | Bước thực hiện | Kết quả mong đợi | KQ |
 |----|-------|----------------|------------------|----|
-| TC-SF-E01 | Sản phẩm chỉ có 1 biến thể | Vào detail sản phẩm có 1 biến thể | Không hiện khu vực chọn biến thể (hoặc hiện 1 chip đã chọn sẵn); gallery và specs hiển thị bình thường | ⬜ |
-| TC-SF-E02 | Biến thể không có specs | Chọn chip biến thể không có thông số kỹ thuật | Bảng specs ẩn hoặc hiện "*Không có thông số kỹ thuật.*" — không crash, không hiện bảng rỗng gây mất thẩm mỹ | ⬜ |
+| TC-SF-E01 | Sản phẩm chỉ có 1 biến thể | Vào detail sản phẩm có 1 biến thể | Không hiện khu vực chọn biến thể (hoặc hiện 1 chip đã chọn sẵn); gallery và specs hiển thị bình thường | ✅(Hiện 1 chip chọn sẵn) |
+| TC-SF-E02 | Biến thể không có specs | Chọn chip biến thể không có thông số kỹ thuật | Bảng specs ẩn hoặc hiện "*Không có thông số kỹ thuật.*" — không crash, không hiện bảng rỗng gây mất thẩm mỹ | ✅ |
 | TC-SF-E03 | Ảnh main bị xóa, biến thể còn ảnh khác | Admin xóa ảnh Main của `var_A`, để lại ảnh không phải Main → Cập nhật | Storefront hiện ảnh còn lại (ảnh đầu theo sort order) làm main; không crash | ⬜ |
 | TC-SF-E04 | Thumbnail trên card danh mục vẫn đúng | Vào trang danh mục/tìm kiếm sau khi thay ảnh biến thể đầu tiên | Card sản phẩm hiện thumbnail của biến thể đầu tiên có ảnh — không bị vỡ | ⬜ |
 
@@ -382,5 +382,5 @@ Tài liệu này bao gồm tất cả các flow kiểm thử thủ công cho tí
 
 | ID | Mô tả | Bước thực hiện | Kết quả mong đợi | KQ |
 |----|-------|----------------|------------------|----|
-| TC-CONC-E01 | Admin thay ảnh trong lúc user đang xem storefront | Tab 1 (Admin): đổi ảnh `var_A` → Cập nhật. Tab 2 (Storefront): đang xem detail `prod_2var` → nhấn F5 | Sau F5, storefront hiện ảnh mới của `var_A` | ⬜ |
-| TC-CONC-E02 | Admin xóa biến thể trong lúc user xem deep link biến thể đó | Tab 1 (Admin): xóa `var_B`. Tab 2 (Storefront): reload URL `…?variant=VAR-B` | Fallback về biến thể mặc định; không crash | ⬜ |
+| TC-CONC-E01 | Admin thay ảnh trong lúc user đang xem storefront | Tab 1 (Admin): đổi ảnh `var_A` → Cập nhật. Tab 2 (Storefront): đang xem detail `prod_2var` → nhấn F5 | Sau F5, storefront hiện ảnh mới của `var_A` | ✅ |
+| TC-CONC-E02 | Admin xóa biến thể trong lúc user xem deep link biến thể đó | Tab 1 (Admin): xóa `var_B`. Tab 2 (Storefront): reload URL `…?variant=VAR-B` | Fallback về biến thể mặc định; không crash | ✅ |

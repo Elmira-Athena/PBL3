@@ -513,6 +513,20 @@
             return;
         }
 
+        var skus = _model.Variants.Select(v => v.SKU.Trim().ToUpper()).ToList();
+        if (skus.Distinct().Count() != skus.Count)
+        {
+            Snackbar.Add("Các biến thể trong cùng sản phẩm không được trùng mã SKU.", Severity.Warning);
+            return;
+        }
+
+        var variantNames = _model.Variants.Select(v => v.VariantName.Trim().ToUpper()).ToList();
+        if (variantNames.Distinct().Count() != variantNames.Count)
+        {
+            Snackbar.Add("Các biến thể trong cùng sản phẩm không được trùng tên phiên bản.", Severity.Warning);
+            return;
+        }
+
         _isSaving = true;
         StateHasChanged();
 
@@ -591,8 +605,8 @@
                 });
                 if (!metaResult.Success)
                 {
-                    Snackbar.Add($"Lưu biến thể #{i + 1} thất bại: {metaResult.Message}", Severity.Warning);
-                    continue;
+                    Snackbar.Add($"Lưu biến thể #{i + 1} thất bại: {metaResult.Message}", Severity.Error);
+                    return;
                 }
 
                 var imgResult = await ProductService.UpdateVariantImagesAsync(variantId, v.Images);
@@ -618,7 +632,10 @@
                     Images = v.Images
                 });
                 if (!createResult.Success)
-                    Snackbar.Add($"Tạo biến thể mới #{i + 1} thất bại: {createResult.Message}", Severity.Warning);
+                {
+                    Snackbar.Add($"Tạo biến thể mới #{i + 1} thất bại: {createResult.Message}", Severity.Error);
+                    return;
+                }
             }
         }
 

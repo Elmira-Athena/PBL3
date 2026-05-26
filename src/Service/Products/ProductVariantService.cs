@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
@@ -64,7 +65,15 @@ namespace PBL3.Service.Products
             }
 
             await _productRepo.AddVariantAsync(variant);
-            await _productRepo.SaveChangesAsync();
+            try
+            {
+                await _productRepo.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true
+                                             || ex.InnerException?.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return ApiResult<ProductVariantDto>.Fail($"Mã SKU '{request.SKU}' đã tồn tại trong hệ thống.");
+            }
 
             _logger.LogInformation("Thêm phiên bản '{VariantName}' (SKU: {SKU}) cho sản phẩm Id: {ProductId}",
                 variant.VariantName, variant.SKU, productId);
@@ -92,7 +101,15 @@ namespace PBL3.Service.Products
             variant.WarrantyMonth = request.WarrantyMonth;
             variant.ModifiedDate = DateTime.UtcNow;
 
-            await _variantRepo.SaveChangesAsync();
+            try
+            {
+                await _variantRepo.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true
+                                             || ex.InnerException?.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return ApiResult<ProductVariantDto>.Fail($"Mã SKU '{request.SKU}' đã tồn tại trong hệ thống.");
+            }
 
             _logger.LogInformation("Cập nhật phiên bản Id: {VariantId} (SKU: {SKU})", variantId, variant.SKU);
 
