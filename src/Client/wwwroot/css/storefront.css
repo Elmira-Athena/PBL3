@@ -1,0 +1,263 @@
+/* =====================================================
+   HushStore Storefront Design Tokens & Utilities
+   NZXT-inspired: White + Red (#E11D2A) + Charcoal (#111)
+   ===================================================== */
+
+/* Design Tokens */
+:root {
+  --hs-red:         #E11D2A;
+  --hs-red-dark:    #B3121E;
+  --hs-red-light:   #FF4D58;
+  --hs-dark:        #111111;
+  --hs-dark-2:      #1C1C1C;
+  --hs-dark-3:      #2A2A2A;
+  --hs-white:       #FFFFFF;
+  --hs-gray-bg:     #F4F4F5;
+  --hs-border:      #E5E5E5;
+  --hs-text:        #111111;
+  --hs-text-muted:  #6B7280;
+  --hs-font:        'Inter', 'Roboto', sans-serif;
+}
+
+/* ── Sections ── */
+.hs-section {
+  width: 100%;
+  padding: 80px 0;
+  background: var(--hs-white);
+}
+
+.hs-section--dark {
+  background: var(--hs-dark);
+  color: var(--hs-white);
+}
+
+.hs-section--gray {
+  background: var(--hs-gray-bg);
+}
+
+.hs-section--compact {
+  padding: 48px 0;
+}
+
+/* ── Container ── */
+.hs-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ── Headings ── */
+.hs-heading {
+  font-family: var(--hs-font);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--hs-text);
+}
+
+.hs-heading--white {
+  color: var(--hs-white);
+}
+
+.hs-heading--xl {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+}
+
+.hs-heading--lg {
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.hs-heading--md {
+  font-size: clamp(1.25rem, 2.5vw, 1.875rem);
+}
+
+.hs-section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--hs-red);
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* ── Buttons ── */
+.hs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 4px;
+  font-family: var(--hs-font);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  border: 2px solid transparent;
+}
+
+.hs-btn--primary {
+  background: var(--hs-red);
+  color: var(--hs-white);
+  border-color: var(--hs-red);
+}
+
+.hs-btn--primary:hover {
+  background: var(--hs-red-dark);
+  border-color: var(--hs-red-dark);
+  color: var(--hs-white);
+  transform: translateY(-1px);
+}
+
+.hs-btn--ghost {
+  background: transparent;
+  color: var(--hs-white);
+  border-color: var(--hs-white);
+}
+
+.hs-btn--ghost:hover {
+  background: var(--hs-white);
+  color: var(--hs-dark);
+}
+
+.hs-btn--ghost-dark {
+  background: transparent;
+  color: var(--hs-dark);
+  border-color: var(--hs-dark);
+}
+
+.hs-btn--ghost-dark:hover {
+  background: var(--hs-dark);
+  color: var(--hs-white);
+}
+
+/* ── Cards ── */
+.hs-card {
+  background: var(--hs-white);
+  border: 1px solid var(--hs-border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hs-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+.hs-card--dark {
+  background: var(--hs-dark-2);
+  border-color: var(--hs-dark-3);
+}
+
+/* ── Divider ── */
+.hs-divider {
+  height: 1px;
+  background: var(--hs-border);
+  border: none;
+  margin: 0;
+}
+
+.hs-divider--dark {
+  background: var(--hs-dark-3);
+}
+
+/* ── Price ── */
+.hs-price {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--hs-red);
+  font-family: var(--hs-font);
+}
+
+.hs-price--old {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--hs-text-muted);
+  text-decoration: line-through;
+}
+
+/* ── Badge ── */
+.hs-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hs-badge--red {
+  background: var(--hs-red);
+  color: var(--hs-white);
+}
+
+/* ── Grid ── */
+.hs-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.hs-grid--products {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.hs-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.hs-grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 768px) {
+  .hs-section {
+    padding: 48px 0;
+  }
+  .hs-grid--3,
+  .hs-grid--4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .hs-grid--3,
+  .hs-grid--4,
+  .hs-grid--products {
+    grid-template-columns: 1fr 1fr;
+  }
+  .hs-container {
+    padding: 0 16px;
+  }
+}
+
+/* ── Navbar override ── */
+.hs-nav-link {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-family: var(--hs-font);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+}
+
+.hs-nav-link:hover {
+  color: #FFFFFF !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.hs-nav-link--active {
+  color: var(--hs-red-light) !important;
+}
