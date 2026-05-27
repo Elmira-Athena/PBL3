@@ -78,7 +78,26 @@
   text-transform: uppercase;
   color: var(--hs-red);
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hs-section-label::before {
+  content: '';
   display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--hs-red);
+  flex-shrink: 0;
+}
+
+.hs-section-label--white {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.hs-section-label--white::before {
+  background: rgba(255, 255, 255, 0.75);
 }
 
 /* ── Buttons ── */
@@ -139,6 +158,74 @@
   outline-offset: 3px;
 }
 
+/* ── Text links (NZXT-style "View all →") ── */
+.hs-text-link {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hs-text);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--hs-font);
+  transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.hs-text-link:hover {
+  color: var(--hs-red);
+}
+
+.hs-text-link--red {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hs-red);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--hs-font);
+  transition: opacity 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hs-text-link--red:hover {
+  opacity: 0.8;
+}
+
+/* ── Feature cards (Why Buy section) ── */
+.hs-icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: rgba(225, 29, 42, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.hs-feature-card {
+  background: var(--hs-white);
+  border: 1px solid var(--hs-border);
+  border-radius: 12px;
+  padding: 32px 24px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hs-feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
 /* ── Cards ── */
 .hs-card {
   background: var(--hs-white);
@@ -146,6 +233,7 @@
   border-radius: 8px;
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .hs-card:hover {

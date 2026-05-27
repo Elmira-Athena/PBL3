@@ -74,14 +74,14 @@ else
     {
         <section class="hs-section hs-section--gray">
             <div class="hs-container">
-                <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:32px;flex-wrap:wrap;gap:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:32px;">
                     <div>
                         <span class="hs-section-label">PC DỰNG SẴN</span>
                         <h2 class="hs-heading hs-heading--lg" style="margin:0;">Cấu Hình Nổi Bật</h2>
                     </div>
-                    <button class="hs-btn hs-btn--ghost-dark"
+                    <button class="hs-text-link"
                             @onclick='() => NavigationManager.NavigateTo("/category/pc-build-san")'>
-                        Xem Tất Cả →
+                        Xem tất cả PC dựng sẵn →
                     </button>
                 </div>
                 <MudGrid>
@@ -97,53 +97,52 @@ else
     }
 
     @* ── Section 3: Three Ways to Game ── *@
-    <section class="hs-section hs-section--dark">
+    <section class="hs-section">
         <div class="hs-container">
-            <div style="text-align:center;margin-bottom:40px;">
-                <span class="hs-section-label">LỰA CHỌN CỦA BẠN</span>
-                <h2 class="hs-heading hs-heading--lg hs-heading--white" style="margin:0;">
-                    Ba Cách Sở Hữu PC Mơ Ước
-                </h2>
-            </div>
+            <span class="hs-section-label">CÁCH SỞ HỮU</span>
+            <h2 class="hs-heading hs-heading--lg" style="margin-bottom:40px;">Ba Cách Sở Hữu PC Mơ Ước</h2>
             <div class="hs-grid hs-grid--3">
-                <button type="button" class="hs-card hs-card--dark hs-card-btn"
-                     style="padding:40px 32px;text-align:center;"
+                <button type="button" class="hs-card hs-card-btn"
+                     style="padding:40px 32px;text-align:left;display:flex;flex-direction:column;"
                      @onclick='() => NavigationManager.NavigateTo("/category/pc-build-san")'>
-                    <MudIcon Icon="@Icons.Material.Filled.DesktopWindows"
-                             Style="font-size:3rem;color:var(--hs-red);display:block;margin:0 auto 20px;" />
-                    <h3 style="font-size:1.05rem;font-weight:800;color:white;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.DesktopWindows" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1.05rem;font-weight:800;color:var(--hs-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">
                         Mua PC Dựng Sẵn
                     </h3>
-                    <p style="font-size:0.85rem;color:#999;line-height:1.6;margin-bottom:24px;">
+                    <p style="font-size:0.875rem;color:var(--hs-text-muted);line-height:1.6;margin-bottom:24px;flex:1;">
                         PC đã được lắp ráp và kiểm tra kỹ lưỡng — đóng gói và giao đến tay bạn nhanh nhất.
                     </p>
-                    <span class="hs-btn hs-btn--primary" style="display:inline-flex;">Khám Phá Ngay</span>
+                    <span class="hs-text-link--red">Khám Phá Ngay →</span>
                 </button>
-                <button type="button" class="hs-card hs-card--dark hs-card-btn"
-                     style="padding:40px 32px;text-align:center;border:1px solid var(--hs-red);"
+                <button type="button" class="hs-card hs-card-btn"
+                     style="padding:40px 32px;text-align:left;display:flex;flex-direction:column;"
                      @onclick='() => NavigationManager.NavigateTo("/build-pc")'>
-                    <MudIcon Icon="@Icons.Material.Filled.Tune"
-                             Style="font-size:3rem;color:var(--hs-red);display:block;margin:0 auto 20px;" />
-                    <h3 style="font-size:1.05rem;font-weight:800;color:white;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.Tune" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1.05rem;font-weight:800;color:var(--hs-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">
                         Tự Dựng Cấu Hình
                     </h3>
-                    <p style="font-size:0.85rem;color:#999;line-height:1.6;margin-bottom:24px;">
+                    <p style="font-size:0.875rem;color:var(--hs-text-muted);line-height:1.6;margin-bottom:24px;flex:1;">
                         Chọn từng linh kiện, kiểm tra tương thích tự động — tạo nên PC theo ý thích riêng của bạn.
                     </p>
-                    <span class="hs-btn hs-btn--primary" style="display:inline-flex;">Dựng Ngay</span>
+                    <span class="hs-text-link--red">Dựng Ngay →</span>
                 </button>
-                <button type="button" class="hs-card hs-card--dark hs-card-btn"
-                     style="padding:40px 32px;text-align:center;"
+                <button type="button" class="hs-card hs-card-btn"
+                     style="padding:40px 32px;text-align:left;display:flex;flex-direction:column;"
                      @onclick='() => NavigationManager.NavigateTo("/category/linh-kien-may-tinh")'>
-                    <MudIcon Icon="@Icons.Material.Filled.Memory"
-                             Style="font-size:3rem;color:var(--hs-red);display:block;margin:0 auto 20px;" />
-                    <h3 style="font-size:1.05rem;font-weight:800;color:white;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.Memory" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1.05rem;font-weight:800;color:var(--hs-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">
                         Mua Linh Kiện Lẻ
                     </h3>
-                    <p style="font-size:0.85rem;color:#999;line-height:1.6;margin-bottom:24px;">
+                    <p style="font-size:0.875rem;color:var(--hs-text-muted);line-height:1.6;margin-bottom:24px;flex:1;">
                         Nâng cấp từng bộ phận hay tìm linh kiện phù hợp — hàng chính hãng, đa dạng lựa chọn.
                     </p>
-                    <span class="hs-btn hs-btn--primary" style="display:inline-flex;">Mua Ngay</span>
+                    <span class="hs-text-link--red">Mua Ngay →</span>
                 </button>
             </div>
         </div>
@@ -155,14 +154,14 @@ else
         bool isGray = sectionIdx % 2 == 0;
         <section class="hs-section hs-section--compact @(isGray ? "hs-section--gray" : "")">
             <div class="hs-container">
-                <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;">
                     <div>
                         <span class="hs-section-label">@featSection.Category.Name.ToUpper()</span>
                         <h2 class="hs-heading hs-heading--md" style="margin:0;">@featSection.Category.Name Nổi Bật</h2>
                     </div>
-                    <button class="hs-btn hs-btn--ghost-dark"
+                    <button class="hs-text-link"
                             @onclick="@(() => NavigateToCategory(featSection.Category.Slug))">
-                        Xem Tất Cả →
+                        Xem tất cả →
                     </button>
                 </div>
                 <MudGrid>
@@ -178,44 +177,53 @@ else
     }
 
     @* ── Section 5: Why Buy from HushStore ── *@
-    <section class="hs-section hs-section--dark">
+    <section class="hs-section hs-section--gray">
         <div class="hs-container">
-            <div style="text-align:center;margin-bottom:48px;">
-                <span class="hs-section-label">TẠI SAO CHỌN CHÚNG TÔI</span>
-                <h2 class="hs-heading hs-heading--lg hs-heading--white" style="margin:0;">
-                    Vì Sao Mua Tại HushStore?
-                </h2>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:48px;flex-wrap:wrap;gap:24px;">
+                <div>
+                    <span class="hs-section-label">LỜI HỨA CỦA CHÚNG TÔI</span>
+                    <h2 class="hs-heading hs-heading--lg" style="margin:0;">
+                        Vì Sao Mua Tại <span style="color:var(--hs-red);">HushStore?</span>
+                    </h2>
+                </div>
+                <p style="max-width:320px;font-size:0.9rem;color:var(--hs-text-muted);line-height:1.7;margin:0;">
+                    Được vận hành bởi đội ngũ am hiểu công nghệ, tận tâm phục vụ khách hàng từ năm 2020.
+                </p>
             </div>
             <div class="hs-grid hs-grid--4">
-                <div style="text-align:center;padding:24px 16px;">
-                    <MudIcon Icon="@Icons.Material.Filled.VerifiedUser"
-                             Style="font-size:2.5rem;color:var(--hs-red);margin-bottom:16px;display:block;" />
-                    <h3 style="font-size:1rem;font-weight:700;color:white;margin-bottom:10px;">Hàng Chính Hãng 100%</h3>
-                    <p style="font-size:0.82rem;color:#999;line-height:1.6;margin:0;">
+                <div class="hs-feature-card">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1rem;font-weight:700;color:var(--hs-text);margin-bottom:10px;">Hàng Chính Hãng 100%</h3>
+                    <p style="font-size:0.85rem;color:var(--hs-text-muted);line-height:1.6;margin:0;">
                         Toàn bộ sản phẩm có tem nhãn, hoá đơn và giấy tờ chứng nhận chính hãng đầy đủ.
                     </p>
                 </div>
-                <div style="text-align:center;padding:24px 16px;">
-                    <MudIcon Icon="@Icons.Material.Filled.Support"
-                             Style="font-size:2.5rem;color:var(--hs-red);margin-bottom:16px;display:block;" />
-                    <h3 style="font-size:1rem;font-weight:700;color:white;margin-bottom:10px;">Bảo Hành Tận Nơi</h3>
-                    <p style="font-size:0.82rem;color:#999;line-height:1.6;margin:0;">
+                <div class="hs-feature-card">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.Support" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1rem;font-weight:700;color:var(--hs-text);margin-bottom:10px;">Bảo Hành Tận Nơi</h3>
+                    <p style="font-size:0.85rem;color:var(--hs-text-muted);line-height:1.6;margin:0;">
                         Đội ngũ kỹ thuật đến tận nhà xử lý sự cố — không cần tự mang máy đến cửa hàng.
                     </p>
                 </div>
-                <div style="text-align:center;padding:24px 16px;">
-                    <MudIcon Icon="@Icons.Material.Filled.LocalShipping"
-                             Style="font-size:2.5rem;color:var(--hs-red);margin-bottom:16px;display:block;" />
-                    <h3 style="font-size:1rem;font-weight:700;color:white;margin-bottom:10px;">Giao Hàng Toàn Quốc</h3>
-                    <p style="font-size:0.82rem;color:#999;line-height:1.6;margin:0;">
+                <div class="hs-feature-card">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1rem;font-weight:700;color:var(--hs-text);margin-bottom:10px;">Giao Hàng Toàn Quốc</h3>
+                    <p style="font-size:0.85rem;color:var(--hs-text-muted);line-height:1.6;margin:0;">
                         Giao hàng nhanh chóng, đóng gói chuyên nghiệp đến mọi tỉnh thành trong cả nước.
                     </p>
                 </div>
-                <div style="text-align:center;padding:24px 16px;">
-                    <MudIcon Icon="@Icons.Material.Filled.HeadsetMic"
-                             Style="font-size:2.5rem;color:var(--hs-red);margin-bottom:16px;display:block;" />
-                    <h3 style="font-size:1rem;font-weight:700;color:white;margin-bottom:10px;">Hỗ Trợ Kỹ Thuật</h3>
-                    <p style="font-size:0.82rem;color:#999;line-height:1.6;margin:0;">
+                <div class="hs-feature-card">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.HeadsetMic" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1rem;font-weight:700;color:var(--hs-text);margin-bottom:10px;">Hỗ Trợ Kỹ Thuật</h3>
+                    <p style="font-size:0.85rem;color:var(--hs-text-muted);line-height:1.6;margin:0;">
                         Chuyên gia tư vấn và hỗ trợ kỹ thuật nhiệt tình, giải đáp mọi thắc mắc của bạn.
                     </p>
                 </div>
@@ -226,10 +234,8 @@ else
     @* ── Section 6: Our Reliable Partners ── *@
     <section class="hs-section">
         <div class="hs-container">
-            <div style="text-align:center;margin-bottom:40px;">
-                <span class="hs-section-label">HỢP TÁC</span>
-                <h2 class="hs-heading hs-heading--lg" style="margin:0;">Đối Tác Tin Cậy</h2>
-            </div>
+            <span class="hs-section-label">HỢP TÁC THƯƠNG HIỆU</span>
+            <h2 class="hs-heading hs-heading--lg" style="margin-bottom:40px;">Đối Tác Tin Cậy</h2>
             <div style="display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:40px 60px;">
                 <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/7/7d/Intel_logo_%282006-2020%29.svg" alt="Intel" loading="lazy" onerror="this.style.display='none'" />
                 <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/7/7c/AMD_Logo.svg" alt="AMD" loading="lazy" onerror="this.style.display='none'" />
