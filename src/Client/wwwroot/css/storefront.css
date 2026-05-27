@@ -153,6 +153,19 @@
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
 }
 
+/* Button reset for clickable cards */
+.hs-card-btn {
+  width: 100%;
+  text-align: left;
+  font-family: var(--hs-font);
+  cursor: pointer;
+}
+
+.hs-card-btn:focus-visible {
+  outline: 2px solid var(--hs-red);
+  outline-offset: 3px;
+}
+
 .hs-card--dark {
   background: var(--hs-dark-2);
   border-color: var(--hs-dark-3);
@@ -226,9 +239,11 @@
   .hs-section--compact {
     padding: 32px 0;
   }
-  .hs-grid--3,
   .hs-grid--4 {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .hs-grid--3 {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -276,6 +291,34 @@
   .hs-footer-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── Partner logos ── */
+.hs-partner-logo {
+  height: 36px;
+  max-width: 120px;
+  opacity: 0.6;
+  filter: grayscale(100%);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+  object-fit: contain;
+}
+
+.hs-partner-logo:hover {
+  opacity: 1;
+  filter: none;
+}
+
+/* ── Accessibility ── */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ── Navbar override ── */
