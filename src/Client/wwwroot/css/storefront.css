@@ -134,6 +134,11 @@
   color: var(--hs-white);
 }
 
+.hs-btn:focus-visible {
+  outline: 2px solid var(--hs-red);
+  outline-offset: 3px;
+}
+
 /* ── Cards ── */
 .hs-card {
   background: var(--hs-white);
@@ -218,6 +223,9 @@
   .hs-section {
     padding: 48px 0;
   }
+  .hs-section--compact {
+    padding: 32px 0;
+  }
   .hs-grid--3,
   .hs-grid--4 {
     grid-template-columns: repeat(2, 1fr);
@@ -228,7 +236,7 @@
   .hs-grid--3,
   .hs-grid--4,
   .hs-grid--products {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
   .hs-container {
     padding: 0 16px;
