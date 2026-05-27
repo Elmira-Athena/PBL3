@@ -75,7 +75,14 @@ builder.Services.AddSwaggerGen();
 
 // Add DbContext
 builder.Services.AddDbContext<HushStoreDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    // ServiceInvoice intentionally omits the query filter so financial records
+    // remain queryable even after the parent ServiceTicket is soft-deleted.
+    options.ConfigureWarnings(w => w.Ignore(
+        Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId
+            .PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning));
+});
 
 // Add Identity
 builder.Services.AddIdentity<AppUser, AppRole>(options =>
