@@ -9,21 +9,25 @@
 
 <PageTitle>Đơn hàng của tôi - HushStore</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
-        <div>
-            <MudText Typo="Typo.h5" Class="fw-bold" Style="color: var(--mud-palette-text-primary);">
-                Đơn Hàng Của Tôi
-            </MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Theo dõi trạng thái các đơn hàng của bạn
-            </MudText>
-        </div>
-    </MudPaper>
+@* ===== HEADER ===== *@
+<div style="background:var(--hs-white); border-bottom:1px solid var(--hs-border); padding:28px 0 20px;">
+    <div class="hs-container">
+        <h1 style="font-size:clamp(1.6rem,3vw,2.2rem); font-weight:800; color:var(--hs-dark);
+                   letter-spacing:-0.02em; text-transform:uppercase; margin:0 0 4px;">
+            Đơn hàng của tôi
+        </h1>
+        <p style="font-size:0.875rem; color:var(--hs-text-muted); margin:0;">
+            Theo dõi trạng thái các đơn hàng của bạn
+        </p>
+    </div>
+</div>
 
-    <MudPaper Elevation="1" Class="pa-4 mb-4 rounded-lg d-flex flex-wrap gap-4 align-center">
-        <MudSelect T="int?" @bind-Value="_statusFilter" Label="Trạng thái" Variant="Variant.Outlined"
-                   Margin="Margin.Dense" Style="max-width: 200px;">
+@* ===== FILTER BAR ===== *@
+<div style="background:var(--hs-white); border-bottom:1px solid var(--hs-border); padding:14px 0;">
+    <div class="hs-container" style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <MudSelect T="int?" @bind-Value="_statusFilter"
+                   Label="Trạng thái" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Style="max-width:200px;">
             <MudSelectItem T="int?" Value="@null">Tất cả</MudSelectItem>
             <MudSelectItem T="int?" Value="0">Chờ duyệt</MudSelectItem>
             <MudSelectItem T="int?" Value="1">Chờ xuất kho</MudSelectItem>
@@ -31,54 +35,76 @@
             <MudSelectItem T="int?" Value="3">Thành công</MudSelectItem>
             <MudSelectItem T="int?" Value="4">Đã hủy</MudSelectItem>
         </MudSelect>
-
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RefreshList" Class="ml-auto">
-            Lọc kết quả
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="RefreshList"
+                   Style="font-weight:700; font-size:0.78rem; letter-spacing:0.05em;">
+            LỌC KẾT QUẢ
         </MudButton>
-    </MudPaper>
+    </div>
+</div>
 
-    <MudTable T="OrderSummaryResponse" ServerData="ServerReload"
-              Dense="true" Hover="true" Bordered="false" Striped="false" Elevation="1"
-              Class="rounded-lg" @ref="_table"
-              OnRowClick="OnRowClick" RowStyle="cursor: pointer;">
-        <HeaderContent>
-            <MudTh>Mã đơn</MudTh>
-            <MudTh>Ngày đặt</MudTh>
-            <MudTh>Tổng tiền</MudTh>
-            <MudTh>Trạng thái</MudTh>
-            <MudTh>Thanh toán</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Mã đơn">
-                <MudText Typo="Typo.body2" Style="font-weight: 500; font-family: monospace;">@context.OrderCode</MudText>
-            </MudTd>
-            <MudTd DataLabel="Ngày đặt">
-                <MudText Typo="Typo.body2">@context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
-            </MudTd>
-            <MudTd DataLabel="Tổng tiền">
-                <MudText Typo="Typo.body2">@context.TotalAmount.ToString("N0") ₫</MudText>
-            </MudTd>
-            <MudTd DataLabel="Trạng thái">
-                @{
-                    var (statusText, statusColor) = GetOrderStatus(context.Status);
-                }
-                <MudChip T="string" Color="@statusColor" Size="Size.Small" Variant="Variant.Filled">@statusText</MudChip>
-            </MudTd>
-            <MudTd DataLabel="Thanh toán">
-                <MudText Typo="Typo.body2">@GetPaymentStatus(context.PaymentStatus)</MudText>
-            </MudTd>
-        </RowTemplate>
-        <NoRecordsContent>
-            <MudText Class="pa-4">Bạn chưa có đơn hàng nào.</MudText>
-        </NoRecordsContent>
-        <LoadingContent>
-            <MudText Class="pa-4">Đang tải dữ liệu...</MudText>
-        </LoadingContent>
-        <PagerContent>
-            <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
-        </PagerContent>
-    </MudTable>
-</MudContainer>
+@* ===== TABLE AREA ===== *@
+<div style="background:var(--hs-gray-bg); padding:32px 0 72px;">
+    <div class="hs-container">
+        <MudTable T="OrderSummaryResponse" ServerData="ServerReload"
+                  Dense="false" Hover="true" Bordered="false" Striped="false" Elevation="0"
+                  Style="border:1px solid var(--hs-border); border-radius:12px; overflow:hidden; background:var(--hs-white);"
+                  @ref="_table"
+                  OnRowClick="OnRowClick" RowStyle="cursor:pointer;">
+            <HeaderContent>
+                <MudTh Style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); background:#FAFAFA;">Mã đơn</MudTh>
+                <MudTh Style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); background:#FAFAFA;">Ngày đặt</MudTh>
+                <MudTh Style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); background:#FAFAFA;">Tổng tiền</MudTh>
+                <MudTh Style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); background:#FAFAFA;">Trạng thái</MudTh>
+                <MudTh Style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); background:#FAFAFA;">Thanh toán</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Mã đơn">
+                    <span style="font-family:monospace; font-weight:700; font-size:0.875rem; color:var(--hs-dark);">
+                        @context.OrderCode
+                    </span>
+                </MudTd>
+                <MudTd DataLabel="Ngày đặt">
+                    <span style="font-size:0.875rem; color:var(--hs-text);">
+                        @context.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy")
+                    </span>
+                </MudTd>
+                <MudTd DataLabel="Tổng tiền">
+                    <span style="font-size:0.875rem; font-weight:700; color:var(--hs-red);">
+                        @context.TotalAmount.ToString("N0") đ
+                    </span>
+                </MudTd>
+                <MudTd DataLabel="Trạng thái">
+                    @{
+                        var (statusText, statusColor) = GetOrderStatus(context.Status);
+                    }
+                    <MudChip T="string" Color="@statusColor" Size="Size.Small" Variant="Variant.Filled">@statusText</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Thanh toán">
+                    <span style="font-size:0.875rem; color:var(--hs-text-muted);">
+                        @GetPaymentStatus(context.PaymentStatus)
+                    </span>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <div style="display:flex; flex-direction:column; align-items:center; padding:56px 0; text-align:center;">
+                    <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong"
+                             Style="font-size:3.5rem; color:#BDBDBD; margin-bottom:12px;" />
+                    <p style="font-size:0.875rem; color:var(--hs-text-muted); margin:0;">
+                        Bạn chưa có đơn hàng nào.
+                    </p>
+                </div>
+            </NoRecordsContent>
+            <LoadingContent>
+                <div style="padding:32px; text-align:center;">
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                </div>
+            </LoadingContent>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 10, 20, 50 }" />
+            </PagerContent>
+        </MudTable>
+    </div>
+</div>
 
 @code {
     private int? _statusFilter;

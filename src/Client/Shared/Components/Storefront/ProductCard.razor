@@ -68,8 +68,8 @@
             </div>
 
             <div style="display:flex; align-items:center; gap:4px; margin-top:8px;">
-                <MudRating SelectedValue="(int)Product.Rating" Max="5" Size="Size.Small" ReadOnly="true"
-                           Style="pointer-events:none;" UserAttributes='@(new Dictionary<string, object> { ["tabindex"] = "-1" })' />
+                <MudRating SelectedValue="(int)Product.Rating" Size="Size.Small" ReadOnly="true"
+                           Style="pointer-events:none;" />
                 <span style="font-size:0.7rem; color:var(--hs-text-muted);">(@Product.ReviewCount)</span>
             </div>
         </div>
