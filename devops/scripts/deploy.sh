@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 CLIENT_WWWROOT="/var/www/hushstore/wwwroot"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -34,8 +34,8 @@ echo "  → Static files deployed to $CLIENT_WWWROOT"
 
 # 3. Build & restart API container
 echo "[3/4] Building and restarting API container..."
-docker compose -f "$REPO_DIR/docker-compose.yml" build api
-docker compose -f "$REPO_DIR/docker-compose.yml" up -d api
+docker compose -f "$REPO_DIR/devops/docker/docker-compose.yml" build api
+docker compose -f "$REPO_DIR/devops/docker/docker-compose.yml" up -d api
 echo "  → API container restarted"
 
 # 4. Verify health check

@@ -8,13 +8,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_FILE="$SCRIPT_DIR/config.json"
-RESOURCES_FILE="$SCRIPT_DIR/resources.env"
+CONFIG_FILE="$SCRIPT_DIR/../config.json"
+RESOURCES_FILE="$SCRIPT_DIR/../resources.env"
 
 # ─── ĐỌC CONFIG ───────────────────────────────────────────────
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "ERROR: $CONFIG_FILE không tồn tại."
-  echo "  cp infra/config.example.json infra/config.json && nano infra/config.json"
+  echo "  cp devops/config.example.json devops/config.json && nano devops/config.json"
   exit 1
 fi
 

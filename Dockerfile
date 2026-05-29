@@ -6,7 +6,7 @@ WORKDIR /src
 COPY src/Shared/Shared.csproj src/Shared/
 COPY src/Core/Core.csproj src/Core/
 COPY src/Infrastructure/Infrastructure.csproj src/Infrastructure/
-COPY src/Service/Service.csproj src/Service/
+COPY src/Application/Application.csproj src/Application/
 COPY src/API/API.csproj src/API/
 RUN dotnet restore src/API/API.csproj
 

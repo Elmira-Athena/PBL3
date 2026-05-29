@@ -8,7 +8,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RESOURCES_FILE="$SCRIPT_DIR/resources.env"
+RESOURCES_FILE="$SCRIPT_DIR/../resources.env"
 
 [[ ! -f "$RESOURCES_FILE" ]] && echo "ERROR: $RESOURCES_FILE không tồn tại." && exit 1
 

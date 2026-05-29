@@ -8,7 +8,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RESOURCES_FILE="$SCRIPT_DIR/resources.env"
+RESOURCES_FILE="$SCRIPT_DIR/../resources.env"
 
 if [[ ! -f "$RESOURCES_FILE" ]]; then
   echo "ERROR: $RESOURCES_FILE không tồn tại. Không có gì để xóa."
@@ -109,7 +109,7 @@ echo "  Done."
 
 # ─── 11. ARCHIVE ──────────────────────────────────────────────
 echo "[11/11] Archiving resources file..."
-ARCHIVE="$SCRIPT_DIR/resources-deleted-$(date '+%Y%m%d-%H%M%S').env"
+ARCHIVE="$SCRIPT_DIR/../resources-deleted-$(date '+%Y%m%d-%H%M%S').env"
 mv "$RESOURCES_FILE" "$ARCHIVE"
 echo "  Archived → $ARCHIVE"
 
