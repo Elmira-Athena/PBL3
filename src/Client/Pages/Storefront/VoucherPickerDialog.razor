@@ -93,7 +93,20 @@
                                             -@v.EstimatedDiscount.ToString("N0")đ
                                         </MudText>
                                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                            @(v.DiscountType == 1 ? $"-{v.DiscountValue:0}%" : $"-{v.DiscountValue:N0}đ")
+                                            @if (v.DiscountType == 1)
+                                            {
+                                                @($"-{v.DiscountValue:0}%")
+                                                if (v.MaxDiscountAmount.HasValue)
+                                                {
+                                                    <span style="display: block; font-size: 10px; color: var(--mud-palette-warning-text); font-weight: 600;">
+                                                        tối đa @v.MaxDiscountAmount.Value.ToString("N0")đ
+                                                    </span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                @($"-{v.DiscountValue:N0}đ")
+                                            }
                                         </MudText>
                                     </div>
                                 </div>
@@ -129,7 +142,20 @@
                                     </div>
                                     <div class="text-right">
                                         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                            @(v.DiscountType == 1 ? $"-{v.DiscountValue:0}%" : $"-{v.DiscountValue:N0}đ")
+                                            @if (v.DiscountType == 1)
+                                            {
+                                                @($"-{v.DiscountValue:0}%")
+                                                if (v.MaxDiscountAmount.HasValue)
+                                                {
+                                                    <span style="display: block; font-size: 10px; font-weight: 600;">
+                                                        tối đa @v.MaxDiscountAmount.Value.ToString("N0")đ
+                                                    </span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                @($"-{v.DiscountValue:N0}đ")
+                                            }
                                         </MudText>
                                     </div>
                                 </div>

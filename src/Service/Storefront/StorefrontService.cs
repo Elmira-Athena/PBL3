@@ -10,11 +10,34 @@ namespace PBL3.Service.Storefront
     {
         private readonly HushStoreDbContext _context;
         private readonly IProductReviewRepository _reviewRepo;
+        private readonly IProductSerialRepository _serialRepo;
+        private readonly IOrderRepository _orderRepo;
 
-        public StorefrontService(HushStoreDbContext context, IProductReviewRepository reviewRepo)
+        public StorefrontService(
+            HushStoreDbContext context,
+            IProductReviewRepository reviewRepo,
+            IProductSerialRepository serialRepo,
+            IOrderRepository orderRepo)
         {
             _context = context;
             _reviewRepo = reviewRepo;
+            _serialRepo = serialRepo;
+            _orderRepo = orderRepo;
+        }
+
+        /// <summary>
+        /// NGHIỆP VỤ PHỤ TRỢ: Tính tồn kho ảo (Virtual Stock) theo batch cho danh sách VariantId.
+        /// Tồn kho ảo = Số Serial Available (Status=0) - Số lượng đang được giữ trong đơn Pending/Confirmed.
+        /// Phương pháp này ngăn chặn tình trạng bán quá số lượng thực tế khi staff chưa duyệt đơn.
+        /// </summary>
+        private async Task<Dictionary<int, int>> GetVirtualStockMapAsync(List<int> variantIds)
+        {
+            if (variantIds.Count == 0) return new();
+            var available = await _serialRepo.CountAvailableByVariantIdsAsync(variantIds);
+            var reserved  = await _orderRepo.GetActiveOrderQuantitiesByVariantIdsAsync(variantIds);
+            return variantIds.ToDictionary(
+                id => id,
+                id => Math.Max(0, available.GetValueOrDefault(id) - reserved.GetValueOrDefault(id)));
         }
 
         /// <summary>
@@ -178,15 +201,23 @@ namespace PBL3.Service.Storefront
                 .Distinct()
                 .ToList();
 
-            var variantResponses = activeVariants.Select(v => new StorefrontVariantResponse
+            // Tính virtual stock cho tất cả variant của sản phẩm này trong 1 batch query
+            var variantIds = activeVariants.Select(v => v.Id).ToList();
+            var virtualStockMap = await GetVirtualStockMapAsync(variantIds);
+
+            var variantResponses = activeVariants.Select(v =>
             {
-                Id = v.Id,
-                VariantName = v.VariantName,
-                Price = v.Price,
-                OriginalPrice = v.OriginalPrice > v.Price ? v.OriginalPrice : null,
-                IsAvailable = v.StockQuantity > 0,
-                StockQuantity = v.StockQuantity,
-                Specifications = v.Specifications ?? new()
+                var virtualStock = virtualStockMap.GetValueOrDefault(v.Id, 0);
+                return new StorefrontVariantResponse
+                {
+                    Id = v.Id,
+                    VariantName = v.VariantName,
+                    Price = v.Price,
+                    OriginalPrice = v.OriginalPrice > v.Price ? v.OriginalPrice : null,
+                    IsAvailable = virtualStock > 0,
+                    StockQuantity = virtualStock,
+                    Specifications = v.Specifications ?? new()
+                };
             }).ToList();
 
             var defaultVariant = activeVariants.OrderBy(v => v.Price).FirstOrDefault();

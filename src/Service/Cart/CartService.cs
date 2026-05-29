@@ -13,23 +13,57 @@ namespace PBL3.Service.Cart
         private readonly ICartRepository _cartRepo;
         private readonly IProductRepository _productRepo;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IProductSerialRepository _serialRepo;
+        private readonly IOrderRepository _orderRepo;
 
-        public CartService(ICartRepository cartRepo, IProductRepository productRepo, IUnitOfWork unitOfWork)
+        public CartService(
+            ICartRepository cartRepo,
+            IProductRepository productRepo,
+            IUnitOfWork unitOfWork,
+            IProductSerialRepository serialRepo,
+            IOrderRepository orderRepo)
         {
             _cartRepo = cartRepo;
             _productRepo = productRepo;
             _unitOfWork = unitOfWork;
+            _serialRepo = serialRepo;
+            _orderRepo = orderRepo;
+        }
+
+        /// <summary>
+        /// Tính tồn kho ảo (Virtual Stock) cho một Variant.
+        /// Tồn kho ảo = Số serial Available - Số lượng đang giữ trong đơn Pending/Confirmed.
+        /// </summary>
+        private async Task<int> GetVirtualStockAsync(int variantId)
+        {
+            var available = await _serialRepo.CountAvailableByVariantIdsAsync(new List<int> { variantId });
+            var reserved  = await _orderRepo.GetActiveOrderQuantitiesByVariantIdsAsync(new List<int> { variantId });
+            return Math.Max(0, available.GetValueOrDefault(variantId) - reserved.GetValueOrDefault(variantId));
         }
 
         public async Task<ApiResult<CartResponse>> GetMyCartAsync(Guid userId)
         {
             var carts = await _cartRepo.GetCartItemsByUserAsync(userId);
 
+            // Batch tính virtual stock cho tất cả variant trong giỏ hàng
+            var allVariantIds = carts.Select(c => c.VariantId).Distinct().ToList();
+            Dictionary<int, int> virtualStockMap = new();
+            if (allVariantIds.Any())
+            {
+                var available = await _serialRepo.CountAvailableByVariantIdsAsync(allVariantIds);
+                var reserved  = await _orderRepo.GetActiveOrderQuantitiesByVariantIdsAsync(allVariantIds);
+                virtualStockMap = allVariantIds.ToDictionary(
+                    id => id,
+                    id => Math.Max(0, available.GetValueOrDefault(id) - reserved.GetValueOrDefault(id)));
+            }
+
             var response = new CartResponse();
             foreach (var cart in carts)
             {
-                var image = cart.Variant.Images.FirstOrDefault(i => i.IsMain) 
+                var image = cart.Variant.Images.FirstOrDefault(i => i.IsMain)
                             ?? cart.Variant.Images.OrderBy(i => i.SortOrder).FirstOrDefault();
+
+                var virtualStock = virtualStockMap.GetValueOrDefault(cart.VariantId, 0);
 
                 response.Items.Add(new CartItemResponse
                 {
@@ -41,7 +75,7 @@ namespace PBL3.Service.Cart
                     UnitPrice = cart.Variant.Price,
                     Quantity = cart.Quantity,
                     SubTotal = cart.Variant.Price * cart.Quantity,
-                    StockQuantity = cart.Variant.StockQuantity,
+                    StockQuantity = virtualStock,
                     ProductSlug = cart.Variant.Product.Slug
                 });
             }
@@ -77,10 +111,11 @@ namespace PBL3.Service.Cart
             var currentQty = existingCart?.Quantity ?? 0;
             var newTotal = currentQty + request.Quantity;
 
-            // 3. Check stock limit
-            if (newTotal > variant.StockQuantity)
+            // 3. Kiểm tra virtual stock (thực tế khả dụng = Available serials - đang giữ trong đơn Pending/Confirmed)
+            var virtualStock = await GetVirtualStockAsync(request.VariantId);
+            if (newTotal > virtualStock)
             {
-                var remaining = variant.StockQuantity - currentQty;
+                var remaining = virtualStock - currentQty;
                 return ApiResult<CartResponse>.Fail(remaining <= 0
                     ? "Sản phẩm đã đạt giới hạn tồn kho trong giỏ hàng."
                     : $"Chỉ có thể thêm tối đa {remaining} sản phẩm nữa.");
@@ -125,13 +160,12 @@ namespace PBL3.Service.Cart
             }
             else
             {
-                // Check stock limit
-                var variant = await _productRepo.GetVariantByIdAsync(cart.VariantId);
-                var stockLimit = variant?.StockQuantity ?? 99;
+                // Kiểm tra virtual stock
+                var virtualStock = await GetVirtualStockAsync(cart.VariantId);
 
-                if (request.Quantity > stockLimit)
+                if (request.Quantity > virtualStock)
                 {
-                    return ApiResult<CartResponse>.Fail($"Số lượng vượt tồn kho. Chỉ còn {stockLimit} sản phẩm.");
+                    return ApiResult<CartResponse>.Fail($"Số lượng vượt tồn kho ảo. Chỉ còn {virtualStock} sản phẩm khả dụng.");
                 }
 
                 cart.Quantity = request.Quantity;
