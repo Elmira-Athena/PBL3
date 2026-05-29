@@ -6,18 +6,14 @@ using PBL3.Shared.DTOs.Vouchers;
 
 namespace PBL3.Application.Vouchers
 {
-    public class VoucherService : IVoucherService
+    public class VoucherService(
+        IVoucherRepository voucherRepo,
+        ILogger<VoucherService> logger) : IVoucherService
     {
-        private readonly IVoucherRepository _voucherRepo;
-        private readonly ILogger<VoucherService> _logger;
-
-        public VoucherService(
-            IVoucherRepository voucherRepo,
-            ILogger<VoucherService> logger)
-        {
-            _voucherRepo = voucherRepo;
-            _logger = logger;
-        }
+        private readonly IVoucherRepository _voucherRepo =
+            voucherRepo ?? throw new ArgumentNullException(nameof(voucherRepo));
+        private readonly ILogger<VoucherService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         // ========================================================
         // GET LIST

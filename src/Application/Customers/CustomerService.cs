@@ -14,27 +14,23 @@ using System.Threading.Tasks;
 
 namespace PBL3.Application.Customers
 {
-    public class CustomerService : ICustomerService
+    public class CustomerService(
+        ICustomerRepository customerRepo,
+        ICartRepository cartRepo,
+        UserManager<AppUser> userManager,
+        IMemoryCache cache,
+        ILogger<CustomerService> logger) : ICustomerService
     {
-        private readonly ICustomerRepository _customerRepo;
-        private readonly ICartRepository _cartRepo;
-        private readonly UserManager<AppUser> _userManager;
-        private readonly IMemoryCache _cache;
-        private readonly ILogger<CustomerService> _logger;
-
-        public CustomerService(
-            ICustomerRepository customerRepo,
-            ICartRepository cartRepo,
-            UserManager<AppUser> userManager,
-            IMemoryCache cache,
-            ILogger<CustomerService> logger)
-        {
-            _customerRepo = customerRepo;
-            _cartRepo = cartRepo;
-            _userManager = userManager;
-            _cache = cache;
-            _logger = logger;
-        }
+        private readonly ICustomerRepository _customerRepo =
+            customerRepo ?? throw new ArgumentNullException(nameof(customerRepo));
+        private readonly ICartRepository _cartRepo =
+            cartRepo ?? throw new ArgumentNullException(nameof(cartRepo));
+        private readonly UserManager<AppUser> _userManager =
+            userManager ?? throw new ArgumentNullException(nameof(userManager));
+        private readonly IMemoryCache _cache =
+            cache ?? throw new ArgumentNullException(nameof(cache));
+        private readonly ILogger<CustomerService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         public async Task<ApiResult<PagedResult<CustomerDto>>> GetPagedListAsync(CustomerFilterRequest filter)
         {

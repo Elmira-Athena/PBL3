@@ -5,14 +5,10 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class RmaShipmentRepository : IRmaShipmentRepository
+    public class RmaShipmentRepository(HushStoreDbContext dbContext) : IRmaShipmentRepository
     {
-        private readonly HushStoreDbContext _dbContext;
-
-        public RmaShipmentRepository(HushStoreDbContext dbContext)
-        {
-            _dbContext = dbContext;
-        }
+        private readonly HushStoreDbContext _dbContext =
+            dbContext ?? throw new ArgumentNullException(nameof(dbContext));
 
         public async Task<RmaShipment?> GetByTicketIdAsync(int ticketId)
         {

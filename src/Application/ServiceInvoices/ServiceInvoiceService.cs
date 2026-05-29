@@ -7,14 +7,11 @@ using PBL3.Shared.DTOs.ServiceTickets;
 
 namespace PBL3.Application.ServiceInvoices
 {
-    public class ServiceInvoiceService : IServiceInvoiceService
+    public class ServiceInvoiceService(
+        IServiceInvoiceRepository repository) : IServiceInvoiceService
     {
-        private readonly IServiceInvoiceRepository _repository;
-
-        public ServiceInvoiceService(IServiceInvoiceRepository repository)
-        {
-            _repository = repository;
-        }
+        private readonly IServiceInvoiceRepository _repository =
+            repository ?? throw new ArgumentNullException(nameof(repository));
 
         public async Task<ServiceInvoiceDetailDto?> GetByIdAsync(int id)
         {

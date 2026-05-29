@@ -11,45 +11,41 @@ using PBL3.Shared.Enums;
 
 namespace PBL3.Application.ServiceTickets
 {
-    public class ServiceTicketService : IServiceTicketService
+    public class ServiceTicketService(
+        IServiceTicketRepository ticketRepository,
+        IQuotationRepository quotationRepository,
+        IRmaShipmentRepository rmaRepository,
+        IServiceInvoiceRepository invoiceRepository,
+        ISerialRepairLogRepository logRepository,
+        IWarrantyRepository warrantyRepository,
+        IProductSerialRepository serialRepository,
+        IOrderRepository orderRepository,
+        IUnitOfWork unitOfWork,
+        HushStoreDbContext dbContext,
+        IInventorySyncService inventorySyncService) : IServiceTicketService
     {
-        private readonly IServiceTicketRepository _ticketRepository;
-        private readonly IQuotationRepository _quotationRepository;
-        private readonly IRmaShipmentRepository _rmaRepository;
-        private readonly IServiceInvoiceRepository _invoiceRepository;
-        private readonly ISerialRepairLogRepository _logRepository;
-        private readonly IWarrantyRepository _warrantyRepository;
-        private readonly IProductSerialRepository _serialRepository;
-        private readonly IOrderRepository _orderRepository;
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly HushStoreDbContext _dbContext;
-        private readonly IInventorySyncService _inventorySyncService;
-
-        public ServiceTicketService(
-            IServiceTicketRepository ticketRepository,
-            IQuotationRepository quotationRepository,
-            IRmaShipmentRepository rmaRepository,
-            IServiceInvoiceRepository invoiceRepository,
-            ISerialRepairLogRepository logRepository,
-            IWarrantyRepository warrantyRepository,
-            IProductSerialRepository serialRepository,
-            IOrderRepository orderRepository,
-            IUnitOfWork unitOfWork,
-            HushStoreDbContext dbContext,
-            IInventorySyncService inventorySyncService)
-        {
-            _ticketRepository = ticketRepository;
-            _quotationRepository = quotationRepository;
-            _rmaRepository = rmaRepository;
-            _invoiceRepository = invoiceRepository;
-            _logRepository = logRepository;
-            _warrantyRepository = warrantyRepository;
-            _serialRepository = serialRepository;
-            _orderRepository = orderRepository;
-            _unitOfWork = unitOfWork;
-            _dbContext = dbContext;
-            _inventorySyncService = inventorySyncService;
-        }
+        private readonly IServiceTicketRepository _ticketRepository =
+            ticketRepository ?? throw new ArgumentNullException(nameof(ticketRepository));
+        private readonly IQuotationRepository _quotationRepository =
+            quotationRepository ?? throw new ArgumentNullException(nameof(quotationRepository));
+        private readonly IRmaShipmentRepository _rmaRepository =
+            rmaRepository ?? throw new ArgumentNullException(nameof(rmaRepository));
+        private readonly IServiceInvoiceRepository _invoiceRepository =
+            invoiceRepository ?? throw new ArgumentNullException(nameof(invoiceRepository));
+        private readonly ISerialRepairLogRepository _logRepository =
+            logRepository ?? throw new ArgumentNullException(nameof(logRepository));
+        private readonly IWarrantyRepository _warrantyRepository =
+            warrantyRepository ?? throw new ArgumentNullException(nameof(warrantyRepository));
+        private readonly IProductSerialRepository _serialRepository =
+            serialRepository ?? throw new ArgumentNullException(nameof(serialRepository));
+        private readonly IOrderRepository _orderRepository =
+            orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+        private readonly IUnitOfWork _unitOfWork =
+            unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        private readonly HushStoreDbContext _dbContext =
+            dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        private readonly IInventorySyncService _inventorySyncService =
+            inventorySyncService ?? throw new ArgumentNullException(nameof(inventorySyncService));
 
         /// <summary>
         /// NGHIỆP VỤ: Đánh giá điều kiện bảo hành của thiết bị dựa trên mã Serial Number trước khi làm thủ tục tiếp nhận.

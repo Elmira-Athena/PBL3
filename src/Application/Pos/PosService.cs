@@ -13,39 +13,35 @@ using PBL3.Shared.Enums;
 
 namespace PBL3.Application.Pos
 {
-    public class PosService : IPosService
+    public class PosService(
+        IUnitOfWork unitOfWork,
+        IOrderRepository orderRepo,
+        IProductSerialRepository serialRepo,
+        IVoucherRepository voucherRepo,
+        IWarrantyRepository warrantyRepo,
+        IProductRepository productRepo,
+        IInventorySyncService inventorySyncService,
+        HushStoreDbContext dbContext,
+        UserManager<AppUser> userManager) : IPosService
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IOrderRepository _orderRepo;
-        private readonly IProductSerialRepository _serialRepo;
-        private readonly IVoucherRepository _voucherRepo;
-        private readonly IWarrantyRepository _warrantyRepo;
-        private readonly IProductRepository _productRepo;
-        private readonly IInventorySyncService _inventorySyncService;
-        private readonly HushStoreDbContext _dbContext; // For user lookup and quick queries
-        private readonly UserManager<AppUser> _userManager;
-
-        public PosService(
-            IUnitOfWork unitOfWork,
-            IOrderRepository orderRepo,
-            IProductSerialRepository serialRepo,
-            IVoucherRepository voucherRepo,
-            IWarrantyRepository warrantyRepo,
-            IProductRepository productRepo,
-            IInventorySyncService inventorySyncService,
-            HushStoreDbContext dbContext,
-            UserManager<AppUser> userManager)
-        {
-            _unitOfWork = unitOfWork;
-            _orderRepo = orderRepo;
-            _serialRepo = serialRepo;
-            _voucherRepo = voucherRepo;
-            _warrantyRepo = warrantyRepo;
-            _productRepo = productRepo;
-            _inventorySyncService = inventorySyncService;
-            _dbContext = dbContext;
-            _userManager = userManager;
-        }
+        private readonly IUnitOfWork _unitOfWork =
+            unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        private readonly IOrderRepository _orderRepo =
+            orderRepo ?? throw new ArgumentNullException(nameof(orderRepo));
+        private readonly IProductSerialRepository _serialRepo =
+            serialRepo ?? throw new ArgumentNullException(nameof(serialRepo));
+        private readonly IVoucherRepository _voucherRepo =
+            voucherRepo ?? throw new ArgumentNullException(nameof(voucherRepo));
+        private readonly IWarrantyRepository _warrantyRepo =
+            warrantyRepo ?? throw new ArgumentNullException(nameof(warrantyRepo));
+        private readonly IProductRepository _productRepo =
+            productRepo ?? throw new ArgumentNullException(nameof(productRepo));
+        private readonly IInventorySyncService _inventorySyncService =
+            inventorySyncService ?? throw new ArgumentNullException(nameof(inventorySyncService));
+        private readonly HushStoreDbContext _dbContext = // For user lookup and quick queries
+            dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        private readonly UserManager<AppUser> _userManager =
+            userManager ?? throw new ArgumentNullException(nameof(userManager));
 
         // ========================================================
         // SCAN SERIAL — Quét mã vạch (Barcode/Serial) kiểm tra hàng bán trực tiếp tại quầy POS

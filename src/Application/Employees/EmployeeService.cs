@@ -14,27 +14,23 @@ using System.Threading.Tasks;
 
 namespace PBL3.Application.Employees
 {
-    public class EmployeeService : IEmployeeService
+    public class EmployeeService(
+        IEmployeeRepository employeeRepo,
+        UserManager<AppUser> userManager,
+        RoleManager<AppRole> roleManager,
+        IMemoryCache cache,
+        ILogger<EmployeeService> logger) : IEmployeeService
     {
-        private readonly IEmployeeRepository _employeeRepo;
-        private readonly UserManager<AppUser> _userManager;
-        private readonly RoleManager<AppRole> _roleManager;
-        private readonly IMemoryCache _cache;
-        private readonly ILogger<EmployeeService> _logger;
-
-        public EmployeeService(
-            IEmployeeRepository employeeRepo,
-            UserManager<AppUser> userManager,
-            RoleManager<AppRole> roleManager,
-            IMemoryCache cache,
-            ILogger<EmployeeService> logger)
-        {
-            _employeeRepo = employeeRepo;
-            _userManager = userManager;
-            _roleManager = roleManager;
-            _cache = cache;
-            _logger = logger;
-        }
+        private readonly IEmployeeRepository _employeeRepo =
+            employeeRepo ?? throw new ArgumentNullException(nameof(employeeRepo));
+        private readonly UserManager<AppUser> _userManager =
+            userManager ?? throw new ArgumentNullException(nameof(userManager));
+        private readonly RoleManager<AppRole> _roleManager =
+            roleManager ?? throw new ArgumentNullException(nameof(roleManager));
+        private readonly IMemoryCache _cache =
+            cache ?? throw new ArgumentNullException(nameof(cache));
+        private readonly ILogger<EmployeeService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         public async Task<ApiResult<PagedResult<EmployeeListDto>>> GetPagedListAsync(EmployeeFilterRequest filter)
         {

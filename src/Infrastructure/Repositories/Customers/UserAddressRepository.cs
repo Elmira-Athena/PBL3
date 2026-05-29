@@ -9,14 +9,10 @@ using System.Threading.Tasks;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class UserAddressRepository : IUserAddressRepository
+    public class UserAddressRepository(HushStoreDbContext context) : IUserAddressRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public UserAddressRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         public async Task<UserAddress?> GetByIdAsync(int id)
         {

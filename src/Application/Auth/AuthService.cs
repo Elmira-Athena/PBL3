@@ -14,18 +14,17 @@ using PBL3.Shared.DTOs.Customers;
 
 namespace PBL3.Application.Auth
 {
-    public class AuthService : IAuthService
+    public class AuthService(
+        UserManager<AppUser> userManager,
+        IConfiguration configuration,
+        HushStoreDbContext context) : IAuthService
     {
-        private readonly UserManager<AppUser> _userManager;
-        private readonly IConfiguration _configuration;
-        private readonly HushStoreDbContext _context;
-
-        public AuthService(UserManager<AppUser> userManager, IConfiguration configuration, HushStoreDbContext context)
-        {
-            _userManager = userManager;
-            _configuration = configuration;
-            _context = context;
-        }
+        private readonly UserManager<AppUser> _userManager =
+            userManager ?? throw new ArgumentNullException(nameof(userManager));
+        private readonly IConfiguration _configuration =
+            configuration ?? throw new ArgumentNullException(nameof(configuration));
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         // =====================================================================
         // LOGIN

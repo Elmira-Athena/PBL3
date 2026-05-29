@@ -13,33 +13,29 @@ namespace PBL3.Application.Inventory
     /// Nghiệp vụ Kiểm kê kho (Inventory Audit/Stocktaking) theo cơ chế quản lý mã vật lý duy nhất (Serial Number).
     /// Quy trình gồm các bước: Tạo phiếu nháp chốt số lượng sổ sách -> Quét mã thực tế (Khớp/Thừa/Thiếu/Hàng lỗi) -> Gửi duyệt -> Phê duyệt cân bằng kho thực tế.
     /// </summary>
-    public class InventoryCheckService : IInventoryCheckService
+    public class InventoryCheckService(
+        IInventoryCheckRepository checkRepo,
+        IProductSerialRepository serialRepo,
+        IProductRepository productRepo,
+        IInventorySyncService inventorySyncService,
+        IUnitOfWork unitOfWork,
+        HushStoreDbContext context,
+        ILogger<InventoryCheckService> logger) : IInventoryCheckService
     {
-        private readonly IInventoryCheckRepository _checkRepo;
-        private readonly IProductSerialRepository _serialRepo;
-        private readonly IProductRepository _productRepo;
-        private readonly IInventorySyncService _inventorySyncService;
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly HushStoreDbContext _context;
-        private readonly ILogger<InventoryCheckService> _logger;
-
-        public InventoryCheckService(
-            IInventoryCheckRepository checkRepo,
-            IProductSerialRepository serialRepo,
-            IProductRepository productRepo,
-            IInventorySyncService inventorySyncService,
-            IUnitOfWork unitOfWork,
-            HushStoreDbContext context,
-            ILogger<InventoryCheckService> logger)
-        {
-            _checkRepo = checkRepo;
-            _serialRepo = serialRepo;
-            _productRepo = productRepo;
-            _inventorySyncService = inventorySyncService;
-            _unitOfWork = unitOfWork;
-            _context = context;
-            _logger = logger;
-        }
+        private readonly IInventoryCheckRepository _checkRepo =
+            checkRepo ?? throw new ArgumentNullException(nameof(checkRepo));
+        private readonly IProductSerialRepository _serialRepo =
+            serialRepo ?? throw new ArgumentNullException(nameof(serialRepo));
+        private readonly IProductRepository _productRepo =
+            productRepo ?? throw new ArgumentNullException(nameof(productRepo));
+        private readonly IInventorySyncService _inventorySyncService =
+            inventorySyncService ?? throw new ArgumentNullException(nameof(inventorySyncService));
+        private readonly IUnitOfWork _unitOfWork =
+            unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
+        private readonly ILogger<InventoryCheckService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         // ========================================================
         // CREATE — Tạo phiếu + chốt snapshot tồn kho sổ sách

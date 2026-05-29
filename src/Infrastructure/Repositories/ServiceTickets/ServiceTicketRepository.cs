@@ -5,14 +5,10 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class ServiceTicketRepository : IServiceTicketRepository
+    public class ServiceTicketRepository(HushStoreDbContext dbContext) : IServiceTicketRepository
     {
-        private readonly HushStoreDbContext _dbContext;
-
-        public ServiceTicketRepository(HushStoreDbContext dbContext)
-        {
-            _dbContext = dbContext;
-        }
+        private readonly HushStoreDbContext _dbContext =
+            dbContext ?? throw new ArgumentNullException(nameof(dbContext));
 
         public async Task<(List<ServiceTicket> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,

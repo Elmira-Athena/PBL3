@@ -12,33 +12,29 @@ namespace PBL3.Application.ImportReceipts
     /// Đảm nhận nghiệp vụ mua hàng và nhập kho vật lý từ nhà cung cấp, tự động sinh mã số định danh hàng loạt (Product Serial) 
     /// ở trạng thái khả dụng để sẵn sàng bán, đồng thời thực hiện đồng bộ hóa số lượng tồn kho sổ sách tức thời.
     /// </summary>
-    public class ImportReceiptService : IImportReceiptService
+    public class ImportReceiptService(
+        IImportReceiptRepository receiptRepo,
+        IProductSerialRepository serialRepo,
+        ISupplierRepository supplierRepo,
+        IProductRepository productRepo,
+        IUnitOfWork unitOfWork,
+        IInventorySyncService inventorySyncService,
+        ILogger<ImportReceiptService> logger) : IImportReceiptService
     {
-        private readonly IImportReceiptRepository _receiptRepo;
-        private readonly IProductSerialRepository _serialRepo;
-        private readonly ISupplierRepository _supplierRepo;
-        private readonly IProductRepository _productRepo;
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IInventorySyncService _inventorySyncService;
-        private readonly ILogger<ImportReceiptService> _logger;
-
-        public ImportReceiptService(
-            IImportReceiptRepository receiptRepo,
-            IProductSerialRepository serialRepo,
-            ISupplierRepository supplierRepo,
-            IProductRepository productRepo,
-            IUnitOfWork unitOfWork,
-            IInventorySyncService inventorySyncService,
-            ILogger<ImportReceiptService> logger)
-        {
-            _receiptRepo = receiptRepo;
-            _serialRepo = serialRepo;
-            _supplierRepo = supplierRepo;
-            _productRepo = productRepo;
-            _unitOfWork = unitOfWork;
-            _inventorySyncService = inventorySyncService;
-            _logger = logger;
-        }
+        private readonly IImportReceiptRepository _receiptRepo =
+            receiptRepo ?? throw new ArgumentNullException(nameof(receiptRepo));
+        private readonly IProductSerialRepository _serialRepo =
+            serialRepo ?? throw new ArgumentNullException(nameof(serialRepo));
+        private readonly ISupplierRepository _supplierRepo =
+            supplierRepo ?? throw new ArgumentNullException(nameof(supplierRepo));
+        private readonly IProductRepository _productRepo =
+            productRepo ?? throw new ArgumentNullException(nameof(productRepo));
+        private readonly IUnitOfWork _unitOfWork =
+            unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        private readonly IInventorySyncService _inventorySyncService =
+            inventorySyncService ?? throw new ArgumentNullException(nameof(inventorySyncService));
+        private readonly ILogger<ImportReceiptService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         // ========================================================
         // CREATE — Tạo phiếu nhập kho (Transaction Required)

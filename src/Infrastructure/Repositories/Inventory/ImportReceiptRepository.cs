@@ -5,14 +5,10 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class ImportReceiptRepository : IImportReceiptRepository
+    public class ImportReceiptRepository(HushStoreDbContext context) : IImportReceiptRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public ImportReceiptRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         public async Task<(List<ImportReceipt> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,

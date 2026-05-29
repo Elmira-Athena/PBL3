@@ -5,14 +5,10 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class ManufacturerRepository : IManufacturerRepository
+    public class ManufacturerRepository(HushStoreDbContext context) : IManufacturerRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public ManufacturerRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         // ========================================================
         // GET PAGED LIST — Phân trang + tìm kiếm

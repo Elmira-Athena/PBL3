@@ -7,24 +7,20 @@ using PBL3.Shared.Enums;
 
 namespace PBL3.Application.ProductSerials
 {
-    public class ProductSerialService : IProductSerialService
+    public class ProductSerialService(
+        IProductSerialRepository productSerialRepository,
+        IOrderRepository orderRepository,
+        IInventorySyncService inventorySyncService,
+        ILogger<ProductSerialService> logger) : IProductSerialService
     {
-        private readonly IProductSerialRepository _productSerialRepository;
-        private readonly IOrderRepository _orderRepository;
-        private readonly IInventorySyncService _inventorySyncService;
-        private readonly ILogger<ProductSerialService> _logger;
-
-        public ProductSerialService(
-            IProductSerialRepository productSerialRepository,
-            IOrderRepository orderRepository,
-            IInventorySyncService inventorySyncService,
-            ILogger<ProductSerialService> logger)
-        {
-            _productSerialRepository = productSerialRepository;
-            _orderRepository = orderRepository;
-            _inventorySyncService = inventorySyncService;
-            _logger = logger;
-        }
+        private readonly IProductSerialRepository _productSerialRepository =
+            productSerialRepository ?? throw new ArgumentNullException(nameof(productSerialRepository));
+        private readonly IOrderRepository _orderRepository =
+            orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
+        private readonly IInventorySyncService _inventorySyncService =
+            inventorySyncService ?? throw new ArgumentNullException(nameof(inventorySyncService));
+        private readonly ILogger<ProductSerialService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         public async Task<ApiResult<bool>> CheckExistAsync(string serialNumber, int variantId)
         {

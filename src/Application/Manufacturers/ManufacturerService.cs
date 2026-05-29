@@ -6,18 +6,14 @@ using PBL3.Shared.DTOs.Manufacturers;
 
 namespace PBL3.Application.Manufacturers
 {
-    public class ManufacturerService : IManufacturerService
+    public class ManufacturerService(
+        IManufacturerRepository manufacturerRepo,
+        ILogger<ManufacturerService> logger) : IManufacturerService
     {
-        private readonly IManufacturerRepository _manufacturerRepo;
-        private readonly ILogger<ManufacturerService> _logger;
-
-        public ManufacturerService(
-            IManufacturerRepository manufacturerRepo,
-            ILogger<ManufacturerService> logger)
-        {
-            _manufacturerRepo = manufacturerRepo;
-            _logger = logger;
-        }
+        private readonly IManufacturerRepository _manufacturerRepo =
+            manufacturerRepo ?? throw new ArgumentNullException(nameof(manufacturerRepo));
+        private readonly ILogger<ManufacturerService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         // ========================================================
         // GET LIST — Phân trang + tìm kiếm

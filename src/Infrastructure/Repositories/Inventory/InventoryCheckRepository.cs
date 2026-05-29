@@ -5,14 +5,10 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class InventoryCheckRepository : IInventoryCheckRepository
+    public class InventoryCheckRepository(HushStoreDbContext context) : IInventoryCheckRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public InventoryCheckRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         public async Task<InventoryCheck?> GetByIdAsync(int id)
         {

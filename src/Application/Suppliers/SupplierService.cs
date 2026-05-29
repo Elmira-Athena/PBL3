@@ -7,16 +7,14 @@ using PBL3.Shared.DTOs.Suppliers;
 
 namespace PBL3.Application.Suppliers
 {
-    public class SupplierService : ISupplierService
+    public class SupplierService(
+        ISupplierRepository supplierRepo,
+        ILogger<SupplierService> logger) : ISupplierService
     {
-        private readonly ISupplierRepository _supplierRepo;
-        private readonly ILogger<SupplierService> _logger;
-
-        public SupplierService(ISupplierRepository supplierRepo, ILogger<SupplierService> logger)
-        {
-            _supplierRepo = supplierRepo;
-            _logger = logger;
-        }
+        private readonly ISupplierRepository _supplierRepo =
+            supplierRepo ?? throw new ArgumentNullException(nameof(supplierRepo));
+        private readonly ILogger<SupplierService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         // ========================================================
         // GET LIST — Phân trang + tìm kiếm

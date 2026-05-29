@@ -11,27 +11,23 @@ using PBL3.Shared.Enums;
 
 namespace PBL3.Application.Inventory
 {
-    public class InventoryExportService : IInventoryExportService
+    public class InventoryExportService(
+        IUnitOfWork unitOfWork,
+        IOrderRepository orderRepo,
+        IProductSerialRepository serialRepo,
+        IInventorySyncService inventorySyncService,
+        ILogger<InventoryExportService> logger) : IInventoryExportService
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IOrderRepository _orderRepo;
-        private readonly IProductSerialRepository _serialRepo;
-        private readonly IInventorySyncService _inventorySyncService;
-        private readonly ILogger<InventoryExportService> _logger;
-
-        public InventoryExportService(
-            IUnitOfWork unitOfWork,
-            IOrderRepository orderRepo,
-            IProductSerialRepository serialRepo,
-            IInventorySyncService inventorySyncService,
-            ILogger<InventoryExportService> logger)
-        {
-            _unitOfWork = unitOfWork;
-            _orderRepo = orderRepo;
-            _serialRepo = serialRepo;
-            _inventorySyncService = inventorySyncService;
-            _logger = logger;
-        }
+        private readonly IUnitOfWork _unitOfWork =
+            unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        private readonly IOrderRepository _orderRepo =
+            orderRepo ?? throw new ArgumentNullException(nameof(orderRepo));
+        private readonly IProductSerialRepository _serialRepo =
+            serialRepo ?? throw new ArgumentNullException(nameof(serialRepo));
+        private readonly IInventorySyncService _inventorySyncService =
+            inventorySyncService ?? throw new ArgumentNullException(nameof(inventorySyncService));
+        private readonly ILogger<InventoryExportService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
         /// NGHIỆP VỤ: Thực thi quy trình xuất kho vật lý cho Đơn hàng.

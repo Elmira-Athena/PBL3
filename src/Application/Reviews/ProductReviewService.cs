@@ -7,16 +7,14 @@ using PBL3.Shared.DTOs.Reviews;
 
 namespace PBL3.Application.Reviews
 {
-    public class ProductReviewService : IProductReviewService
+    public class ProductReviewService(
+        IProductReviewRepository reviewRepo,
+        HushStoreDbContext context) : IProductReviewService
     {
-        private readonly IProductReviewRepository _reviewRepo;
-        private readonly HushStoreDbContext _context;
-
-        public ProductReviewService(IProductReviewRepository reviewRepo, HushStoreDbContext context)
-        {
-            _reviewRepo = reviewRepo;
-            _context = context;
-        }
+        private readonly IProductReviewRepository _reviewRepo =
+            reviewRepo ?? throw new ArgumentNullException(nameof(reviewRepo));
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         public async Task<ApiResult<PagedResult<ReviewDto>>> GetReviewsAsync(
             int productId, int page, int pageSize)

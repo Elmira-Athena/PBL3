@@ -9,14 +9,10 @@ using System.Threading.Tasks;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class CartRepository : ICartRepository
+    public class CartRepository(HushStoreDbContext context) : ICartRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public CartRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         public async Task<List<Cart>> GetCartItemsByUserAsync(Guid userId)
         {

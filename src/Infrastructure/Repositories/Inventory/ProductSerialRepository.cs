@@ -5,14 +5,10 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class ProductSerialRepository : IProductSerialRepository
+    public class ProductSerialRepository(HushStoreDbContext context) : IProductSerialRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public ProductSerialRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         public async Task<bool> ExistsAsync(string serialNumber, int variantId)
         {

@@ -6,16 +6,14 @@ using PBL3.Shared.DTOs.Common;
 
 namespace PBL3.Application.Analytics
 {
-    public class AnalyticsService : IAnalyticsService
+    public class AnalyticsService(
+        HushStoreDbContext context,
+        ILogger<AnalyticsService> logger) : IAnalyticsService
     {
-        private readonly HushStoreDbContext _context;
-        private readonly ILogger<AnalyticsService> _logger;
-
-        public AnalyticsService(HushStoreDbContext context, ILogger<AnalyticsService> logger)
-        {
-            _context = context;
-            _logger = logger;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
+        private readonly ILogger<AnalyticsService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         private (bool valid, string error) ValidateRange(DateTime from, DateTime to)
         {

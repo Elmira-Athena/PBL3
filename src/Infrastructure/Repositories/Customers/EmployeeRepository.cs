@@ -9,14 +9,10 @@ using System.Threading.Tasks;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class EmployeeRepository : IEmployeeRepository
+    public class EmployeeRepository(HushStoreDbContext context) : IEmployeeRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public EmployeeRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         public async Task<(List<AppUser> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,

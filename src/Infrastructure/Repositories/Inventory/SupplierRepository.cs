@@ -5,14 +5,10 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class SupplierRepository : ISupplierRepository
+    public class SupplierRepository(HushStoreDbContext context) : ISupplierRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public SupplierRepository(HushStoreDbContext context)
-        {
-            _context = context;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         public async Task<(List<Supplier> Items, int TotalCount)> GetPagedListAsync(
             string? keyword,

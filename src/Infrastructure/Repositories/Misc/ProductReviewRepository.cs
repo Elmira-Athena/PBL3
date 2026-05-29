@@ -5,11 +5,10 @@ using PBL3.Infrastructure.Data;
 
 namespace PBL3.Infrastructure.Repositories
 {
-    public class ProductReviewRepository : IProductReviewRepository
+    public class ProductReviewRepository(HushStoreDbContext context) : IProductReviewRepository
     {
-        private readonly HushStoreDbContext _context;
-
-        public ProductReviewRepository(HushStoreDbContext context) => _context = context;
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
 
         public async Task<(List<ProductReview> Items, int TotalCount)> GetPagedByProductIdAsync(
             int productId, int pageNumber, int pageSize)

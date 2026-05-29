@@ -6,16 +6,14 @@ using PBL3.Shared.DTOs.Storefront;
 
 namespace PBL3.Application.Storefront
 {
-    public class StorefrontService : IStorefrontService
+    public class StorefrontService(
+        HushStoreDbContext context,
+        IProductReviewRepository reviewRepo) : IStorefrontService
     {
-        private readonly HushStoreDbContext _context;
-        private readonly IProductReviewRepository _reviewRepo;
-
-        public StorefrontService(HushStoreDbContext context, IProductReviewRepository reviewRepo)
-        {
-            _context = context;
-            _reviewRepo = reviewRepo;
-        }
+        private readonly HushStoreDbContext _context =
+            context ?? throw new ArgumentNullException(nameof(context));
+        private readonly IProductReviewRepository _reviewRepo =
+            reviewRepo ?? throw new ArgumentNullException(nameof(reviewRepo));
 
         /// <summary>
         /// NGHIỆP VỤ PHỤ TRỢ: Lập bản đồ đánh giá trung bình (Rating Map) tối ưu hóa hiệu năng.

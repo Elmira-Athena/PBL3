@@ -8,18 +8,17 @@ using PBL3.Shared.DTOs.Common;
 
 namespace PBL3.Application.Cart
 {
-    public class CartService : ICartService
+    public class CartService(
+        ICartRepository cartRepo,
+        IProductRepository productRepo,
+        IUnitOfWork unitOfWork) : ICartService
     {
-        private readonly ICartRepository _cartRepo;
-        private readonly IProductRepository _productRepo;
-        private readonly IUnitOfWork _unitOfWork;
-
-        public CartService(ICartRepository cartRepo, IProductRepository productRepo, IUnitOfWork unitOfWork)
-        {
-            _cartRepo = cartRepo;
-            _productRepo = productRepo;
-            _unitOfWork = unitOfWork;
-        }
+        private readonly ICartRepository _cartRepo =
+            cartRepo ?? throw new ArgumentNullException(nameof(cartRepo));
+        private readonly IProductRepository _productRepo =
+            productRepo ?? throw new ArgumentNullException(nameof(productRepo));
+        private readonly IUnitOfWork _unitOfWork =
+            unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
 
         public async Task<ApiResult<CartResponse>> GetMyCartAsync(Guid userId)
         {

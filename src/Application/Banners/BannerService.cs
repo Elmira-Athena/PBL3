@@ -7,24 +7,20 @@ using PBL3.Shared.DTOs.Common;
 
 namespace PBL3.Application.Banners
 {
-    public class BannerService : IBannerService
+    public class BannerService(
+        IBannerRepository bannerRepo,
+        IValidator<CreateBannerRequest> createValidator,
+        IValidator<UpdateBannerRequest> updateValidator,
+        ILogger<BannerService> logger) : IBannerService
     {
-        private readonly IBannerRepository _bannerRepo;
-        private readonly IValidator<CreateBannerRequest> _createValidator;
-        private readonly IValidator<UpdateBannerRequest> _updateValidator;
-        private readonly ILogger<BannerService> _logger;
-
-        public BannerService(
-            IBannerRepository bannerRepo,
-            IValidator<CreateBannerRequest> createValidator,
-            IValidator<UpdateBannerRequest> updateValidator,
-            ILogger<BannerService> logger)
-        {
-            _bannerRepo = bannerRepo;
-            _createValidator = createValidator;
-            _updateValidator = updateValidator;
-            _logger = logger;
-        }
+        private readonly IBannerRepository _bannerRepo =
+            bannerRepo ?? throw new ArgumentNullException(nameof(bannerRepo));
+        private readonly IValidator<CreateBannerRequest> _createValidator =
+            createValidator ?? throw new ArgumentNullException(nameof(createValidator));
+        private readonly IValidator<UpdateBannerRequest> _updateValidator =
+            updateValidator ?? throw new ArgumentNullException(nameof(updateValidator));
+        private readonly ILogger<BannerService> _logger =
+            logger ?? throw new ArgumentNullException(nameof(logger));
 
         public async Task<ApiResult<PagedResult<BannerDto>>> GetPagedListAsync(BannerFilterRequest filter)
         {

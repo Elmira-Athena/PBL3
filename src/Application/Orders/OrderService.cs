@@ -11,33 +11,29 @@ using PBL3.Shared.DTOs.Products;
 using PBL3.Shared.Enums;
 namespace PBL3.Application.Orders
 {
-    public class OrderService : IOrderService
+    public class OrderService(
+        IUnitOfWork unitOfWork,
+        IOrderRepository orderRepo,
+        IVoucherRepository voucherRepo,
+        IProductRepository productRepo,
+        ICartRepository cartRepo,
+        IUserAddressRepository userAddressRepo,
+        IProductSerialRepository productSerialRepo) : IOrderService
     {
-        private readonly IUnitOfWork _unitOfWork;
-        private readonly IOrderRepository _orderRepo;
-        private readonly IVoucherRepository _voucherRepo;
-        private readonly IProductRepository _productRepo;
-        private readonly ICartRepository _cartRepo;
-        private readonly IUserAddressRepository _userAddressRepo;
-        private readonly IProductSerialRepository _productSerialRepo;
-
-        public OrderService(
-            IUnitOfWork unitOfWork,
-            IOrderRepository orderRepo,
-            IVoucherRepository voucherRepo,
-            IProductRepository productRepo,
-            ICartRepository cartRepo,
-            IUserAddressRepository userAddressRepo,
-            IProductSerialRepository productSerialRepo)
-        {
-            _unitOfWork = unitOfWork;
-            _orderRepo = orderRepo;
-            _voucherRepo = voucherRepo;
-            _productRepo = productRepo;
-            _cartRepo = cartRepo;
-            _userAddressRepo = userAddressRepo;
-            _productSerialRepo = productSerialRepo;
-        }
+        private readonly IUnitOfWork _unitOfWork =
+            unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        private readonly IOrderRepository _orderRepo =
+            orderRepo ?? throw new ArgumentNullException(nameof(orderRepo));
+        private readonly IVoucherRepository _voucherRepo =
+            voucherRepo ?? throw new ArgumentNullException(nameof(voucherRepo));
+        private readonly IProductRepository _productRepo =
+            productRepo ?? throw new ArgumentNullException(nameof(productRepo));
+        private readonly ICartRepository _cartRepo =
+            cartRepo ?? throw new ArgumentNullException(nameof(cartRepo));
+        private readonly IUserAddressRepository _userAddressRepo =
+            userAddressRepo ?? throw new ArgumentNullException(nameof(userAddressRepo));
+        private readonly IProductSerialRepository _productSerialRepo =
+            productSerialRepo ?? throw new ArgumentNullException(nameof(productSerialRepo));
 
         /// <summary>
         /// NGHIỆP VỤ: Thực hiện quy trình đặt hàng trực tuyến (Online Checkout).
