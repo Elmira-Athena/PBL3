@@ -1,6 +1,5 @@
 @page "/admin/products/create"
 @page "/admin/products/edit/{Id:int}"
-@inject IImageClientService ImageService
 
 <PageTitle>@(_isEditMode ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới") - HushStore</PageTitle>
 
@@ -12,7 +11,7 @@
                 @(_isEditMode ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới")
             </MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                @(_isEditMode ? "Cập nhật thông tin sản phẩm và biến thể" : "Nhập đầy đủ thông tin sản phẩm")
+                @(_isEditMode ? "Cập nhật thông tin sản phẩm và biến thể (mỗi biến thể có ảnh + thông số riêng)" : "Nhập đầy đủ thông tin sản phẩm")
             </MudText>
         </div>
         <MudStack Row="true" Spacing="2">
@@ -81,113 +80,11 @@
                                       Class="mb-3" />
 
                         <MudTextField @bind-Value="_model.Description"
-                                      Label="Mô tả chi tiết"
+                                      Label="Mô tả chi tiết (dùng chung cho mọi biến thể)"
                                       Placeholder="Nhập mô tả sản phẩm"
                                       Variant="Variant.Outlined"
                                       Margin="Margin.Dense"
                                       Lines="5" />
-                    </MudPaper>
-
-                    @* -- Hình ảnh -- *@
-                    <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
-                        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
-                            <MudIcon Icon="@Icons.Material.Filled.Image" Class="me-1" Size="Size.Small" />
-                            Hình ảnh
-                        </MudText>
-
-                        @if (_productImages.Count > 0)
-                        {
-                            <div class="d-flex flex-wrap gap-2 mb-3">
-                                @for (int i = 0; i < _productImages.Count; i++)
-                                {
-                                    var imgUrl = _productImages[i];
-                                    var imgIndex = i;
-                                    <div style="position: relative; width: 90px; height: 90px; flex-shrink: 0;">
-                                        <MudImage Src="@imgUrl" Width="90" Height="90" ObjectFit="ObjectFit.Cover" Class="rounded" Style="display:block;" />
-                                        @if (imgIndex == 0)
-                                        {
-                                            <span style="position:absolute; bottom:2px; left:2px; background:#1976d2; color:white; font-size:9px; border-radius:3px; padding:0 4px; line-height:16px;">Main</span>
-                                        }
-                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
-                                                       Size="Size.Small"
-                                                       Color="Color.Error"
-                                                       Style="position:absolute; top:-8px; right:-8px; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.2); padding:2px; min-width:0; width:20px; height:20px;"
-                                                       OnClick="() => RemoveProductImage(imgUrl)" />
-                                    </div>
-                                }
-                            </div>
-                        }
-
-                        <InputFile id="productImageInput" OnChange="HandleImageUpload" accept="image/*" multiple style="display:none" disabled="@_isUploadingImage" />
-                        <label for="productImageInput" style="cursor: @(_isUploadingImage ? "not-allowed" : "pointer"); display: block;">
-                            <MudPaper Outlined="true"
-                                      Class="d-flex flex-column align-center justify-center pa-6 rounded-lg"
-                                      Style="border-style: dashed; border-width: 2px; min-height: 120px; background: var(--mud-palette-background-grey);">
-                                @if (_isUploadingImage)
-                                {
-                                    <MudProgressCircular Indeterminate="true" Size="Size.Medium" />
-                                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Đang upload ảnh...</MudText>
-                                }
-                                else
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" Color="Color.Default" />
-                                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Click để chọn ảnh (tối đa 5 ảnh)</MudText>
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">JPEG, PNG, WebP, GIF – tối đa 5MB/ảnh</MudText>
-                                }
-                            </MudPaper>
-                        </label>
-                    </MudPaper>
-
-                    @* -- Thông số kỹ thuật (Dynamic Key-Value) -- *@
-                    <MudPaper Elevation="1" Class="pa-5 rounded-lg mb-4">
-                        <div class="d-flex align-center justify-space-between mb-3">
-                            <MudText Typo="Typo.h6" Style="font-weight: 600;">
-                                <MudIcon Icon="@Icons.Material.Filled.Settings" Class="me-1" Size="Size.Small" />
-                                Thông số kỹ thuật
-                            </MudText>
-                            <MudButton Variant="Variant.Text"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.Add"
-                                       Size="Size.Small"
-                                       OnClick="AddSpecification"
-                                       Style="text-transform: none;">
-                                Thêm thông số
-                            </MudButton>
-                        </div>
-
-                        @if (_specifications.Count == 0)
-                        {
-                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="rounded-lg">
-                                Chưa có thông số nào. Nhấn "Thêm thông số" để bắt đầu.
-                            </MudAlert>
-                        }
-                        else
-                        {
-                            @for (int i = 0; i < _specifications.Count; i++)
-                            {
-                                var index = i;
-                                <MudGrid Class="mb-2">
-                                    <MudItem xs="5">
-                                        <MudTextField @bind-Value="_specifications[index].Key"
-                                                      Placeholder="VD: Hãng CPU"
-                                                      Variant="Variant.Outlined"
-                                                      Margin="Margin.Dense" />
-                                    </MudItem>
-                                    <MudItem xs="5">
-                                        <MudTextField @bind-Value="_specifications[index].Value"
-                                                      Placeholder="VD: Intel"
-                                                      Variant="Variant.Outlined"
-                                                      Margin="Margin.Dense" />
-                                    </MudItem>
-                                    <MudItem xs="2" Class="d-flex align-center">
-                                        <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline"
-                                                       Color="Color.Error"
-                                                       Size="Size.Small"
-                                                       OnClick="() => RemoveSpecification(index)" />
-                                    </MudItem>
-                                </MudGrid>
-                            }
-                        }
                     </MudPaper>
                 </MudItem>
 
@@ -290,7 +187,7 @@
                                 <strong>Ngày tạo:</strong> @_editDetail.CreatedDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
                             </MudText>
                             <MudText Typo="Typo.body2">
-                                <strong>Số biến thể:</strong> @_editDetail.Variants.Count
+                                <strong>Số biến thể:</strong> @_model.Variants.Count
                             </MudText>
                         </MudPaper>
                     }
@@ -315,7 +212,7 @@
                         </div>
 
                         <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">
-                            Sản phẩm bắt buộc phải có ít nhất 1 biến thể. Mỗi biến thể có SKU, tên, giá riêng.
+                            Mỗi biến thể có ảnh và thông số kỹ thuật riêng. Sản phẩm bắt buộc có ít nhất 1 biến thể.
                         </MudText>
 
                         @if (_model.Variants.Count == 0)
@@ -329,18 +226,19 @@
                             @for (int i = 0; i < _model.Variants.Count; i++)
                             {
                                 var index = i;
-                                <MudPaper Outlined="true" Class="pa-4 rounded-lg mb-3" Style="border-color: var(--mud-palette-lines-default);">
+                                var variantKey = GetVariantKey(index);
+                                <MudPaper Outlined="true" Class="pa-4 rounded-lg mb-4" Style="border-color: var(--mud-palette-lines-default);">
                                     <div class="d-flex align-center justify-space-between mb-3">
                                         <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">
                                             <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Class="me-1" />
-                                            Biến thể @(index + 1)
+                                            Biến thể @(index + 1) @(string.IsNullOrWhiteSpace(_model.Variants[index].VariantName) ? "" : $"— {_model.Variants[index].VariantName}")
                                         </MudText>
                                         @if (_model.Variants.Count > 1)
                                         {
                                             <MudIconButton Icon="@Icons.Material.Filled.Close"
                                                            Color="Color.Error"
                                                            Size="Size.Small"
-                                                           OnClick="() => RemoveVariant(index)" />
+                                                           OnClick="@(() => RemoveVariant(index))" />
                                         }
                                     </div>
 
@@ -391,6 +289,24 @@
                                                              Min="0" />
                                         </MudItem>
                                     </MudGrid>
+
+                                    <MudDivider Class="my-3" />
+
+                                    <MudGrid>
+                                        <MudItem xs="12" md="6">
+                                            <MudText Typo="Typo.subtitle2" Class="mb-2" Style="font-weight: 600;">
+                                                <MudIcon Icon="@Icons.Material.Filled.Image" Class="me-1" Size="Size.Small" />
+                                                Hình ảnh
+                                            </MudText>
+                                            <VariantImageEditor EditorKey="@variantKey"
+                                                                Images="_model.Variants[index].Images"
+                                                                ImagesChanged="@(imgs => OnVariantImagesChanged(index, imgs))" />
+                                        </MudItem>
+                                        <MudItem xs="12" md="6">
+                                            <VariantSpecsEditor Specifications="_model.Variants[index].Specifications"
+                                                                SpecificationsChanged="@(s => OnVariantSpecsChanged(index, s))" />
+                                        </MudItem>
+                                    </MudGrid>
                                 </MudPaper>
                             }
                         }
@@ -415,39 +331,30 @@
     private bool _isLoadingDetail;
     private bool _isSaving;
 
-    // Model chung cho Create
     private CreateProductRequest _model = new()
     {
         Variants = new List<CreateVariantRequest>
         {
-            new CreateVariantRequest { WarrantyMonth = 12 }
+            new CreateVariantRequest { WarrantyMonth = 12, Specifications = new() }
         }
     };
 
-    // Dữ liệu gốc khi Edit
+    // Map index → VariantId hiện có (chỉ tồn tại khi Edit). Variant mới thêm trong Edit mode sẽ không có Id.
+    private readonly Dictionary<int, int> _existingVariantIds = new();
+
     private ProductDetailDto? _editDetail;
     private ProductStatus _statusForUpdate = ProductStatus.Draft;
 
-    // Danh sách Category để chọn
     private List<CategoryTreeDto>? _categories;
 
-    // Danh sách Hãng sản xuất để chọn (dropdown)
     private List<ManufacturerSummaryDto> _manufacturers = new();
     private bool _isLoadingManufacturers;
 
-    // Thông số kỹ thuật (Dynamic Key-Value)
-    private List<SpecEntry> _specifications = new();
-
-    // Hình ảnh sản phẩm (dùng chung cho tất cả biến thể)
-    private List<string> _productImages = new();
-    private bool _isUploadingImage;
-
     protected override async Task OnInitializedAsync()
     {
-        // Load categories và manufacturers song song
         _isLoadingManufacturers = true;
         var catTask = CategoryService.GetTreeAsync();
-        var mfTask  = ManufacturerService.GetDropdownAsync();
+        var mfTask = ManufacturerService.GetDropdownAsync();
 
         await Task.WhenAll(catTask, mfTask);
 
@@ -461,7 +368,6 @@
 
         _isLoadingManufacturers = false;
 
-        // Nếu Edit mode → load product detail
         if (_isEditMode)
         {
             await LoadProductForEdit();
@@ -478,8 +384,8 @@
         if (result.Success && result.Data != null)
         {
             _editDetail = result.Data;
+            _existingVariantIds.Clear();
 
-            // Map sang CreateProductRequest để reuse form
             _model = new CreateProductRequest
             {
                 Name = _editDetail.Name,
@@ -487,39 +393,31 @@
                 Description = _editDetail.Description,
                 ManufacturerId = _editDetail.ManufacturerId,
                 CategoryId = _editDetail.CategoryId,
-                Variants = _editDetail.Variants.Select(v => new CreateVariantRequest
+                Variants = _editDetail.Variants.Select((v, idx) =>
                 {
-                    SKU = v.SKU,
-                    VariantName = v.VariantName,
-                    Price = v.Price,
-                    OriginalPrice = v.OriginalPrice,
-                    WarrantyMonth = v.WarrantyMonth,
-                    Specifications = v.Specifications
+                    _existingVariantIds[idx] = v.Id;
+                    return new CreateVariantRequest
+                    {
+                        SKU = v.SKU,
+                        VariantName = v.VariantName,
+                        Price = v.Price,
+                        OriginalPrice = v.OriginalPrice,
+                        WarrantyMonth = v.WarrantyMonth,
+                        Specifications = v.Specifications != null
+                            ? new Dictionary<string, string>(v.Specifications)
+                            : new(),
+                        Images = v.Images?.OrderByDescending(i => i.IsMain).ThenBy(i => i.SortOrder)
+                            .Select((img, i) => new SaveImageRequest
+                            {
+                                ImageUrl = img.ImageUrl,
+                                IsMain = i == 0,
+                                SortOrder = i
+                            }).ToList() ?? new()
+                    };
                 }).ToList()
             };
 
-            // ManufacturerId đã được set vào _model.ManufacturerId bên trên
             _statusForUpdate = _editDetail.Status;
-
-            // Load ảnh hiện có từ variant đầu tiên vào _productImages
-            var firstVariant = _editDetail.Variants.FirstOrDefault();
-            if (firstVariant?.Images != null && firstVariant.Images.Count > 0)
-            {
-                _productImages = firstVariant.Images
-                    .OrderBy(img => img.SortOrder)
-                    .Select(img => img.ImageUrl)
-                    .ToList();
-            }
-
-            // Load specs từ variant đầu tiên (nếu có) hoặc để trống
-            var firstVariantSpecs = firstVariant?.Specifications;
-
-            if (firstVariantSpecs != null)
-            {
-                _specifications = firstVariantSpecs
-                    .Select(kvp => new SpecEntry { Key = kvp.Key, Value = kvp.Value })
-                    .ToList();
-            }
         }
         else
         {
@@ -531,79 +429,71 @@
         StateHasChanged();
     }
 
-    // ===== IMAGES =====
-
-    private async Task HandleImageUpload(InputFileChangeEventArgs e)
-    {
-        _isUploadingImage = true;
-        StateHasChanged();
-
-        foreach (var file in e.GetMultipleFiles(5))
-        {
-            var url = await ImageService.UploadAsync(file, "products");
-            if (url != null)
-                _productImages.Add(url);
-            else
-                Snackbar.Add($"Upload ảnh \"{file.Name}\" thất bại.", Severity.Error);
-        }
-
-        _isUploadingImage = false;
-        StateHasChanged();
-    }
-
-    private void RemoveProductImage(string url)
-    {
-        _productImages.Remove(url);
-    }
-
     // ===== VARIANTS =====
+
+    private string GetVariantKey(int index)
+    {
+        // Dùng VariantId nếu đã tồn tại (Edit), nếu không dùng index làm key tạm cho file input.
+        return _existingVariantIds.TryGetValue(index, out var vid) ? vid.ToString() : $"new_{index}";
+    }
 
     private void AddVariant()
     {
-        _model.Variants.Add(new CreateVariantRequest { WarrantyMonth = 12 });
+        _model.Variants.Add(new CreateVariantRequest
+        {
+            WarrantyMonth = 12,
+            Specifications = new(),
+            Images = new()
+        });
     }
 
     private void RemoveVariant(int index)
     {
-        if (_model.Variants.Count > 1)
-        {
-            _model.Variants.RemoveAt(index);
-        }
-        else
+        if (_model.Variants.Count <= 1)
         {
             Snackbar.Add("Sản phẩm phải có ít nhất 1 biến thể.", Severity.Warning);
+            return;
         }
+        _model.Variants.RemoveAt(index);
+
+        // Re-index existing-variant map (key bị shift sau remove)
+        var rebuilt = new Dictionary<int, int>();
+        int newIdx = 0;
+        for (int oldIdx = 0; oldIdx < _model.Variants.Count + 1; oldIdx++)
+        {
+            if (oldIdx == index) continue;
+            if (_existingVariantIds.TryGetValue(oldIdx, out var vid))
+                rebuilt[newIdx] = vid;
+            newIdx++;
+        }
+        _existingVariantIds.Clear();
+        foreach (var kvp in rebuilt) _existingVariantIds[kvp.Key] = kvp.Value;
     }
 
-    // ===== SPECIFICATIONS =====
-
-    private void AddSpecification()
+    private void OnVariantImagesChanged(int index, List<SaveImageRequest> images)
     {
-        _specifications.Add(new SpecEntry());
+        _model.Variants[index].Images = images;
     }
 
-    private void RemoveSpecification(int index)
+    private void OnVariantSpecsChanged(int index, Dictionary<string, string> specs)
     {
-        _specifications.RemoveAt(index);
+        _model.Variants[index].Specifications = specs.Count > 0 ? specs : null;
     }
 
     // ===== SUBMIT =====
 
     private async Task HandleSubmit()
     {
-        // Validation cơ bản
         if (string.IsNullOrWhiteSpace(_model.Name))
         {
             Snackbar.Add("Tên sản phẩm không được để trống.", Severity.Warning);
             return;
         }
-
         if (_model.Variants.Count == 0)
         {
             Snackbar.Add("Sản phẩm phải có ít nhất 1 biến thể.", Severity.Warning);
             return;
         }
-
         foreach (var v in _model.Variants)
         {
             if (string.IsNullOrWhiteSpace(v.SKU))
@@ -611,113 +501,174 @@
                 Snackbar.Add("Mã SKU của biến thể không được để trống.", Severity.Warning);
                 return;
             }
+            if (string.IsNullOrWhiteSpace(v.VariantName))
+            {
+                Snackbar.Add("Tên phiên bản không được để trống.", Severity.Warning);
+                return;
+            }
         }
-
-        // Validate ManufacturerId
         if (_model.ManufacturerId <= 0)
         {
             Snackbar.Add("Vui lòng chọn hãng sản xuất.", Severity.Warning);
             return;
         }
 
-        // Gán Specifications vào mỗi Variant
-        var specsDict = _specifications
-            .Where(s => !string.IsNullOrWhiteSpace(s.Key))
-            .ToDictionary(s => s.Key, s => s.Value ?? string.Empty);
-
-        foreach (var variant in _model.Variants)
+        var skus = _model.Variants.Select(v => v.SKU.Trim().ToUpper()).ToList();
+        if (skus.Distinct().Count() != skus.Count)
         {
-            variant.Specifications = specsDict.Count > 0
-                ? new Dictionary<string, string>(specsDict)
-                : null;
+            Snackbar.Add("Các biến thể trong cùng sản phẩm không được trùng mã SKU.", Severity.Warning);
+            return;
+        }
 
-            variant.Images = _productImages.Count > 0
-                ? _productImages.Select((url, idx) => new SaveImageRequest
-                    {
-                        ImageUrl = url,
-                        IsMain = idx == 0,
-                        SortOrder = idx
-                    }).ToList()
-                : new List<SaveImageRequest>
-                    {
-                        new SaveImageRequest
-                        {
-                            ImageUrl = "https://placehold.co/400x400?text=No+Image",
-                            IsMain = true,
-                            SortOrder = 0
-                        }
-                    };
+        var variantNames = _model.Variants.Select(v => v.VariantName.Trim().ToUpper()).ToList();
+        if (variantNames.Distinct().Count() != variantNames.Count)
+        {
+            Snackbar.Add("Các biến thể trong cùng sản phẩm không được trùng tên phiên bản.", Severity.Warning);
+            return;
         }
 
         _isSaving = true;
         StateHasChanged();
 
-        if (_isEditMode)
+        try
         {
-            // Update thông tin chung
-            var updateRequest = new UpdateProductRequest
+            if (_isEditMode)
             {
-                Name = _model.Name,
-                ShortDescription = _model.ShortDescription,
-                Description = _model.Description,
-                ManufacturerId = _model.ManufacturerId,
-                CategoryId = _model.CategoryId,
-                Status = _statusForUpdate
-            };
-
-            var result = await ProductService.UpdateAsync(Id!.Value, updateRequest);
-
-            if (result.Success && _productImages.Count > 0)
-            {
-                var imageRequests = _productImages.Select((url, idx) => new SaveImageRequest
-                {
-                    ImageUrl = url,
-                    IsMain = idx == 0,
-                    SortOrder = idx
-                }).ToList();
-
-                var imgResult = await ProductService.UpdateProductImagesAsync(Id!.Value, imageRequests);
-                if (!imgResult.Success)
-                    Snackbar.Add($"Lưu ảnh thất bại: {imgResult.Message}", Severity.Warning);
-            }
-
-            _isSaving = false;
-
-            if (result.Success)
-            {
-                Snackbar.Add("Cập nhật sản phẩm thành công!", Severity.Success);
-                Navigation.NavigateTo("/admin/products");
+                await SaveEditAsync();
             }
             else
             {
-                Snackbar.Add(result.Message, Severity.Error);
+                await SaveCreateAsync();
             }
+        }
+        finally
+        {
+            _isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveCreateAsync()
+    {
+        // Đảm bảo mỗi variant có thuộc tính SortOrder/IsMain hợp lệ
+        foreach (var v in _model.Variants)
+        {
+            ReindexImages(v.Images);
+        }
+
+        var result = await ProductService.CreateAsync(_model);
+        if (result.Success)
+        {
+            Snackbar.Add("Tạo sản phẩm thành công!", Severity.Success);
+            Navigation.NavigateTo("/admin/products");
         }
         else
         {
-            // Create
-            var result = await ProductService.CreateAsync(_model);
-            _isSaving = false;
+            Snackbar.Add(result.Message, Severity.Error);
+        }
+    }
 
-            if (result.Success)
+    private async Task SaveEditAsync()
+    {
+        // 1) Update product metadata
+        var productResult = await ProductService.UpdateAsync(Id!.Value, new UpdateProductRequest
+        {
+            Name = _model.Name,
+            ShortDescription = _model.ShortDescription,
+            Description = _model.Description,
+            ManufacturerId = _model.ManufacturerId,
+            CategoryId = _model.CategoryId,
+            Status = _statusForUpdate
+        });
+
+        if (!productResult.Success)
+        {
+            Snackbar.Add(productResult.Message, Severity.Error);
+            return;
+        }
+
+        // 2) Per-variant: nếu có Id thì gọi 3 endpoint variant-scoped, nếu không thì tạo mới
+        for (int i = 0; i < _model.Variants.Count; i++)
+        {
+            var v = _model.Variants[i];
+            ReindexImages(v.Images);
+
+            if (_existingVariantIds.TryGetValue(i, out var variantId))
             {
-                Snackbar.Add("Tạo sản phẩm thành công!", Severity.Success);
-                Navigation.NavigateTo("/admin/products");
+                var metaResult = await ProductService.UpdateVariantAsync(variantId, new UpdateVariantRequest
+                {
+                    SKU = v.SKU,
+                    VariantName = v.VariantName,
+                    Price = v.Price,
+                    OriginalPrice = v.OriginalPrice,
+                    WarrantyMonth = v.WarrantyMonth
+                });
+                if (!metaResult.Success)
+                {
+                    Snackbar.Add($"Lưu biến thể #{i + 1} thất bại: {metaResult.Message}", Severity.Error);
+                    return;
+                }
+
+                var imgResult = await ProductService.UpdateVariantImagesAsync(variantId, v.Images);
+                if (!imgResult.Success)
+                    Snackbar.Add($"Lưu ảnh biến thể #{i + 1} thất bại: {imgResult.Message}", Severity.Warning);
+
+                var specResult = await ProductService.UpdateVariantSpecificationsAsync(
+                    variantId,
+                    v.Specifications ?? new());
+                if (!specResult.Success)
+                    Snackbar.Add($"Lưu thông số biến thể #{i + 1} thất bại: {specResult.Message}", Severity.Warning);
             }
             else
             {
-                Snackbar.Add(result.Message, Severity.Error);
+                var createResult = await ProductService.CreateVariantAsync(Id!.Value, new SaveVariantRequest
+                {
+                    SKU = v.SKU,
+                    VariantName = v.VariantName,
+                    Price = v.Price,
+                    OriginalPrice = v.OriginalPrice,
+                    WarrantyMonth = v.WarrantyMonth,
+                    Specifications = v.Specifications,
+                    Images = v.Images
+                });
+                if (!createResult.Success)
+                {
+                    Snackbar.Add($"Tạo biến thể mới #{i + 1} thất bại: {createResult.Message}", Severity.Error);
+                    return;
+                }
             }
         }
 
-        StateHasChanged();
+        // 3) Xoá các variant đã bị remove khỏi UI
+        var keptIds = _existingVariantIds.Values.ToHashSet();
+        if (_editDetail != null)
+        {
+            foreach (var original in _editDetail.Variants)
+            {
+                if (!keptIds.Contains(original.Id))
+                {
+                    var delResult = await ProductService.DeleteVariantAsync(original.Id);
+                    if (!delResult.Success)
+                        Snackbar.Add($"Xoá biến thể '{original.VariantName}' thất bại: {delResult.Message}", Severity.Warning);
+                }
+            }
+        }
+
+        Snackbar.Add("Cập nhật sản phẩm thành công!", Severity.Success);
+        Navigation.NavigateTo("/admin/products");
+    }
+
+    private static void ReindexImages(List<SaveImageRequest> images)
+    {
+        if (images.Count == 0) return;
+        if (!images.Any(i => i.IsMain))
+            images[0].IsMain = true;
+        for (int i = 0; i < images.Count; i++)
+            images[i].SortOrder = i;
     }
 
     // ===== HELPERS =====
 
-    /// <summary>
-    /// Flatten cây danh mục thành list phẳng (dùng cho MudSelect).
-    /// </summary>
     private List<CategoryTreeDto> FlattenCategories(List<CategoryTreeDto> cats)
     {
         var result = new List<CategoryTreeDto>();
@@ -728,14 +679,5 @@
                 result.AddRange(FlattenCategories(cat.Children));
         }
         return result;
-    }
-
-    /// <summary>
-    /// Helper class cho Dynamic Specification.
-    /// </summary>
-    private class SpecEntry
-    {
-        public string Key { get; set; } = string.Empty;
-        public string Value { get; set; } = string.Empty;
     }
 }

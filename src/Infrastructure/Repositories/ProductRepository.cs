@@ -230,34 +230,6 @@ namespace PBL3.Infrastructure.Repositories
                 .FirstOrDefaultAsync(v => v.Id == variantId && !v.IsDeleted);
         }
 
-        public async Task ReplaceProductImagesAsync(int productId, List<ProductImage> newImages)
-        {
-            var variantIds = await _context.ProductVariants
-                .Where(v => v.ProductId == productId && !v.IsDeleted)
-                .Select(v => v.Id)
-                .ToListAsync();
-
-            var oldImages = await _context.ProductImages
-                .Where(i => variantIds.Contains(i.VariantId))
-                .ToListAsync();
-
-            _context.ProductImages.RemoveRange(oldImages);
-
-            foreach (var variantId in variantIds)
-            {
-                foreach (var img in newImages)
-                {
-                    await _context.ProductImages.AddAsync(new ProductImage
-                    {
-                        VariantId = variantId,
-                        ImageUrl = img.ImageUrl,
-                        IsMain = img.IsMain,
-                        SortOrder = img.SortOrder
-                    });
-                }
-            }
-        }
-
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

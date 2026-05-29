@@ -20,6 +20,9 @@ namespace PBL3.Shared.DTOs.Pos
         public string ProductName { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public int WarrantyMonth { get; set; }
+
+        /// <summary>Ảnh chính của variant (nếu có).</summary>
+        public string? ThumbnailUrl { get; set; }
     }
 
     public class PosCheckoutRequest

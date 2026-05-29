@@ -114,7 +114,35 @@ namespace PBL3.Core.Interfaces
         Task AddAsync(Product product);
         Task AddVariantAsync(ProductVariant variant);
         Task RemoveVariant(ProductVariant variant);
-        Task ReplaceProductImagesAsync(int productId, List<ProductImage> newImages);
+        Task SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Repository interface cho ProductVariant — quản lý variant ở cấp độ độc lập
+    /// (ảnh, thông số kỹ thuật, metadata) sau khi Product đã tồn tại.
+    /// </summary>
+    public interface IProductVariantRepository
+    {
+        /// <summary>
+        /// Lấy variant theo Id (WITH TRACKING để update metadata / specifications).
+        /// </summary>
+        Task<ProductVariant?> GetByIdAsync(int variantId);
+
+        /// <summary>
+        /// Lấy variant theo Id kèm Images (WITH TRACKING).
+        /// </summary>
+        Task<ProductVariant?> GetByIdWithImagesAsync(int variantId);
+
+        /// <summary>
+        /// Đếm số variant còn hoạt động (chưa bị soft-delete) thuộc về một product.
+        /// </summary>
+        Task<int> CountActiveByProductAsync(int productId);
+
+        /// <summary>
+        /// Thay toàn bộ ảnh của một variant (xoá ảnh cũ, thêm danh sách ảnh mới).
+        /// </summary>
+        Task ReplaceImagesAsync(int variantId, List<ProductImage> newImages);
+
         Task SaveChangesAsync();
     }
 

@@ -80,10 +80,10 @@ else
                                      Style="font-size:5rem; color:#BDBDBD;" />
                         }
                     </div>
-                    @if (_product.Images.Count > 1)
+                    @if (_currentVariantImages.Count > 1)
                     {
                         <div style="display:flex; gap:8px; margin-top:12px; overflow-x:auto; padding-bottom:4px;">
-                            @foreach (var img in _product.Images)
+                            @foreach (var img in _currentVariantImages)
                             {
                                 var isSelected = _mainImage == img;
                                 <div @onclick="@(() => ChangeMainImage(img))"
@@ -203,10 +203,27 @@ else
                                              Variant="Variant.Outlined" Color="Color.Primary"
                                              Disabled="!variant.IsAvailable"
                                              Style="@($"border-radius:8px; font-weight:600; font-size:0.8rem; {(variant.Id == _currentVariant?.Id ? "border:2px solid var(--hs-red); color:var(--hs-red);" : "")}")">
-                                        @variant.VariantName
+                                        <div style="display:flex; align-items:center; gap:6px;">
+                                            @if (!string.IsNullOrWhiteSpace(variant.ThumbnailUrl))
+                                            {
+                                                <img src="@variant.ThumbnailUrl" alt="@variant.VariantName"
+                                                     style="width:24px; height:24px; object-fit:cover; border-radius:4px;" />
+                                            }
+                                            <span>@variant.VariantName</span>
+                                        </div>
                                     </MudChip>
                                 }
                             </MudChipSet>
+                            @if (!string.IsNullOrWhiteSpace(_currentVariant?.SKU))
+                            {
+                                <div style="font-size:0.75rem; color:var(--hs-text-muted); margin-top:8px;">
+                                    Mã SKU: <strong>@_currentVariant.SKU</strong>
+                                    @if (_currentVariant.WarrantyMonth > 0)
+                                    {
+                                        <span> · Bảo hành: <strong>@_currentVariant.WarrantyMonth tháng</strong></span>
+                                    }
+                                </div>
+                            }
                         </div>
                     }
 
@@ -356,6 +373,7 @@ else
     private ProductDetailResponse? _product;
     private List<ProductCardResponse>? _relatedProducts;
     private StorefrontVariantResponse? _currentVariant;
+    private List<string> _currentVariantImages = new();
     private string? _mainImage;
     private int _quantity = 1;
 
@@ -369,17 +387,28 @@ else
         _isLoading = true;
         _product = null;
         _relatedProducts = null;
-        
+
         var response = await StorefrontClientService.GetProductDetailAsync(Slug);
         if (response.Success && response.Data != null)
         {
             _product = response.Data;
-            _mainImage = _product.Images.FirstOrDefault();
-            
-            // Set default variant (first available or just the first one)
-            _currentVariant = _product.Variants.FirstOrDefault(v => v.IsAvailable) ?? _product.Variants.FirstOrDefault();
 
-            // Load related products
+            // Variant mặc định = variant chỉ định qua URL (?variant=<sku>) nếu hợp lệ,
+            // sau đó variant available đầu tiên, cuối cùng variant đầu tiên.
+            StorefrontVariantResponse? preferred = null;
+            var requestedSku = GetVariantSkuFromUrl();
+            if (!string.IsNullOrWhiteSpace(requestedSku))
+            {
+                preferred = _product.Variants.FirstOrDefault(
+                    v => string.Equals(v.SKU, requestedSku, StringComparison.OrdinalIgnoreCase));
+            }
+
+            _currentVariant = preferred
+                ?? _product.Variants.FirstOrDefault(v => v.IsAvailable)
+                ?? _product.Variants.FirstOrDefault();
+
+            ApplyVariantImages();
+
             var relatedResponse = await StorefrontClientService.GetRelatedProductsAsync(Slug);
             if (relatedResponse.Success && relatedResponse.Data != null)
             {
@@ -403,7 +432,42 @@ else
     {
         if (variant == null) return;
         _currentVariant = variant;
-        // In-memory UI update happens automatically due to bindings.
+        ApplyVariantImages();
+        SyncVariantToUrl(variant.SKU);
+    }
+
+    private void ApplyVariantImages()
+    {
+        if (_currentVariant?.Images != null && _currentVariant.Images.Count > 0)
+        {
+            _currentVariantImages = _currentVariant.Images;
+        }
+        else
+        {
+            // Fallback: nếu variant chưa có ảnh, dùng gallery cấp product.
+            _currentVariantImages = _product?.Images ?? new List<string>();
+        }
+        _mainImage = _currentVariantImages.FirstOrDefault();
+    }
+
+    private void SyncVariantToUrl(string sku)
+    {
+        if (string.IsNullOrWhiteSpace(sku)) return;
+        var newUrl = NavigationManager.GetUriWithQueryParameter("variant", sku);
+        NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
+    }
+
+    private string? GetVariantSkuFromUrl()
+    {
+        var uri = new Uri(NavigationManager.Uri);
+        if (string.IsNullOrEmpty(uri.Query)) return null;
+        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            if (parts.Length == 2 && parts[0].Equals("variant", StringComparison.OrdinalIgnoreCase))
+                return Uri.UnescapeDataString(parts[1]);
+        }
+        return null;
     }
 
     private bool IsCurrentVariantAvailable()

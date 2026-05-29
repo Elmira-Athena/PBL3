@@ -1,7 +1,4 @@
 using System.Globalization;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
@@ -121,7 +118,7 @@ namespace PBL3.Service.Products
             var product = new Product
             {
                 Name = request.Name,
-                Slug = GenerateProductSlug(request.Name),
+                Slug = ProductSlugHelper.GenerateProductSlug(request.Name),
                 ShortDescription = request.ShortDescription,
                 Description = request.Description,
                 ManufacturerId = request.ManufacturerId,
@@ -137,7 +134,7 @@ namespace PBL3.Service.Products
                 {
                     SKU = variantReq.SKU,
                     VariantName = variantReq.VariantName,
-                    Slug = GenerateSlug(request.Name, variantReq.SKU),
+                    Slug = ProductSlugHelper.GenerateVariantSlug(request.Name, variantReq.SKU),
                     Price = variantReq.Price,
                     OriginalPrice = variantReq.OriginalPrice,
                     WarrantyMonth = variantReq.WarrantyMonth,
@@ -192,7 +189,7 @@ namespace PBL3.Service.Products
 
             // Update fields
             product.Name = request.Name;
-            product.Slug = GenerateProductSlug(request.Name);
+            product.Slug = ProductSlugHelper.GenerateProductSlug(request.Name);
             product.ShortDescription = request.ShortDescription;
             product.Description = request.Description;
             product.ManufacturerId = request.ManufacturerId;
@@ -209,77 +206,6 @@ namespace PBL3.Service.Products
             var dto = MapToDetailDto(updated!);
 
             return ApiResult<ProductDetailDto>.Ok(dto, "Cập nhật sản phẩm thành công.");
-        }
-
-        // ========================================================
-        // ADD VARIANT — Thêm phiên bản cho sản phẩm đã có
-        // ========================================================
-        public async Task<ApiResult<ProductVariantDto>> AddVariantAsync(int productId, SaveVariantRequest request)
-        {
-            var product = await _productRepo.GetByIdAsync(productId);
-
-            if (product == null)
-                return ApiResult<ProductVariantDto>.Fail("Không tìm thấy sản phẩm yêu cầu.");
-
-            // Check SKU unique
-            if (await _productRepo.IsSkuExistsAsync(request.SKU))
-                return ApiResult<ProductVariantDto>.Fail($"Mã SKU '{request.SKU}' đã tồn tại trong hệ thống.");
-
-            var variant = new ProductVariant
-            {
-                ProductId = productId,
-                SKU = request.SKU,
-                VariantName = request.VariantName,
-                Slug = GenerateSlug(product.Name, request.SKU),
-                Price = request.Price,
-                OriginalPrice = request.OriginalPrice,
-                WarrantyMonth = request.WarrantyMonth,
-                Specifications = request.Specifications ?? new(),
-                CreatedDate = DateTime.UtcNow
-            };
-
-            // Images
-            foreach (var imgReq in request.Images)
-            {
-                variant.Images.Add(new ProductImage
-                {
-                    ImageUrl = imgReq.ImageUrl,
-                    IsMain = imgReq.IsMain,
-                    SortOrder = imgReq.SortOrder
-                });
-            }
-
-
-            await _productRepo.AddVariantAsync(variant);
-            await _productRepo.SaveChangesAsync();
-
-            _logger.LogInformation("Thêm phiên bản '{VariantName}' (SKU: {SKU}) cho sản phẩm Id: {ProductId}",
-                variant.VariantName, variant.SKU, productId);
-
-            var dto = MapToVariantDto(variant);
-            return ApiResult<ProductVariantDto>.Ok(dto, "Thêm phiên bản thành công.");
-        }
-
-        // ========================================================
-        // UPDATE IMAGES — Thay toàn bộ ảnh của sản phẩm
-        // ========================================================
-        public async Task<ApiResult<bool>> UpdateImagesAsync(int productId, List<SaveImageRequest> images)
-        {
-            var product = await _productRepo.GetByIdAsync(productId);
-            if (product == null)
-                return ApiResult<bool>.Fail("Không tìm thấy sản phẩm yêu cầu.");
-
-            var newImages = images.Select((img, idx) => new ProductImage
-            {
-                ImageUrl = img.ImageUrl,
-                IsMain = idx == 0,
-                SortOrder = idx
-            }).ToList();
-
-            await _productRepo.ReplaceProductImagesAsync(productId, newImages);
-            await _productRepo.SaveChangesAsync();
-
-            return ApiResult<bool>.Ok(true, "Cập nhật ảnh sản phẩm thành công.");
         }
 
         // DELETE — Soft Delete sản phẩm
@@ -397,66 +323,5 @@ namespace PBL3.Service.Products
             return $"{min.ToString("N0", culture)}đ - {max.ToString("N0", culture)}đ";
         }
 
-        /// <summary>
-        /// NGHIỆP VỤ & THUẬT TOÁN: Sinh đường dẫn tĩnh (URL Slug) thân thiện SEO cho từng biến thể sản phẩm (Variant).
-        /// Kết hợp tên sản phẩm và mã SKU để đảm bảo tính độc bản cao nhất trên URL định tuyến.
-        /// 1. Chuẩn hóa chuỗi Unicode dưới dạng FormD để tách rời ký tự gốc và các dấu thanh tiếng Việt.
-        /// 2. Quét qua từng ký tự và lọc bỏ các dấu thanh/dấu phụ (thuộc nhóm NonSpacingMark).
-        /// 3. Tái tổ hợp chuỗi sạch dấu về Unicode FormC tiêu chuẩn để xử lý tiếp.
-        /// 4. Chuyển chữ thường, dùng Regex loại bỏ ký tự đặc biệt, thay thế khoảng trắng và chuỗi gạch ngang liên tiếp bằng một dấu gạch (-) duy nhất.
-        /// </summary>
-        private static string GenerateSlug(string productName, string sku)
-        {
-            var combined = $"{productName} {sku}";
-            // Remove diacritics (dấu tiếng Việt)
-            // Phân rã ký tự tiếng Việt có dấu thành dạng tổ hợp (ví dụ: á -> a + dấu sắc)
-            var normalized = combined.Normalize(NormalizationForm.FormD);
-            var sb = new StringBuilder();
-            foreach (var c in normalized)
-            {
-                var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
-                // Bỏ qua các dấu thanh và dấu phụ (NonSpacingMark)
-                if (unicodeCategory != UnicodeCategory.NonSpacingMark)
-                    sb.Append(c);
-            }
-            // Tái tổ hợp về Unicode FormC gốc để xử lý chuỗi không còn dấu tiếng Việt
-            var noDiacritics = sb.ToString().Normalize(NormalizationForm.FormC);
-
-            // Convert to lowercase, replace spaces and special chars with dashes
-            // Chuyển chữ thường, dùng Regex loại ký tự đặc biệt và dồn các khoảng trắng/gạch ngang thành 1 dấu gạch duy nhất
-            var slug = Regex.Replace(noDiacritics.ToLower(), @"[^a-z0-9\s-]", "");
-            slug = Regex.Replace(slug, @"[\s-]+", "-").Trim('-');
-
-            return slug;
-        }
-
-        /// <summary>
-        /// NGHIỆP VỤ & THUẬT TOÁN: Sinh đường dẫn tĩnh (URL Slug) chuẩn SEO cấp độ sản phẩm cha (Product).
-        /// Áp dụng cơ chế loại bỏ hoàn toàn dấu tiếng Việt thông qua phân rã Unicode FormD và lọc bỏ NonSpacingMark,
-        /// chuẩn hóa thành định dạng đường dẫn URL viết thường, ngăn cách bằng dấu gạch ngang thân thiện.
-        /// </summary>
-        private static string GenerateProductSlug(string productName)
-        {
-            // Remove diacritics (dấu tiếng Việt)
-            // Phân rã ký tự tiếng Việt có dấu thành dạng tổ hợp
-            var normalized = productName.Normalize(NormalizationForm.FormD);
-            var sb = new StringBuilder();
-            foreach (var c in normalized)
-            {
-                var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
-                // Bỏ qua các dấu thanh và dấu phụ
-                if (unicodeCategory != UnicodeCategory.NonSpacingMark)
-                    sb.Append(c);
-            }
-            // Tái tổ hợp chuỗi Unicode FormC sạch dấu
-            var noDiacritics = sb.ToString().Normalize(NormalizationForm.FormC);
-
-            // Convert to lowercase, replace spaces and special chars with dashes
-            // Chuẩn hóa chữ thường, lọc ký tự đặc biệt và tối ưu hóa dấu nối (-)
-            var slug = Regex.Replace(noDiacritics.ToLower(), @"[^a-z0-9\s-]", "");
-            slug = Regex.Replace(slug, @"[\s-]+", "-").Trim('-');
-
-            return slug;
-        }
     }
 }

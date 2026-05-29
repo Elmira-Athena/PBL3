@@ -182,6 +182,34 @@ namespace PBL3.Shared.DTOs.Products
         public List<SaveImageRequest> Images { get; set; } = new();
     }
 
+    /// <summary>
+    /// Request cập nhật metadata của 1 variant (KHÔNG bao gồm ảnh + specs — dùng endpoint riêng).
+    /// </summary>
+    public class UpdateVariantRequest
+    {
+        public string SKU { get; set; } = string.Empty;
+        public string VariantName { get; set; } = string.Empty;
+        public decimal Price { get; set; }
+        public decimal? OriginalPrice { get; set; }
+        public int WarrantyMonth { get; set; } = 12;
+    }
+
+    /// <summary>
+    /// Request thay toàn bộ ảnh của 1 variant.
+    /// </summary>
+    public class SaveVariantImagesRequest
+    {
+        public List<SaveImageRequest> Images { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Request thay toàn bộ specs của 1 variant.
+    /// </summary>
+    public class SaveVariantSpecificationsRequest
+    {
+        public Dictionary<string, string> Specifications { get; set; } = new();
+    }
+
     // ========================================================
     // QUERY PARAMETERS
     // ========================================================

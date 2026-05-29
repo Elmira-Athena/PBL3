@@ -81,6 +81,11 @@ namespace PBL3.Service.Pos
             if (variant == null || product == null)
                 return ApiResult<PosScanResponse>.Fail("Không thể lấy thông tin sản phẩm. Biến thể hoặc sản phẩm không còn tồn tại trong hệ thống.");
 
+            var thumbnail = variant.Images?
+                .OrderByDescending(i => i.IsMain)
+                .ThenBy(i => i.SortOrder)
+                .FirstOrDefault()?.ImageUrl;
+
             return ApiResult<PosScanResponse>.Ok(new PosScanResponse
             {
                 SerialId = serial.Id,
@@ -90,7 +95,8 @@ namespace PBL3.Service.Pos
                 VariantName = variant.VariantName,
                 ProductName = product.Name,
                 Price = variant.Price,
-                WarrantyMonth = variant.WarrantyMonth
+                WarrantyMonth = variant.WarrantyMonth,
+                ThumbnailUrl = thumbnail
             });
         }
 
