@@ -1,50 +1,139 @@
 @inherits LayoutComponentBase
 
-<div style="display: flex; height: 100vh; overflow: hidden;">
+<div style="display: flex; height: 100vh; overflow: hidden; font-family: 'Inter', 'Roboto', sans-serif;">
 
-    @* ===== LEFT PANEL: Branding (ẩn trên mobile) ===== *@
-    <div class="auth-brand-panel d-none d-md-flex flex-column align-center justify-center px-8"
-         style="width: 42%; min-width: 320px;
-                background: linear-gradient(135deg, #1a1a2e 0%, #c0392b 100%);
-                color: white; gap: 24px;">
+    @* ===== LEFT PANEL: NZXT-style branding (ẩn trên mobile) ===== *@
+    <div class="d-none d-md-flex flex-column"
+         style="width: 46%; min-width: 340px; background: #111111;
+                position: relative; overflow: hidden; padding: 28px 28px 24px 32px;">
 
-        <MudImage Src="images/logo.png" Alt="HushStore" Width="180" Height="60"
-                  ObjectFit="ObjectFit.Contain" />
+        @* Viền đỏ cạnh trái *@
+        <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #E11D2A;"></div>
 
-        <div class="text-center" style="margin-bottom: 48px;">
-            <MudText Typo="Typo.h4" Style="font-weight: 800; letter-spacing: 0.04em; color: white;">
-                HUSH STORE
-            </MudText>
-            <MudText Typo="Typo.subtitle1" Style="color: rgba(255,255,255,0.75); margin-top: 8px;">
-                Công nghệ đỉnh cao, giá tốt nhất
-            </MudText>
-        </div>
+        @* Tech grid overlay *@
+        <div style="position: absolute; inset: 0; pointer-events: none;
+                    background-image: linear-gradient(rgba(225,29,42,0.05) 1px, transparent 1px),
+                                      linear-gradient(90deg, rgba(225,29,42,0.05) 1px, transparent 1px);
+                    background-size: 32px 32px;"></div>
 
-        <MudDivider Style="border-color: rgba(255,255,255,0.2); width: 60%;" />
+        @* Radial glow góc dưới-phải *@
+        <div style="position: absolute; bottom: -70px; right: -70px;
+                    width: 260px; height: 260px; border-radius: 50%; pointer-events: none;
+                    background: radial-gradient(circle, rgba(225,29,42,0.14) 0%, transparent 70%);"></div>
 
-        <div class="d-flex flex-column gap-3" style="width: 100%; max-width: 280px; margin-top: 32px;">
-            <div class="d-flex align-center gap-3">
-                <MudIcon Icon="@Icons.Material.Filled.Verified" Style="color: rgba(255,255,255,0.85); font-size: 1.3rem;" />
-                <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.85);">Sản phẩm chính hãng 100%</MudText>
+        @* Watermark chữ H *@
+        <div style="position: absolute; bottom: -20px; right: -8px;
+                    font-size: 13rem; font-weight: 900; line-height: 1;
+                    color: rgba(255,255,255,0.025); pointer-events: none; user-select: none;
+                    letter-spacing: -0.05em; font-family: 'Inter', sans-serif;">H</div>
+
+        @* ===== Nội dung (z-index trên các lớp trang trí) ===== *@
+        <div style="position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%;">
+
+            @* ── Group 1: Header (logo + headline + subtitle) ── *@
+            <div>
+                @* Logo + HUSHSTORE *@
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 24px;">
+                    <MudImage Src="images/logo.png" Alt="HushStore" Height="44" ObjectFit="ObjectFit.Contain" />
+                    <span style="font-size: 1rem; font-weight: 800; letter-spacing: 0.06em; line-height: 1;">
+                        <span style="color: #ffffff;">HUSH</span><span style="color: #E11D2A;">STORE</span>
+                    </span>
+                </div>
+
+                @* Section label *@
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                    <div style="width: 18px; height: 2px; background: #E11D2A; flex-shrink: 0;"></div>
+                    <span style="font-size: 0.62rem; font-weight: 600; color: #E11D2A;
+                                 letter-spacing: 0.15em; text-transform: uppercase;">Cửa hàng công nghệ</span>
+                </div>
+
+                @* Headline lớn *@
+                <div style="font-size: 1.75rem; font-weight: 900; color: #ffffff;
+                            line-height: 1.08; letter-spacing: -0.03em; margin-bottom: 10px;">
+                    Công nghệ<br />
+                    <span style="color: #E11D2A;">đỉnh cao</span>,<br />
+                    giá tốt nhất.
+                </div>
+
+                @* Subtitle *@
+                <div style="font-size: 0.72rem; color: rgba(255,255,255,0.45);
+                            line-height: 1.55; max-width: 240px;">
+                    Hệ thống mua sắm IT hiện đại — từ linh kiện lẻ đến cấu hình dựng sẵn.
+                </div>
             </div>
-            <div class="d-flex align-center gap-3">
-                <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Style="color: rgba(255,255,255,0.85); font-size: 1.3rem;" />
-                <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.85);">Giao hàng toàn quốc</MudText>
-            </div>
-            <div class="d-flex align-center gap-3">
-                <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Style="color: rgba(255,255,255,0.85); font-size: 1.3rem;" />
-                <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.85);">Hỗ trợ kỹ thuật 24/7</MudText>
-            </div>
-            <div class="d-flex align-center gap-3">
-                <MudIcon Icon="@Icons.Material.Filled.Shield" Style="color: rgba(255,255,255,0.85); font-size: 1.3rem;" />
-                <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,0.85);">Bảo hành chính sách rõ ràng</MudText>
-            </div>
-        </div>
 
-        <div style="position: absolute; top: 24px; left: 24px;">
-            <MudLink Href="/" Style="color: rgba(255,255,255,0.55); font-size: 0.8rem;">
-                ← Quay về trang chủ
-            </MudLink>
+            @* ── Group 2: Stats + Features (flex:1, căn giữa theo chiều dọc) ── *@
+            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px;
+                        padding: 24px 0;">
+
+                @* Stats 2×2 *@
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+                                border-radius: 7px; padding: 10px 12px;">
+                        <div style="font-size: 1.1rem; font-weight: 800; color: #fff; line-height: 1;">
+                            500<span style="color: #E11D2A;">+</span>
+                        </div>
+                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4);
+                                    text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px;">Sản phẩm</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+                                border-radius: 7px; padding: 10px 12px;">
+                        <div style="font-size: 1.1rem; font-weight: 800; color: #fff; line-height: 1;">
+                            10<span style="color: #E11D2A;">K</span>
+                        </div>
+                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4);
+                                    text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px;">Khách hàng</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+                                border-radius: 7px; padding: 10px 12px;">
+                        <div style="font-size: 1.1rem; font-weight: 800; color: #fff; line-height: 1;">
+                            24<span style="color: #E11D2A;">/7</span>
+                        </div>
+                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4);
+                                    text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px;">Hỗ trợ</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+                                border-radius: 7px; padding: 10px 12px;">
+                        <div style="font-size: 1.1rem; font-weight: 800; color: #fff; line-height: 1;">
+                            100<span style="color: #E11D2A;">%</span>
+                        </div>
+                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4);
+                                    text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px;">Chính hãng</div>
+                    </div>
+                </div>
+
+                @* Feature list *@
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 9px; padding: 7px 10px;
+                                background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+                                border-radius: 6px;">
+                        <div style="width: 5px; height: 5px; border-radius: 50%; background: #E11D2A; flex-shrink: 0;"></div>
+                        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.65); font-weight: 500;">
+                            Sản phẩm chính hãng — bảo hành đầy đủ
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 9px; padding: 7px 10px;
+                                background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+                                border-radius: 6px;">
+                        <div style="width: 5px; height: 5px; border-radius: 50%; background: #E11D2A; flex-shrink: 0;"></div>
+                        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.65); font-weight: 500;">
+                            Giao hàng nhanh toàn quốc
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+
+            @* ── Group 3: Bottom row (back link + badge) ── *@
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <MudLink Href="/" Style="font-size: 0.68rem; color: #E11D2A; font-weight: 500;">
+                    ← Quay về trang chủ
+                </MudLink>
+                <span style="font-size: 0.6rem; color: rgba(255,255,255,0.28);
+                             border: 1px solid rgba(255,255,255,0.09);
+                             border-radius: 20px; padding: 2px 8px;">IT Hardware Store</span>
+            </div>
+
         </div>
     </div>
 
