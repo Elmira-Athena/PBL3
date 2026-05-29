@@ -673,7 +673,25 @@ Kiến trúc Component yêu cầu chia nhỏ giao diện thành các mảnh ghé
 
 ---
 
-### 🕸️ CẠM BẪY 5: CÂU HỎI CHIÊU HỒN: *"CODE NÀY CÓ PHẢI EM TỰ VIẾT KHÔNG?"*
+### 🕸️ CẠM BẪY 5: BẤY BẢN CHẤT & CƠ CHẾ MIDDLEWARE (CHỐT CHẶN HÀNH TRÌNH)
+*   **👨‍🏫 Thầy giáo hỏi chỉ vào `Program.cs` dưới Backend và hỏi:** 
+    *"Tôi thấy trong file `Program.cs` Backend của em có cấu hình một Custom Middleware viết dạng inline `app.Use(async (context, next) => { ... })` để kiểm tra trạng thái `IsActive` của User và có sử dụng `IMemoryCache` 30 giây. Em hãy giải thích bản chất Middleware trong .NET là gì? Luồng hoạt động của đoạn code này ra sao và tại sao lại cần phải Cache 30 giây?"*
+
+*   **💡 Cách bạn trả lời bản lĩnh để lấy điểm tối đa:**
+    *"Dạ thưa thầy, em xin phép trình bày bản chất và cơ chế tối ưu của chốt chặn này như sau ạ:
+    1.  **Bản chất Middleware:** Middleware là các đoạn code (các lớp xử lý) được móc nối nối tiếp nhau để tạo thành **Đường ống xử lý yêu cầu (HTTP Request Pipeline)**. Request từ trình duyệt gửi lên bắt buộc phải đi tuần tự xuyên qua các Middleware này trước khi chạm được tới Controller. Bất kỳ Middleware nào cũng có quyền chặn đứng và bắt request quay đầu (**Short-circuiting**) nếu phát hiện vi phạm bảo mật.
+    2.  **Luồng hoạt động của Custom Middleware `IsActive` trong code:**
+        *   Khi Client gửi request lên (sau khi đã đi qua chốt `UseAuthentication` để giải mã chữ ký Token JWT), request sẽ đụng chốt chặn Custom Middleware này của tụi em.
+        *   Middleware sẽ lấy ra `UserId` từ Claims danh tính và kiểm tra trạng thái hoạt động của tài khoản này.
+        *   Nếu phát hiện tài khoản đã bị khóa (`IsActive == false`), Middleware sẽ lập tức **ngắt luồng sớm (Short-circuit)**, cấu hình HTTP Status Code là `403 Forbidden`, trả về JSON báo lỗi chuẩn `ApiResult.Fail` và **hoàn toàn không gọi lệnh `await next()`**, chặn đứng không cho request xâm nhập sâu vào các Controller nghiệp vụ.
+        *   Nếu tài khoản hoạt động bình thường, nó gọi `await next();` để cho phép yêu cầu đi tiếp sang chốt tiếp theo (chốt Authorization và Controller).
+    3.  **Tại sao lại phải sử dụng MemoryCache 30 giây?**
+        *   Đây là giải pháp **tối ưu hóa hiệu năng hệ thống cực kỳ quan trọng**. Nếu không sử dụng Cache, cứ mỗi request gọi API (dù là kiểm tra giỏ hàng, lấy danh sách sản phẩm hay load menu...), Web API lại phải truy vấn xuống SQL Server để tìm kiếm trạng thái tài khoản, gây ra gánh nặng truy vấn khổng lồ và làm giảm tốc độ API.
+        *   Việc cache trạng thái trong 30 giây giúp giảm hàng ngàn truy vấn DB thừa, tăng tốc độ phản hồi API gần như tức thì mà vẫn đảm bảo tính an toàn bảo mật (độ trễ khóa tài khoản tối đa chỉ là 30 giây)."*
+
+---
+
+### 🕸️ CẠM BẪY 6: CÂU HỎI CHIÊU HỒN: *"CODE NÀY CÓ PHẢI EM TỰ VIẾT KHÔNG?"*
 *   **👨‍🏫 Thầy giáo hỏi thẳng:** *"Dự án này cấu trúc rất chuẩn, nhiều chỗ viết rất chuyên nghiệp. Tôi nghi ngờ code này không phải do sinh viên tụi em tự viết. Em giải thích thế nào?"*
 
 *   **💡 Cách bạn trả lời thông minh, bản lĩnh để ghi điểm:**
