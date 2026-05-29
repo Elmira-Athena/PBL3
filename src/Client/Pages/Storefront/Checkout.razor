@@ -1,4 +1,5 @@
 @page "/checkout"
+@using PBL3.Shared.DTOs.Common
 @using PBL3.Shared.DTOs.Sale
 @using System.ComponentModel.DataAnnotations
 @using PBL3.Shared.DTOs.Customers
@@ -300,7 +301,7 @@
                 NavigationManager.NavigateTo("/cart");
             }
         }
-        else if (cartResult.Message == "Unauthorized")
+        else if (cartResult.ErrorCode == ApiErrorCode.Forbidden)
         {
             Snackbar.Add("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại.", Severity.Error);
             NavigationManager.NavigateTo("/login");
