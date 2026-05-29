@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.BuildPc;
+using PBL3.Application.BuildPc;
 using PBL3.Shared.DTOs.BuildPc;
 using PBL3.Shared.DTOs.Common;
 

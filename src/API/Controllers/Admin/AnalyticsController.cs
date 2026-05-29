@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.Analytics;
+using PBL3.Application.Analytics;
 using PBL3.Shared.DTOs.Analytics;
 
 namespace PBL3.API.Controllers.Admin

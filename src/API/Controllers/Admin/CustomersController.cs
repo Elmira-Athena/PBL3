@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.Customers;
+using PBL3.Application.Customers;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
 using PBL3.Shared.DTOs.Products;

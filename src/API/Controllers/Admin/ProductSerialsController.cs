@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.ProductSerials;
+using PBL3.Application.ProductSerials;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
 

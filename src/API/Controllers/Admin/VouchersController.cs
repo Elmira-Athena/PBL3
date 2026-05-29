@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.Vouchers;
+using PBL3.Application.Vouchers;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Vouchers;
 

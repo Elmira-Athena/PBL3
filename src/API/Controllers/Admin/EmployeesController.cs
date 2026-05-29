@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.Employees;
+using PBL3.Application.Employees;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Employees;
 using System;

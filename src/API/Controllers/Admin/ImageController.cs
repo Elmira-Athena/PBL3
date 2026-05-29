@@ -2,7 +2,7 @@ using Amazon.S3;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using PBL3.Service.Storage;
+using PBL3.Application.Storage;
 using PBL3.Shared.DTOs.Common;
 
 namespace PBL3.API.Controllers.Admin;

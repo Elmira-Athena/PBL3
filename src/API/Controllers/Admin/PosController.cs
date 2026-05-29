@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.Pos;
+using PBL3.Application.Pos;
 using PBL3.Shared.DTOs.Pos;
 using System;
 using System.Security.Claims;

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.Banners;
+using PBL3.Application.Banners;
 using PBL3.Shared.DTOs.Banners;
 using PBL3.Shared.DTOs.Common;
 

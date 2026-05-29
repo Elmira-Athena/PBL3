@@ -2,7 +2,7 @@ using System.Security.Claims;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.Reviews;
+using PBL3.Application.Reviews;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Reviews;
 

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PBL3.Service.Categories;
+using PBL3.Application.Categories;
 using PBL3.Shared.DTOs.Categories;
 using PBL3.Shared.DTOs.Common;
 

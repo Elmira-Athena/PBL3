@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using PBL3.Service.Auth;
+using PBL3.Application.Auth;
 using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
