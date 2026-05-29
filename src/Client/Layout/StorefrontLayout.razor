@@ -13,7 +13,7 @@
 <MudLayout Style="min-height: 100vh; display: flex; flex-direction: column;">
     @* ===== TOP APP BAR ===== *@
     <MudAppBar Elevation="2" Dense="false" Fixed="true"
-               Style="background: linear-gradient(135deg, #1a1a2e 0%, #c0392b 100%); color: white;">
+               Style="background-color: #111111; color: white;">
 
         @* -- Logo -- *@
         <MudImage Src="images/logo.png" Alt="HushStore"
@@ -22,36 +22,43 @@
                   Class="mr-4" Style="cursor: pointer;"
                   @onclick='() => Navigation.NavigateTo("/")' />
 
-        @* -- DANH MỤC Button with dropdown -- *@
-        <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Class="mr-4">
+        @* -- PC Dựng Sẵn -- *@
+        <MudButton Variant="Variant.Text" Class="hs-nav-link"
+                   OnClick='@(() => Navigation.NavigateTo("/category/pc-build-san"))'>
+            PC Dựng Sẵn
+        </MudButton>
+
+        @* -- Linh Kiện PC dropdown -- *@
+        <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
             <ActivatorContent>
-                <MudButton Variant="Variant.Filled"
-                           StartIcon="@Icons.Material.Filled.Menu"
-                           Style="background-color: rgba(255,255,255,0.15); color: white; font-weight: 700; letter-spacing: 0.05em; border-radius: 4px;">
-                    DANH MỤC
+                <MudButton Variant="Variant.Text" Class="hs-nav-link"
+                           EndIcon="@Icons.Material.Filled.KeyboardArrowDown">
+                    Linh Kiện PC
                 </MudButton>
             </ActivatorContent>
             <ChildContent>
-                <div style="max-height: 420px; overflow-y: auto; min-width: 220px;">
-                    @foreach (var cat in _menuCategories.OrderBy(c => c.Name))
+                <div style="min-width: 200px; padding: 8px 0; background: #1C1C1C;">
+                    <MudMenuItem OnClick='@(() => Navigation.NavigateTo("/category/linh-kien-may-tinh"))'
+                                 Style="color: #ccc; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; cursor: default; padding: 6px 16px;">
+                        XEM TẤT CẢ LINH KIỆN
+                    </MudMenuItem>
+                    <MudDivider Style="border-color: #333;" />
+                    @foreach (var cat in _menuCategories.Where(c => c.Level == 1).OrderBy(c => c.Name))
                     {
-                        <MudMenuItem OnClick="@(() => Navigation.NavigateTo($"/category/{cat.Slug}"))">
-                            <div class="d-flex align-center">
-                                @if (!string.IsNullOrEmpty(cat.IconUrl))
-                                {
-                                    <img src="@cat.IconUrl" style="width:20px;height:20px;object-fit:contain;" class="mr-2" alt="" />
-                                }
-                                else
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.Circle" Size="Size.Small" Class="mr-2" Style="opacity:0.4;" />
-                                }
-                                <MudText Typo="Typo.body2">@cat.Name</MudText>
-                            </div>
+                        <MudMenuItem OnClick="@(() => Navigation.NavigateTo($"/category/{cat.Slug}"))"
+                                     Style="color: #eee;">
+                            @cat.Name
                         </MudMenuItem>
                     }
                 </div>
             </ChildContent>
         </MudMenu>
+
+        @* -- Hỗ Trợ -- *@
+        <MudButton Variant="Variant.Text" Class="hs-nav-link"
+                   OnClick="FooterComingSoon">
+            Hỗ Trợ
+        </MudButton>
 
         @* -- Search Bar -- *@
         <MudPaper Elevation="0" Class="d-flex align-center rounded-lg px-3 flex-grow-1"
@@ -164,38 +171,98 @@
     </MudAppBar>
 
     @* ===== MAIN CONTENT (no sidebar) ===== *@
-    <MudMainContent Style="flex: 1 0 auto; padding-top: 68px !important; background-color: #f5f5f5;">
+    <MudMainContent Style="flex: 1 0 auto; padding-top: 68px !important; background-color: #FFFFFF;">
         @Body
     </MudMainContent>
 
     @* ===== FOOTER ===== *@
-    <MudPaper Elevation="0" Class="pa-8" Style="background-color: #ebebeb; border-top: 1px solid #ddd;">
-        <MudContainer MaxWidth="MaxWidth.Large">
-            <MudGrid>
-                <MudItem xs="12" md="4">
-                    <MudText Typo="Typo.h5" Color="Color.Primary" Class="fw-bold mb-4">HUSH STORE</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2">CÔNG TY TNHH HUSH STORE</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2 d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Class="mr-2" />123 Nguyễn Lương Bằng, Đà Nẵng</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2 d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Phone" Size="Size.Small" Class="mr-2" />0236.3636367</MudText>
-                    <MudText Typo="Typo.body2" Class="d-flex align-center"><MudIcon Icon="@Icons.Material.Filled.Email" Size="Size.Small" Class="mr-2" />hotro@hushstore.vn</MudText>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudText Typo="Typo.h6" Class="fw-bold mb-4">SOCIAL</MudText>
-                    <div class="d-flex gap-4">
-                        <MudIconButton Icon="@Icons.Custom.Brands.Facebook" Color="Color.Info" Size="Size.Large" />
-                        <MudIconButton Icon="@Icons.Custom.Brands.Twitter" Color="Color.Info" Size="Size.Large" />
+    <footer style="background: #111111; color: #aaaaaa; font-family: var(--hs-font, 'Inter', sans-serif);">
+        <div class="hs-container" style="padding-top: 56px; padding-bottom: 40px;">
+            <div class="hs-footer-grid">
+
+                @* Col 1: Brand *@
+                <div>
+                    <div style="font-size: 1.5rem; font-weight: 800; color: white; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 16px;">
+                        HUSH<span style="color: #E11D2A;">STORE</span>
                     </div>
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudText Typo="Typo.h6" Class="fw-bold mb-4">Hỗ trợ khách hàng</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="FooterComingSoon">Chính sách bảo mật</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="FooterComingSoon">Chính sách bảo hành</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="FooterComingSoon">Chính sách thanh toán</MudText>
-                    <MudText Typo="Typo.body2" Class="mb-2" Style="cursor:pointer" @onclick="FooterComingSoon">Chính sách vận chuyển</MudText>
-                </MudItem>
-            </MudGrid>
-        </MudContainer>
-    </MudPaper>
+                    <p style="font-size: 0.8rem; line-height: 1.7; margin-bottom: 16px; color: #888;">
+                        CÔNG TY TNHH HUSH STORE
+                    </p>
+                    <div style="font-size: 0.8rem; line-height: 2; color: #888;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <MudIcon Icon="@Icons.Material.Filled.LocationOn" Style="font-size:1rem;color:#888;flex-shrink:0;" />
+                            <span>123 Nguyễn Lương Bằng, Đà Nẵng</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <MudIcon Icon="@Icons.Material.Filled.Phone" Style="font-size:1rem;color:#888;flex-shrink:0;" />
+                            <span>0236.3636367</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <MudIcon Icon="@Icons.Material.Filled.Email" Style="font-size:1rem;color:#888;flex-shrink:0;" />
+                            <span>hotro@hushstore.vn</span>
+                        </div>
+                    </div>
+                </div>
+
+                @* Col 2: Products *@
+                <div>
+                    <h4 style="font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: white; margin-bottom: 20px;">
+                        SẢN PHẨM
+                    </h4>
+                    <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
+                        <li><span class="hs-footer-link" @onclick='() => Navigation.NavigateTo("/category/pc-build-san")'>PC Dựng Sẵn</span></li>
+                        <li><span class="hs-footer-link" @onclick='() => Navigation.NavigateTo("/category/linh-kien-may-tinh")'>Linh Kiện PC</span></li>
+                        <li><span class="hs-footer-link" @onclick='() => Navigation.NavigateTo("/build-pc")'>Xây Dựng Cấu Hình</span></li>
+                    </ul>
+                </div>
+
+                @* Col 3: Support *@
+                <div>
+                    <h4 style="font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: white; margin-bottom: 20px;">
+                        HỖ TRỢ
+                    </h4>
+                    <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
+                        <li><span class="hs-footer-link" @onclick="FooterComingSoon">Chính sách bảo mật</span></li>
+                        <li><span class="hs-footer-link" @onclick="FooterComingSoon">Chính sách bảo hành</span></li>
+                        <li><span class="hs-footer-link" @onclick="FooterComingSoon">Chính sách thanh toán</span></li>
+                        <li><span class="hs-footer-link" @onclick="FooterComingSoon">Chính sách vận chuyển</span></li>
+                    </ul>
+                </div>
+
+                @* Col 4: Connect *@
+                <div>
+                    <h4 style="font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: white; margin-bottom: 20px;">
+                        KẾT NỐI
+                    </h4>
+                    <p style="font-size: 0.8rem; color: #888; line-height: 1.6;">
+                        Theo dõi HushStore để cập nhật<br />sản phẩm & ưu đãi mới nhất.
+                    </p>
+                    <div style="display: flex; gap: 8px; margin-top: 16px;">
+                        <MudIconButton Icon="@Icons.Custom.Brands.Facebook"
+                                       Title="Facebook"
+                                       Style="color: #888; background: #1C1C1C; border-radius: 4px;"
+                                       Size="Size.Medium" />
+                        <MudIconButton Icon="@Icons.Custom.Brands.Twitter"
+                                       Title="Twitter"
+                                       Style="color: #888; background: #1C1C1C; border-radius: 4px;"
+                                       Size="Size.Medium" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Bottom bar *@
+        <div style="border-top: 1px solid #2A2A2A;">
+            <div class="hs-container" style="padding-top: 20px; padding-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <span style="font-size: 0.75rem; color: #555;">
+                    © @DateTime.Now.Year CÔNG TY TNHH HUSH STORE. Bảo lưu mọi quyền.
+                </span>
+                <span style="font-size: 0.75rem; color: #555;">
+                    Hàng chính hãng · Bảo hành tận nơi · Giao hàng toàn quốc
+                </span>
+            </div>
+        </div>
+    </footer>
 
     <ComparisonTray />
 </MudLayout>

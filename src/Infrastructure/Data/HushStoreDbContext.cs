@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using PBL3.Core.Entities;
 
 namespace PBL3.Infrastructure.Data
@@ -118,20 +119,33 @@ namespace PBL3.Infrastructure.Data
                       .HasDefaultValue(0);
 
                 // Specifications - JSON column
+                var specComparer = new ValueComparer<Dictionary<string, string>>(
+                    (c1, c2) => c1 == c2 || (c1 != null && c2 != null &&
+                                c1.Count == c2.Count && !c1.Except(c2).Any()),
+                    c => c == null ? 0 : c.Aggregate(0, (a, p) =>
+                                HashCode.Combine(a, p.Key.GetHashCode(),
+                                    p.Value == null ? 0 : p.Value.GetHashCode())),
+                    c => new Dictionary<string, string>(c ?? new())
+                );
                 entity.Property(e => e.Specifications)
                       .HasColumnType("nvarchar(max)")
                       .HasConversion(
                           v => System.Text.Json.JsonSerializer.Serialize(v, System.Text.Json.JsonSerializerOptions.Default),
                           v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(v, System.Text.Json.JsonSerializerOptions.Default)
                                ?? new Dictionary<string, string>()
-                      );
+                      )
+                      .Metadata.SetValueComparer(specComparer);
             });
 
             // --- PRODUCT ---
-            // Global Query Filter: Tự động bỏ qua Manufacturer đã bị xoá mềm
             modelBuilder.Entity<Manufacturer>(entity =>
             {
                 entity.HasQueryFilter(m => !m.IsDeleted);
+            });
+
+            modelBuilder.Entity<Product>(entity =>
+            {
+                entity.HasQueryFilter(p => !p.IsDeleted && !p.Manufacturer.IsDeleted);
             });
 
             // --- STOREFRONT: BANNER ---
@@ -156,6 +170,7 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<ImportReceipt>(entity =>
             {
+                entity.HasQueryFilter(r => !r.IsDeleted && !r.Supplier.IsDeleted);
                 entity.HasIndex(r => r.ReceiptCode).IsUnique();
                 entity.Property(e => e.TotalAmount).HasColumnType("decimal(18,2)");
             });
@@ -182,6 +197,7 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<InventoryCheckDetail>(entity =>
             {
+                entity.HasQueryFilter(d => !d.Check.IsDeleted);
                 entity.HasIndex(d => d.CheckId);
                 entity.HasIndex(d => d.VariantId);
 
@@ -191,6 +207,7 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<InventoryCheckDetailSerial>(entity =>
             {
+                entity.HasQueryFilter(s => !s.Check.IsDeleted);
                 entity.HasIndex(s => s.CheckId);
                 entity.HasIndex(s => new { s.CheckId, s.ScanStatus });
 
@@ -226,6 +243,7 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<InventoryAdjustmentLog>(entity =>
             {
+                entity.HasQueryFilter(l => !l.AuditCheck.IsDeleted);
                 entity.HasIndex(l => l.AuditCheckId);
                 entity.HasIndex(l => l.AdjustedDate);
                 entity.HasIndex(l => l.SerialId);
@@ -270,6 +288,7 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<VoucherCategory>(entity =>
             {
+                entity.HasQueryFilter(vc => !vc.Voucher.IsDeleted);
                 entity.HasKey(vc => new { vc.VoucherId, vc.CategoryId });
 
                 entity.HasOne(vc => vc.Voucher)
@@ -307,6 +326,7 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<VoucherUsage>(entity =>
             {
+                entity.HasQueryFilter(vu => !vu.Voucher.IsDeleted);
                 // Non-unique index: MaxUsesPerUser cho phép dùng nhiều lần; check bằng count trong service
                 entity.HasIndex(vu => new { vu.UserId, vu.VoucherId })
                       .HasDatabaseName("IX_VoucherUsages_UserId_VoucherId");
@@ -462,11 +482,13 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<ServiceTicketStatusHistory>(entity =>
             {
+                entity.HasQueryFilter(h => !h.Ticket.IsDeleted);
                 entity.HasIndex(h => new { h.TicketId, h.ChangedAt });
             });
 
             modelBuilder.Entity<Quotation>(entity =>
             {
+                entity.HasQueryFilter(q => !q.Ticket.IsDeleted);
                 entity.HasMany(q => q.Items)
                     .WithOne(i => i.Quotation)
                     .HasForeignKey(i => i.QuotationId)
@@ -487,6 +509,7 @@ namespace PBL3.Infrastructure.Data
 
             modelBuilder.Entity<RmaShipment>(entity =>
             {
+                entity.HasQueryFilter(r => !r.Ticket.IsDeleted);
                 entity.HasIndex(r => r.TicketId).IsUnique();
             });
 

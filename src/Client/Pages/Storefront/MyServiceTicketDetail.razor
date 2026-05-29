@@ -9,228 +9,281 @@
 
 <PageTitle>Chi tiết phiếu sửa chữa - HushStore</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    @if (ticket == null)
-    {
-        <MudProgressCircular Indeterminate="true" Class="ma-auto d-flex mt-4" />
-    }
-    else
-    {
-        <MudPaper Elevation="0" Class="d-flex align-center justify-space-between mb-4 pa-0">
-            <div>
-                <MudText Typo="Typo.h5" Class="fw-bold">@ticket.TicketCode</MudText>
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">Serial: @ticket.SerialNumber</MudText>
+@if (ticket == null)
+{
+    <div style="display:flex; justify-content:center; align-items:center; min-height:60vh; background:var(--hs-white);">
+        <MudProgressCircular Indeterminate="true" Size="Size.Medium" Color="Color.Primary" />
+    </div>
+}
+else
+{
+    @* ===== HEADER ===== *@
+    <div style="background:var(--hs-white); border-bottom:1px solid var(--hs-border); padding:28px 0 20px;">
+        <div class="hs-container">
+            <a href="/my/service-tickets"
+               style="display:inline-flex; align-items:center; gap:6px; font-size:0.8rem; font-weight:600;
+                      color:var(--hs-text-muted); text-decoration:none; letter-spacing:0.04em;
+                      text-transform:uppercase; margin-bottom:12px;">
+                ← QUAY LẠI
+            </a>
+            <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
+                      color:var(--hs-text-muted); margin:0 0 4px;">
+                Phiếu sửa chữa
+            </p>
+            <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:8px;">
+                <h1 style="font-size:clamp(1.4rem,3vw,2rem); font-weight:800; color:var(--hs-dark);
+                           letter-spacing:-0.02em; margin:0; font-family:monospace;">
+                    @ticket.TicketCode
+                </h1>
+                <ServiceTicketStatusChip Status="@ticket.Status" />
             </div>
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack"
-                       Href="/my/service-tickets">
-                Quay Lại
-            </MudButton>
-        </MudPaper>
+            <p style="font-size:0.875rem; color:var(--hs-text-muted); margin:0;">
+                Serial: <span style="font-family:monospace; font-weight:600;">@ticket.SerialNumber</span>
+                &nbsp;·&nbsp;
+                Tiếp nhận: @ticket.IntakeDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+            </p>
+        </div>
+    </div>
 
-        <MudGrid Class="mb-4">
-            <MudItem xs="12" md="8">
-                <MudTabs>
-                    <!-- Tab: Thông Tin -->
-                    <MudTabPanel Text="Thông Tin">
-                        <MudPaper Class="pa-4 mt-4" Elevation="0">
-                            <MudGrid Spacing="3">
-                                <MudItem xs="12" sm="6">
-                                    <MudText Typo="Typo.body2"><strong>Mã Phiếu:</strong></MudText>
-                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.TicketCode</MudText>
-                                </MudItem>
-                                <MudItem xs="12" sm="6">
-                                    <MudText Typo="Typo.body2"><strong>Ngày Tiếp Nhận:</strong></MudText>
-                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.IntakeDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
-                                </MudItem>
-                                <MudItem xs="12" sm="6">
-                                    <MudText Typo="Typo.body2"><strong>Sản Phẩm:</strong></MudText>
-                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.ProductName</MudText>
-                                </MudItem>
-                                <MudItem xs="12" sm="6">
-                                    <MudText Typo="Typo.body2"><strong>Serial:</strong></MudText>
-                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.SerialNumber</MudText>
-                                </MudItem>
-                                <MudItem xs="12">
-                                    <MudText Typo="Typo.body2"><strong>Vấn Đề Báo Cáo:</strong></MudText>
-                                    <MudText Typo="Typo.body2" Class="mt-1">@ticket.CustomerReportedIssue</MudText>
-                                </MudItem>
-                                <MudItem xs="12">
-                                    <MudText Typo="Typo.body2"><strong>Tình Trạng Ngoại Quan:</strong></MudText>
-                                    <MudText Typo="Typo.body2" Class="mt-1">@(GetCosmeticDescription())</MudText>
-                                </MudItem>
-                                <MudItem xs="12">
-                                    <MudText Typo="Typo.body2" Class="d-flex align-center gap-2">
-                                        <strong>Bảo Hành:</strong>
+    @* ===== CONTENT AREA ===== *@
+    <div style="background:var(--hs-gray-bg); padding:32px 0 72px;">
+        <div class="hs-container">
+            <MudGrid Spacing="3">
+
+                @* ===== LEFT: TABS ===== *@
+                <MudItem xs="12" md="8">
+                    <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="true"
+                             Style="background:transparent;">
+
+                        @* Tab: Thông Tin *@
+                        <MudTabPanel Text="THÔNG TIN">
+                            <div style="border:1px solid var(--hs-border); border-radius:12px; background:var(--hs-white); padding:24px; margin-top:16px;">
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px 32px;">
+                                    <div>
+                                        <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Mã Phiếu</p>
+                                        <p style="font-size:0.9rem; font-weight:700; color:var(--hs-dark); font-family:monospace; margin:0;">@ticket.TicketCode</p>
+                                    </div>
+                                    <div>
+                                        <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Ngày Tiếp Nhận</p>
+                                        <p style="font-size:0.9rem; color:var(--hs-dark); margin:0;">@ticket.IntakeDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p>
+                                    </div>
+                                    <div>
+                                        <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Sản Phẩm</p>
+                                        <p style="font-size:0.9rem; font-weight:600; color:var(--hs-dark); margin:0;">@ticket.ProductName</p>
+                                    </div>
+                                    <div>
+                                        <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Serial</p>
+                                        <p style="font-size:0.9rem; color:var(--hs-dark); font-family:monospace; margin:0;">@ticket.SerialNumber</p>
+                                    </div>
+                                    <div style="grid-column:1/-1;">
+                                        <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Vấn Đề Báo Cáo</p>
+                                        <p style="font-size:0.9rem; color:var(--hs-dark); margin:0; line-height:1.6;">@ticket.CustomerReportedIssue</p>
+                                    </div>
+                                    <div style="grid-column:1/-1;">
+                                        <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Tình Trạng Ngoại Quan</p>
+                                        <p style="font-size:0.9rem; color:var(--hs-dark); margin:0;">@GetCosmeticDescription()</p>
+                                    </div>
+                                    <div style="grid-column:1/-1;">
+                                        <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 8px;">Bảo Hành</p>
                                         @if (ticket.WasInWarrantyAtIntake)
                                         {
-                                            <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small">
+                                            <span style="display:inline-block; padding:4px 12px; border-radius:99px; font-size:0.75rem; font-weight:700; background:#DCFCE7; color:#166534;">
                                                 Còn hạn đến @ticket.WarrantyEndDateAtIntake?.ToString("dd/MM/yyyy")
-                                            </MudChip>
+                                            </span>
                                         }
                                         else
                                         {
-                                            <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">
-                                                Hết hạn
-                                            </MudChip>
+                                            <span style="display:inline-block; padding:4px 12px; border-radius:99px; font-size:0.75rem; font-weight:700; background:#FEE2E2; color:#991B1B;">
+                                                Hết hạn bảo hành
+                                            </span>
                                         }
-                                    </MudText>
-                                </MudItem>
-                            </MudGrid>
-                        </MudPaper>
-                    </MudTabPanel>
+                                    </div>
+                                </div>
+                            </div>
+                        </MudTabPanel>
 
-                    <!-- Tab: Chẩn Đoán -->
-                    <MudTabPanel Text="Chẩn Đoán">
-                        <MudPaper Class="pa-4 mt-4" Elevation="0">
-                            @if (!string.IsNullOrEmpty(ticket.DiagnosisFindings))
-                            {
-                                <MudText>@ticket.DiagnosisFindings</MudText>
-                            }
-                            else
-                            {
-                                <MudText Class="mud-text-secondary">Chưa có kết luận chẩn đoán.</MudText>
-                            }
-                        </MudPaper>
-                    </MudTabPanel>
-
-                    <!-- Tab: Báo Giá -->
-                    @if (ticket.Quotations?.Any() == true)
-                    {
-                        <MudTabPanel Text="Báo Giá">
-                            <MudPaper Class="pa-4 mt-4" Elevation="0">
-                                @foreach (var quotation in ticket.Quotations)
+                        @* Tab: Chẩn Đoán *@
+                        <MudTabPanel Text="CHẨN ĐOÁN">
+                            <div style="border:1px solid var(--hs-border); border-radius:12px; background:var(--hs-white); padding:24px; margin-top:16px;">
+                                @if (!string.IsNullOrEmpty(ticket.DiagnosisFindings))
                                 {
-                                    <MudPaper Class="pa-3 mb-3" Elevation="1" Outlined="false">
-                                        <MudGrid Spacing="2">
-                                            <MudItem xs="12">
-                                                <MudText><strong>Ngày Tạo:</strong> @quotation.IssuedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
-                                            </MudItem>
-                                            <MudItem xs="12">
-                                                <MudTable Items="@quotation.Items" Dense="true" Hover="true">
-                                                    <HeaderContent>
-                                                        <MudTh>Mô Tả</MudTh>
-                                                        <MudTh Align="Align.Right">Số Lượng</MudTh>
-                                                        <MudTh Align="Align.Right">Đơn Giá</MudTh>
-                                                        <MudTh Align="Align.Right">Thành Tiền</MudTh>
-                                                    </HeaderContent>
-                                                    <RowTemplate>
-                                                        <MudTd DataLabel="Mô Tả">@context.Description</MudTd>
-                                                        <MudTd DataLabel="Số Lượng" Align="Align.Right">@context.Quantity</MudTd>
-                                                        <MudTd DataLabel="Đơn Giá" Align="Align.Right">@context.UnitPrice.ToString("N0") đ</MudTd>
-                                                        <MudTd DataLabel="Thành Tiền" Align="Align.Right">@context.LineTotal.ToString("N0") đ</MudTd>
-                                                    </RowTemplate>
-                                                </MudTable>
-                                            </MudItem>
-                                            <MudItem xs="12" Class="d-flex justify-space-between">
-                                                <MudText><strong>Công Lao Động:</strong></MudText>
-                                                <MudText><strong>@quotation.LaborCost.ToString("N0") đ</strong></MudText>
-                                            </MudItem>
-                                            <MudItem xs="12" Class="d-flex justify-space-between">
-                                                <MudText><strong>Linh Kiện:</strong></MudText>
-                                                <MudText><strong>@quotation.PartsTotal.ToString("N0") đ</strong></MudText>
-                                            </MudItem>
-                                            <MudDivider Class="my-2" />
-                                            <MudItem xs="12" Class="d-flex justify-space-between">
-                                                <MudText Typo="Typo.h6" Class="fw-bold"><strong>Tổng Cộng:</strong></MudText>
-                                                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: var(--mud-palette-primary);">
-                                                    @quotation.GrandTotal.ToString("N0") đ
-                                                </MudText>
-                                            </MudItem>
-                                            @if (ticket.Status == 2 && quotation.Status == 0) // QuoteSent and Pending
-                                            {
-                                                <MudItem xs="12" Class="d-flex gap-2 justify-end">
-                                                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                                               OnClick="@(() => AcceptQuotation(quotation.Id))">
-                                                        Đồng Ý
-                                                    </MudButton>
-                                                    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                                               OnClick="@(() => RejectQuotation(quotation.Id))">
-                                                        Từ Chối
-                                                    </MudButton>
-                                                </MudItem>
-                                            }
-                                        </MudGrid>
-                                    </MudPaper>
+                                    <p style="font-size:0.9rem; color:var(--hs-dark); line-height:1.7; margin:0;">@ticket.DiagnosisFindings</p>
                                 }
-                            </MudPaper>
+                                else
+                                {
+                                    <div style="display:flex; flex-direction:column; align-items:center; padding:40px 0; text-align:center;">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Search"
+                                                 Style="font-size:3rem; color:#BDBDBD; margin-bottom:12px;" />
+                                        <p style="font-size:0.875rem; color:var(--hs-text-muted); margin:0;">Chưa có kết luận chẩn đoán.</p>
+                                    </div>
+                                }
+                            </div>
                         </MudTabPanel>
-                    }
 
-                    <!-- Tab: RMA -->
-                    @if (ticket.RmaShipment != null)
-                    {
-                        <MudTabPanel Text="RMA">
-                            <MudPaper Class="pa-4 mt-4" Elevation="0">
-                                <MudGrid Spacing="2">
-                                    <MudItem xs="12">
-                                        <MudText><strong>Hãng Vận Chuyển:</strong> @ticket.RmaShipment.CarrierName</MudText>
-                                    </MudItem>
-                                    <MudItem xs="12">
-                                        <MudText><strong>Mã Vận Đơn:</strong> @ticket.RmaShipment.TrackingCode</MudText>
-                                    </MudItem>
-                                    <MudItem xs="12">
-                                        <MudText><strong>Ngày Gửi:</strong> @ticket.RmaShipment.ShippedDate?.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
-                                    </MudItem>
-                                    @if (ticket.RmaShipment.ReceivedBackDate.HasValue)
-                                    {
-                                        <MudItem xs="12">
-                                            <MudText><strong>Ngày Nhận Lại:</strong> @ticket.RmaShipment.ReceivedBackDate.Value.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
-                                        </MudItem>
-                                    }
-                                </MudGrid>
-                            </MudPaper>
-                        </MudTabPanel>
-                    }
-
-                    <!-- Tab: Hóa Đơn -->
-                    @if (ticket.Invoice != null)
-                    {
-                        <MudTabPanel Text="Hóa Đơn">
-                            <MudPaper Class="pa-4 mt-4" Elevation="0">
-                                <MudGrid Spacing="2">
-                                    <MudItem xs="12">
-                                        <MudText><strong>Mã Hóa Đơn:</strong> @ticket.Invoice.InvoiceCode</MudText>
-                                    </MudItem>
-                                    <MudItem xs="12">
-                                        <MudText><strong>Ngày Phát Hành:</strong> @ticket.Invoice.IssuedDate.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
-                                    </MudItem>
-                                    <MudItem xs="12">
-                                        <MudText><strong>Tổng Cộng:</strong> @ticket.Invoice.GrandTotal.ToString("N0") đ</MudText>
-                                    </MudItem>
-                                </MudGrid>
-                            </MudPaper>
-                        </MudTabPanel>
-                    }
-                </MudTabs>
-            </MudItem>
-
-            <!-- Sidebar: Status -->
-            <MudItem xs="12" md="4">
-                <MudPaper Class="pa-4 rounded-lg" Elevation="1">
-                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Trạng Thái</MudText>
-                    <ServiceTicketStatusChip Status="@ticket.Status" />
-
-                    <MudDivider Class="my-4" />
-
-                    <MudText Typo="Typo.subtitle2" Class="fw-bold mb-3">Lịch Sử Trạng Thái</MudText>
-                    <MudTimeline TimelineAlign="TimelineAlign.Start">
-                        @foreach (var history in ticket.StatusHistory ?? new List<ServiceTicketStatusHistoryDto>())
+                        @* Tab: Báo Giá *@
+                        @if (ticket.Quotations?.Any() == true)
                         {
-                            <MudTimelineItem Color="@ServiceTicketStatusHelper.GetColor(history.ToStatus)" Variant="Variant.Filled">
-                                <MudText Typo="Typo.body2" Style="color: white;">
-                                    <strong>@ServiceTicketStatusHelper.GetLabel(history.ToStatus)</strong>
-                                </MudText>
-                                <MudText Typo="Typo.caption" Style="color: white; opacity: 0.8;">
-                                    @history.ChangedAt.ToLocalTime().ToString("HH:mm dd/MM/yyyy")
-                                </MudText>
-                            </MudTimelineItem>
+                            <MudTabPanel Text="BÁO GIÁ">
+                                <div style="margin-top:16px; display:flex; flex-direction:column; gap:16px;">
+                                    @foreach (var quotation in ticket.Quotations)
+                                    {
+                                        <div style="border:1px solid var(--hs-border); border-radius:12px; background:var(--hs-white); overflow:hidden;">
+                                            <div style="padding:14px 20px; background:#FAFAFA; border-bottom:1px solid var(--hs-border);">
+                                                <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0;">
+                                                    Ngày tạo: @quotation.IssuedDate.ToLocalTime().ToString("dd/MM/yyyy")
+                                                </p>
+                                            </div>
+                                            <MudTable Items="@quotation.Items" Dense="true" Hover="true" Elevation="0"
+                                                      Style="border-radius:0;">
+                                                <HeaderContent>
+                                                    <MudTh Style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); background:#FAFAFA;">Mô Tả</MudTh>
+                                                    <MudTh Style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); background:#FAFAFA; text-align:right;">SL</MudTh>
+                                                    <MudTh Style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); background:#FAFAFA; text-align:right;">Đơn Giá</MudTh>
+                                                    <MudTh Style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); background:#FAFAFA; text-align:right;">Thành Tiền</MudTh>
+                                                </HeaderContent>
+                                                <RowTemplate>
+                                                    <MudTd DataLabel="Mô Tả">
+                                                        <span style="font-size:0.875rem; color:var(--hs-dark);">@context.Description</span>
+                                                    </MudTd>
+                                                    <MudTd DataLabel="SL" Style="text-align:right;">
+                                                        <span style="font-size:0.875rem; color:var(--hs-dark);">@context.Quantity</span>
+                                                    </MudTd>
+                                                    <MudTd DataLabel="Đơn Giá" Style="text-align:right;">
+                                                        <span style="font-size:0.875rem; color:var(--hs-text-muted);">@context.UnitPrice.ToString("N0") đ</span>
+                                                    </MudTd>
+                                                    <MudTd DataLabel="Thành Tiền" Style="text-align:right;">
+                                                        <span style="font-size:0.875rem; font-weight:700; color:var(--hs-dark);">@context.LineTotal.ToString("N0") đ</span>
+                                                    </MudTd>
+                                                </RowTemplate>
+                                            </MudTable>
+                                            <div style="padding:16px 20px; border-top:1px solid var(--hs-border);">
+                                                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                                                    <span style="font-size:0.875rem; color:var(--hs-text-muted);">Công lao động</span>
+                                                    <span style="font-size:0.875rem; color:var(--hs-dark);">@quotation.LaborCost.ToString("N0") đ</span>
+                                                </div>
+                                                <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                                                    <span style="font-size:0.875rem; color:var(--hs-text-muted);">Linh kiện</span>
+                                                    <span style="font-size:0.875rem; color:var(--hs-dark);">@quotation.PartsTotal.ToString("N0") đ</span>
+                                                </div>
+                                                <div style="border-top:1px solid var(--hs-border); padding-top:12px; display:flex; justify-content:space-between; align-items:center;">
+                                                    <span style="font-size:0.875rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--hs-dark);">Tổng Cộng</span>
+                                                    <span style="font-size:1.2rem; font-weight:800; color:var(--hs-red);">@quotation.GrandTotal.ToString("N0") đ</span>
+                                                </div>
+                                                @if (ticket.Status == 2 && quotation.Status == 0)
+                                                {
+                                                    <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:16px; padding-top:16px; border-top:1px solid var(--hs-border);">
+                                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                                   Style="font-weight:700; letter-spacing:0.05em;"
+                                                                   OnClick="@(() => AcceptQuotation(quotation.Id))">
+                                                            ĐỒNG Ý
+                                                        </MudButton>
+                                                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                                                   Style="font-weight:700; letter-spacing:0.05em;"
+                                                                   OnClick="@(() => RejectQuotation(quotation.Id))">
+                                                            TỪ CHỐI
+                                                        </MudButton>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </MudTabPanel>
                         }
-                    </MudTimeline>
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
-    }
-</MudContainer>
+
+                        @* Tab: RMA *@
+                        @if (ticket.RmaShipment != null)
+                        {
+                            <MudTabPanel Text="RMA">
+                                <div style="border:1px solid var(--hs-border); border-radius:12px; background:var(--hs-white); padding:24px; margin-top:16px;">
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px 32px;">
+                                        <div>
+                                            <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Hãng Vận Chuyển</p>
+                                            <p style="font-size:0.9rem; font-weight:600; color:var(--hs-dark); margin:0;">@ticket.RmaShipment.CarrierName</p>
+                                        </div>
+                                        <div>
+                                            <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Mã Vận Đơn</p>
+                                            <p style="font-size:0.9rem; font-weight:700; color:var(--hs-dark); font-family:monospace; margin:0;">@ticket.RmaShipment.TrackingCode</p>
+                                        </div>
+                                        <div>
+                                            <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Ngày Gửi</p>
+                                            <p style="font-size:0.9rem; color:var(--hs-dark); margin:0;">@ticket.RmaShipment.ShippedDate?.ToLocalTime().ToString("dd/MM/yyyy")</p>
+                                        </div>
+                                        @if (ticket.RmaShipment.ReceivedBackDate.HasValue)
+                                        {
+                                            <div>
+                                                <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Ngày Nhận Lại</p>
+                                                <p style="font-size:0.9rem; color:var(--hs-dark); margin:0;">@ticket.RmaShipment.ReceivedBackDate.Value.ToLocalTime().ToString("dd/MM/yyyy")</p>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </MudTabPanel>
+                        }
+
+                        @* Tab: Hóa Đơn *@
+                        @if (ticket.Invoice != null)
+                        {
+                            <MudTabPanel Text="HÓA ĐƠN">
+                                <div style="border:1px solid var(--hs-border); border-radius:12px; background:var(--hs-white); padding:24px; margin-top:16px;">
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px 32px;">
+                                        <div>
+                                            <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Mã Hóa Đơn</p>
+                                            <p style="font-size:0.9rem; font-weight:700; color:var(--hs-dark); font-family:monospace; margin:0;">@ticket.Invoice.InvoiceCode</p>
+                                        </div>
+                                        <div>
+                                            <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0 0 4px;">Ngày Phát Hành</p>
+                                            <p style="font-size:0.9rem; color:var(--hs-dark); margin:0;">@ticket.Invoice.IssuedDate.ToLocalTime().ToString("dd/MM/yyyy")</p>
+                                        </div>
+                                        <div style="grid-column:1/-1; border-top:3px solid var(--hs-red); padding-top:16px; margin-top:4px; display:flex; justify-content:space-between; align-items:center;">
+                                            <span style="font-size:0.875rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--hs-dark);">Tổng Cộng</span>
+                                            <span style="font-size:1.3rem; font-weight:800; color:var(--hs-red);">@ticket.Invoice.GrandTotal.ToString("N0") đ</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </MudTabPanel>
+                        }
+
+                    </MudTabs>
+                </MudItem>
+
+                @* ===== RIGHT: SIDEBAR ===== *@
+                <MudItem xs="12" md="4">
+                    <div style="border:1px solid var(--hs-border); border-radius:12px; background:var(--hs-white); overflow:hidden; margin-bottom:16px;">
+                        <div style="padding:14px 20px; background:#FAFAFA; border-bottom:1px solid var(--hs-border);">
+                            <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0;">Trạng Thái Hiện Tại</p>
+                        </div>
+                        <div style="padding:20px;">
+                            <ServiceTicketStatusChip Status="@ticket.Status" />
+                        </div>
+                    </div>
+
+                    <div style="border:1px solid var(--hs-border); border-radius:12px; background:var(--hs-white); overflow:hidden;">
+                        <div style="padding:14px 20px; background:#FAFAFA; border-bottom:1px solid var(--hs-border);">
+                            <p style="font-size:0.72rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--hs-text-muted); margin:0;">Lịch Sử Trạng Thái</p>
+                        </div>
+                        <div style="padding:16px 20px;">
+                            <MudTimeline TimelineAlign="TimelineAlign.Start">
+                                @foreach (var history in ticket.StatusHistory ?? new List<ServiceTicketStatusHistoryDto>())
+                                {
+                                    <MudTimelineItem Color="@ServiceTicketStatusHelper.GetColor(history.ToStatus)" Variant="Variant.Filled">
+                                        <MudText Typo="Typo.body2">
+                                            <strong>@ServiceTicketStatusHelper.GetLabel(history.ToStatus)</strong>
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Style="color:var(--hs-text-muted);">
+                                            @history.ChangedAt.ToLocalTime().ToString("HH:mm dd/MM/yyyy")
+                                        </MudText>
+                                    </MudTimelineItem>
+                                }
+                            </MudTimeline>
+                        </div>
+                    </div>
+                </MudItem>
+
+            </MudGrid>
+        </div>
+    </div>
+}
 
 @code {
     [Parameter]

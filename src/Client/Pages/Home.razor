@@ -12,77 +12,39 @@
 
 @if (_isLoading)
 {
-    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-        <MudGrid>
-            <MudItem xs="12" md="3">
-                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="400px" />
-            </MudItem>
-            <MudItem xs="12" md="9">
-                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="400px" />
-            </MudItem>
-        </MudGrid>
-        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" Class="mt-4" />
-        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" Class="mt-4" />
-    </MudContainer>
+    <div style="background:#111111;">
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="500px" Width="100%" />
+    </div>
+    <section class="hs-section hs-section--gray">
+        <div class="hs-container">
+            <MudSkeleton Height="32px" Width="180px" Class="mb-4" />
+            <MudGrid>
+                @for (int i = 0; i < 4; i++)
+                {
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="280px" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </div>
+    </section>
 }
 else
 {
-    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-8">
-        <!-- Khối 1: Hero Section -->
-        <MudGrid>
-            <MudItem xs="12" md="3">
-                <MudPaper Elevation="2" Class="pa-0 h-100" Style="overflow-y: auto; max-height: 400px;">
-                    <MudList T="CategoryMenuResponse" Dense="true" Class="py-2">
-                        @foreach (var cat in _categories.Where(c => c.Level == 0).OrderBy(c => c.Name))
-                        {
-                            var hasChildren = _categories.Any(c => c.ParentId == cat.Id);
-                            var isExpanded = _expandedCategoryId == cat.Id;
-                            <MudListItem T="CategoryMenuResponse" OnClick="@(() => ToggleCategory(cat))">
-                                <div class="d-flex align-center">
-                                    @if (!string.IsNullOrEmpty(cat.IconUrl))
-                                    {
-                                        <img src="@cat.IconUrl" style="width: 24px; height: 24px; object-fit: contain;" class="mr-3" alt="@cat.Name" />
-                                    }
-                                    else
-                                    {
-                                        <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" Class="mr-3" />
-
-                                    }
-                                    <MudText Typo="Typo.body2">@cat.Name</MudText>
-                                    <MudSpacer />
-                                    <MudIcon Icon="@(isExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ChevronRight)"
-                                             Size="Size.Small" />
-                                </div>
-                            </MudListItem>
-
-                            @if (isExpanded && hasChildren)
-                            {
-                                @foreach (var child in _categories.Where(c => c.ParentId == cat.Id).OrderBy(c => c.Name))
-                                {
-                                    <MudListItem T="CategoryMenuResponse" Dense="true" OnClick="@(() => NavigateToCategory(child.Slug))">
-                                        <div class="d-flex align-center" style="padding-left: 12px;">
-                                            <MudIcon Icon="@Icons.Material.Filled.SubdirectoryArrowRight"
-                                                     Size="Size.Small" Class="mr-2 mud-text-secondary" />
-                                            <MudText Typo="Typo.caption">@child.Name</MudText>
-                                        </div>
-                                    </MudListItem>
-                                }
-                            }
-                        }
-                    </MudList>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" md="9">
+    @* ── Section 1: Hero Banner (padded, rounded corners) ── *@
+    <div style="background:var(--hs-gray-bg); padding:20px 0 0;">
+        <h1 class="visually-hidden">HushStore — Cửa hàng linh kiện máy tính chính hãng</h1>
+        <div class="hs-container">
+            <div style="border-radius:16px; overflow:hidden; line-height:0;">
                 @if (_banners.Count > 0)
                 {
                     <MudCarousel TData="object"
-                                 Style="height: 400px; border-radius: 8px; overflow: hidden;"
+                                 Style="height:480px; width:100%;"
                                  ShowArrows="@(_banners.Count > 1)"
                                  ShowBullets="@(_banners.Count > 1)"
                                  EnableSwipeGesture="true"
                                  AutoCycle="@(_banners.Count > 1)"
-                                 AutoCycleTime="TimeSpan.FromSeconds(5)"
-                                 Class="mud-elevation-2">
+                                 AutoCycleTime="TimeSpan.FromSeconds(5)">
                         @foreach (var b in _banners)
                         {
                             <MudCarouselItem Transition="Transition.Slide">
@@ -90,13 +52,13 @@ else
                                 {
                                     <MudLink Href="@b.LinkUrl" Underline="Underline.None" Class="d-block w-100 h-100">
                                         <img src="@b.ImageUrl" alt="@b.Title"
-                                             style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+                                             style="width:100%;height:100%;object-fit:cover;display:block;" />
                                     </MudLink>
                                 }
                                 else
                                 {
                                     <img src="@b.ImageUrl" alt="@b.Title"
-                                         style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+                                         style="width:100%;height:100%;object-fit:cover;display:block;" />
                                 }
                             </MudCarouselItem>
                         }
@@ -104,59 +66,192 @@ else
                 }
                 else
                 {
-                    <MudImage Src="@FallbackBannerUrl" ObjectFit="ObjectFit.Cover" Fluid="true" Height="400" Class="rounded-lg w-100" Elevation="2" />
+                    <img src="@FallbackBannerUrl" alt="HushStore Banner"
+                         style="width:100%;height:480px;object-fit:cover;display:block;" />
                 }
-            </MudItem>
-        </MudGrid>
+            </div>
+        </div>
+    </div>
 
-        <!-- Khối 2+: Sản phẩm nổi bật theo danh mục cấp 0 -->
-        @foreach (var featSection in _featuredSections.Where(fs => fs.Products.Any()))
-        {
-            <div class="mt-8">
-                <div class="d-flex align-center justify-space-between mb-4">
-                    <MudText Typo="Typo.h5" Class="fw-bold">@featSection.Category.Name nổi bật</MudText>
-                    <MudButton Variant="Variant.Text" Color="Color.Primary"
-                               EndIcon="@Icons.Material.Filled.ArrowForward"
-                               OnClick="@(() => NavigateToCategory(featSection.Category.Slug))">
-                        Xem tất cả
-                    </MudButton>
+    @* ── Section 2: Featured Systems ── *@
+    @if (FeaturedSystems.Count > 0)
+    {
+        <section class="hs-section hs-section--gray">
+            <div class="hs-container">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:32px;">
+                    <div>
+                        <span class="hs-section-label">PC DỰNG SẴN</span>
+                        <h2 class="hs-heading hs-heading--lg" style="margin:0;">Cấu Hình Nổi Bật</h2>
+                    </div>
+                    <button class="hs-text-link"
+                            @onclick='() => NavigationManager.NavigateTo("/category/pc-build-san")'>
+                        Xem tất cả PC dựng sẵn →
+                    </button>
                 </div>
                 <MudGrid>
-                    @foreach (var product in featSection.Products)
+                    @foreach (var product in FeaturedSystems.Take(4))
                     {
-                        <MudItem xs="12" sm="6" md="4" lg="2">
+                        <MudItem xs="12" sm="6" md="6" lg="3">
                             <ProductCard Product="product" />
                         </MudItem>
                     }
                 </MudGrid>
             </div>
-        }
+        </section>
+    }
 
-        <!-- Danh mục sản phẩm Grid (level-0 only) -->
-        <div class="mt-8">
-            <MudText Typo="Typo.h5" Class="fw-bold mb-4">Danh mục sản phẩm</MudText>
-            <MudGrid>
-                @foreach (var cat in _categories.Where(c => c.Level == 0).OrderBy(c => c.Name))
-                {
-                    <MudItem xs="6" sm="4" md="2">
-                        <MudPaper Elevation="1" Class="pa-4 d-flex flex-column align-center justify-center h-100" Style="cursor:pointer" @onclick="@(() => NavigateToCategory(cat.Slug))">
-                            @if (!string.IsNullOrEmpty(cat.IconUrl))
-                            {
-                                <img src="@cat.IconUrl" style="width: 48px; height: 48px; object-fit: contain;" class="mb-2" alt="@cat.Name" />
-                            }
-                            else
-                            {
-                                <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Large" Class="mb-2" />
-                            }
-                            <MudText Typo="Typo.body2" Align="Align.Center">@cat.Name</MudText>
-                        </MudPaper>
-                    </MudItem>
-                }
-            </MudGrid>
+    @* ── Section 3: Three Ways to Game ── *@
+    <section class="hs-section">
+        <div class="hs-container">
+            <span class="hs-section-label">CÁCH SỞ HỮU</span>
+            <h2 class="hs-heading hs-heading--lg" style="margin-bottom:40px;">Ba Cách Sở Hữu PC Mơ Ước</h2>
+            <div class="hs-grid hs-grid--3">
+                <button type="button" class="hs-card hs-card-btn"
+                     style="padding:40px 32px;text-align:left;display:flex;flex-direction:column;"
+                     @onclick='() => NavigationManager.NavigateTo("/category/pc-build-san")'>
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.DesktopWindows" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1.05rem;font-weight:800;color:var(--hs-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">
+                        Mua PC Dựng Sẵn
+                    </h3>
+                    <p style="font-size:0.875rem;color:var(--hs-text-muted);line-height:1.6;margin-bottom:24px;flex:1;">
+                        PC đã được lắp ráp và kiểm tra kỹ lưỡng — đóng gói và giao đến tay bạn nhanh nhất.
+                    </p>
+                    <span class="hs-text-link--red">Khám Phá Ngay →</span>
+                </button>
+                <button type="button" class="hs-card hs-card-btn"
+                     style="padding:40px 32px;text-align:left;display:flex;flex-direction:column;"
+                     @onclick='() => NavigationManager.NavigateTo("/build-pc")'>
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.Tune" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1.05rem;font-weight:800;color:var(--hs-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">
+                        Tự Dựng Cấu Hình
+                    </h3>
+                    <p style="font-size:0.875rem;color:var(--hs-text-muted);line-height:1.6;margin-bottom:24px;flex:1;">
+                        Chọn từng linh kiện, kiểm tra tương thích tự động — tạo nên PC theo ý thích riêng của bạn.
+                    </p>
+                    <span class="hs-text-link--red">Dựng Ngay →</span>
+                </button>
+                <button type="button" class="hs-card hs-card-btn"
+                     style="padding:40px 32px;text-align:left;display:flex;flex-direction:column;"
+                     @onclick='() => NavigationManager.NavigateTo("/category/linh-kien-may-tinh")'>
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.Memory" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1.05rem;font-weight:800;color:var(--hs-text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">
+                        Mua Linh Kiện Lẻ
+                    </h3>
+                    <p style="font-size:0.875rem;color:var(--hs-text-muted);line-height:1.6;margin-bottom:24px;flex:1;">
+                        Nâng cấp từng bộ phận hay tìm linh kiện phù hợp — hàng chính hãng, đa dạng lựa chọn.
+                    </p>
+                    <span class="hs-text-link--red">Mua Ngay →</span>
+                </button>
+            </div>
         </div>
+    </section>
 
-    </MudContainer>
+    @* ── Section 4: See the Deals (category product rows) ── *@
+    @foreach (var (featSection, sectionIdx) in DealSections.Select((s, i) => (s, i)))
+    {
+        bool isGray = sectionIdx % 2 == 0;
+        <section class="hs-section hs-section--compact @(isGray ? "hs-section--gray" : "")">
+            <div class="hs-container">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;">
+                    <div>
+                        <span class="hs-section-label">@featSection.Category.Name.ToUpper()</span>
+                        <h2 class="hs-heading hs-heading--md" style="margin:0;">@featSection.Category.Name Nổi Bật</h2>
+                    </div>
+                    <button class="hs-text-link"
+                            @onclick="@(() => NavigateToCategory(featSection.Category.Slug))">
+                        Xem tất cả →
+                    </button>
+                </div>
+                <MudGrid>
+                    @foreach (var product in featSection.Products.Take(4))
+                    {
+                        <MudItem xs="12" sm="6" md="6" lg="3">
+                            <ProductCard Product="product" />
+                        </MudItem>
+                    }
+                </MudGrid>
+            </div>
+        </section>
+    }
 
+    @* ── Section 5: Why Buy from HushStore ── *@
+    <section class="hs-section hs-section--gray">
+        <div class="hs-container">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:48px;flex-wrap:wrap;gap:24px;">
+                <div>
+                    <span class="hs-section-label">LỜI HỨA CỦA CHÚNG TÔI</span>
+                    <h2 class="hs-heading hs-heading--lg" style="margin:0;">
+                        Vì Sao Mua Tại <span style="color:var(--hs-red);">HushStore?</span>
+                    </h2>
+                </div>
+                <p style="max-width:320px;font-size:0.9rem;color:var(--hs-text-muted);line-height:1.7;margin:0;">
+                    Được vận hành bởi đội ngũ am hiểu công nghệ, tận tâm phục vụ khách hàng từ năm 2020.
+                </p>
+            </div>
+            <div class="hs-grid hs-grid--4">
+                <div class="hs-feature-card">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1rem;font-weight:700;color:var(--hs-text);margin-bottom:10px;">Hàng Chính Hãng 100%</h3>
+                    <p style="font-size:0.85rem;color:var(--hs-text-muted);line-height:1.6;margin:0;">
+                        Toàn bộ sản phẩm có tem nhãn, hoá đơn và giấy tờ chứng nhận chính hãng đầy đủ.
+                    </p>
+                </div>
+                <div class="hs-feature-card">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.Support" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1rem;font-weight:700;color:var(--hs-text);margin-bottom:10px;">Bảo Hành Tận Nơi</h3>
+                    <p style="font-size:0.85rem;color:var(--hs-text-muted);line-height:1.6;margin:0;">
+                        Đội ngũ kỹ thuật đến tận nhà xử lý sự cố — không cần tự mang máy đến cửa hàng.
+                    </p>
+                </div>
+                <div class="hs-feature-card">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1rem;font-weight:700;color:var(--hs-text);margin-bottom:10px;">Giao Hàng Toàn Quốc</h3>
+                    <p style="font-size:0.85rem;color:var(--hs-text-muted);line-height:1.6;margin:0;">
+                        Giao hàng nhanh chóng, đóng gói chuyên nghiệp đến mọi tỉnh thành trong cả nước.
+                    </p>
+                </div>
+                <div class="hs-feature-card">
+                    <div class="hs-icon-box">
+                        <MudIcon Icon="@Icons.Material.Filled.HeadsetMic" Style="font-size:1.5rem;color:var(--hs-red);" />
+                    </div>
+                    <h3 style="font-size:1rem;font-weight:700;color:var(--hs-text);margin-bottom:10px;">Hỗ Trợ Kỹ Thuật</h3>
+                    <p style="font-size:0.85rem;color:var(--hs-text-muted);line-height:1.6;margin:0;">
+                        Chuyên gia tư vấn và hỗ trợ kỹ thuật nhiệt tình, giải đáp mọi thắc mắc của bạn.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @* ── Section 6: Our Reliable Partners ── *@
+    <section class="hs-section">
+        <div class="hs-container">
+            <span class="hs-section-label">HỢP TÁC THƯƠNG HIỆU</span>
+            <h2 class="hs-heading hs-heading--lg" style="margin-bottom:40px;">Đối Tác Tin Cậy</h2>
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:40px 60px;">
+                <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/7/7d/Intel_logo_%282006-2020%29.svg" alt="Intel" loading="lazy" onerror="this.style.display='none'" />
+                <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/7/7c/AMD_Logo.svg" alt="AMD" loading="lazy" onerror="this.style.display='none'" />
+                <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/2/21/Nvidia_logo.svg" alt="NVIDIA" loading="lazy" onerror="this.style.display='none'" />
+                <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/2/2e/ASUS_Logo.svg" alt="ASUS" loading="lazy" onerror="this.style.display='none'" />
+                <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/1/13/MSI_Logo_%282022%29.svg" alt="MSI" loading="lazy" onerror="this.style.display='none'" />
+                <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/4/49/GIGABYTE_Logo.svg" alt="Gigabyte" loading="lazy" onerror="this.style.display='none'" />
+                <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/9/98/Corsair_Logo.svg" alt="Corsair" loading="lazy" onerror="this.style.display='none'" />
+                <img class="hs-partner-logo" src="https://upload.wikimedia.org/wikipedia/commons/e/e8/Logitech_logo.svg" alt="Logitech" loading="lazy" onerror="this.style.display='none'" />
+            </div>
+        </div>
+    </section>
 }
 
 @code {
@@ -168,7 +263,12 @@ else
     private List<CategoryMenuResponse> _categories = new();
     private List<CategorySection> _featuredSections = new();
     private List<BannerPublicDto> _banners = new();
-    private int? _expandedCategoryId;
+
+    private List<ProductCardResponse> FeaturedSystems =>
+        _featuredSections.FirstOrDefault(fs => fs.Category.Slug == "pc-build-san")?.Products ?? new();
+
+    private IEnumerable<CategorySection> DealSections =>
+        _featuredSections.Where(fs => fs.Products.Any() && fs.Category.Slug != "pc-build-san");
 
     protected override async Task OnInitializedAsync()
     {
@@ -211,18 +311,6 @@ else
             _isLoading = false;
         }
     }
-
-    private void ToggleCategory(CategoryMenuResponse cat)
-    {
-        var hasChildren = _categories.Any(c => c.ParentId == cat.Id);
-        if (!hasChildren)
-        {
-            NavigateToCategory(cat.Slug);
-            return;
-        }
-        _expandedCategoryId = _expandedCategoryId == cat.Id ? (int?)null : cat.Id;
-    }
-
 
     private void NavigateToCategory(string slug) =>
         NavigationManager.NavigateTo($"/category/{slug}");

@@ -15,269 +15,336 @@
 
 <PageTitle>@(_product?.Name ?? "Chi tiết sản phẩm") - HushStore</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6 mb-16">
-    @if (_isLoading)
-    {
-        <MudGrid>
-            <MudItem xs="12" md="6">
-                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="500px" Class="rounded-lg" />
-            </MudItem>
-            <MudItem xs="12" md="6">
-                <MudSkeleton SkeletonType="SkeletonType.Text" Height="40px" Width="80%" Class="mb-4" />
-                <MudSkeleton SkeletonType="SkeletonType.Text" Height="30px" Width="50%" Class="mb-6" />
-                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="100px" Class="mb-6" />
-                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="60px" Class="mb-4" />
-                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="50px" />
-            </MudItem>
-        </MudGrid>
-    }
-    else if (_product == null)
-    {
-        <div class="d-flex flex-column align-center justify-center py-16">
-            <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Style="font-size: 80px;" Color="Color.Error" Class="mb-4 opacity-50" />
-            <MudText Typo="Typo.h5" Class="fw-bold mb-2">Không tìm thấy sản phẩm</MudText>
-            <MudText Typo="Typo.body1" Class="text-muted mb-6">Sản phẩm này không tồn tại hoặc đã bị xóa.</MudText>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/"))">Về trang chủ</MudButton>
-        </div>
-    }
-    else
-    {
-        <!-- Main Info -->
-        <MudGrid Class="mb-10">
-            <!-- Left: Gallery -->
-            <MudItem xs="12" md="5">
-                <MudCard Elevation="0" Class="rounded-lg overflow-hidden border mb-3 p-2">
-                    <MudImage Src="@_mainImage" Alt="@_product.Name" ObjectFit="ObjectFit.Contain" Style="width: 100%; height: 400px;" />
-                </MudCard>
-                <div class="d-flex flex-row overflow-x-auto gap-2 py-2">
-                    @foreach (var img in _product.Images)
-                    {
-                        var isSelected = _mainImage == img;
-                        <MudImage Src="@img" Alt="Thumbnail" ObjectFit="ObjectFit.Cover" Width="80" Height="80" 
-                                  Class="@($"rounded cursor-pointer border {(isSelected ? "border-primary border-2" : "")}")" 
-                                  @onclick="@(() => ChangeMainImage(img))" />
-                    }
-                </div>
-            </MudItem>
-
-            <!-- Right: Order Area -->
-            <MudItem xs="12" md="7" Class="pl-md-8">
-                <MudText Typo="Typo.h4" Class="fw-bold mb-2">@_product.Name</MudText>
-                <div class="d-flex align-center mb-3 gap-4">
-                    <MudText Typo="Typo.body2" Class="text-muted">
-                        Thương hiệu: <span class="fw-bold text-dark">@_product.ManufacturerName</span>
-                    </MudText>
-                    <MudDivider Vertical="true" FlexItem="true" />
-                    <div class="d-flex align-center">
-                        <div style="pointer-events: none;">
-                            <MudRating SelectedValue="(int)_product.Rating" Max="5" ReadOnly="true" Size="Size.Small" />
-                        </div>
-                        <MudText Typo="Typo.caption" Class="ml-2 text-muted">(@_product.ReviewCount đánh giá)</MudText>
+@* ===== LOADING STATE ===== *@
+@if (_isLoading)
+{
+    <div style="background:var(--hs-white); padding:48px 0;">
+        <div class="hs-container">
+            <MudGrid Spacing="6">
+                <MudItem xs="12" md="5">
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="480px" Style="border-radius:12px;" />
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        @for (int i = 0; i < 4; i++)
+                        {
+                            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Width="80px" Height="80px" Style="border-radius:8px; flex-shrink:0;" />
+                        }
                     </div>
-                    <div class="ml-auto d-flex align-center gap-2">
-                        <MudDivider Vertical="true" FlexItem="true" />
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="35%" Height="20px" Style="margin-bottom:12px;" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="85%" Height="44px" Style="margin-bottom:8px;" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="60%" Height="44px" Style="margin-bottom:24px;" />
+                    <MudSkeleton SkeletonType="SkeletonType.Text" Width="40%" Height="60px" Style="margin-bottom:24px;" />
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="52px" Style="border-radius:8px; margin-bottom:16px;" />
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="52px" Style="border-radius:8px;" />
+                </MudItem>
+            </MudGrid>
+        </div>
+    </div>
+}
+else if (_product == null)
+{
+    @* ===== NOT FOUND ===== *@
+    <div style="background:var(--hs-white); padding:120px 0; text-align:center;">
+        <MudIcon Icon="@Icons.Material.Outlined.SearchOff"
+                 Style="font-size:5rem; color:#BDBDBD; margin-bottom:16px;" />
+        <h3 style="font-size:1.4rem; font-weight:800; color:var(--hs-dark); margin:0 0 8px;">
+            Không tìm thấy sản phẩm
+        </h3>
+        <p style="color:var(--hs-text-muted); margin-bottom:28px;">
+            Sản phẩm này không tồn tại hoặc đã bị xóa.
+        </p>
+        <a href="/" class="hs-btn hs-btn--primary">Về trang chủ</a>
+    </div>
+}
+else
+{
+    @* ===== MAIN PRODUCT SECTION ===== *@
+    <div style="background:var(--hs-white); padding:40px 0 56px;">
+        <div class="hs-container">
+            <MudGrid Spacing="6">
+
+                @* LEFT: Gallery *@
+                <MudItem xs="12" md="5">
+                    <div style="border:1px solid var(--hs-border); border-radius:12px; overflow:hidden;
+                                display:flex; align-items:center; justify-content:center;
+                                height:480px; background:#FAFAFA; padding:24px;">
+                        @if (!string.IsNullOrEmpty(_mainImage))
+                        {
+                            <img src="@_mainImage" alt="@_product.Name"
+                                 style="max-height:100%; max-width:100%; object-fit:contain;" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.ImageNotSupported"
+                                     Style="font-size:5rem; color:#BDBDBD;" />
+                        }
+                    </div>
+                    @if (_product.Images.Count > 1)
+                    {
+                        <div style="display:flex; gap:8px; margin-top:12px; overflow-x:auto; padding-bottom:4px;">
+                            @foreach (var img in _product.Images)
+                            {
+                                var isSelected = _mainImage == img;
+                                <div @onclick="@(() => ChangeMainImage(img))"
+                                     style="flex-shrink:0; width:80px; height:80px; border-radius:8px; overflow:hidden; cursor:pointer;
+                                            border:2px solid @(isSelected ? "var(--hs-red)" : "var(--hs-border)");
+                                            display:flex; align-items:center; justify-content:center; background:#FAFAFA; padding:4px;">
+                                    <img src="@img" alt="Thumbnail"
+                                         style="max-height:100%; max-width:100%; object-fit:contain;" />
+                                </div>
+                            }
+                        </div>
+                    }
+                </MudItem>
+
+                @* RIGHT: Info + Order *@
+                <MudItem xs="12" md="7">
+
+                    @* Eyebrow: brand *@
+                    @if (!string.IsNullOrEmpty(_product.ManufacturerName))
+                    {
+                        <div style="font-size:0.72rem; font-weight:700; letter-spacing:0.1em;
+                                    text-transform:uppercase; color:var(--hs-text-muted); margin-bottom:10px;">
+                            @_product.ManufacturerName
+                        </div>
+                    }
+
+                    @* Product name *@
+                    <h1 style="font-size:clamp(1.4rem,2.5vw,2rem); font-weight:800; color:var(--hs-dark);
+                               letter-spacing:-0.02em; line-height:1.2; margin:0 0 12px;">
+                        @_product.Name
+                    </h1>
+
+                    @* Rating + Compare row *@
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px; flex-wrap:wrap;">
+                        <div style="display:flex; align-items:center; gap:6px; pointer-events:none;">
+                            <MudRating SelectedValue="(int)_product.Rating" ReadOnly="true" Size="Size.Small" />
+                            <span style="font-size:0.8rem; color:var(--hs-text-muted);">(@_product.ReviewCount đánh giá)</span>
+                        </div>
+                        <div style="width:1px; height:16px; background:var(--hs-border);"></div>
                         <MudTooltip Text="@(ComparisonService.Contains(_product!.Id) ? "Bỏ khỏi so sánh" : "Thêm vào so sánh")">
                             <MudButton Variant="@(ComparisonService.Contains(_product!.Id) ? Variant.Filled : Variant.Outlined)"
                                        Color="Color.Primary" Size="Size.Small"
                                        StartIcon="@Icons.Material.Filled.CompareArrows"
                                        OnClick="HandleCompareClick"
-                                       Class="rounded-pill">
-                                So sánh
+                                       Style="border-radius:100px; font-size:0.75rem; font-weight:700; letter-spacing:0.04em;">
+                                SO SÁNH
                             </MudButton>
                         </MudTooltip>
                     </div>
-                </div>
 
-                <MudDivider Class="mb-4" />
+                    @* Divider *@
+                    <div style="height:1px; background:var(--hs-border); margin-bottom:24px;"></div>
 
-                <!-- Price -->
-                <div class="mb-6">
+                    @* Price block *@
                     @if (_currentVariant != null)
                     {
-                        <div class="d-flex flex-column mb-1">
+                        <div style="margin-bottom:20px;">
                             @if (_currentVariant.OriginalPrice.HasValue)
                             {
-                                <div class="d-flex align-center gap-2 mb-1">
-                                    <MudText Typo="Typo.h6" Style="text-decoration: line-through;" Class="text-muted">
+                                <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+                                    <span style="font-size:1rem; color:var(--hs-text-muted); text-decoration:line-through;">
                                         @_currentVariant.OriginalPrice.Value.ToString("N0") ₫
-                                    </MudText>
-                                    <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">
+                                    </span>
+                                    <span style="background:rgba(225,29,42,0.12); color:var(--hs-red);
+                                                 font-size:0.72rem; font-weight:700; letter-spacing:0.04em;
+                                                 padding:3px 10px; border-radius:100px; text-transform:uppercase;">
                                         -@((int)Math.Round((1 - _currentVariant.Price / _currentVariant.OriginalPrice.Value) * 100))%
-                                    </MudChip>
+                                    </span>
                                 </div>
                             }
-                            <MudText Typo="Typo.h3" Color="Color.Error" Class="fw-bold">
+                            <div style="font-size:clamp(2rem,3vw,2.6rem); font-weight:800; color:var(--hs-red); line-height:1;">
                                 @_currentVariant.Price.ToString("N0") ₫
-                            </MudText>
+                            </div>
                         </div>
-                        @if (!_currentVariant.IsAvailable)
+
+                        @* Stock badge *@
+                        <div style="margin-bottom:24px;">
+                            @if (!_currentVariant.IsAvailable)
+                            {
+                                <span style="display:inline-block; background:#FEE2E2; color:#DC2626;
+                                             font-size:0.75rem; font-weight:700; padding:4px 14px; border-radius:100px;">
+                                    Hết hàng
+                                </span>
+                            }
+                            else if (_currentVariant.StockQuantity <= 5)
+                            {
+                                <span style="display:inline-block; background:#FEF3C7; color:#D97706;
+                                             font-size:0.75rem; font-weight:700; padding:4px 14px; border-radius:100px;">
+                                    Chỉ còn @_currentVariant.StockQuantity sản phẩm
+                                </span>
+                            }
+                            else
+                            {
+                                <span style="display:inline-block; background:#DCFCE7; color:#16A34A;
+                                             font-size:0.75rem; font-weight:700; padding:4px 14px; border-radius:100px;">
+                                    Còn hàng
+                                </span>
+                            }
+                        </div>
+                    }
+
+                    @* Variants *@
+                    @if (_product.Variants.Any())
+                    {
+                        <div style="margin-bottom:24px;">
+                            <div style="font-size:0.8rem; font-weight:700; letter-spacing:0.06em;
+                                        text-transform:uppercase; color:var(--hs-text-muted); margin-bottom:10px;">
+                                Phiên bản
+                            </div>
+                            <MudChipSet T="StorefrontVariantResponse" SelectedValue="_currentVariant"
+                                        SelectedValueChanged="OnVariantChanged"
+                                        SelectionMode="SelectionMode.SingleSelection"
+                                        Style="gap:8px; flex-wrap:wrap;">
+                                @foreach (var variant in _product.Variants)
+                                {
+                                    <MudChip T="StorefrontVariantResponse" Value="@variant"
+                                             Variant="Variant.Outlined" Color="Color.Primary"
+                                             Disabled="!variant.IsAvailable"
+                                             Style="@($"border-radius:8px; font-weight:600; font-size:0.8rem; {(variant.Id == _currentVariant?.Id ? "border:2px solid var(--hs-red); color:var(--hs-red);" : "")}")">
+                                        @variant.VariantName
+                                    </MudChip>
+                                }
+                            </MudChipSet>
+                        </div>
+                    }
+
+                    @* Quantity *@
+                    <div style="display:flex; align-items:center; gap:16px; margin-bottom:28px;">
+                        <span style="font-size:0.8rem; font-weight:700; letter-spacing:0.06em;
+                                     text-transform:uppercase; color:var(--hs-text-muted);">Số lượng</span>
+                        <MudNumericField @bind-Value="_quantity"
+                                         Min="1" Max="@(Math.Max(_currentVariant?.StockQuantity ?? 1, 1))"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense"
+                                         Style="width:100px;"
+                                         Disabled="!IsCurrentVariantAvailable()" />
+                    </div>
+
+                    @* Action buttons *@
+                    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                        <button class="hs-btn" style="flex:1; min-width:160px;
+                                    border:2px solid var(--hs-dark); color:var(--hs-dark); background:transparent;
+                                    display:flex; align-items:center; justify-content:center; gap:8px;
+                                    @(!IsCurrentVariantAvailable() || _isProcessing ? "opacity:.45; cursor:not-allowed;" : "")"
+                                @onclick="AddToCartAsync"
+                                disabled="@(!IsCurrentVariantAvailable() || _isProcessing)">
+                            <MudIcon Icon="@Icons.Material.Filled.AddShoppingCart" Style="font-size:1.1rem;" />
+                            THÊM VÀO GIỎ
+                        </button>
+                        <button class="hs-btn hs-btn--primary" style="flex:1; min-width:160px;
+                                    @(!IsCurrentVariantAvailable() || _isProcessing ? "opacity:.45; cursor:not-allowed;" : "")"
+                                @onclick="BuyNowAsync"
+                                disabled="@(!IsCurrentVariantAvailable() || _isProcessing)">
+                            MUA NGAY
+                        </button>
+                    </div>
+
+                </MudItem>
+            </MudGrid>
+        </div>
+    </div>
+
+    @* ===== TABS: MÔ TẢ / THÔNG SỐ / ĐÁNH GIÁ ===== *@
+    <div style="background:var(--hs-gray-bg); padding:48px 0 56px;">
+        <div class="hs-container">
+            <MudTabs Elevation="0" Rounded="false" ApplyEffectsToContainer="true" PanelClass="pa-0 pt-6"
+                     Style="background:transparent;"
+                     TabHeaderClass="pd-tab-header">
+                <MudTabPanel Text="MÔ TẢ SẢN PHẨM" Icon="@Icons.Material.Filled.Description">
+                    <div style="background:var(--hs-white); border-radius:12px; padding:36px 40px;">
+                        @if (!string.IsNullOrWhiteSpace(_product.Description))
                         {
-                            <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">Hết hàng</MudChip>
-                        }
-                        else if (_currentVariant.StockQuantity <= 5)
-                        {
-                            <MudChip T="string" Color="Color.Warning" Variant="Variant.Outlined" Size="Size.Small">Chỉ còn @_currentVariant.StockQuantity sản phẩm</MudChip>
+                            <div class="pd-description">
+                                @((MarkupString)_product.Description)
+                            </div>
                         }
                         else
                         {
-                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">Còn @_currentVariant.StockQuantity sản phẩm</MudChip>
+                            <p style="color:var(--hs-text-muted); text-align:center; padding:40px 0; margin:0;">
+                                Chưa có thông tin mô tả cho sản phẩm này.
+                            </p>
                         }
-                    }
-                </div>
-
-                <!-- Variants -->
-                @if (_product.Variants.Any())
-                {
-                    <div class="mb-6">
-                        <MudText Typo="Typo.subtitle2" Class="fw-bold mb-2">Chọn phiên bản:</MudText>
-                        <MudChipSet T="StorefrontVariantResponse" SelectedValue="_currentVariant" SelectedValueChanged="OnVariantChanged" SelectionMode="SelectionMode.SingleSelection" Class="gap-2">
-                            @foreach (var variant in _product.Variants)
-                            {
-                                <MudChip T="StorefrontVariantResponse" Value="@variant" Variant="Variant.Text" Color="Color.Primary"
-                                         Disabled="!variant.IsAvailable"
-                                         Class="@($"border {(variant.Id == _currentVariant?.Id ? "border-primary border-2 bg-light-primary" : "border-lines-default")}")">
-                                    @variant.VariantName
-                                </MudChip>
-                            }
-                        </MudChipSet>
                     </div>
-                }
-
-                <!-- Quantity -->
-                <div class="mb-6 d-flex align-center gap-4">
-                    <MudText Typo="Typo.subtitle2" Class="fw-bold">Số lượng:</MudText>
-                    <MudNumericField @bind-Value="_quantity" Min="1" Max="@(Math.Max(_currentVariant?.StockQuantity ?? 1, 1))" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width: 100px;" Disabled="!IsCurrentVariantAvailable()" />
-                </div>
-
-                <!-- Actions -->
-                <div class="d-flex gap-4 flex-wrap">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Large" Class="flex-1 py-3 fw-bold rounded-lg"
-                               StartIcon="@Icons.Material.Filled.AddShoppingCart"
-                               OnClick="AddToCartAsync" Disabled="!IsCurrentVariantAvailable() || _isProcessing">
-                        THÊM VÀO GIỎ
-                    </MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Large" Class="flex-1 py-3 fw-bold rounded-lg"
-                               OnClick="BuyNowAsync" Disabled="!IsCurrentVariantAvailable() || _isProcessing">
-                        MUA NGAY
-                    </MudButton>
-
-                </div>
-            </MudItem>
-        </MudGrid>
-
-        <!-- Tabs Information -->
-        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6" Class="mb-10">
-            <MudTabPanel Text="MÔ TẢ SẢN PHẨM" Icon="@Icons.Material.Filled.Description">
-                @if (!string.IsNullOrWhiteSpace(_product.Description))
-                {
-                    <div class="product-description-content">
-                        @((MarkupString)_product.Description)
+                </MudTabPanel>
+                <MudTabPanel Text="THÔNG SỐ KỸ THUẬT" Icon="@Icons.Material.Filled.Tune">
+                    <div style="background:var(--hs-white); border-radius:12px; overflow:hidden;">
+                        @if (_currentVariant != null && _currentVariant.Specifications.Any())
+                        {
+                            <MudTable Items="@_currentVariant.Specifications" Hover="true" Elevation="0">
+                                <HeaderContent>
+                                    <MudTh Style="font-size:0.78rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--hs-text-muted);">Thông số</MudTh>
+                                    <MudTh Style="font-size:0.78rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--hs-text-muted);">Giá trị</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Thông số"
+                                           Style="width:35%; font-weight:700; font-size:0.875rem; color:var(--hs-dark); background:#FAFAFA;">
+                                        @context.Key
+                                    </MudTd>
+                                    <MudTd DataLabel="Giá trị" Style="font-size:0.875rem; color:var(--hs-text);">
+                                        @context.Value
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        }
+                        else
+                        {
+                            <p style="color:var(--hs-text-muted); text-align:center; padding:40px 0; margin:0;">
+                                Không có thông số kỹ thuật cho phiên bản này.
+                            </p>
+                        }
                     </div>
-                }
-                else
-                {
-                    <MudText Class="text-muted text-center py-8">Chưa có thông tin mô tả cho sản phẩm này.</MudText>
-                }
-            </MudTabPanel>
-            <MudTabPanel Text="THÔNG SỐ KỸ THUẬT" Icon="@Icons.Material.Filled.Tune">
-                @if (_currentVariant != null && _currentVariant.Specifications.Any())
-                {
-                    <MudTable Items="@_currentVariant.Specifications" Hover="true" Elevation="0" Class="border rounded">
-                        <HeaderContent>
-                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Thông số</MudText></MudTh>
-                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Giá trị</MudText></MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd DataLabel="Thông số" Class="fw-bold" Style="width: 30%; background-color: rgba(0,0,0,0.02);">@context.Key</MudTd>
-                            <MudTd DataLabel="Giá trị">@context.Value</MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                }
-                else
-                {
-                    <MudText Class="text-muted text-center py-8">Không có thông số kỹ thuật cho phiên bản này.</MudText>
-                }
-            </MudTabPanel>
-            <MudTabPanel Text="ĐÁNH GIÁ" Icon="@Icons.Material.Filled.StarRate">
-                <ReviewSection ProductId="@_product.Id" />
-            </MudTabPanel>
-        </MudTabs>
+                </MudTabPanel>
+                <MudTabPanel Text="ĐÁNH GIÁ" Icon="@Icons.Material.Filled.StarRate">
+                    <div style="background:var(--hs-white); border-radius:12px; padding:36px 40px;">
+                        <ReviewSection ProductId="@_product.Id" />
+                    </div>
+                </MudTabPanel>
+            </MudTabs>
+        </div>
+    </div>
 
-        <!-- Related Products -->
-        @if (_relatedProducts != null && _relatedProducts.Any())
-        {
-            <div class="mb-10">
-                <MudText Typo="Typo.h5" Class="fw-bold mb-6 border-l-4 border-primary pl-3">Sản phẩm tương tự</MudText>
-                <MudGrid>
+    @* ===== RELATED PRODUCTS ===== *@
+    @if (_relatedProducts != null && _relatedProducts.Any())
+    {
+        <div style="background:var(--hs-white); padding:56px 0 72px;">
+            <div class="hs-container">
+                <h2 style="font-size:clamp(1.3rem,2.5vw,1.8rem); font-weight:800; color:var(--hs-dark);
+                           letter-spacing:-0.01em; text-transform:uppercase; margin:0 0 32px;">
+                    Sản phẩm tương tự
+                </h2>
+                <MudGrid Spacing="3">
                     @foreach (var p in _relatedProducts)
                     {
-                        <MudItem xs="12" sm="6" md="4" lg="2">
-                            <!-- TODO: Inject ProductCard component once it's available. Assuming we use a simple view here if not -->
-                            <MudCard Elevation="1" Class="h-100 product-card cursor-pointer" @onclick="@(() => NavigateToProduct(p.Slug))">
-                                <MudCardMedia Image="@p.ThumbnailUrl" Height="150" Style="background-size: contain; margin-top: 10px;" />
-                                <MudCardContent Class="pa-3">
-                                    <MudText Typo="Typo.body2" Class="fw-bold line-clamp-2 mb-2" Style="min-height: 40px;">@p.Name</MudText>
-                                    <MudText Typo="Typo.subtitle1" Color="Color.Error" Class="fw-bold">@p.CurrentPrice.ToString("N0") ₫</MudText>
-                                    @if (p.OldPrice > p.CurrentPrice)
-                                    {
-                                        <MudText Typo="Typo.caption" Class="text-muted text-decoration-line-through">@p.OldPrice.ToString("N0") ₫</MudText>
-                                    }
-                                </MudCardContent>
-                            </MudCard>
+                        <MudItem xs="6" sm="4" md="3">
+                            <ProductCard Product="p" />
                         </MudItem>
                     }
                 </MudGrid>
             </div>
-        }
+        </div>
     }
-</MudContainer>
+}
 
 <style>
-    .fw-bold { font-weight: 600; }
-    .text-muted { color: var(--mud-palette-text-secondary); }
-    .text-dark { color: var(--mud-palette-text-primary); }
-    .border-l-4 { border-left-width: 4px; border-left-style: solid; }
-    .border-primary { border-color: var(--mud-palette-primary) !important; }
-    .bg-light-primary { background-color: rgba(var(--mud-palette-primary-rgb), 0.1); }
-    .cursor-pointer { cursor: pointer; }
-    .product-card:hover { transform: translateY(-5px); transition: transform 0.3s ease; box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
-    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-
-    /* CSS For HTML Description */
-    .product-description-content {
-        font-family: 'Roboto', 'Inter', sans-serif; /* Fallback to MudBlazor fonts */
-        color: var(--mud-palette-text-primary);
+    .pd-description {
+        font-family: 'Inter', 'Roboto', sans-serif;
+        color: var(--hs-text);
         line-height: 1.8;
         font-size: 1rem;
     }
-    
-    .product-description-content p {
-        margin-bottom: 1rem;
+    .pd-description p { margin-bottom: 1rem; }
+    .pd-description img {
+        max-width: 100%; height: auto;
+        border-radius: 8px; margin: 1rem 0; display: block;
     }
-    
-    .product-description-content img {
-        max-width: 100%;
-        height: auto;
-        border-radius: 8px;
-        margin: 1rem 0;
-        display: block;
+    .pd-description ul, .pd-description ol { margin-bottom: 1rem; padding-left: 2rem; }
+    .pd-description li { margin-bottom: 0.5rem; }
+    .pd-description h2, .pd-description h3, .pd-description h4 {
+        margin-top: 2rem; margin-bottom: 1rem;
+        font-weight: 700; color: var(--hs-dark);
     }
-    
-    .product-description-content ul, .product-description-content ol {
-        margin-bottom: 1rem;
-        padding-left: 2rem;
-    }
-    
-    .product-description-content li {
-        margin-bottom: 0.5rem;
-    }
-    
-    .product-description-content h2, .product-description-content h3, .product-description-content h4 {
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        font-weight: 600;
-        color: var(--mud-palette-primary);
-    }
+    .pd-tab-header .mud-tab { font-weight: 700; font-size: 0.82rem; letter-spacing: 0.05em; }
 </style>
 
 @code {

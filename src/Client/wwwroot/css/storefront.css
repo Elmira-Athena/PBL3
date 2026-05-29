@@ -1,0 +1,437 @@
+/* =====================================================
+   HushStore Storefront Design Tokens & Utilities
+   NZXT-inspired: White + Red (#E11D2A) + Charcoal (#111)
+   ===================================================== */
+
+/* Design Tokens */
+:root {
+  --hs-red:         #E11D2A;
+  --hs-red-dark:    #B3121E;
+  --hs-red-light:   #FF4D58;
+  --hs-dark:        #111111;
+  --hs-dark-2:      #1C1C1C;
+  --hs-dark-3:      #2A2A2A;
+  --hs-white:       #FFFFFF;
+  --hs-gray-bg:     #F4F4F5;
+  --hs-border:      #E5E5E5;
+  --hs-text:        #111111;
+  --hs-text-muted:  #6B7280;
+  --hs-font:        'Inter', 'Roboto', sans-serif;
+}
+
+/* ── Sections ── */
+.hs-section {
+  width: 100%;
+  padding: 80px 0;
+  background: var(--hs-white);
+}
+
+.hs-section--dark {
+  background: var(--hs-dark);
+  color: var(--hs-white);
+}
+
+.hs-section--gray {
+  background: var(--hs-gray-bg);
+}
+
+.hs-section--compact {
+  padding: 48px 0;
+}
+
+/* ── Container ── */
+.hs-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ── Headings ── */
+.hs-heading {
+  font-family: var(--hs-font);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--hs-text);
+}
+
+.hs-heading--white {
+  color: var(--hs-white);
+}
+
+.hs-heading--xl {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+}
+
+.hs-heading--lg {
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.hs-heading--md {
+  font-size: clamp(1.25rem, 2.5vw, 1.875rem);
+}
+
+.hs-section-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--hs-red);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hs-section-label::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--hs-red);
+  flex-shrink: 0;
+}
+
+.hs-section-label--white {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.hs-section-label--white::before {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+/* ── Buttons ── */
+.hs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 4px;
+  font-family: var(--hs-font);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  border: 2px solid transparent;
+}
+
+.hs-btn--primary {
+  background: var(--hs-red);
+  color: var(--hs-white);
+  border-color: var(--hs-red);
+}
+
+.hs-btn--primary:hover {
+  background: var(--hs-red-dark);
+  border-color: var(--hs-red-dark);
+  color: var(--hs-white);
+  transform: translateY(-1px);
+}
+
+.hs-btn--ghost {
+  background: transparent;
+  color: var(--hs-white);
+  border-color: var(--hs-white);
+}
+
+.hs-btn--ghost:hover {
+  background: var(--hs-white);
+  color: var(--hs-dark);
+}
+
+.hs-btn--ghost-dark {
+  background: transparent;
+  color: var(--hs-dark);
+  border-color: var(--hs-dark);
+}
+
+.hs-btn--ghost-dark:hover {
+  background: var(--hs-dark);
+  color: var(--hs-white);
+}
+
+.hs-btn:focus-visible {
+  outline: 2px solid var(--hs-red);
+  outline-offset: 3px;
+}
+
+/* ── Text links (NZXT-style "View all →") ── */
+.hs-text-link {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hs-text);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--hs-font);
+  transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.hs-text-link:hover {
+  color: var(--hs-red);
+}
+
+.hs-text-link--red {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--hs-red);
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--hs-font);
+  transition: opacity 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hs-text-link--red:hover {
+  opacity: 0.8;
+}
+
+/* ── Feature cards (Why Buy section) ── */
+.hs-icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: rgba(225, 29, 42, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.hs-feature-card {
+  background: var(--hs-white);
+  border: 1px solid var(--hs-border);
+  border-radius: 12px;
+  padding: 32px 24px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hs-feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Cards ── */
+.hs-card {
+  background: var(--hs-white);
+  border: 1px solid var(--hs-border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.hs-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* Button reset for clickable cards */
+.hs-card-btn {
+  width: 100%;
+  text-align: left;
+  font-family: var(--hs-font);
+  cursor: pointer;
+}
+
+.hs-card-btn:focus-visible {
+  outline: 2px solid var(--hs-red);
+  outline-offset: 3px;
+}
+
+.hs-card--dark {
+  background: var(--hs-dark-2);
+  border-color: var(--hs-dark-3);
+}
+
+/* ── Divider ── */
+.hs-divider {
+  height: 1px;
+  background: var(--hs-border);
+  border: none;
+  margin: 0;
+}
+
+.hs-divider--dark {
+  background: var(--hs-dark-3);
+}
+
+/* ── Price ── */
+.hs-price {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--hs-red);
+  font-family: var(--hs-font);
+}
+
+.hs-price--old {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--hs-text-muted);
+  text-decoration: line-through;
+}
+
+/* ── Badge ── */
+.hs-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hs-badge--red {
+  background: var(--hs-red);
+  color: var(--hs-white);
+}
+
+/* ── Grid ── */
+.hs-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.hs-grid--products {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.hs-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.hs-grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 768px) {
+  .hs-section {
+    padding: 48px 0;
+  }
+  .hs-section--compact {
+    padding: 32px 0;
+  }
+  .hs-grid--4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .hs-grid--3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .hs-grid--3,
+  .hs-grid--4,
+  .hs-grid--products {
+    grid-template-columns: 1fr;
+  }
+  .hs-container {
+    padding: 0 16px;
+  }
+}
+
+/* ── Footer ── */
+.hs-footer-link {
+  color: #888888;
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.15s ease;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--hs-font);
+}
+
+.hs-footer-link:hover {
+  color: #ffffff;
+}
+
+.hs-footer-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 40px;
+}
+
+@media (max-width: 768px) {
+  .hs-footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .hs-footer-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Partner logos ── */
+.hs-partner-logo {
+  height: 36px;
+  max-width: 120px;
+  opacity: 0.6;
+  filter: grayscale(100%);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+  object-fit: contain;
+}
+
+.hs-partner-logo:hover {
+  opacity: 1;
+  filter: none;
+}
+
+/* ── Accessibility ── */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Navbar override ── */
+.hs-nav-link {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-family: var(--hs-font);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+}
+
+.hs-nav-link:hover {
+  color: #FFFFFF !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.hs-nav-link--active {
+  color: var(--hs-red-light) !important;
+}

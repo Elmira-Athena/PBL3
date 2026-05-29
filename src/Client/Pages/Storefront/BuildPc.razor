@@ -12,165 +12,222 @@
 
 <PageTitle>Xây dựng PC - HushStore</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-10">
-
-    @* ── Header ── *@
-    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4" Justify="Justify.SpaceBetween">
-        <MudText Typo="Typo.h5" Style="font-weight:700;">
-            Build PC - Chọn linh kiện xây dựng cấu hình
-        </MudText>
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Default"
-                   StartIcon="@Icons.Material.Filled.Refresh"
-                   OnClick="ResetAll">
-            LÀM MỚI
-        </MudButton>
-    </MudStack>
-
-    @* ── Cost estimate (top) ── *@
-    <div class="d-flex justify-end mb-3">
-        <MudText Typo="Typo.subtitle1">
-            Chi phí dự tính:
-            <strong style="color:#c0392b; font-size:1.2rem;">@TotalCost.ToString("N0")đ</strong>
-        </MudText>
+@* ===== HEADER ===== *@
+<div style="background:var(--hs-white); border-bottom:1px solid var(--hs-border); padding:28px 0 20px;">
+    <div class="hs-container">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+            <div>
+                <h1 style="font-size:clamp(1.6rem,3vw,2.2rem); font-weight:800; color:var(--hs-dark);
+                           letter-spacing:-0.02em; text-transform:uppercase; margin:0 0 4px;">
+                    Xây dựng cấu hình PC
+                </h1>
+                <p style="font-size:0.875rem; color:var(--hs-text-muted); margin:0;">
+                    Chọn từng linh kiện để xây dựng cấu hình theo ý bạn — @_slots.Count(s => s.SelectedItem != null)/@_slots.Count linh kiện đã chọn
+                </p>
+            </div>
+            <button class="hs-btn"
+                    style="border:2px solid var(--hs-border); color:var(--hs-dark); background:transparent;
+                           display:inline-flex; align-items:center; gap:6px;"
+                    @onclick="ResetAll">
+                <MudIcon Icon="@Icons.Material.Filled.Refresh" Style="font-size:1rem;" />
+                LÀM MỚI
+            </button>
+        </div>
     </div>
+</div>
 
-    @* ── Component table ── *@
-    <MudPaper Elevation="2" Class="rounded-lg overflow-hidden">
+@* ===== SLOT TABLE ===== *@
+<div style="background:var(--hs-gray-bg); padding:32px 0 120px;">
+    <div class="hs-container">
 
-        @* Column header — chỉ hiện khi có ít nhất 1 slot đã chọn *@
+        @* Column header (shows when ≥1 item selected) *@
         @if (HasAnyItem)
         {
-            <div class="build-pc-header-row d-flex align-center">
-                <div class="slot-label" style="visibility:hidden;"></div>
-                <div class="slot-content build-pc-header-content">
-                    <div style="flex:1; font-weight:700;">Tên sản phẩm</div>
-                    <div style="width:110px; font-weight:700; text-align:center;">Số lượng</div>
-                    <div style="width:130px; font-weight:700; text-align:right;">Đơn giá</div>
-                    <div style="width:140px; font-weight:700; text-align:right;">Thành tiền</div>
-                    <div style="width:90px;"></div>
+            <div style="display:flex; align-items:center; margin-bottom:6px; padding:0 16px 0 0;">
+                <div style="width:200px; flex-shrink:0;"></div>
+                <div style="flex:1; display:flex; align-items:center; padding-left:16px; gap:8px;">
+                    <div style="flex:1;">
+                        <span class="bpc-col-label">Sản phẩm</span>
+                    </div>
+                    <div class="bpc-col-qty"><span class="bpc-col-label">Số lượng</span></div>
+                    <div class="bpc-col-price"><span class="bpc-col-label">Đơn giá</span></div>
+                    <div class="bpc-col-total"><span class="bpc-col-label">Thành tiền</span></div>
+                    <div class="bpc-col-actions"></div>
                 </div>
             </div>
-            <MudDivider />
         }
 
-        @* Tất cả 16 slot theo thứ tự cố định *@
-        @foreach (var slot in _slots)
-        {
-            <div class="build-pc-row d-flex align-center">
-                <div class="slot-label">
-                    <MudText Typo="Typo.body1" Style="font-weight:600;">
-                        @slot.Index. @slot.Name
-                    </MudText>
-                </div>
-                <div class="slot-content">
-                    @if (slot.SelectedItem == null)
-                    {
-                        <MudButton Variant="Variant.Filled"
-                                   Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Add"
-                                   OnClick="@(() => OpenPicker(slot))">
-                            Chọn @slot.Name
-                        </MudButton>
-                    }
-                    else
-                    {
-                        <div class="slot-selected-item">
-                            <div class="slot-col-name d-flex align-center gap-2">
-                                @if (!string.IsNullOrEmpty(slot.SelectedItem!.ImageUrl))
-                                {
-                                    <img src="@slot.SelectedItem!.ImageUrl"
-                                         style="width:40px; height:40px; object-fit:contain; flex-shrink:0;" />
-                                }
-                                <div>
-                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@slot.SelectedItem!.ProductName</MudText>
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@slot.SelectedItem!.VariantName</MudText>
-                                    @if (slot.SelectedItem!.WarrantyMonth > 0)
-                                    {
-                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                            Bảo hành: @slot.SelectedItem!.WarrantyMonth tháng
-                                        </MudText>
-                                    }
-                                </div>
+        @* Slots container *@
+        <div style="border:1px solid var(--hs-border); border-radius:12px; overflow:hidden; background:var(--hs-white);">
+            @foreach (var slot in _slots)
+            {
+                var isLast = slot == _slots.Last();
+                <div class="bpc-row" style="@(isLast ? "" : "border-bottom:1px solid var(--hs-border);")">
+
+                    @* Label column *@
+                    <div class="bpc-label-col">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <div style="width:24px; height:24px; border-radius:50%; flex-shrink:0;
+                                        display:flex; align-items:center; justify-content:center;
+                                        font-size:0.68rem; font-weight:800;
+                                        background:@(slot.SelectedItem != null ? "var(--hs-red)" : "#E5E5E5");
+                                        color:@(slot.SelectedItem != null ? "#fff" : "var(--hs-text-muted)");">
+                                @slot.Index
                             </div>
-                            <div class="slot-col-qty">
-                                <MudNumericField T="int"
-                                                Value="@slot.SelectedItem!.Quantity"
-                                                ValueChanged="@(q => UpdateQuantity(slot, q))"
-                                                Min="1" Max="10"
-                                                Variant="Variant.Outlined"
-                                                Margin="Margin.Dense"
-                                                Style="width:72px;" />
-                            </div>
-                            <div class="slot-col-price">
-                                <MudText Typo="Typo.body2" Style="white-space:nowrap;">
-                                    @slot.SelectedItem!.UnitPrice.ToString("N0")đ
-                                </MudText>
-                            </div>
-                            <div class="slot-col-total">
-                                <MudText Typo="Typo.body2" Color="Color.Error"
-                                         Style="font-weight:700; white-space:nowrap;">
-                                    @((slot.SelectedItem!.UnitPrice * slot.SelectedItem!.Quantity).ToString("N0"))đ
-                                </MudText>
-                            </div>
-                            <div class="slot-col-actions d-flex gap-1 justify-end">
-                                <MudTooltip Text="Thay đổi linh kiện">
-                                    <MudIconButton Icon="@Icons.Material.Outlined.Edit"
-                                                   Size="Size.Small" Color="Color.Primary"
-                                                   OnClick="@(() => OpenPicker(slot))" />
-                                </MudTooltip>
-                                <MudTooltip Text="Xóa">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                   Size="Size.Small" Color="Color.Error"
-                                                   OnClick="@(() => RemoveItem(slot))" />
-                                </MudTooltip>
-                            </div>
+                            <span style="font-size:0.82rem; font-weight:700; color:var(--hs-dark); line-height:1.2;">
+                                @slot.Name
+                            </span>
                         </div>
-                    }
+                    </div>
+
+                    @* Content column *@
+                    <div class="bpc-content-col">
+                        @if (slot.SelectedItem == null)
+                        {
+                            <button class="bpc-add-btn" @onclick="@(() => OpenPicker(slot))">
+                                <MudIcon Icon="@Icons.Material.Filled.Add" Style="font-size:0.95rem;" />
+                                Chọn @slot.Name
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="bpc-item-row">
+
+                                @* Thumbnail + info *@
+                                <div style="flex:1; display:flex; align-items:center; gap:12px; min-width:0;">
+                                    @if (!string.IsNullOrEmpty(slot.SelectedItem!.ImageUrl))
+                                    {
+                                        <div style="width:48px; height:48px; flex-shrink:0; padding:4px;
+                                                    border:1px solid var(--hs-border); border-radius:8px; background:#FAFAFA;
+                                                    display:flex; align-items:center; justify-content:center;">
+                                            <img src="@slot.SelectedItem!.ImageUrl"
+                                                 style="max-width:100%; max-height:100%; object-fit:contain;" />
+                                        </div>
+                                    }
+                                    <div style="min-width:0;">
+                                        <div style="font-size:0.875rem; font-weight:700; color:var(--hs-dark);
+                                                    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                            @slot.SelectedItem!.ProductName
+                                        </div>
+                                        <div style="font-size:0.75rem; color:var(--hs-text-muted);">
+                                            @slot.SelectedItem!.VariantName
+                                        </div>
+                                        @if (slot.SelectedItem!.WarrantyMonth > 0)
+                                        {
+                                            <div style="font-size:0.72rem; color:var(--hs-text-muted);">
+                                                BH: @slot.SelectedItem!.WarrantyMonth tháng
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                @* Quantity *@
+                                <div class="bpc-col-qty">
+                                    <MudNumericField T="int"
+                                                     Value="@slot.SelectedItem!.Quantity"
+                                                     ValueChanged="@(q => UpdateQuantity(slot, q))"
+                                                     Min="1" Max="10"
+                                                     Variant="Variant.Outlined"
+                                                     Margin="Margin.Dense"
+                                                     Style="width:72px;" />
+                                </div>
+
+                                @* Unit price *@
+                                <div class="bpc-col-price">
+                                    <span style="font-size:0.875rem; font-weight:600; color:var(--hs-dark); white-space:nowrap;">
+                                        @slot.SelectedItem!.UnitPrice.ToString("N0") đ
+                                    </span>
+                                </div>
+
+                                @* Row total *@
+                                <div class="bpc-col-total">
+                                    <span style="font-size:0.875rem; font-weight:800; color:var(--hs-red); white-space:nowrap;">
+                                        @((slot.SelectedItem!.UnitPrice * slot.SelectedItem!.Quantity).ToString("N0")) đ
+                                    </span>
+                                </div>
+
+                                @* Actions *@
+                                <div class="bpc-col-actions">
+                                    <MudTooltip Text="Thay đổi linh kiện">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                                       Size="Size.Small"
+                                                       Style="color:var(--hs-text-muted);"
+                                                       OnClick="@(() => OpenPicker(slot))" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Xóa">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.DeleteOutline"
+                                                       Size="Size.Small"
+                                                       Style="color:var(--hs-text-muted);"
+                                                       OnClick="@(() => RemoveItem(slot))" />
+                                    </MudTooltip>
+                                </div>
+
+                            </div>
+                        }
+                    </div>
+
                 </div>
-            </div>
-            <MudDivider />
-        }
+            }
+        </div>
 
-    </MudPaper>
-
-    @* ── Cost estimate (bottom) ── *@
-    <div class="d-flex justify-end mt-3 mb-5">
-        <MudText Typo="Typo.subtitle1">
-            Chi phí dự tính:
-            <strong style="color:#c0392b; font-size:1.2rem;">@TotalCost.ToString("N0")đ</strong>
-        </MudText>
     </div>
+</div>
 
-    @* ── Action buttons ── *@
-    <MudStack Row="true" Spacing="2" Class="mb-10">
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Default"
-                   StartIcon="@Icons.Material.Filled.SaveAlt"
-                   OnClick="ExportExcel"
-                   Disabled="@(_isExporting || !HasAnyItem)">
-            @if (_isExporting)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-            }
-            LƯU CẤU HÌNH
-        </MudButton>
+@* ===== STICKY ACTION BAR ===== *@
+<div style="background:var(--hs-white); border-top:1px solid var(--hs-border);
+            padding:16px 0; position:sticky; bottom:0; z-index:50;">
+    <div class="hs-container" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
 
-        <MudButton Variant="Variant.Filled"
-                   Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.ShoppingCart"
-                   OnClick="AddAllToCart"
-                   Disabled="@(_isAddingToCart || !HasAnyItem)">
-            @if (_isAddingToCart)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-            }
-            THÊM VÀO GIỎ HÀNG
-        </MudButton>
-    </MudStack>
+        @* Total *@
+        <div>
+            <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase;
+                        letter-spacing:0.08em; color:var(--hs-text-muted); margin-bottom:2px;">
+                Tổng chi phí dự tính
+            </div>
+            <div style="font-size:clamp(1.4rem,2.5vw,1.8rem); font-weight:800;
+                        color:@(HasAnyItem ? "var(--hs-red)" : "var(--hs-text-muted)"); letter-spacing:-0.01em;">
+                @TotalCost.ToString("N0") đ
+            </div>
+        </div>
 
+        @* Buttons *@
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <button class="hs-btn"
+                    style="border:2px solid var(--hs-border); color:var(--hs-dark); background:transparent;
+                           display:inline-flex; align-items:center; gap:6px;
+                           @(!HasAnyItem || _isExporting ? "opacity:.4; cursor:not-allowed;" : "")"
+                    @onclick="ExportExcel"
+                    disabled="@(_isExporting || !HasAnyItem)">
+                @if (_isExporting)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Style="width:16px;height:16px;" />
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.SaveAlt" Style="font-size:1rem;" />
+                }
+                LƯU CẤU HÌNH
+            </button>
 
-</MudContainer>
+            <button class="hs-btn hs-btn--primary"
+                    style="display:inline-flex; align-items:center; gap:6px;
+                           @(!HasAnyItem || _isAddingToCart ? "opacity:.4; cursor:not-allowed;" : "")"
+                    @onclick="AddAllToCart"
+                    disabled="@(_isAddingToCart || !HasAnyItem)">
+                @if (_isAddingToCart)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Style="width:16px;height:16px;" />
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Style="font-size:1rem;" />
+                }
+                THÊM VÀO GIỎ HÀNG
+            </button>
+        </div>
+
+    </div>
+</div>
 
 @code {
     // ─── Slot model ───────────────────────────────────────────────────────────
@@ -319,47 +376,66 @@
 }
 
 <style>
-    .build-pc-row {
+    .bpc-row {
+        display: flex;
+        align-items: stretch;
+    }
+    .bpc-label-col {
+        width: 200px;
+        flex-shrink: 0;
+        padding: 14px 16px;
+        border-right: 1px solid var(--hs-border);
+        background: var(--hs-gray-bg);
         display: flex;
         align-items: center;
-        min-height: 64px;
-        transition: background .15s;
     }
-
-    .build-pc-row:hover {
-        background: rgba(0, 0, 0, .02);
-    }
-
-    .slot-label {
-        width: 220px;
-        flex-shrink: 0;
-        padding: 12px 16px;
-        border-right: 1px solid rgba(0, 0, 0, .08);
-        background: rgba(0, 0, 0, .02);
-    }
-
-    .slot-content {
+    .bpc-content-col {
         flex: 1;
         padding: 12px 16px;
         display: flex;
         align-items: center;
     }
-
-    .build-pc-header-row {
-        min-height: 48px;
-        background: rgba(0, 0, 0, .04);
-    }
-
-    .build-pc-header-content,
-    .slot-selected-item {
+    .bpc-item-row {
         display: flex;
         align-items: center;
         width: 100%;
+        gap: 8px;
+    }
+    .bpc-col-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--hs-text-muted);
+    }
+    .bpc-col-qty     { width: 90px;  flex-shrink: 0; display: flex; justify-content: center; }
+    .bpc-col-price   { width: 130px; flex-shrink: 0; text-align: right; }
+    .bpc-col-total   { width: 140px; flex-shrink: 0; text-align: right; }
+    .bpc-col-actions { width: 72px;  flex-shrink: 0; display: flex; gap: 2px; justify-content: flex-end; }
+
+    .bpc-add-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 16px;
+        border: 1.5px dashed var(--hs-border);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--hs-text-muted);
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: border-color .15s, color .15s;
+        letter-spacing: 0.03em;
+    }
+    .bpc-add-btn:hover {
+        border-color: var(--hs-red);
+        color: var(--hs-red);
     }
 
-    .slot-col-name    { flex: 1; }
-    .slot-col-qty     { width: 110px; flex-shrink: 0; display: flex; justify-content: center; }
-    .slot-col-price   { width: 130px; flex-shrink: 0; text-align: right; }
-    .slot-col-total   { width: 140px; flex-shrink: 0; text-align: right; }
-    .slot-col-actions { width: 90px;  flex-shrink: 0; }
+    @@media (max-width: 600px) {
+        .bpc-label-col { width: 110px; }
+        .bpc-col-price, .bpc-col-total { display: none; }
+        .bpc-col-qty { width: 72px; }
+    }
 </style>

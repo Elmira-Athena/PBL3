@@ -14,8 +14,8 @@
         <MudImage Src="images/logo.png" Alt="HushStore" Height="48" ObjectFit="ObjectFit.Contain" />
     </div>
 
-    <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight: 700; color: #1a1a2e;">Đăng nhập</MudText>
-    <MudText Typo="Typo.body2" Class="mb-6" Style="color: #666666;">Chào mừng bạn trở lại HushStore</MudText>
+    <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight: 700; color: #111111;">Đăng nhập</MudText>
+    <MudText Typo="Typo.body2" Class="mb-6" Style="color: #888888;">Chào mừng bạn trở lại HushStore</MudText>
 
     <EditForm Model="@_loginRequest" OnValidSubmit="HandleLogin">
         <FluentValidationValidator />
@@ -44,8 +44,14 @@
         </MudButton>
     </EditForm>
 
-    <div class="d-flex justify-center mt-4">
-        <MudText Typo="Typo.body2">Chưa có tài khoản?</MudText>
+    <div class="d-flex align-center mt-5 mb-1" style="gap: 10px;">
+        <div style="flex: 1; height: 1px; background: #ebebeb;"></div>
+        <MudText Typo="Typo.caption" Style="color: #bbb;">hoặc</MudText>
+        <div style="flex: 1; height: 1px; background: #ebebeb;"></div>
+    </div>
+
+    <div class="d-flex justify-center mt-3">
+        <MudText Typo="Typo.body2" Style="color: #888888;">Chưa có tài khoản?</MudText>
         <MudLink Href="/register" Class="ml-1" Color="Color.Primary" Underline="Underline.Always">
             Đăng ký ngay
         </MudLink>
