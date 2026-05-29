@@ -4,6 +4,7 @@ using PBL3.Application.Suppliers;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Products;
 using PBL3.Shared.DTOs.Suppliers;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -40,11 +41,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetById(int id)
         {
             var result = await _supplierService.GetByIdAsync(id);
-
-            if (!result.Success)
-                return NotFound(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -57,8 +54,7 @@ namespace PBL3.API.Controllers.Admin
         {
             var result = await _supplierService.CreateAsync(request);
 
-            if (!result.Success)
-                return BadRequest(result);
+            if (!result.Success) return result.ToActionResult(this);
 
             return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
         }
@@ -73,16 +69,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Update(int id, [FromBody] UpdateSupplierRequest request)
         {
             var result = await _supplierService.UpdateAsync(id, request);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -94,16 +81,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Delete(int id)
         {
             var result = await _supplierService.DeleteAsync(id);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
     }
 }

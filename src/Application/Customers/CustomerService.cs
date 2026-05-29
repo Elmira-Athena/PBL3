@@ -65,7 +65,7 @@ namespace PBL3.Application.Customers
             var user = await _customerRepo.GetByIdWithProfileAsync(id);
             if (user == null)
             {
-                return ApiResult<CustomerDetailDto>.Fail("Không tìm thấy khách hàng yêu cầu.");
+                return ApiResult<CustomerDetailDto>.Fail("Không tìm thấy khách hàng yêu cầu.", ApiErrorCode.NotFound);
             }
 
             var dto = new CustomerDetailDto
@@ -117,7 +117,7 @@ namespace PBL3.Application.Customers
             {
                 var existingUserByEmail = await _userManager.FindByEmailAsync(request.Email);
                 if (existingUserByEmail != null)
-                    return ApiResult<CustomerDto>.Fail("Email đã được sử dụng.");
+                    return ApiResult<CustomerDto>.Fail("Email đã được sử dụng.", ApiErrorCode.Conflict);
             }
 
             if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
@@ -125,7 +125,7 @@ namespace PBL3.Application.Customers
                 var phoneExists = await _userManager.Users
                     .AnyAsync(u => u.PhoneNumber == request.PhoneNumber && !u.IsDeleted);
                 if (phoneExists)
-                    return ApiResult<CustomerDto>.Fail("Số điện thoại đã được sử dụng.");
+                    return ApiResult<CustomerDto>.Fail("Số điện thoại đã được sử dụng.", ApiErrorCode.Conflict);
             }
 
             // Create user
@@ -172,7 +172,7 @@ namespace PBL3.Application.Customers
         {
             var user = await _customerRepo.GetByIdWithProfileAsync(id);
             if (user == null)
-                return ApiResult<CustomerDto>.Fail("Không tìm thấy khách hàng yêu cầu.");
+                return ApiResult<CustomerDto>.Fail("Không tìm thấy khách hàng yêu cầu.", ApiErrorCode.NotFound);
 
             // Cập nhật Profile
             if (user.Profile == null)
@@ -205,7 +205,7 @@ namespace PBL3.Application.Customers
         {
             var user = await _customerRepo.GetByIdWithProfileAsync(id);
             if (user == null)
-                return ApiResult<bool>.Fail("Không tìm thấy khách hàng yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy khách hàng yêu cầu.", ApiErrorCode.NotFound);
 
             // Kiểm tra ràng buộc
             var hasPendingOrders = await _customerRepo.HasPendingOrdersAsync(id);
@@ -235,7 +235,7 @@ namespace PBL3.Application.Customers
         {
             var user = await _customerRepo.GetByIdWithProfileAsync(id);
             if (user == null)
-                return ApiResult<bool>.Fail("Không tìm thấy khách hàng yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy khách hàng yêu cầu.", ApiErrorCode.NotFound);
 
             user.IsActive = true;
             user.LockReason = null;

@@ -74,7 +74,7 @@ namespace PBL3.Application.Products
             var product = await _productRepo.GetByIdWithDetailsAsync(id);
 
             if (product == null)
-                return ApiResult<ProductDetailDto>.Fail("Không tìm thấy sản phẩm yêu cầu.");
+                return ApiResult<ProductDetailDto>.Fail("Không tìm thấy sản phẩm yêu cầu.", ApiErrorCode.NotFound);
 
             var dto = MapToDetailDto(product);
             return ApiResult<ProductDetailDto>.Ok(dto);
@@ -107,14 +107,14 @@ namespace PBL3.Application.Products
             foreach (var variant in request.Variants)
             {
                 if (await _productRepo.IsSkuExistsAsync(variant.SKU))
-                    return ApiResult<ProductDetailDto>.Fail($"Mã SKU '{variant.SKU}' đã tồn tại trong hệ thống.");
+                    return ApiResult<ProductDetailDto>.Fail($"Mã SKU '{variant.SKU}' đã tồn tại trong hệ thống.", ApiErrorCode.Conflict);
             }
 
             // Check duplicate SKU trong cùng request
             // LƯU Ý NGHIỆP VỤ: Kiểm tra chéo giữa các biến thể gửi kèm trong cùng một request để tránh trùng lặp nội bộ
             var skus = request.Variants.Select(v => v.SKU.ToUpper()).ToList();
             if (skus.Distinct().Count() != skus.Count)
-                return ApiResult<ProductDetailDto>.Fail("Các phiên bản trong cùng sản phẩm không được trùng mã SKU.");
+                return ApiResult<ProductDetailDto>.Fail("Các phiên bản trong cùng sản phẩm không được trùng mã SKU.", ApiErrorCode.Conflict);
 
             // Build Entity
             // Tự động sinh Product Slug từ tên để làm URL tĩnh thân thiện SEO ở cấp độ sản phẩm cha
@@ -180,7 +180,7 @@ namespace PBL3.Application.Products
             var product = await _productRepo.GetByIdAsync(id);
 
             if (product == null)
-                return ApiResult<ProductDetailDto>.Fail("Không tìm thấy sản phẩm yêu cầu.");
+                return ApiResult<ProductDetailDto>.Fail("Không tìm thấy sản phẩm yêu cầu.", ApiErrorCode.NotFound);
 
             // Validate: Manufacturer tồn tại
             if (!await _productRepo.ManufacturerExistsAsync(request.ManufacturerId))
@@ -219,11 +219,11 @@ namespace PBL3.Application.Products
             var product = await _productRepo.GetByIdAsync(productId);
 
             if (product == null)
-                return ApiResult<ProductVariantDto>.Fail("Không tìm thấy sản phẩm yêu cầu.");
+                return ApiResult<ProductVariantDto>.Fail("Không tìm thấy sản phẩm yêu cầu.", ApiErrorCode.NotFound);
 
             // Check SKU unique
             if (await _productRepo.IsSkuExistsAsync(request.SKU))
-                return ApiResult<ProductVariantDto>.Fail($"Mã SKU '{request.SKU}' đã tồn tại trong hệ thống.");
+                return ApiResult<ProductVariantDto>.Fail($"Mã SKU '{request.SKU}' đã tồn tại trong hệ thống.", ApiErrorCode.Conflict);
 
             var variant = new ProductVariant
             {
@@ -267,7 +267,7 @@ namespace PBL3.Application.Products
         {
             var product = await _productRepo.GetByIdAsync(productId);
             if (product == null)
-                return ApiResult<bool>.Fail("Không tìm thấy sản phẩm yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy sản phẩm yêu cầu.", ApiErrorCode.NotFound);
 
             var newImages = images.Select((img, idx) => new ProductImage
             {
@@ -289,7 +289,7 @@ namespace PBL3.Application.Products
             var product = await _productRepo.GetByIdAsync(id);
 
             if (product == null)
-                return ApiResult<bool>.Fail("Không tìm thấy sản phẩm yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy sản phẩm yêu cầu.", ApiErrorCode.NotFound);
 
             // Soft Delete
             product.IsDeleted = true;

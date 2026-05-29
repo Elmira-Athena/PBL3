@@ -5,6 +5,7 @@ using PBL3.Application.Inventory;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
 using System.Security.Claims;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -50,9 +51,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetById(int id)
         {
             var result = await _checkService.GetByIdAsync(id);
-            if (!result.Success)
-                return NotFound(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         // ─── DASHBOARD ───
@@ -61,9 +60,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetDashboard(int id)
         {
             var result = await _checkService.GetDashboardAsync(id);
-            if (!result.Success)
-                return NotFound(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         // ─── GET SERIALS ───
@@ -72,9 +69,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetSerials(int id, [FromQuery] InventoryCheckSerialFilterRequest filter)
         {
             var result = await _checkService.GetSerialsAsync(id, filter);
-            if (!result.Success)
-                return NotFound(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         // ─── CREATE ───
@@ -95,8 +90,7 @@ namespace PBL3.API.Controllers.Admin
                 return Unauthorized(ApiResult<InventoryCheckDto>.Fail("Người dùng chưa đăng nhập."));
 
             var result = await _checkService.CreateAsync(request, userId.Value);
-            if (!result.Success)
-                return BadRequest(result);
+            if (!result.Success) return result.ToActionResult(this);
 
             return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
         }
@@ -120,7 +114,7 @@ namespace PBL3.API.Controllers.Admin
 
             var result = await _checkService.ScanSerialAsync(id, request, userId.Value);
             if (!result.Success && result.Data == null)
-                return BadRequest(result);
+                return result.ToActionResult(this);
             return Ok(result);
         }
 
@@ -135,9 +129,7 @@ namespace PBL3.API.Controllers.Admin
                 return Unauthorized(ApiResult<bool>.Fail("Người dùng chưa đăng nhập."));
 
             var result = await _checkService.MarkDefectiveAsync(id, detailSerialId, userId.Value);
-            if (!result.Success)
-                return BadRequest(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         // ─── UPDATE REASON ───
@@ -158,9 +150,7 @@ namespace PBL3.API.Controllers.Admin
                 return Unauthorized(ApiResult<bool>.Fail("Người dùng chưa đăng nhập."));
 
             var result = await _checkService.UpdateReasonAsync(id, detailSerialId, request, userId.Value);
-            if (!result.Success)
-                return BadRequest(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         // ─── SUBMIT ───
@@ -174,9 +164,7 @@ namespace PBL3.API.Controllers.Admin
                 return Unauthorized(ApiResult<bool>.Fail("Người dùng chưa đăng nhập."));
 
             var result = await _checkService.SubmitAsync(id, userId.Value);
-            if (!result.Success)
-                return BadRequest(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         // ─── APPROVE (Admin only) ───
@@ -191,9 +179,7 @@ namespace PBL3.API.Controllers.Admin
                 return Unauthorized(ApiResult<bool>.Fail("Người dùng chưa đăng nhập."));
 
             var result = await _checkService.ApproveAsync(id, userId.Value);
-            if (!result.Success)
-                return BadRequest(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         // ─── REJECT (Admin only) ───
@@ -215,9 +201,7 @@ namespace PBL3.API.Controllers.Admin
                 return Unauthorized(ApiResult<bool>.Fail("Người dùng chưa đăng nhập."));
 
             var result = await _checkService.RejectAsync(id, request, userId.Value);
-            if (!result.Success)
-                return BadRequest(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         // ─── CANCEL ───
@@ -232,9 +216,7 @@ namespace PBL3.API.Controllers.Admin
 
             var isAdmin = User.IsInRole("Admin");
             var result = await _checkService.CancelAsync(id, userId.Value, isAdmin);
-            if (!result.Success)
-                return BadRequest(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         // ─── HELPERS ───

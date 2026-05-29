@@ -64,7 +64,7 @@ namespace PBL3.Application.Vouchers
             var voucher = await _voucherRepo.GetByIdWithCategoriesAsync(id);
 
             if (voucher == null)
-                return ApiResult<VoucherDto>.Fail("Không tìm thấy voucher yêu cầu.");
+                return ApiResult<VoucherDto>.Fail("Không tìm thấy voucher yêu cầu.", ApiErrorCode.NotFound);
 
             return ApiResult<VoucherDto>.Ok(MapToDto(voucher));
         }
@@ -86,7 +86,7 @@ namespace PBL3.Application.Vouchers
 
             // NGHIỆP VỤ: Chặn trùng mã voucher
             if (await _voucherRepo.IsDuplicateCodeAsync(normalizedCode))
-                return ApiResult<VoucherDto>.Fail($"Mã voucher \"{normalizedCode}\" đã tồn tại trong hệ thống.");
+                return ApiResult<VoucherDto>.Fail($"Mã voucher \"{normalizedCode}\" đã tồn tại trong hệ thống.", ApiErrorCode.Conflict);
 
             var voucher = new Voucher
             {
@@ -144,7 +144,7 @@ namespace PBL3.Application.Vouchers
             var voucher = await _voucherRepo.GetByIdWithCategoriesAsync(id);
 
             if (voucher == null)
-                return ApiResult<VoucherDto>.Fail("Không tìm thấy voucher yêu cầu.");
+                return ApiResult<VoucherDto>.Fail("Không tìm thấy voucher yêu cầu.", ApiErrorCode.NotFound);
 
             // NGHIỆP VỤ: Khống chế số lượng phát hành tối thiểu không được nhỏ hơn số lượt đã thực tế sử dụng
             if (request.Quantity.HasValue && request.Quantity.Value < voucher.UsedCount)
@@ -201,7 +201,7 @@ namespace PBL3.Application.Vouchers
             var voucher = await _voucherRepo.GetByIdWithCategoriesAsync(id);
 
             if (voucher == null)
-                return ApiResult<bool>.Fail("Không tìm thấy voucher yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy voucher yêu cầu.", ApiErrorCode.NotFound);
 
             voucher.IsDeleted   = true;
             voucher.DeletedDate = DateTime.UtcNow;
@@ -227,7 +227,7 @@ namespace PBL3.Application.Vouchers
             var voucher = await _voucherRepo.GetByIdWithCategoriesAsync(id);
 
             if (voucher == null)
-                return ApiResult<VoucherDto>.Fail("Không tìm thấy voucher yêu cầu.");
+                return ApiResult<VoucherDto>.Fail("Không tìm thấy voucher yêu cầu.", ApiErrorCode.NotFound);
 
             voucher.IsActive = !voucher.IsActive; // Đảo trạng thái hoạt động
 

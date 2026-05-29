@@ -6,6 +6,7 @@ using PBL3.Shared.DTOs.Employees;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -52,8 +53,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Create([FromBody] CreateEmployeeRequest request)
         {
             var result = await _employeeService.CreateAsync(request);
-            if (!result.Success)
-                return BadRequest(result);
+            if (!result.Success) return result.ToActionResult(this);
 
             return CreatedAtAction(nameof(GetList), result);
         }
@@ -63,10 +63,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateEmployeeRequest request)
         {
             var result = await _employeeService.UpdateAsync(id, request);
-            if (!result.Success)
-                return result.Message.Contains("Không tìm thấy") ? NotFound(result) : BadRequest(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpDelete("{id:guid}")]
@@ -74,10 +71,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Deactivate(Guid id, [FromQuery] string? lockReason = null)
         {
             var result = await _employeeService.DeactivateAsync(id, lockReason);
-            if (!result.Success)
-                return result.Message.Contains("Không tìm thấy") ? NotFound(result) : BadRequest(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPut("{id:guid}/activate")]
@@ -85,10 +79,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Reactivate(Guid id)
         {
             var result = await _employeeService.ReactivateAsync(id);
-            if (!result.Success)
-                return result.Message.Contains("Không tìm thấy") ? NotFound(result) : BadRequest(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("{id:guid}")]
@@ -96,8 +87,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetById(Guid id)
         {
             var result = await _employeeService.GetByIdAsync(id);
-            if (!result.Success) return NotFound(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         [AllowAnonymous]

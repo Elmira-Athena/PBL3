@@ -79,7 +79,7 @@ namespace PBL3.Application.ProductSerials
         {
             var serial = await _productSerialRepository.GetByIdWithDetailsAsync(id);
             if (serial == null)
-                return ApiResult<ProductSerialDetailDto>.Fail("Không tìm thấy Serial yêu cầu.");
+                return ApiResult<ProductSerialDetailDto>.Fail("Không tìm thấy Serial yêu cầu.", ApiErrorCode.NotFound);
 
             var dto = new ProductSerialDetailDto
             {
@@ -141,7 +141,7 @@ namespace PBL3.Application.ProductSerials
         {
             var serial = await _productSerialRepository.GetByIdWithTrackingAsync(id);
             if (serial == null)
-                return ApiResult<bool>.Fail("Không tìm thấy Serial yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy Serial yêu cầu.", ApiErrorCode.NotFound);
 
             var currentStatus = (SerialStatus)serial.Status;
             var newStatus = (SerialStatus)request.NewStatus;

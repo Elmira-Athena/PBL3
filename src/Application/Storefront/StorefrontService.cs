@@ -165,7 +165,7 @@ namespace PBL3.Application.Storefront
 
             if (product == null)
             {
-                return ApiResult<ProductDetailResponse>.Fail("Không tìm thấy sản phẩm yêu cầu.");
+                return ApiResult<ProductDetailResponse>.Fail("Không tìm thấy sản phẩm yêu cầu.", ApiErrorCode.NotFound);
             }
 
             var activeVariants = product.Variants.ToList();
@@ -326,7 +326,7 @@ namespace PBL3.Application.Storefront
 
             if (category == null)
             {
-                return ApiResult<CategoryDetailResponse>.Fail("Không tìm thấy danh mục yêu cầu.");
+                return ApiResult<CategoryDetailResponse>.Fail("Không tìm thấy danh mục yêu cầu.", ApiErrorCode.NotFound);
             }
 
             return ApiResult<CategoryDetailResponse>.Ok(category);
@@ -460,7 +460,7 @@ namespace PBL3.Application.Storefront
 
             if (rootCategory == null)
             {
-                return ApiResult<PagedResult<ProductCardResponse>>.Fail("Không tìm thấy danh mục yêu cầu.");
+                return ApiResult<PagedResult<ProductCardResponse>>.Fail("Không tìm thấy danh mục yêu cầu.", ApiErrorCode.NotFound);
             }
 
             // Bước 2: Load tất cả categories vào RAM để BFS collect descendant IDs

@@ -57,13 +57,13 @@ namespace PBL3.Application.Cart
             var variant = await _productRepo.GetVariantByIdAsync(request.VariantId);
             if (variant == null)
             {
-                return ApiResult<CartResponse>.Fail("Sản phẩm không tồn tại hoặc đã ngừng kinh doanh.");
+                return ApiResult<CartResponse>.Fail("Sản phẩm không tồn tại hoặc đã ngừng kinh doanh.", ApiErrorCode.NotFound);
             }
 
             var product = await _productRepo.GetByIdAsync(variant.ProductId);
             if (product == null || product.Status != 1 || product.IsDeleted)
             {
-                return ApiResult<CartResponse>.Fail("Sản phẩm không tồn tại hoặc đã ngừng kinh doanh.");
+                return ApiResult<CartResponse>.Fail("Sản phẩm không tồn tại hoặc đã ngừng kinh doanh.", ApiErrorCode.NotFound);
             }
 
             if (request.Quantity <= 0)
@@ -115,7 +115,7 @@ namespace PBL3.Application.Cart
             var cart = await _cartRepo.GetCartItemAsync(cartItemId, userId);
             if (cart == null)
             {
-                return ApiResult<CartResponse>.Fail("Không tìm thấy sản phẩm trong giỏ hàng.");
+                return ApiResult<CartResponse>.Fail("Không tìm thấy sản phẩm trong giỏ hàng.", ApiErrorCode.NotFound);
             }
 
             if (request.Quantity <= 0)
@@ -147,7 +147,7 @@ namespace PBL3.Application.Cart
             var cart = await _cartRepo.GetCartItemAsync(cartItemId, userId);
             if (cart == null)
             {
-                return ApiResult<CartResponse>.Fail("Không tìm thấy sản phẩm trong giỏ hàng.");
+                return ApiResult<CartResponse>.Fail("Không tìm thấy sản phẩm trong giỏ hàng.", ApiErrorCode.NotFound);
             }
 
             _cartRepo.Remove(cart);

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Application.Cart;
 using PBL3.Shared.DTOs.Cart;
 using PBL3.Shared.DTOs.Common;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Storefront
 {
@@ -59,8 +60,7 @@ namespace PBL3.API.Controllers.Storefront
             {
                 var userId = GetUserId();
                 var result = await _cartService.AddToCartAsync(userId, request);
-                if (!result.Success) return BadRequest(result);
-                return Ok(result);
+                return result.ToActionResult(this);
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -80,8 +80,7 @@ namespace PBL3.API.Controllers.Storefront
             {
                 var userId = GetUserId();
                 var result = await _cartService.UpdateQuantityAsync(userId, id, request);
-                if (!result.Success) return BadRequest(result);
-                return Ok(result);
+                return result.ToActionResult(this);
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -101,8 +100,7 @@ namespace PBL3.API.Controllers.Storefront
             {
                 var userId = GetUserId();
                 var result = await _cartService.RemoveItemAsync(userId, id);
-                if (!result.Success) return BadRequest(result);
-                return Ok(result);
+                return result.ToActionResult(this);
             }
             catch (UnauthorizedAccessException ex)
             {

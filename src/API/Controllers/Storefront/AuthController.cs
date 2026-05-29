@@ -6,6 +6,7 @@ using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
 using System.Security.Claims;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Storefront
 {
@@ -30,13 +31,7 @@ namespace PBL3.API.Controllers.Storefront
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var result = await _authService.LoginAsync(request);
-
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -48,13 +43,7 @@ namespace PBL3.API.Controllers.Storefront
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
         {
             var result = await _authService.RefreshTokenAsync(request);
-
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -78,12 +67,7 @@ namespace PBL3.API.Controllers.Storefront
             }
 
             var result = await _authService.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -96,13 +80,7 @@ namespace PBL3.API.Controllers.Storefront
         public async Task<IActionResult> Register([FromBody] RegisterCustomerRequest request)
         {
             var result = await _authService.RegisterAsync(request);
-
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
     }
 }

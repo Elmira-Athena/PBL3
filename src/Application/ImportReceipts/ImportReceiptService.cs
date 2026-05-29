@@ -265,7 +265,7 @@ namespace PBL3.Application.ImportReceipts
             var receipt = await _receiptRepo.GetByIdWithDetailsAsync(id);
 
             if (receipt == null)
-                return ApiResult<ImportReceiptDto>.Fail("Không tìm thấy phiếu nhập kho yêu cầu.");
+                return ApiResult<ImportReceiptDto>.Fail("Không tìm thấy phiếu nhập kho yêu cầu.", ApiErrorCode.NotFound);
 
             var detailDtos = new List<ImportReceiptDetailDto>();
 

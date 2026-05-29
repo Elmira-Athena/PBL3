@@ -4,6 +4,7 @@ using PBL3.Application.ImportReceipts;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
 using PBL3.Shared.DTOs.Products;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -30,8 +31,7 @@ namespace PBL3.API.Controllers.Admin
         {
             var result = await _importReceiptService.CreateAsync(request);
 
-            if (!result.Success)
-                return BadRequest(result);
+            if (!result.Success) return result.ToActionResult(this);
 
             return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
         }
@@ -56,11 +56,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetById(int id)
         {
             var result = await _importReceiptService.GetByIdAsync(id);
-
-            if (!result.Success)
-                return NotFound(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
     }
 }

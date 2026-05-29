@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Application.Reviews;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Reviews;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Storefront
 {
@@ -60,8 +61,7 @@ namespace PBL3.API.Controllers.Storefront
                 return Unauthorized(ApiResult<ReviewDto>.Fail("Người dùng chưa đăng nhập."));
 
             var result = await _reviewService.CreateReviewAsync(request, userId);
-            if (!result.Success)
-                return BadRequest(result);
+            if (!result.Success) return result.ToActionResult(this);
 
             return CreatedAtAction(nameof(GetReviews), new { productId = request.ProductId }, result);
         }
@@ -80,10 +80,7 @@ namespace PBL3.API.Controllers.Storefront
                 return Unauthorized(ApiResult<bool>.Fail("Người dùng chưa đăng nhập."));
 
             var result = await _reviewService.DeleteReviewAsync(reviewId, userId);
-            if (!result.Success)
-                return BadRequest(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
     }
 }

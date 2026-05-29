@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Application.Storefront;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Storefront;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Storefront
 {
@@ -48,11 +49,7 @@ namespace PBL3.API.Controllers.Storefront
         public async Task<IActionResult> GetProductDetail(string slug)
         {
             var result = await _storefrontService.GetProductDetailAsync(slug);
-            if (!result.Success)
-            {
-                return NotFound(result);
-            }
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -74,11 +71,7 @@ namespace PBL3.API.Controllers.Storefront
         public async Task<IActionResult> GetCategoryBySlug(string slug)
         {
             var result = await _storefrontService.GetCategoryBySlugAsync(slug);
-            if (!result.Success)
-            {
-                return NotFound(result);
-            }
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -109,11 +102,7 @@ namespace PBL3.API.Controllers.Storefront
             [FromQuery] int pageSize = 20)
         {
             var result = await _storefrontService.GetProductsByCategoryAsync(slug, page, pageSize);
-            if (!result.Success)
-            {
-                return NotFound(result);
-            }
-            return Ok(result);
+            return result.ToActionResult(this);
         }
     }
 }

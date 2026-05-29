@@ -6,6 +6,7 @@ using PBL3.Shared.DTOs.Customers;
 using PBL3.Shared.DTOs.Products;
 using System;
 using System.Threading.Tasks;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -42,11 +43,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetById(Guid id)
         {
             var result = await _customerService.GetByIdAsync(id);
-
-            if (!result.Success)
-                return NotFound(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -59,8 +56,7 @@ namespace PBL3.API.Controllers.Admin
         {
             var result = await _customerService.CreateAsync(request);
 
-            if (!result.Success)
-                return BadRequest(result);
+            if (!result.Success) return result.ToActionResult(this);
 
             return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
         }
@@ -75,16 +71,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCustomerRequest request)
         {
             var result = await _customerService.UpdateAsync(id, request);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -97,16 +84,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Deactivate(Guid id, [FromQuery] string? lockReason = null)
         {
             var result = await _customerService.DeactivateAsync(id, lockReason);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -118,16 +96,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Reactivate(Guid id)
         {
             var result = await _customerService.ReactivateAsync(id);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
     }
 }

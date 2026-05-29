@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Application.Products;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Products;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -41,11 +42,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetById(int id)
         {
             var result = await _productService.GetByIdAsync(id);
-
-            if (!result.Success)
-                return NotFound(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -58,8 +55,7 @@ namespace PBL3.API.Controllers.Admin
         {
             var result = await _productService.CreateAsync(request);
 
-            if (!result.Success)
-                return BadRequest(result);
+            if (!result.Success) return result.ToActionResult(this);
 
             return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
         }
@@ -74,16 +70,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Update(int id, [FromBody] UpdateProductRequest request)
         {
             var result = await _productService.UpdateAsync(id, request);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -97,13 +84,7 @@ namespace PBL3.API.Controllers.Admin
         {
             var result = await _productService.AddVariantAsync(id, request);
 
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
+            if (!result.Success) return result.ToActionResult(this);
 
             return CreatedAtAction(nameof(GetById), new { id }, result);
         }
@@ -118,16 +99,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> UpdateImages(int id, [FromBody] List<SaveImageRequest> images)
         {
             var result = await _productService.UpdateImagesAsync(id, images);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -140,16 +112,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Delete(int id)
         {
             var result = await _productService.DeleteAsync(id);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
     }
 }

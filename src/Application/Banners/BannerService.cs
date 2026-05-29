@@ -48,7 +48,7 @@ namespace PBL3.Application.Banners
         {
             var banner = await _bannerRepo.GetByIdAsync(id);
             if (banner == null)
-                return ApiResult<BannerDto>.Fail("Không tìm thấy banner yêu cầu.");
+                return ApiResult<BannerDto>.Fail("Không tìm thấy banner yêu cầu.", ApiErrorCode.NotFound);
 
             return ApiResult<BannerDto>.Ok(MapToDto(banner));
         }
@@ -72,7 +72,7 @@ namespace PBL3.Application.Banners
         {
             var validation = await _createValidator.ValidateAsync(request);
             if (!validation.IsValid)
-                return ApiResult<BannerDto>.Fail(validation.Errors.First().ErrorMessage);
+                return ApiResult<BannerDto>.Fail(validation.Errors.First().ErrorMessage, ApiErrorCode.Validation);
 
             var banner = new Banner
             {
@@ -99,11 +99,11 @@ namespace PBL3.Application.Banners
         {
             var validation = await _updateValidator.ValidateAsync(request);
             if (!validation.IsValid)
-                return ApiResult<BannerDto>.Fail(validation.Errors.First().ErrorMessage);
+                return ApiResult<BannerDto>.Fail(validation.Errors.First().ErrorMessage, ApiErrorCode.Validation);
 
             var banner = await _bannerRepo.GetByIdWithTrackingAsync(id);
             if (banner == null)
-                return ApiResult<BannerDto>.Fail("Không tìm thấy banner yêu cầu.");
+                return ApiResult<BannerDto>.Fail("Không tìm thấy banner yêu cầu.", ApiErrorCode.NotFound);
 
             banner.Title        = request.Title.Trim();
             banner.ImageUrl     = request.ImageUrl.Trim();
@@ -125,7 +125,7 @@ namespace PBL3.Application.Banners
         {
             var banner = await _bannerRepo.GetByIdWithTrackingAsync(id);
             if (banner == null)
-                return ApiResult<bool>.Fail("Không tìm thấy banner yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy banner yêu cầu.", ApiErrorCode.NotFound);
 
             banner.IsDeleted   = true;
             banner.DeletedDate = DateTime.UtcNow;

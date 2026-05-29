@@ -202,7 +202,7 @@ namespace PBL3.Application.Inventory
         {
             var dto = await BuildCheckDtoAsync(id);
             if (dto == null)
-                return ApiResult<InventoryCheckDto>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<InventoryCheckDto>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
             return ApiResult<InventoryCheckDto>.Ok(dto);
         }
 
@@ -213,7 +213,7 @@ namespace PBL3.Application.Inventory
         {
             var check = await _checkRepo.GetByIdWithDetailsAsync(id);
             if (check == null)
-                return ApiResult<InventoryCheckDashboardDto>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<InventoryCheckDashboardDto>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
 
             var counts = await _checkRepo.GetGroupedCountsByCheckAsync(id);
 
@@ -253,7 +253,7 @@ namespace PBL3.Application.Inventory
         {
             var exists = await _context.InventoryChecks.AnyAsync(c => c.Id == checkId);
             if (!exists)
-                return ApiResult<PagedResult<InventoryCheckSerialDto>>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<PagedResult<InventoryCheckSerialDto>>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
 
             var (items, totalCount) = await _checkRepo.GetDetailSerialsPagedAsync(
                 checkId, filter.ScanStatus, filter.VariantId, filter.PageNumber, filter.PageSize);
@@ -285,7 +285,7 @@ namespace PBL3.Application.Inventory
         {
             var check = await _checkRepo.GetByIdAsync(checkId);
             if (check == null)
-                return ApiResult<ScanResultDto>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<ScanResultDto>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
 
             // NGHIỆP VỤ: Chỉ cho phép quét barcode khi phiếu ở trạng thái Nháp (Draft).
             if (check.Status != (byte)InventoryCheckStatus.Draft)
@@ -502,7 +502,7 @@ namespace PBL3.Application.Inventory
         {
             var check = await _checkRepo.GetByIdAsync(checkId);
             if (check == null)
-                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
 
             // NGHIỆP VỤ: Chỉ có thể cập nhật trạng thái lỗi khi phiếu ở trạng thái Nháp (Draft).
             if (check.Status != (byte)InventoryCheckStatus.Draft)
@@ -510,7 +510,7 @@ namespace PBL3.Application.Inventory
 
             var row = await _checkRepo.GetDetailSerialAsync(detailSerialId, withTracking: true);
             if (row == null || row.CheckId != checkId)
-                return ApiResult<bool>.Fail("Không tìm thấy dòng Serial trong phiếu kiểm kê.");
+                return ApiResult<bool>.Fail("Không tìm thấy dòng Serial trong phiếu kiểm kê.", ApiErrorCode.NotFound);
 
             // Chỉ cho phép báo lỗi với hàng thực tế đang được tính là Khớp (tức là hàng đang nằm sẵn trong kho sổ sách)
             if (row.ScanStatus != (byte)InventoryScanStatus.Matched)
@@ -545,14 +545,14 @@ namespace PBL3.Application.Inventory
         {
             var check = await _checkRepo.GetByIdAsync(checkId);
             if (check == null)
-                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
 
             if (check.Status != (byte)InventoryCheckStatus.Draft)
                 return ApiResult<bool>.Fail("Chỉ có thể cập nhật lý do khi phiếu ở trạng thái Nháp.");
 
             var row = await _checkRepo.GetDetailSerialAsync(detailSerialId, withTracking: true);
             if (row == null || row.CheckId != checkId)
-                return ApiResult<bool>.Fail("Không tìm thấy dòng Serial trong phiếu kiểm kê.");
+                return ApiResult<bool>.Fail("Không tìm thấy dòng Serial trong phiếu kiểm kê.", ApiErrorCode.NotFound);
 
             row.Note = request.Reason.Trim();
             row.ProposedActionNote = request.ProposedActionNote?.Trim();
@@ -574,14 +574,14 @@ namespace PBL3.Application.Inventory
         {
             var check = await _checkRepo.GetByIdAsync(checkId);
             if (check == null)
-                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
 
             if (check.Status != (byte)InventoryCheckStatus.Draft)
                 return ApiResult<bool>.Fail("Chỉ có thể gửi duyệt khi phiếu ở trạng thái Nháp.");
 
             // Chỉ người tạo phiếu mới có quyền gửi duyệt
             if (check.EmployeeId != employeeId)
-                return ApiResult<bool>.Fail("Bạn không có quyền gửi duyệt phiếu này.");
+                return ApiResult<bool>.Fail("Bạn không có quyền gửi duyệt phiếu này.", ApiErrorCode.Forbidden);
 
             await _unitOfWork.BeginTransactionAsync();
             try
@@ -644,7 +644,7 @@ namespace PBL3.Application.Inventory
         {
             var check = await _checkRepo.GetByIdAsync(checkId);
             if (check == null)
-                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
 
             // NGHIỆP VỤ: Chỉ phê duyệt khi phiếu đang ở trạng thái Chờ duyệt (AwaitingApproval).
             if (check.Status != (byte)InventoryCheckStatus.AwaitingApproval)
@@ -788,7 +788,7 @@ namespace PBL3.Application.Inventory
         {
             var check = await _checkRepo.GetByIdAsync(checkId);
             if (check == null)
-                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
 
             if (check.Status != (byte)InventoryCheckStatus.AwaitingApproval)
                 return ApiResult<bool>.Fail("Chỉ có thể từ chối phiếu ở trạng thái Chờ duyệt.");
@@ -897,13 +897,13 @@ namespace PBL3.Application.Inventory
         {
             var check = await _checkRepo.GetByIdAsync(checkId);
             if (check == null)
-                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.", ApiErrorCode.NotFound);
 
             if (check.Status != (byte)InventoryCheckStatus.Draft)
                 return ApiResult<bool>.Fail("Chỉ có thể hủy phiếu ở trạng thái Nháp.");
 
             if (!isAdmin && check.EmployeeId != employeeId)
-                return ApiResult<bool>.Fail("Bạn không có quyền hủy phiếu này.");
+                return ApiResult<bool>.Fail("Bạn không có quyền hủy phiếu này.", ApiErrorCode.Forbidden);
 
             check.Status = (byte)InventoryCheckStatus.Cancelled;
             await _checkRepo.SaveChangesAsync();

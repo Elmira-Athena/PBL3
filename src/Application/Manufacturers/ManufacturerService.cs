@@ -69,7 +69,7 @@ namespace PBL3.Application.Manufacturers
             var manufacturer = await _manufacturerRepo.GetByIdAsync(id);
 
             if (manufacturer == null)
-                return ApiResult<ManufacturerDto>.Fail("Không tìm thấy hãng sản xuất yêu cầu.");
+                return ApiResult<ManufacturerDto>.Fail("Không tìm thấy hãng sản xuất yêu cầu.", ApiErrorCode.NotFound);
 
             return ApiResult<ManufacturerDto>.Ok(MapToDto(manufacturer));
         }
@@ -81,7 +81,7 @@ namespace PBL3.Application.Manufacturers
         {
             // Kiểm tra tên trùng lặp
             if (await _manufacturerRepo.IsDuplicateNameAsync(request.Name))
-                return ApiResult<ManufacturerDto>.Fail($"Hãng sản xuất với tên \"{request.Name}\" đã tồn tại trong hệ thống.");
+                return ApiResult<ManufacturerDto>.Fail($"Hãng sản xuất với tên \"{request.Name}\" đã tồn tại trong hệ thống.", ApiErrorCode.Conflict);
 
             var manufacturer = new Manufacturer
             {
@@ -110,11 +110,11 @@ namespace PBL3.Application.Manufacturers
             var manufacturer = await _manufacturerRepo.GetByIdAsync(id);
 
             if (manufacturer == null)
-                return ApiResult<ManufacturerDto>.Fail("Không tìm thấy hãng sản xuất yêu cầu.");
+                return ApiResult<ManufacturerDto>.Fail("Không tìm thấy hãng sản xuất yêu cầu.", ApiErrorCode.NotFound);
 
             // Kiểm tra tên trùng (bỏ qua chính nó)
             if (await _manufacturerRepo.IsDuplicateNameAsync(request.Name, excludeId: id))
-                return ApiResult<ManufacturerDto>.Fail($"Hãng sản xuất với tên \"{request.Name}\" đã tồn tại trong hệ thống.");
+                return ApiResult<ManufacturerDto>.Fail($"Hãng sản xuất với tên \"{request.Name}\" đã tồn tại trong hệ thống.", ApiErrorCode.Conflict);
 
             // Cập nhật entity
             manufacturer.Name         = request.Name.Trim();
@@ -141,7 +141,7 @@ namespace PBL3.Application.Manufacturers
             var manufacturer = await _manufacturerRepo.GetByIdAsync(id);
 
             if (manufacturer == null)
-                return ApiResult<bool>.Fail("Không tìm thấy hãng sản xuất yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy hãng sản xuất yêu cầu.", ApiErrorCode.NotFound);
 
             // Ràng buộc nghiệp vụ: Không xóa nếu còn sản phẩm
             if (await _manufacturerRepo.HasProductsAsync(id))

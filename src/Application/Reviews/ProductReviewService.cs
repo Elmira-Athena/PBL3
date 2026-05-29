@@ -39,7 +39,7 @@ namespace PBL3.Application.Reviews
                 .AnyAsync(p => p.Id == request.ProductId && p.Status == 1 && !p.IsDeleted);
 
             if (!productExists)
-                return ApiResult<ReviewDto>.Fail("Không tìm thấy sản phẩm yêu cầu.");
+                return ApiResult<ReviewDto>.Fail("Không tìm thấy sản phẩm yêu cầu.", ApiErrorCode.NotFound);
 
             if (await _reviewRepo.ExistsAsync(request.ProductId, userId))
                 return ApiResult<ReviewDto>.Fail("Bạn đã đánh giá sản phẩm này rồi.");
@@ -79,10 +79,10 @@ namespace PBL3.Application.Reviews
             var review = await _reviewRepo.GetByIdWithTrackingAsync(reviewId);
 
             if (review == null)
-                return ApiResult<bool>.Fail("Không tìm thấy đánh giá yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy đánh giá yêu cầu.", ApiErrorCode.NotFound);
 
             if (review.UserId != userId)
-                return ApiResult<bool>.Fail("Bạn không có quyền xóa đánh giá này.");
+                return ApiResult<bool>.Fail("Bạn không có quyền xóa đánh giá này.", ApiErrorCode.Forbidden);
 
             review.IsDeleted   = true;
             review.DeletedDate = DateTime.UtcNow;

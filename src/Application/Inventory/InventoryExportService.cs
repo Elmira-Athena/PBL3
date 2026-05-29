@@ -51,7 +51,7 @@ namespace PBL3.Application.Inventory
             var order = await _orderRepo.GetByIdWithDetailsTrackedAsync(request.OrderId);
             if (order == null)
             {
-                return ApiResult<bool>.Fail("Đơn hàng không tồn tại.");
+                return ApiResult<bool>.Fail("Đơn hàng không tồn tại.", ApiErrorCode.NotFound);
             }
 
             if (order.Status != (byte)OrderStatus.Confirmed)

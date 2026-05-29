@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Application.ProductSerials;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -72,8 +73,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetById(int id)
         {
             var result = await _productSerialService.GetByIdAsync(id);
-            if (!result.Success) return NotFound(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -89,15 +89,7 @@ namespace PBL3.API.Controllers.Admin
                 return BadRequest(ApiResult<bool>.Fail("Id Serial không hợp lệ."));
 
             var result = await _productSerialService.UpdateStatusAsync(id, request);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
     }
 }

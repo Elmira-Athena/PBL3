@@ -35,7 +35,7 @@ namespace PBL3.Application.Categories
             var category = await _categoryRepo.GetByIdAsync(id, includeParent: true);
 
             if (category == null)
-                return ApiResult<CategoryDto>.Fail("Không tìm thấy danh mục yêu cầu.");
+                return ApiResult<CategoryDto>.Fail("Không tìm thấy danh mục yêu cầu.", ApiErrorCode.NotFound);
 
             var dto = MapToDto(category);
             return ApiResult<CategoryDto>.Ok(dto);
@@ -48,11 +48,11 @@ namespace PBL3.Application.Categories
         {
             // Rule: Unique Name Per Level (cùng ParentId)
             if (await _categoryRepo.IsDuplicateNameAsync(request.ParentId, request.Name))
-                return ApiResult<CategoryDto>.Fail("Tên danh mục đã tồn tại trong cấp này.");
+                return ApiResult<CategoryDto>.Fail("Tên danh mục đã tồn tại trong cấp này.", ApiErrorCode.Conflict);
 
             // Kiểm tra Slug unique
             if (await _categoryRepo.IsDuplicateSlugAsync(request.Slug))
-                return ApiResult<CategoryDto>.Fail("Slug đã tồn tại. Vui lòng chọn slug khác.");
+                return ApiResult<CategoryDto>.Fail("Slug đã tồn tại. Vui lòng chọn slug khác.", ApiErrorCode.Conflict);
 
             // Tính Level tự động
             int level = 0;
@@ -98,15 +98,15 @@ namespace PBL3.Application.Categories
             var category = await _categoryRepo.GetByIdAsync(id);
 
             if (category == null)
-                return ApiResult<CategoryDto>.Fail("Không tìm thấy danh mục yêu cầu.");
+                return ApiResult<CategoryDto>.Fail("Không tìm thấy danh mục yêu cầu.", ApiErrorCode.NotFound);
 
             // Rule: Unique Name Per Level (cùng ParentId, trừ chính nó)
             if (await _categoryRepo.IsDuplicateNameAsync(request.ParentId, request.Name, excludeId: id))
-                return ApiResult<CategoryDto>.Fail("Tên danh mục đã tồn tại trong cấp này.");
+                return ApiResult<CategoryDto>.Fail("Tên danh mục đã tồn tại trong cấp này.", ApiErrorCode.Conflict);
 
             // Kiểm tra Slug unique (trừ chính nó)
             if (await _categoryRepo.IsDuplicateSlugAsync(request.Slug, excludeId: id))
-                return ApiResult<CategoryDto>.Fail("Slug đã tồn tại. Vui lòng chọn slug khác.");
+                return ApiResult<CategoryDto>.Fail("Slug đã tồn tại. Vui lòng chọn slug khác.", ApiErrorCode.Conflict);
 
             // =====================================================
             // CIRCULAR REFERENCE CHECK
@@ -169,7 +169,7 @@ namespace PBL3.Application.Categories
             var category = await _categoryRepo.GetByIdAsync(id);
 
             if (category == null)
-                return ApiResult<bool>.Fail("Không tìm thấy danh mục yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy danh mục yêu cầu.", ApiErrorCode.NotFound);
 
             if (await _categoryRepo.HasActiveChildrenAsync(id))
                 return ApiResult<bool>.Fail("Không thể xóa danh mục đang có danh mục con hoặc sản phẩm.");

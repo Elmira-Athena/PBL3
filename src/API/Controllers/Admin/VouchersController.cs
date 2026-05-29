@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Application.Vouchers;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Vouchers;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -41,11 +42,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetById(int id)
         {
             var result = await _voucherService.GetByIdAsync(id);
-
-            if (!result.Success)
-                return NotFound(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -59,8 +56,7 @@ namespace PBL3.API.Controllers.Admin
         {
             var result = await _voucherService.CreateAsync(request);
 
-            if (!result.Success)
-                return BadRequest(result);
+            if (!result.Success) return result.ToActionResult(this);
 
             return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
         }
@@ -76,16 +72,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Update(int id, [FromBody] UpdateVoucherRequest request)
         {
             var result = await _voucherService.UpdateAsync(id, request);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -98,16 +85,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> Delete(int id)
         {
             var result = await _voucherService.DeleteAsync(id);
-
-            if (!result.Success)
-            {
-                if (result.Message.Contains("Không tìm thấy"))
-                    return NotFound(result);
-
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>
@@ -120,11 +98,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> ToggleStatus(int id)
         {
             var result = await _voucherService.ToggleStatusAsync(id);
-
-            if (!result.Success)
-                return NotFound(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         /// <summary>

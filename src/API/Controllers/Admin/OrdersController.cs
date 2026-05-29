@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Application.Orders;
 using PBL3.Shared.DTOs.Sale;
 using PBL3.Shared.DTOs.Common;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -34,8 +35,7 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var result = await _orderService.CheckoutAsync(request, userId);
-                if (!result.Success) return BadRequest(result);
-                return Ok(result);
+                return result.ToActionResult(this);
             }
             catch (Exception ex)
             {
@@ -51,8 +51,7 @@ namespace PBL3.API.Controllers.Admin
             if (!Guid.TryParse(userIdStr, out var userId))
                 return Unauthorized(ApiResult<PagedResult<OrderSummaryResponse>>.Fail("Không thể xác thực thông tin người dùng."));
             var result = await _orderService.GetMyOrdersAsync(userId, request);
-            if (!result.Success) return BadRequest(result);
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("{id}")]
@@ -65,16 +64,11 @@ namespace PBL3.API.Controllers.Admin
                     return Unauthorized(ApiResult<OrderDetailDto>.Fail("Không thể xác thực thông tin người dùng."));
 
                 var myResult = await _orderService.GetMyOrderByIdAsync(id, userId);
-                if (!myResult.Success) return NotFound(myResult);
-                return Ok(myResult);
+                return myResult.ToActionResult(this);
             }
 
             var result = await _orderService.GetByIdAsync(id);
-            if (!result.Success)
-            {
-                return NotFound(result);
-            }
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPut("my/{id}/cancel")]
@@ -88,8 +82,7 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var result = await _orderService.CancelMyOrderAsync(id, userId, request?.CancelReason ?? string.Empty);
-                if (!result.Success) return BadRequest(result);
-                return Ok(result);
+                return result.ToActionResult(this);
             }
             catch (Exception ex)
             {
@@ -108,8 +101,7 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var result = await _orderService.ConfirmReceivedByCustomerAsync(id, userId);
-                if (!result.Success) return BadRequest(result);
-                return Ok(result);
+                return result.ToActionResult(this);
             }
             catch (Exception ex)
             {
@@ -122,11 +114,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> GetPagedOrders([FromQuery] OrderFilterRequest request)
         {
             var result = await _orderService.GetPagedOrdersAsync(request);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpPut("{id}/cancel")]
@@ -136,11 +124,7 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var result = await _orderService.CancelOrderAsync(id, request);
-                if (!result.Success)
-                {
-                    return BadRequest(result);
-                }
-                return Ok(result);
+                return result.ToActionResult(this);
             }
             catch (Exception ex)
             {
@@ -155,11 +139,7 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var result = await _orderService.CompleteOrderAsync(id);
-                if (!result.Success)
-                {
-                    return BadRequest(result);
-                }
-                return Ok(result);
+                return result.ToActionResult(this);
             }
             catch (Exception ex)
             {
@@ -174,9 +154,7 @@ namespace PBL3.API.Controllers.Admin
             try
             {
                 var result = await _orderService.ConfirmOrderAsync(id);
-                if (!result.Success)
-                    return BadRequest(result);
-                return Ok(result);
+                return result.ToActionResult(this);
             }
             catch (Exception ex)
             {

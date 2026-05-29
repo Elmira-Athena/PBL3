@@ -251,7 +251,7 @@ namespace PBL3.Application.Orders
                 var variant = await _productRepo.GetVariantByIdAsync(item.VariantId);
                 if (variant == null)
                 {
-                    return ApiResult<OrderDetailDto>.Fail($"Không tìm thấy sản phẩm có mã {item.VariantId}");
+                    return ApiResult<OrderDetailDto>.Fail($"Không tìm thấy sản phẩm có mã {item.VariantId}", ApiErrorCode.NotFound);
                 }
                 
                 // Usually we also check stock here...
@@ -491,7 +491,7 @@ namespace PBL3.Application.Orders
         {
             var order = await _orderRepo.GetByIdWithDetailsAsync(id);
             if (order == null)
-                return ApiResult<OrderDetailDto>.Fail("Không tìm thấy đơn hàng.");
+                return ApiResult<OrderDetailDto>.Fail("Không tìm thấy đơn hàng.", ApiErrorCode.NotFound);
 
             var dto = MapToOrderDetailDto(order);
             return ApiResult<OrderDetailDto>.Ok(dto);
@@ -609,7 +609,7 @@ namespace PBL3.Application.Orders
             var order = await _orderRepo.GetByIdAsync(id);
             if (order == null)
             {
-                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.", ApiErrorCode.NotFound);
             }
 
             if (order.Status == 2)
@@ -639,7 +639,7 @@ namespace PBL3.Application.Orders
             var order = await _orderRepo.GetByIdAsync(id);
             if (order == null)
             {
-                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.", ApiErrorCode.NotFound);
             }
 
             if (order.Status != 2)
@@ -661,7 +661,7 @@ namespace PBL3.Application.Orders
         {
             var order = await _orderRepo.GetByIdAsync(id);
             if (order == null)
-                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.", ApiErrorCode.NotFound);
 
             if (order.Status != 0)
                 return ApiResult<bool>.Fail("Chỉ có thể duyệt đơn hàng đang ở trạng thái 'Chờ duyệt'.");
@@ -677,7 +677,7 @@ namespace PBL3.Application.Orders
         {
             var order = await _orderRepo.GetByIdWithDetailsAsync(id);
             if (order == null || order.UserId != userId)
-                return ApiResult<OrderDetailDto>.Fail("Không tìm thấy đơn hàng.");
+                return ApiResult<OrderDetailDto>.Fail("Không tìm thấy đơn hàng.", ApiErrorCode.NotFound);
 
             var dto = MapToOrderDetailDto(order);
             return ApiResult<OrderDetailDto>.Ok(dto);
@@ -690,7 +690,7 @@ namespace PBL3.Application.Orders
 
             var order = await _orderRepo.GetByIdAsync(id);
             if (order == null || order.UserId != userId)
-                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.", ApiErrorCode.NotFound);
 
             if (order.Status != (byte)OrderStatus.Pending)
                 return ApiResult<bool>.Fail("Chỉ có thể hủy đơn hàng đang ở trạng thái 'Chờ duyệt'.");
@@ -706,7 +706,7 @@ namespace PBL3.Application.Orders
         {
             var order = await _orderRepo.GetByIdAsync(id);
             if (order == null || order.UserId != userId)
-                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.");
+                return ApiResult<bool>.Fail("Không tìm thấy đơn hàng.", ApiErrorCode.NotFound);
 
             if (order.Status != (byte)OrderStatus.Exported)
                 return ApiResult<bool>.Fail("Chỉ có thể xác nhận khi đơn hàng đang ở trạng thái 'Đang giao'.");

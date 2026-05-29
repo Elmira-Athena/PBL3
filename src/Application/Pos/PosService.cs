@@ -65,7 +65,7 @@ namespace PBL3.Application.Pos
             // NGHIỆP VỤ: Serial quét được bắt buộc phải tồn tại trong cơ sở dữ liệu
             if (serial == null)
             {
-                return ApiResult<PosScanResponse>.Fail("Mã Serial không hợp lệ hoặc không có trong kho.");
+                return ApiResult<PosScanResponse>.Fail("Mã Serial không hợp lệ hoặc không có trong kho.", ApiErrorCode.NotFound);
             }
 
             // NGHIỆP VỤ: Mã Serial vật lý bắt buộc phải có trạng thái Available (Trong kho và sẵn sàng bán)
@@ -79,7 +79,7 @@ namespace PBL3.Application.Pos
             var product = variant?.Product;
 
             if (variant == null || product == null)
-                return ApiResult<PosScanResponse>.Fail("Không thể lấy thông tin sản phẩm. Biến thể hoặc sản phẩm không còn tồn tại trong hệ thống.");
+                return ApiResult<PosScanResponse>.Fail("Không thể lấy thông tin sản phẩm. Biến thể hoặc sản phẩm không còn tồn tại trong hệ thống.", ApiErrorCode.NotFound);
 
             return ApiResult<PosScanResponse>.Ok(new PosScanResponse
             {
@@ -109,7 +109,7 @@ namespace PBL3.Application.Pos
 
             if (user == null)
             {
-                return ApiResult<PosCustomerDto>.Fail("Không tìm thấy khách hàng.");
+                return ApiResult<PosCustomerDto>.Fail("Không tìm thấy khách hàng.", ApiErrorCode.NotFound);
             }
 
             return ApiResult<PosCustomerDto>.Ok(new PosCustomerDto
@@ -442,7 +442,7 @@ namespace PBL3.Application.Pos
         public async Task<ApiResult<PosDraftDto>> GetDraftByIdAsync(int orderId, Guid employeeId)
         {
              var draft = await _dbContext.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId && o.EmployeeId == employeeId && o.Status == (byte)OrderStatus.PosDraft);
-             if (draft == null) return ApiResult<PosDraftDto>.Fail("Không tìm thấy đơn chờ.");
+             if (draft == null) return ApiResult<PosDraftDto>.Fail("Không tìm thấy đơn chờ.", ApiErrorCode.NotFound);
              return ApiResult<PosDraftDto>.Ok(new PosDraftDto {
                 OrderId = draft.Id,
                 OrderCode = draft.OrderCode,
@@ -457,7 +457,7 @@ namespace PBL3.Application.Pos
         public async Task<ApiResult<bool>> DeleteDraftAsync(int orderId, Guid employeeId)
         {
              var draft = await _dbContext.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.EmployeeId == employeeId && o.Status == (byte)OrderStatus.PosDraft);
-             if (draft == null) return ApiResult<bool>.Fail("Không tìm thấy đơn chờ.");
+             if (draft == null) return ApiResult<bool>.Fail("Không tìm thấy đơn chờ.", ApiErrorCode.NotFound);
              
              _dbContext.Orders.Remove(draft);
              await _dbContext.SaveChangesAsync();

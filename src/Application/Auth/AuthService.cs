@@ -350,7 +350,7 @@ namespace PBL3.Application.Auth
             var existingUser = await _userManager.FindByEmailAsync(request.Email);
             if (existingUser != null)
             {
-                return ApiResult<bool>.Fail("Email này đã được sử dụng.");
+                return ApiResult<bool>.Fail("Email này đã được sử dụng.", ApiErrorCode.Conflict);
             }
 
             // 2. Kiểm tra SĐT đã tồn tại chưa
@@ -358,7 +358,7 @@ namespace PBL3.Application.Auth
             var existingPhone = _context.Users.Any(u => u.PhoneNumber == request.PhoneNumber);
             if (existingPhone)
             {
-                return ApiResult<bool>.Fail("Số điện thoại này đã được sử dụng.");
+                return ApiResult<bool>.Fail("Số điện thoại này đã được sử dụng.", ApiErrorCode.Conflict);
             }
 
             // 3. Tạo AppUser mới

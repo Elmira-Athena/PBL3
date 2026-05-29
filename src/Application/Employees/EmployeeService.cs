@@ -66,7 +66,7 @@ namespace PBL3.Application.Employees
         {
             var user = await _employeeRepo.GetByIdWithProfileAsync(id);
             if (user == null)
-                return ApiResult<EmployeeListDto>.Fail("Không tìm thấy nhân viên yêu cầu.");
+                return ApiResult<EmployeeListDto>.Fail("Không tìm thấy nhân viên yêu cầu.", ApiErrorCode.NotFound);
 
             var isTechnician = await _userManager.IsInRoleAsync(user, "Technician");
             return ApiResult<EmployeeListDto>.Ok(MapToDto(user, isTechnician));
@@ -76,12 +76,12 @@ namespace PBL3.Application.Employees
         {
             var existing = await _userManager.FindByEmailAsync(request.Email);
             if (existing != null)
-                return ApiResult<EmployeeListDto>.Fail("Email đã được sử dụng.");
+                return ApiResult<EmployeeListDto>.Fail("Email đã được sử dụng.", ApiErrorCode.Conflict);
 
             var phoneExists = await _userManager.Users
                 .AnyAsync(u => u.PhoneNumber == request.PhoneNumber && !u.IsDeleted);
             if (phoneExists)
-                return ApiResult<EmployeeListDto>.Fail("Số điện thoại đã được sử dụng.");
+                return ApiResult<EmployeeListDto>.Fail("Số điện thoại đã được sử dụng.", ApiErrorCode.Conflict);
 
             var user = new AppUser
             {
@@ -124,7 +124,7 @@ namespace PBL3.Application.Employees
         {
             var user = await _employeeRepo.GetByIdWithProfileAsync(id);
             if (user == null)
-                return ApiResult<EmployeeListDto>.Fail("Không tìm thấy nhân viên yêu cầu.");
+                return ApiResult<EmployeeListDto>.Fail("Không tìm thấy nhân viên yêu cầu.", ApiErrorCode.NotFound);
 
             if (user.Profile == null)
                 user.Profile = new UserProfile { UserId = user.Id };
@@ -157,7 +157,7 @@ namespace PBL3.Application.Employees
         {
             var user = await _employeeRepo.GetByIdWithProfileAsync(id);
             if (user == null)
-                return ApiResult<bool>.Fail("Không tìm thấy nhân viên yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy nhân viên yêu cầu.", ApiErrorCode.NotFound);
 
             user.IsActive = false;
             user.LockReason = lockReason;
@@ -178,7 +178,7 @@ namespace PBL3.Application.Employees
         {
             var user = await _employeeRepo.GetByIdWithProfileAsync(id);
             if (user == null)
-                return ApiResult<bool>.Fail("Không tìm thấy nhân viên yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy nhân viên yêu cầu.", ApiErrorCode.NotFound);
 
             user.IsActive = true;
             user.LockReason = null;

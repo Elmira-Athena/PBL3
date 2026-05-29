@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Application.Inventory;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
+using PBL3.API.Extensions;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -31,13 +32,7 @@ namespace PBL3.API.Controllers.Admin
         public async Task<IActionResult> ExportOrder([FromBody] ExportOrderRequest request)
         {
             var result = await _inventoryExportService.ExportOrderAsync(request);
-
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
 
         [HttpGet("serials/validate")]
@@ -49,11 +44,7 @@ namespace PBL3.API.Controllers.Admin
                 return BadRequest(ApiResult<bool>.Fail("Tham số không hợp lệ."));
 
             var result = await _inventoryExportService.ValidateSerialAsync(serialNo, variantId);
-
-            if (!result.Success)
-                return BadRequest(result);
-
-            return Ok(result);
+            return result.ToActionResult(this);
         }
     }
 }

@@ -51,7 +51,7 @@ namespace PBL3.Application.Suppliers
             var supplier = await _supplierRepo.GetByIdAsync(id);
 
             if (supplier == null)
-                return ApiResult<SupplierDto>.Fail("Không tìm thấy nhà cung cấp yêu cầu.");
+                return ApiResult<SupplierDto>.Fail("Không tìm thấy nhà cung cấp yêu cầu.", ApiErrorCode.NotFound);
 
             return ApiResult<SupplierDto>.Ok(MapToDto(supplier));
         }
@@ -89,7 +89,7 @@ namespace PBL3.Application.Suppliers
             var supplier = await _supplierRepo.GetByIdAsync(id);
 
             if (supplier == null)
-                return ApiResult<SupplierDto>.Fail("Không tìm thấy nhà cung cấp yêu cầu.");
+                return ApiResult<SupplierDto>.Fail("Không tìm thấy nhà cung cấp yêu cầu.", ApiErrorCode.NotFound);
 
             // Cập nhật entity
             supplier.Name = request.Name.Trim();
@@ -116,7 +116,7 @@ namespace PBL3.Application.Suppliers
             var supplier = await _supplierRepo.GetByIdAsync(id);
 
             if (supplier == null)
-                return ApiResult<bool>.Fail("Không tìm thấy nhà cung cấp yêu cầu.");
+                return ApiResult<bool>.Fail("Không tìm thấy nhà cung cấp yêu cầu.", ApiErrorCode.NotFound);
 
             // Soft Delete
             supplier.IsDeleted = true;
