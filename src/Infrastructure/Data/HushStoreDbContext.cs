@@ -119,12 +119,28 @@ namespace PBL3.Infrastructure.Data
                       .HasDefaultValue(0);
 
                 // Specifications - JSON column
+                // EF Core không tự so sánh được Dictionary<string,string> theo từng cặp key-value.
+                // Nếu không có ValueComparer tuỳ chỉnh, EF Core sẽ luôn đánh dấu cột này là "đã thay đổi"
+                // mỗi khi SaveChanges() được gọi — dù dữ liệu thực tế không đổi — gây ra UPDATE thừa.
+                // ValueComparer cần 3 hàm:
                 var specComparer = new ValueComparer<Dictionary<string, string>>(
+                    // 1. equalsExpression — so sánh bằng nhau:
+                    //    Hai Dictionary bằng nhau khi cùng null, hoặc có cùng số cặp key-value
+                    //    và tất cả các cặp trong c1 đều tồn tại trong c2 (Except trả về rỗng).
                     (c1, c2) => c1 == c2 || (c1 != null && c2 != null &&
                                 c1.Count == c2.Count && !c1.Except(c2).Any()),
+
+                    // 2. hashCodeExpression — tính hash code để EF Core lưu "ảnh chụp" trạng thái cũ:
+                    //    Nếu null → hash = 0. Nếu có dữ liệu → kết hợp hash của từng cặp key-value
+                    //    bằng HashCode.Combine để ra một số duy nhất đại diện cho toàn bộ Dictionary.
                     c => c == null ? 0 : c.Aggregate(0, (a, p) =>
                                 HashCode.Combine(a, p.Key.GetHashCode(),
                                     p.Value == null ? 0 : p.Value.GetHashCode())),
+
+                    // 3. snapshotExpression — tạo bản sao độc lập (deep copy):
+                    //    EF Core cần lưu bản sao của giá trị gốc để so sánh sau khi entity bị sửa.
+                    //    Nếu chỉ gán tham chiếu (=), cả hai sẽ trỏ vào cùng object → mất khả năng phát hiện thay đổi.
+                    //    "c ?? new()" đảm bảo không bao giờ snapshot thành null.
                     c => new Dictionary<string, string>(c ?? new())
                 );
                 entity.Property(e => e.Specifications)

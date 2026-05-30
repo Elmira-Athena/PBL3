@@ -241,13 +241,107 @@ EF Core tích hợp sẵn một công cụ biên dịch (Query Provider). Nó ph
     3.  **Tách biệt ứng dụng:** Định vị rõ ràng đây là các API cung cấp dữ liệu JSON, phân biệt rõ với các luồng dẫn trang HTML tĩnh.
 
 #### 25. Cấu hình định tuyến (Routing) nằm ở đâu trong dự án? Tại sao khi chạy thử ở máy local lại xuất hiện 2 Host khác nhau?
-*   **Nơi cấu hình Routing:**
-    *   *Phía Backend API:* Đăng ký định tuyến tự động bằng thuộc tính `app.MapControllers()` trong `Program.cs`. Trên từng Controller, sử dụng các Attribute định tuyến như `[Route("api/[controller]")]` kết hợp `[HttpGet("{id:int}")]`.
-    *   *Phía Client Blazor WASM:* Cấu hình trực tiếp ở dòng đầu tiên của mỗi tệp Razor Component bằng từ khóa `@page "/duong-dan"`.
+
+Dự án HushStore có **2 điểm cấu hình Routing hoàn toàn tách biệt** tương ứng với 2 project riêng biệt: `API` và `Client`.
+
+*   **① Phía Backend API — `src/API/Program.cs`:**
+
+    Chỉ cần một dòng duy nhất để kích hoạt toàn bộ hệ thống routing cho Controller:
+    ```csharp
+    // src/API/Program.cs — dòng 131
+    app.MapControllers();
+    ```
+    Lệnh này yêu cầu ASP.NET Core **tự động quét toàn bộ Assembly**, tìm tất cả các lớp kế thừa `ControllerBase` và đăng ký route tương ứng với chúng theo các Attribute đã khai báo.
+
+    **Cách khai báo route trên từng Controller** — lấy `ProductsController` làm ví dụ thực tế:
+    ```csharp
+    // src/API/Controllers/Admin/ProductsController.cs
+    [ApiController]
+    [Route("api/[controller]")]          // → "api/products" (thay [controller] = tên class bỏ "Controller")
+    [Authorize(Roles = "Admin, Employee")]
+    public class ProductsController : ControllerBase
+    {
+        [AllowAnonymous]
+        [HttpGet]                         // → GET  api/products
+        public async Task<IActionResult> GetList(...) { }
+
+        [AllowAnonymous]
+        [HttpGet("{id:int}")]             // → GET  api/products/5
+        public async Task<IActionResult> GetById(int id) { }
+
+        [HttpPost]                        // → POST api/products
+        public async Task<IActionResult> Create(...) { }
+
+        [HttpPut("{id:int}")]             // → PUT  api/products/5
+        public async Task<IActionResult> Update(int id, ...) { }
+
+        [HttpDelete("{id:int}")]          // → DELETE api/products/5
+        public async Task<IActionResult> Delete(int id) { }
+
+        [HttpPost("{id:int}/variants")]   // → POST api/products/5/variants (route lồng nhau)
+        public async Task<IActionResult> AddVariant(int id, ...) { }
+    }
+    ```
+    > **Lưu ý đặc biệt:** Dự án không dùng tiền tố `/v1/` mà dùng `api/[controller]` (hoặc đặt tên tường minh như `api/service-tickets`, `api/inventory`). Lý do: đây là đồ án nội bộ, chưa cần quản lý đa phiên bản API.
+
+    Ngoài ra, còn có 1 endpoint đặc biệt dạng **Minimal API** (không dùng Controller) được khai báo trực tiếp trong `Program.cs` cho health check của Docker:
+    ```csharp
+    // src/API/Program.cs — dòng 128
+    app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
+       .AllowAnonymous();
+    ```
+
+*   **② Phía Client Blazor WASM — `src/Client/`:**
+
+    **Bước 1 — Đăng ký Router trong `App.razor`:** Đây là nơi khởi động toàn bộ hệ thống điều hướng phía Client. Blazor dùng component `<Router>` để quét Assembly tìm tất cả các trang có `@page`:
+    ```razor
+    <%-- src/Client/App.razor --%>
+    <CascadingAuthenticationState>
+        <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+            <Found Context="routeData">
+                <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(StorefrontLayout)">
+                    <NotAuthorized>
+                        <%-- Nếu chưa đăng nhập → tự động redirect sang trang Login --%>
+                        <Client.Auth.RedirectToLogin />
+                    </NotAuthorized>
+                </AuthorizeRouteView>
+            </Found>
+        </Router>
+    </CascadingAuthenticationState>
+    ```
+    > **Điểm hay:** `<AuthorizeRouteView>` tích hợp phân quyền ngay vào routing — nếu người dùng chưa đăng nhập hoặc không đủ quyền truy cập một trang, hệ thống tự động hiển thị trang "Truy cập bị từ chối" hoặc redirect về trang Login mà **không cần viết logic kiểm tra ở từng trang riêng lẻ**.
+
+    **Bước 2 — Khai báo route trong từng `.razor` Component:** Mỗi trang chỉ cần thêm `@page` ở đầu file:
+    ```razor
+    <%-- Ví dụ thực tế từ các file trong src/Client/Pages/ --%>
+
+    @page "/"                                     <%-- Trang chủ --%>
+    @page "/login"                                <%-- Đăng nhập --%>
+    @page "/admin/products"                       <%-- Danh sách sản phẩm (Admin) --%>
+    @page "/admin/products/create"                <%-- Tạo sản phẩm mới --%>
+    @page "/admin/products/edit/{Id:int}"         <%-- Sửa sản phẩm — {Id:int} là route constraint --%>
+    @page "/orders/{Id:int}"                      <%-- Chi tiết đơn hàng theo Id --%>
+    @page "/admin/employees/{Id:guid}"            <%-- Chi tiết nhân viên theo Guid --%>
+    @page "/service-tickets/{TicketId:int}/quotation" <%-- Route lồng nhau --%>
+    @page "/admin/vouchers/create"                <%-- Một file .razor có thể có nhiều @page --%>
+    @page "/admin/vouchers/edit/{Id:int}"         <%-- VoucherForm.razor có 2 @page! --%>
+    ```
+    > **Đặc điểm:** Khác với Backend, routing phía Client hoạt động hoàn toàn **trên trình duyệt** (client-side). Khi bấm link `/orders/5`, trình duyệt KHÔNG gửi request lên server mà Blazor Router tự điều hướng và render component tương ứng ngay trong bộ nhớ.
+
 *   **Tại sao lại chạy thành 2 Host (2 cổng Port khác nhau)?**
-    *   Vì dự án được xây dựng theo kiến trúc **Decoupled (Client-Server Split - Tách rời hoàn toàn)**.
-    *   **Host 1 (Cổng API - ví dụ `https://localhost:5001`):** Là Server Backend đóng vai trò như một kho dịch vụ, chuyên xử lý logic nghiệp vụ và trả về dữ liệu thô dạng JSON.
-    *   **Host 2 (Cổng Client - ví dụ `https://localhost:5002`):** Là máy chủ phân phối mã nguồn giao diện (HTML/CSS/JS/WebAssembly). Trình duyệt tải giao diện từ Host này về máy người dùng, sau đó chạy các đoạn mã HTTP Client để gọi ngầm lấy dữ liệu từ Host API.
+
+    Vì dự án được xây dựng theo kiến trúc **Decoupled (Client-Server tách rời hoàn toàn)** — hai project `src/API` và `src/Client` là 2 ứng dụng độc lập nhau:
+
+    | | Host 1 — Backend API | Host 2 — Frontend Client |
+    |---|---|---|
+    | **Ví dụ cổng** | `https://localhost:7xxx` | `https://localhost:7107` |
+    | **Vai trò** | Xử lý nghiệp vụ, đọc ghi DB, trả về JSON | Phân phối file `.wasm`, `.js`, `.css`, `index.html` |
+    | **Cấu hình trong** | `src/API/Program.cs` | `src/Client/Program.cs` |
+    | **Giao tiếp** | ← Nhận HTTP Request từ Client | → Gọi API qua `HttpClient` với `ApiBaseUrl` |
+
+    URL của Backend được Client đọc từ file cấu hình `wwwroot/appsettings.json` qua biến `ApiBaseUrl` (xem `src/Client/Program.cs` dòng 41-42). CORS cũng được cấu hình ở Backend (`Program.cs` dòng 21-30) để cho phép Client gọi qua.
+
+
 
 #### 26. Đối tượng `HttpContext` dùng để làm gì?
 `HttpContext` là một lớp cực kỳ quan trọng trong ASP.NET Core, đóng gói toàn bộ thông tin chi tiết về một **yêu cầu HTTP đơn lẻ** đang được xử lý.
