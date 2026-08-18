@@ -1,0 +1,20 @@
+# Copy thành terraform.tfvars rồi điền giá trị thật.
+# terraform.tfvars bị .gitignore — KHÔNG commit.
+
+# IP công cộng của laptop, dùng cho NACL deny rule demo và kiểm thử bảo mật.
+# Lấy bằng: curl -s https://checkip.amazonaws.com
+my_ip = "203.0.113.45/32"
+
+# ── Toggle chi phí ──────────────────────────────────────────────
+# Giữ false khi không làm việc. NAT Gateway $0.045/h, ALB $0.0225/h.
+enable_nat = false
+enable_alb = false
+
+# Số EC2 container instance (0 hoặc 1). max_size cố định = 1.
+instance_count = 0
+
+# VPC Flow Logs — chỉ bật khi cần bằng chứng REJECT cho báo cáo bảo mật.
+enable_flow_logs = false
+
+# NACL deny rule theo my_ip — chỉ bật khi demo kịch bản test số 8.
+enable_deny_demo = false
