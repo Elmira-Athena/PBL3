@@ -26,7 +26,10 @@
 - **Tuyệt đối không có Security Group rule nào mở port 22**, ở bất kỳ đâu. Admin access chỉ qua SSM Session Manager và ECS Exec.
 - **ASG `max_size = 1`**, instance type `t3.micro` (free tier).
 - **ECR image tag = git SHA đầy đủ** (immutable), không dùng `latest`.
-- **Mọi thông báo lỗi trả về cho người dùng phải bằng tiếng Việt có dấu** (quy tắc trong `CLAUDE.md`). Áp dụng cho cả `error_message` trong `terraform test` và message trong script bash.
+- **Tiếng Việt — phân biệt hai loại chuỗi, đừng trộn:**
+  - **Chuỗi Terraform-local** (`description` của `variable`/`output`, `error_message` của `validation` và của `terraform test`, comment, message trong script bash): **tiếng Việt CÓ DẤU**. Chúng không bao giờ được gửi lên AWS.
+  - **Chuỗi gửi vào AWS API** (`description` của `aws_security_group` và của rule, `description` của IAM role, `description` của SSM parameter, `db_subnet_group_description`, text trong ECR lifecycle policy): **tiếng Việt KHÔNG DẤU (ASCII)**. `description` của EC2 Security Group chỉ nhận ASCII — bỏ dấu vào là AWS từ chối request và `apply` fail. Các field còn lại giữ ASCII cho nhất quán và tránh rủi ro encoding ở Console.
+  - Đây là lý do trong plan có những chuỗi như `"ALB: nhan 80/443 tu internet"` — **không được "sửa cho có dấu"**.
 - **Kỷ luật chi phí:** giữ `enable_nat = false` và `enable_alb = false` trong `terraform.tfvars` cho tới khi task nào cần mới bật. Sau mỗi phiên làm việc, đặt lại về `false` và `terraform apply`. NAT Gateway $0.045/h và ALB $0.0225/h tính theo giờ, không có free tier.
 - **Thứ tự apply luôn tăng dần:** mỗi task thêm module block vào `infra/tf/envs/prod/main.tf` rồi `apply`. Không task nào được `destroy` resource của task trước, trừ Task 17.
 
@@ -213,7 +216,7 @@ variable "project" {
 }
 
 variable "region" {
-  description = "AWS region"
+  description = "Vùng AWS"
   type        = string
   default     = "ap-southeast-1"
 }
@@ -315,7 +318,7 @@ output "state_bucket" {
 }
 
 output "account_id" {
-  description = "AWS account ID"
+  description = "ID tài khoản AWS"
   value       = data.aws_caller_identity.current.account_id
 }
 ```
@@ -328,7 +331,7 @@ terraform init
 terraform apply
 ```
 
-Expected: `Apply complete! Resources: 6 added`. Output in ra `state_bucket = "hushstore-tfstate-<ACCT>"` với `<ACCT>` là account ID thật.
+Expected: `Apply complete! Resources: 5 added`. Output in ra `state_bucket = "hushstore-tfstate-<ACCT>"` với `<ACCT>` là account ID thật.
 
 - [ ] **Step 5: Xác nhận bucket tồn tại và đã bật versioning**
 
@@ -402,7 +405,7 @@ variable "project" {
 }
 
 variable "region" {
-  description = "AWS region"
+  description = "Vùng AWS"
   type        = string
   default     = "ap-southeast-1"
 }
@@ -676,7 +679,7 @@ variable "vpc_cidr" {
 }
 
 variable "azs" {
-  description = "Hai Availability Zone"
+  description = "Hai Availability Zone dùng cho stack"
   type        = list(string)
 }
 
@@ -2209,7 +2212,7 @@ variable "project" {
 }
 
 variable "region" {
-  description = "AWS region"
+  description = "Vùng AWS"
   type        = string
 }
 
@@ -2514,7 +2517,7 @@ output "artifacts_bucket_name" {
 }
 
 output "artifacts_bucket_arn" {
-  description = "ARN bucket artifacts"
+  description = "ARN của bucket artifacts"
   value       = aws_s3_bucket.artifacts.arn
 }
 
@@ -3979,7 +3982,7 @@ variable "ssm_connection_string_arn" {
 }
 
 variable "ssm_jwt_secret_arn" {
-  description = "ARN parameter JWT secret"
+  description = "ARN của parameter chứa JWT secret"
   type        = string
 }
 ```
@@ -4688,7 +4691,7 @@ output "cluster_name" {
 }
 
 output "cluster_arn" {
-  description = "ARN ECS cluster"
+  description = "ARN của ECS cluster"
   value       = aws_ecs_cluster.this.arn
 }
 
