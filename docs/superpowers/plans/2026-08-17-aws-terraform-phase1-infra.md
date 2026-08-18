@@ -1003,7 +1003,7 @@ terraform validate
 terraform test
 ```
 
-Expected: `terraform test` in `6 passed, 0 failed.` (5 run block + 1 run block có variables override). `fmt -check` không in gì. `validate` in `Success!`.
+Expected: `terraform test` in `5 passed, 0 failed.` (5 run block, trong đó block cuối override `enable_nat = true`). `fmt -check` không in gì. `validate` in `Success!`.
 
 - [ ] **Step 7: Thêm biến toggle vào `infra/tf/envs/prod/variables.tf`**
 
@@ -1570,7 +1570,7 @@ terraform validate
 terraform test
 ```
 
-Expected: `terraform test` in `13 passed, 0 failed.` (6 run của `vpc.tftest.hcl` + 7 run của `nacl.tftest.hcl`).
+Expected: `terraform test` in `12 passed, 0 failed.` (5 run của `vpc.tftest.hcl` + 7 run của `nacl.tftest.hcl`).
 
 - [ ] **Step 7: Apply và xác nhận NACL thật trên AWS**
 
@@ -3820,7 +3820,7 @@ HAI bien ConnectionStrings__DefaultConnection va JwtSettings__SecretKey."
 - Modify: `infra/tf/envs/prod/main.tf` (thêm `module "ecs"`)
 
 **Interfaces:**
-- Consumes: `module.storage.{assets_bucket_arn, ecr_api_arn, ecr_web_arn, ecr_migrator_arn}`, `module.data.{ssm_connection_string_arn, ssm_jwt_secret_arn, ssm_path_prefix}`.
+- Consumes: `module.storage.{assets_bucket_arn, artifacts_bucket_arn}`, `module.data.{ssm_connection_string_arn, ssm_jwt_secret_arn}`.
 - Produces — outputs của `module.ecs` mà Task 12/13 dùng:
   - `instance_profile_name` (string) — gắn vào launch template
   - `task_execution_role_arn` (string) — `execution_role_arn` của task definition
@@ -3849,7 +3849,6 @@ variables {
   project                   = "hushstore-tftest"
   assets_bucket_arn         = "arn:aws:s3:::hushstore-public-assets"
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
-  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:000000000000:repository/hushstore-api"]
   ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
   ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
 }
@@ -3974,11 +3973,6 @@ variable "artifacts_bucket_arn" {
   type        = string
 }
 
-variable "ecr_arns" {
-  description = "ARN của các ECR repository mà ECS agent được pull"
-  type        = list(string)
-}
-
 variable "ssm_connection_string_arn" {
   description = "ARN parameter connection string — ECS agent inject vào container"
   type        = string
@@ -4068,6 +4062,11 @@ resource "aws_iam_role" "task_execution" {
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }
 
+# Managed policy này cấp quyền pull ECR và ghi CloudWatch Logs. Grant ECR của
+# nó là read-only pull nhưng trên Resource = *, tức pull được mọi repo trong
+# account. Chấp nhận có ý thức: account này chỉ có 3 repo của dự án, và siết
+# ECR theo ARN sẽ buộc tự quản luôn grant log group — mà log group lại được
+# tạo ở Task 12, tức xé một policy ra hai task. Ghi nhận để siết ở Phase 2.
 resource "aws_iam_role_policy_attachment" "task_execution_managed" {
   role       = aws_iam_role.task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
@@ -4218,12 +4217,6 @@ module "ecs" {
   assets_bucket_arn    = module.storage.assets_bucket_arn
   artifacts_bucket_arn = module.storage.artifacts_bucket_arn
 
-  ecr_arns = [
-    module.storage.ecr_api_arn,
-    module.storage.ecr_web_arn,
-    module.storage.ecr_migrator_arn,
-  ]
-
   ssm_connection_string_arn = module.data.ssm_connection_string_arn
   ssm_jwt_secret_arn        = module.data.ssm_jwt_secret_arn
 }
@@ -4340,7 +4333,6 @@ variables {
   project                   = "hushstore-tftest"
   assets_bucket_arn         = "arn:aws:s3:::hushstore-public-assets"
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
-  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:000000000000:repository/hushstore-api"]
   ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
   ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
@@ -4830,6 +4822,11 @@ output "asg_name" {
   description = "Tên ASG — dùng để bật/tắt instance tiết kiệm chi phí"
   value       = module.ecs.asg_name
 }
+
+output "capacity_provider_name" {
+  description = "Tên ECS capacity provider — dùng cho aws ecs run-task"
+  value       = module.ecs.capacity_provider_name
+}
 ```
 
 ```bash
@@ -4888,7 +4885,6 @@ variables {
   project                   = "hushstore-tftest"
   assets_bucket_arn         = "arn:aws:s3:::hushstore-public-assets"
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
-  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:000000000000:repository/hushstore-api"]
   ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
   ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
@@ -5385,7 +5381,7 @@ Expected: cả 3 repo in ra `$TAG`. `apply` tạo 3 `aws_ecs_task_definition`. N
 
 ```bash
 CLUSTER=$(terraform output -raw ecs_cluster_name)
-CP=$(terraform output -raw capacity_provider_name 2>/dev/null || echo hushstore-cp)
+CP=$(terraform output -raw capacity_provider_name)
 SUBNETS=$(terraform output -json app_subnet_ids | jq -r 'join(",")')
 
 TASK_ARN=$(aws ecs run-task \
@@ -6132,7 +6128,6 @@ variables {
   project                   = "hushstore-tftest"
   assets_bucket_arn         = "arn:aws:s3:::hushstore-public-assets"
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
-  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:000000000000:repository/hushstore-api"]
   ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
   ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
@@ -6647,11 +6642,12 @@ TOKEN=$(echo "$RESP" | jq -r '.data.accessToken // .data.token')
 printf '\x89PNG\r\n\x1a\n' > /tmp/probe.png
 head -c 512 /dev/urandom >> /tmp/probe.png
 
-curl -sk -X POST "https://${ALB_DNS}/api/image/upload" \
+# Route thật là /api/images (số nhiều) và `folder` là QUERY param, không phải
+# form field — xem src/API/Controllers/Admin/ImageController.cs:11,29,31
+curl -sk -X POST "https://${ALB_DNS}/api/images/upload?folder=probe" \
   -H "Host: api.hushstore.io.vn" \
   -H "Authorization: Bearer ${TOKEN}" \
-  -F "file=@/tmp/probe.png;type=image/png" \
-  -F "folder=probe" | tee /tmp/upload.json
+  -F "file=@/tmp/probe.png;type=image/png" | tee /tmp/upload.json
 echo
 URL=$(jq -r '.data // .data.url // empty' /tmp/upload.json)
 echo "URL trả về: $URL"
@@ -6662,7 +6658,7 @@ Expected: response chứa URL dạng `https://hushstore-public-assets.s3.ap-sout
 
 **Đây là bằng chứng quan trọng nhất của Task 8:** container không có access key nào, nó ghi được vào S3 hoàn toàn nhờ credential tạm thời của `task-app-role` lấy qua `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`.
 
-> Nếu endpoint không phải `/api/image/upload`, tìm route thật: `grep -n "Route\|HttpPost" src/API/Controllers/Admin/ImageController.cs`.
+> Controller có `[Authorize]` ở cấp class nên bắt buộc phải có Bearer token.
 
 - [ ] **Step 6: Verify blast radius của task role — kịch bản kiểm thử số 10**
 

@@ -118,3 +118,6 @@ terraform.rc
 # tfvars chứa my_ip và có thể chứa giá trị nhạy cảm — chỉ commit file mẫu
 *.tfvars
 !*.tfvars.example
+
+# SDD scratch workspace (khong commit)
+.superpowers/
