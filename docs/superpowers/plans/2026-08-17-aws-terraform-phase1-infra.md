@@ -2144,25 +2144,19 @@ cach bao dam 'khong rule nao mo port 22' o pham vi ca module."
 
 > **Không còn `import` block nào.** Spec ban đầu dự tính `import` bucket ảnh sản phẩm `hushstore-public-assets` vì nó chứa ảnh thật. Nhưng account cũ đã bị xoá sạch — kiểm tra thực tế cho thấy **không còn S3 bucket nào**, nên bucket đó không tồn tại và DB kỳ này cũng seed từ đầu, không có URL ảnh cũ nào để giữ. Cả 3 bucket đều tạo mới.
 >
-> **Tên S3 bucket là duy nhất toàn cầu**, không chỉ trong account. `hushstore-artifacts` và `hushstore-alb-logs` là tên quá phổ thông, dễ bị account khác chiếm. Vì vậy hai bucket này gắn hậu tố account ID cho chắc chắn tạo được. Riêng bucket ảnh thì **giữ tên đẹp không hậu tố** nếu còn trống, vì tên nó hiện trong URL ảnh công khai mà người dùng nhìn thấy — Step 1 kiểm tra trước, còn trống thì dùng, bị chiếm thì mới thêm hậu tố.
+> **Tên S3 bucket là duy nhất toàn cầu**, không chỉ trong account — nên **cả ba bucket đều gắn hậu tố account ID**. Đây là quyết định sau khi thử cách khác và thất bại: bản đầu của plan cho bucket ảnh giữ tên đẹp `hushstore-public-assets` nếu `head-bucket` báo còn trống. Thực tế `head-bucket` trả **404** cho đúng cái tên mà `CreateBucket` sau đó báo **409 `BucketAlreadyExists`** — vì với bucket thuộc account khác, S3 che sự tồn tại bằng 404 thay vì 403. Kết luận: **không có cách read-only nào kiểm tra được tên bucket còn trống toàn cầu**; cách duy nhất đáng tin là thử tạo. Nên đừng đoán — hậu tố account ID cho cả ba, tên dài hơn một chút trong URL ảnh là giá phải trả và nó chấp nhận được (DB kỳ này seed từ đầu, không có URL ảnh cũ nào).
 
-- [ ] **Step 1: Kiểm tra tên bucket ảnh còn trống không, rồi chốt tên**
+- [ ] **Step 1: Đặt biến `$ACCT` để đối chiếu tên bucket sau khi apply**
 
 ```bash
-export ACCT=${ACCT:-$(aws sts get-caller-identity --query Account --output text --profile hushstore)}
-
-if aws s3api head-bucket --bucket hushstore-public-assets --profile hushstore --no-cli-pager 2>&1 | grep -q '404'; then
-  echo "ASSETS_BUCKET=hushstore-public-assets   # tên trống, dùng được"
-elif aws s3api head-bucket --bucket hushstore-public-assets --profile hushstore --no-cli-pager 2>&1 | grep -q '403'; then
-  echo "ASSETS_BUCKET=hushstore-public-assets-${ACCT}   # tên đã bị account khác chiếm"
-else
-  echo "ASSETS_BUCKET=hushstore-public-assets   # bucket đã thuộc account này"
-fi
+export ACCT=$(aws sts get-caller-identity --query Account --output text --profile hushstore)
+echo "Ba bucket sẽ có tên:"
+echo "  hushstore-public-assets-${ACCT}"
+echo "  hushstore-artifacts-${ACCT}"
+echo "  hushstore-alb-logs-${ACCT}"
 ```
 
-Expected: in ra đúng một dòng `ASSETS_BUCKET=...`. Ghi lại giá trị đó — Step 9 sẽ đặt nó vào `terraform.tfvars`.
-
-> `head-bucket` trả `404` nghĩa là tên hoàn toàn trống; `403` nghĩa là tên đã tồn tại nhưng thuộc account khác (không được phép dùng); không lỗi nghĩa là bucket đã thuộc account này.
+Không có bước kiểm tra tên còn trống, vì **không kiểm được** — xem ghi chú ở trên. Tên do module tự ghép từ `data.aws_caller_identity.current.account_id`, không có biến nào để đặt sai.
 
 - [ ] **Step 2: Viết test trước — `infra/tf/modules/storage/tests/storage.tftest.hcl`**
 
@@ -2175,7 +2169,6 @@ provider "aws" {
 variables {
   project             = "hushstore"
   region              = "ap-southeast-1"
-  assets_bucket_name  = "hushstore-public-assets"
   alb_logs_retention  = 7
   artifacts_retention = 30
 }
@@ -2272,12 +2265,6 @@ variable "region" {
   type        = string
 }
 
-variable "assets_bucket_name" {
-  description = "Tên bucket ảnh sản phẩm. Tên này hiện trong URL ảnh công khai nên ưu tiên tên đẹp không hậu tố; nếu bị account khác chiếm thì thêm hậu tố account ID (xem Task 6 Step 1)"
-  type        = string
-  default     = "hushstore-public-assets"
-}
-
 variable "ecr_keep_images" {
   description = "Số image gần nhất giữ lại trong mỗi ECR repository"
   type        = number
@@ -2351,11 +2338,20 @@ resource "aws_ecr_lifecycle_policy" "this" {
 ```hcl
 data "aws_caller_identity" "current" {}
 
+locals {
+  # Cả ba bucket gắn hậu tố account ID. Tên bucket S3 duy nhất toàn cầu và
+  # KHÔNG có cách read-only nào kiểm tra được tên còn trống (head-bucket trả 404
+  # cho cả bucket của account khác), nên đừng đoán — ghép account ID là xong.
+  assets_bucket   = "${var.project}-public-assets-${data.aws_caller_identity.current.account_id}"
+  artifacts_bucket = "${var.project}-artifacts-${data.aws_caller_identity.current.account_id}"
+  alb_logs_bucket  = "${var.project}-alb-logs-${data.aws_caller_identity.current.account_id}"
+}
+
 # ─── BUCKET ẢNH SẢN PHẨM ─────────────────────────────────────────
 resource "aws_s3_bucket" "assets" {
-  bucket = var.assets_bucket_name
+  bucket = local.assets_bucket
 
-  tags = { Name = var.assets_bucket_name }
+  tags = { Name = local.assets_bucket }
 
   # force_destroy = false (mặc định) là lưới an toàn đúng mức ở đây:
   # terraform destroy sẽ THẤT BẠI nếu bucket còn object, buộc phải xoá ảnh
@@ -2411,7 +2407,7 @@ resource "aws_s3_bucket_cors_configuration" "assets" {
 
 # ─── BUCKET ARTIFACTS ────────────────────────────────────────────
 resource "aws_s3_bucket" "artifacts" {
-  bucket        = "${var.project}-artifacts-${data.aws_caller_identity.current.account_id}"
+  bucket        = local.artifacts_bucket
   force_destroy = true
 
   tags = { Name = "${var.project}-artifacts" }
@@ -2453,7 +2449,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
 
 # ─── BUCKET ALB ACCESS LOGS ──────────────────────────────────────
 resource "aws_s3_bucket" "alb_logs" {
-  bucket        = "${var.project}-alb-logs-${data.aws_caller_identity.current.account_id}"
+  bucket        = local.alb_logs_bucket
   force_destroy = true
 
   tags = { Name = "${var.project}-alb-logs" }
@@ -2602,28 +2598,12 @@ Thêm sau `module "security"`:
 module "storage" {
   source = "../../modules/storage"
 
-  project            = local.name
-  region             = var.region
-  assets_bucket_name = var.assets_bucket_name
+  project = local.name
+  region  = var.region
 }
 ```
 
-Thêm vào `infra/tf/envs/prod/variables.tf`:
-
-```hcl
-variable "assets_bucket_name" {
-  description = "Tên bucket ảnh sản phẩm. Chốt bằng Task 6 Step 1 — tên này hiện trong URL ảnh công khai"
-  type        = string
-  default     = "hushstore-public-assets"
-}
-```
-
-Nếu Step 1 báo tên đã bị chiếm, đặt tên có hậu tố vào `terraform.tfvars`:
-
-```bash
-cd infra/tf/envs/prod
-echo "assets_bucket_name = \"hushstore-public-assets-${ACCT}\"" >> terraform.tfvars
-```
+Không có biến `assets_bucket_name` — tên do module tự ghép, nên không có chỗ nào đặt sai được.
 
 - [ ] **Step 10: Plan và kiểm tra không có gì bị destroy**
 
@@ -2656,7 +2636,7 @@ Expected: 3 dòng `hushstore-api`, `hushstore-web`, `hushstore-migrator`, tất 
 - [ ] **Step 13: Verify bucket ảnh đọc công khai được (điều kiện để upload ảnh hoạt động ở Task 16)**
 
 ```bash
-ASSETS=$(terraform output -raw assets_bucket 2>/dev/null || echo hushstore-public-assets)
+ASSETS=$(terraform output -raw assets_bucket)
 echo "probe" > /tmp/probe.txt
 aws s3 cp /tmp/probe.txt "s3://${ASSETS}/probe/probe.txt" --profile hushstore --no-cli-pager
 curl -s -o /dev/null -w "public-read=%{http_code}\n" \
