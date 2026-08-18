@@ -3047,12 +3047,20 @@ resource "aws_ssm_parameter" "connection_string" {
   description = "Connection string day du, inject vao container qua khoi secrets cua ECS"
   type        = "SecureString"
 
+  # Encrypt=True + TrustServerCertificate=False: bắt buộc TLS VÀ xác thực cert
+  # của RDS thật, không tin mù. TrustServerCertificate=True (bản trước) vẫn mã
+  # hoá nhưng bỏ qua kiểm cert, tức về nguyên tắc vẫn bị MITM ngay trong VPC.
+  # ĐIỀU KIỆN: cert của RDS do Amazon RDS CA cấp, mà CA đó KHÔNG có trong trust
+  # store của image aspnet:10.0 / runtime-deps:10.0 — nên cả image API và image
+  # migrator phải cài bundle CA của region (xem Task 8 và Task 10). Thiếu bước
+  # đó là app không kết nối được DB.
   value = join("", [
     "Server=${aws_db_instance.this.address},1433;",
     "Database=${var.db_name};",
     "User Id=${var.db_username};",
     "Password=${random_password.db.result};",
-    "TrustServerCertificate=True;",
+    "Encrypt=True;",
+    "TrustServerCertificate=False;",
     "MultipleActiveResultSets=True;",
   ])
 
@@ -3238,6 +3246,7 @@ Terraform quan."
 ### Task 8: Sửa `Program.cs` (4 điểm) + build và push image API lên ECR
 
 **Files:**
+- Modify: `Dockerfile` (cài Amazon RDS CA bundle vào trust store)
 - Modify: `src/API/Program.cs`
 - Modify: `src/API/API.csproj` (thêm package health check EF Core)
 - Modify: `src/API/appsettings.json` (xoá `AccessKeyId`, `SecretAccessKey`)
@@ -3422,6 +3431,34 @@ Thay bằng:
 # Local dev: export AWS_PROFILE=hushstore trước khi chạy API.
 ```
 
+- [ ] **Step 9b: Cài Amazon RDS CA vào image API**
+
+Connection string production dùng `TrustServerCertificate=False`, nên client phải xác thực được cert của RDS. Cert đó do Amazon RDS CA cấp và CA ấy **không có** trong trust store mặc định của `aspnet:10.0`.
+
+Trong `Dockerfile`, chèn vào stage `runtime` **trước dòng `USER appuser`**:
+
+```dockerfile
+# Amazon RDS CA cho region ap-southeast-1 — cần để client xác thực cert của RDS
+# khi connection string dùng Encrypt=True;TrustServerCertificate=False.
+# Phải làm TRƯỚC khi đổi sang user không phải root, vì update-ca-certificates
+# ghi vào /etc/ssl/certs.
+ADD https://truststore.pki.rds.amazonaws.com/ap-southeast-1/ap-southeast-1-bundle.pem \
+    /usr/local/share/ca-certificates/rds-ap-southeast-1.crt
+RUN chmod 644 /usr/local/share/ca-certificates/rds-ap-southeast-1.crt \
+    && update-ca-certificates
+```
+
+Verify CA đã vào trust store:
+
+```bash
+docker build -t hushstore-api:catest -f Dockerfile .
+docker run --rm hushstore-api:catest sh -c \
+  "grep -c 'BEGIN CERTIFICATE' /usr/local/share/ca-certificates/rds-ap-southeast-1.crt && \
+   ls -la /etc/ssl/certs/ | grep -c rds"
+```
+
+Expected: số cert trong bundle > 0, và có symlink `rds-*` trong `/etc/ssl/certs/`. Nếu `update-ca-certificates` báo `command not found`, image thiếu package `ca-certificates` — thêm `apt-get update && apt-get install -y --no-install-recommends ca-certificates` trước đó và báo lại.
+
 - [ ] **Step 10: Bỏ dòng loại trừ `src/Client/` khỏi `.dockerignore`**
 
 Xoá 2 dòng này khỏi `.dockerignore`:
@@ -3443,6 +3480,9 @@ Expected: `Build succeeded`. `grep` **không in gì cả**.
 - [ ] **Step 12: Chạy API local và verify `/health/ready` trả 200 khi DB sống**
 
 ```bash
+# Local dev GIỮ TrustServerCertificate=True — SQL Server trong container dùng
+# cert tự ký, không có CA nào xác thực được. Chỉ connection string PRODUCTION
+# (lấy từ SSM Parameter Store) mới dùng Encrypt=True;TrustServerCertificate=False.
 export ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=HushStoreDB;User Id=sa;Password=$(grep SA_PASSWORD Infrastructure/db/.env | cut -d= -f2);TrustServerCertificate=True;"
 export JwtSettings__SecretKey="$(openssl rand -base64 48)"
 export AWS_PROFILE=hushstore
@@ -3773,6 +3813,15 @@ RUN dotnet ef migrations bundle \
 # ─── Stage 2: runtime tối giản ───────────────────────────────────
 FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
 WORKDIR /app
+
+# Amazon RDS CA cho region ap-southeast-1 — bắt buộc vì connection string
+# production dùng Encrypt=True;TrustServerCertificate=False, nên efbundle phải
+# xác thực được cert của RDS. Nếu update-ca-certificates không có sẵn trong
+# runtime-deps thì cài package ca-certificates trước rồi báo lại.
+ADD https://truststore.pki.rds.amazonaws.com/ap-southeast-1/ap-southeast-1-bundle.pem \
+    /usr/local/share/ca-certificates/rds-ap-southeast-1.crt
+RUN chmod 644 /usr/local/share/ca-certificates/rds-ap-southeast-1.crt \
+    && update-ca-certificates
 
 COPY --from=build /app/efbundle .
 RUN chmod +x ./efbundle
