@@ -14,6 +14,7 @@
 
 - **Terraform** `>= 1.10` — bắt buộc, vì backend S3 dùng `use_lockfile = true` (native lockfile, không DynamoDB).
 - **AWS provider** `~> 6.0`.
+- **`terraform test` với `command = plan` chỉ được assert trên giá trị biết-ở-plan-time.** Đó là: literal trong `locals`, giá trị `variable`, key của `for_each`, và attribute được set trực tiếp từ chúng (`from_port`, `cidr_ipv4`, `rule_number`, `network_mode`, `type`...). **KHÔNG được so sánh hai attribute mà cả hai là `(known after apply)`** — ví dụ `r.security_group_id == aws_security_group.x.id`, `taskdef.task_role_arn == aws_iam_role.y.arn`, `listener.target_group_arn == aws_lb_target_group.z.arn`. Terraform không chứng minh được hai unknown bằng nhau nên **báo lỗi `Unknown condition value` và bỏ luôn các run còn lại trong file**, chứ không trả `false`. Muốn biết một rule thuộc resource nào thì đếm theo **key của `for_each`** (`startswith(k, "alb-")`), và muốn chứng minh source là SG chứ không phải CIDR thì assert `cidr_ipv4 == null`.
 - **Mỗi module phải có `versions.tf`** khai báo `required_version >= 1.10` và `aws ~> 6.0`. Không có nó, `terraform init` khi chạy `terraform test` trong thư mục module sẽ lấy provider mới nhất thay vì bản root đang dùng — test có thể validate trên provider khác với bản thật sự apply. Nội dung giống nhau ở mọi module:
   ```hcl
   terraform {
@@ -1723,37 +1724,50 @@ run "khong_co_ingress_rule_nao_mo_0000_ngoai_alb" {
   }
 }
 
-run "alb_chi_mo_80_va_443" {
+run "alb_chi_mo_dung_2_rule_80_va_443" {
   command = plan
 
   assert {
     condition = alltrue([
       aws_vpc_security_group_ingress_rule.all["alb-http"].from_port == 80,
+      aws_vpc_security_group_ingress_rule.all["alb-http"].to_port == 80,
       aws_vpc_security_group_ingress_rule.all["alb-http"].cidr_ipv4 == "0.0.0.0/0",
       aws_vpc_security_group_ingress_rule.all["alb-https"].from_port == 443,
+      aws_vpc_security_group_ingress_rule.all["alb-https"].to_port == 443,
       aws_vpc_security_group_ingress_rule.all["alb-https"].cidr_ipv4 == "0.0.0.0/0",
     ])
     error_message = "sg-alb phải mở đúng 80 và 443 từ 0.0.0.0/0."
   }
 
+  # Đếm theo KEY của for_each — key biết ở plan-time. KHÔNG so
+  # r.security_group_id với aws_security_group.alb.id: cả hai là
+  # (known after apply) nên Terraform báo lỗi Unknown condition value.
   assert {
     condition = length([
-      for k, r in aws_vpc_security_group_ingress_rule.all :
-      k if r.security_group_id == aws_security_group.alb.id
+      for k in keys(aws_vpc_security_group_ingress_rule.all) : k if startswith(k, "alb-")
     ]) == 2
     error_message = "sg-alb phải có ĐÚNG 2 ingress rule — thêm rule nào là vi phạm nguyên tắc tối thiểu."
   }
 }
 
-run "alb_egress_chi_toi_sg_web" {
+run "alb_egress_chi_toi_sg_web_khong_ra_cidr_nao" {
   command = plan
 
+  # cidr_ipv4 == null chứng minh source/destination là SG reference chứ không
+  # phải CIDR, mà không cần biết giá trị ID thật.
   assert {
     condition = alltrue([
       for k, r in aws_vpc_security_group_egress_rule.all :
-      r.security_group_id != aws_security_group.alb.id || r.referenced_security_group_id == aws_security_group.web.id
+      r.cidr_ipv4 == null if startswith(k, "alb-")
     ])
-    error_message = "sg-alb chỉ được egress tới sg-web, không được mở ra CIDR nào."
+    error_message = "sg-alb chỉ được egress tới sg-web qua referenced_security_group_id, không được mở ra CIDR nào."
+  }
+
+  assert {
+    condition = length([
+      for k in keys(aws_vpc_security_group_egress_rule.all) : k if startswith(k, "alb-")
+    ]) == 2
+    error_message = "sg-alb phải có đúng 2 egress rule (80 và 8080 tới sg-web)."
   }
 }
 
@@ -1762,18 +1776,25 @@ run "web_chi_nhan_traffic_tu_sg_alb" {
 
   assert {
     condition = alltrue([
-      aws_vpc_security_group_ingress_rule.all["web-http"].referenced_security_group_id == aws_security_group.alb.id,
-      aws_vpc_security_group_ingress_rule.all["web-api"].referenced_security_group_id == aws_security_group.alb.id,
+      for k, r in aws_vpc_security_group_ingress_rule.all :
+      r.cidr_ipv4 == null if startswith(k, "web-")
     ])
-    error_message = "sg-web chỉ được nhận traffic từ sg-alb, không từ CIDR nào."
+    error_message = "sg-web chỉ được nhận traffic từ sg-alb — mọi ingress rule của nó phải dùng referenced_security_group_id, không dùng CIDR."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_vpc_security_group_ingress_rule.all["web-http"].from_port == 80,
+      aws_vpc_security_group_ingress_rule.all["web-api"].from_port == 8080,
+    ])
+    error_message = "sg-web phải nhận đúng port 80 (nginx) và 8080 (API)."
   }
 
   assert {
     condition = length([
-      for k, r in aws_vpc_security_group_ingress_rule.all :
-      k if r.security_group_id == aws_security_group.web.id
+      for k in keys(aws_vpc_security_group_ingress_rule.all) : k if startswith(k, "web-")
     ]) == 2
-    error_message = "sg-web phải có ĐÚNG 2 ingress rule (80 và 8080 từ sg-alb)."
+    error_message = "sg-web phải có ĐÚNG 2 ingress rule."
   }
 }
 
@@ -1784,23 +1805,21 @@ run "rds_chi_nhan_1433_tu_sg_web_va_khong_co_egress" {
     condition = alltrue([
       aws_vpc_security_group_ingress_rule.all["rds-mssql"].from_port == 1433,
       aws_vpc_security_group_ingress_rule.all["rds-mssql"].to_port == 1433,
-      aws_vpc_security_group_ingress_rule.all["rds-mssql"].referenced_security_group_id == aws_security_group.web.id,
+      aws_vpc_security_group_ingress_rule.all["rds-mssql"].cidr_ipv4 == null,
     ])
-    error_message = "sg-rds phải nhận đúng 1433 và chỉ từ sg-web."
+    error_message = "sg-rds phải nhận đúng 1433 và chỉ qua referenced_security_group_id (sg-web), không qua CIDR."
   }
 
   assert {
     condition = length([
-      for k, r in aws_vpc_security_group_ingress_rule.all :
-      k if r.security_group_id == aws_security_group.rds.id
+      for k in keys(aws_vpc_security_group_ingress_rule.all) : k if startswith(k, "rds-")
     ]) == 1
     error_message = "sg-rds phải có ĐÚNG 1 ingress rule."
   }
 
   assert {
     condition = length([
-      for k, r in aws_vpc_security_group_egress_rule.all :
-      k if r.security_group_id == aws_security_group.rds.id
+      for k in keys(aws_vpc_security_group_egress_rule.all) : k if startswith(k, "rds-")
     ]) == 0
     error_message = "sg-rds phải có egress RỖNG — RDS không cần gọi ra ngoài."
   }
@@ -5056,14 +5075,12 @@ run "image_tag_khong_bao_gio_la_latest" {
 run "api_bat_ecs_exec_va_co_task_role_rieng" {
   command = plan
 
+  # KHÔNG so task_role_arn với aws_iam_role.x.arn — cả hai là (known after
+  # apply). Thay bằng tính chất biết-ở-plan-time và có giá trị bảo mật thật:
+  # container web KHÔNG được gán task role nào cả.
   assert {
-    condition     = aws_ecs_task_definition.api.task_role_arn == aws_iam_role.task_app.arn
-    error_message = "Task định nghĩa API phải dùng task-app-role (chỉ S3 + ECS Exec)."
-  }
-
-  assert {
-    condition     = aws_ecs_task_definition.migrator.task_role_arn == aws_iam_role.task_migrator.arn
-    error_message = "Task định nghĩa migrator phải dùng task-migrator-role (không có quyền AWS API nào)."
+    condition     = aws_ecs_task_definition.web.task_role_arn == null || aws_ecs_task_definition.web.task_role_arn == ""
+    error_message = "Task definition web KHÔNG được có task_role_arn — nginx serve static file, không gọi AWS API nào."
   }
 
   assert {
@@ -5654,9 +5671,12 @@ run "listener_rule_route_api_domain_sang_tg_api" {
     error_message = "Phải có listener rule route Host = api.hushstore.io.vn sang tg-api."
   }
 
+  # KHÔNG so target_group_arn với aws_lb_target_group.web[0].arn — cả hai là
+  # (known after apply). Assert type thay thế; việc route đúng tg-web được
+  # kiểm chứng thật bằng curl ở Task 15 Step 10-11.
   assert {
-    condition     = aws_lb_listener.https[0].default_action[0].target_group_arn == aws_lb_target_group.web[0].arn
-    error_message = "Default action của listener 443 phải trỏ tg-web (Blazor client)."
+    condition     = aws_lb_listener.https[0].default_action[0].type == "forward"
+    error_message = "Default action của listener 443 phải là forward (sang tg-web), không phải redirect hay fixed-response."
   }
 }
 
