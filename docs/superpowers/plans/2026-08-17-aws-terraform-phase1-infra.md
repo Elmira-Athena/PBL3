@@ -1180,16 +1180,36 @@ variables {
   enable_deny_demo    = false
 }
 
-run "co_dung_3_nacl" {
+# KHÔNG assert `aws_network_acl.x.vpc_id == aws_vpc.this.id`: ở `command = plan`
+# cả hai `.id` đều unknown, Terraform không so sánh được unknown với unknown và
+# sẽ báo lỗi, làm hỏng cả file test. Thay bằng đếm số rule — vừa đánh giá được ở
+# plan-time (độ dài map lấy từ locals), vừa kiểm tra đúng tính chất mà đề bài
+# chấm: rule mở ở mức tối thiểu.
+run "so_luong_rule_dung_muc_toi_thieu" {
   command = plan
 
   assert {
     condition = alltrue([
-      aws_network_acl.public.vpc_id == aws_vpc.this.id,
-      aws_network_acl.app.vpc_id == aws_vpc.this.id,
-      aws_network_acl.db.vpc_id == aws_vpc.this.id,
+      length(aws_network_acl_rule.public_ingress) == 3,
+      length(aws_network_acl_rule.public_egress) == 5,
     ])
-    error_message = "Phải có 3 NACL riêng cho 3 tier, tất cả trong cùng VPC."
+    error_message = "nacl-public phải có đúng 3 rule inbound và 5 rule outbound — thêm rule nào là vi phạm nguyên tắc tối thiểu."
+  }
+
+  assert {
+    condition = alltrue([
+      length(aws_network_acl_rule.app_ingress) == 6,
+      length(aws_network_acl_rule.app_egress) == 4,
+    ])
+    error_message = "nacl-app phải có đúng 6 rule inbound (90, 95, 100, 110, 115, 120) và 4 rule outbound."
+  }
+
+  assert {
+    condition = alltrue([
+      length(aws_network_acl_rule.db_ingress) == 1,
+      length(aws_network_acl_rule.db_egress) == 1,
+    ])
+    error_message = "nacl-db phải có đúng 1 rule mỗi chiều — đây là tier chặt nhất của thiết kế."
   }
 }
 
@@ -1582,7 +1602,7 @@ cd ../../envs/prod
 terraform apply
 ```
 
-Expected: `Apply complete!` với 3 `aws_network_acl` + 19 `aws_network_acl_rule` added.
+Expected: `Apply complete!` với 3 `aws_network_acl` + 20 `aws_network_acl_rule` added (3+5 public, 6+4 app, 1+1 db).
 
 - [ ] **Step 8: Verify rule của NACL app đúng thứ tự trên AWS thật**
 
