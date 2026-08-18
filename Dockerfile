@@ -18,6 +18,15 @@ RUN dotnet publish src/API/API.csproj -c Release -o /app/publish --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
+# Amazon RDS CA cho region ap-southeast-1 — cần để client xác thực cert của RDS
+# khi connection string dùng Encrypt=True;TrustServerCertificate=False.
+# Phải làm TRƯỚC khi đổi sang user không phải root, vì update-ca-certificates
+# ghi vào /etc/ssl/certs.
+ADD https://truststore.pki.rds.amazonaws.com/ap-southeast-1/ap-southeast-1-bundle.pem \
+    /usr/local/share/ca-certificates/rds-ap-southeast-1.crt
+RUN chmod 644 /usr/local/share/ca-certificates/rds-ap-southeast-1.crt \
+    && update-ca-certificates
+
 # Don't run as root
 RUN useradd -m appuser && chown -R appuser /app
 USER appuser

@@ -8,6 +8,8 @@ using Amazon;
 using Amazon.Runtime;
 using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -188,17 +190,24 @@ builder.Services.AddScoped<IValidator<UpdateScanReasonRequest>, UpdateScanReason
 builder.Services.AddScoped<IValidator<RejectInventoryCheckRequest>, RejectInventoryCheckRequestValidator>();
 
 // DI: AWS S3 Storage
+// KHÔNG dùng credential tĩnh (static access key/secret key). AmazonS3Client
+// không truyền credential sẽ dùng default credential chain: trên ECS nó tự
+// lấy credential tạm thời của task role qua
+// AWS_CONTAINER_CREDENTIALS_RELATIVE_URI. Nhờ vậy trong toàn hệ thống không
+// còn static access key nào.
+// Local dev: đặt AWS_PROFILE=hushstore trước khi chạy để upload ảnh hoạt động.
 var awsCfg = builder.Configuration.GetSection("AwsSettings");
 builder.Services.AddSingleton<IAmazonS3>(_ =>
-{
-    var credentials = new BasicAWSCredentials(awsCfg["AccessKeyId"], awsCfg["SecretAccessKey"]);
-    var region = RegionEndpoint.GetBySystemName(awsCfg["Region"] ?? "ap-southeast-1");
-    return new AmazonS3Client(credentials, region);
-});
+    new AmazonS3Client(RegionEndpoint.GetBySystemName(awsCfg["Region"] ?? "ap-southeast-1")));
 builder.Services.AddScoped<IStorageService, PBL3.Service.Storage.S3StorageService>();
 
 // DI: Auth
 builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Health check cho ALB target group. /health/ready CHẠM DB thật — nếu RDS
+// chết thì ALB phải rút instance khỏi target group, không được báo healthy.
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<HushStoreDbContext>("database");
 
 // Rate Limiting: Chống DoS & Brute-force cho Login
 builder.Services.AddRateLimiter(options =>
@@ -213,16 +222,28 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
+// ALB terminate TLS rồi forward HTTP xuống container. Không có block này thì
+// app không biết request gốc là HTTPS, khiến mọi URL sinh ra bị sai scheme.
+//
+// KnownNetworks/KnownProxies bị clear vì container chạy bridge network mode:
+// source IP mà app thấy là gateway của docker bridge (172.17.0.1), KHÔNG phải
+// IP của ALB trong VPC — nên không thể whitelist theo VPC CIDR. An toàn vì
+// sg-web chỉ nhận traffic từ sg-alb, không ai khác chạm tới được container.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
 var app = builder.Build();
 
-// Auto-apply EF Core migrations khi khởi động — chỉ chạy trên Production
-// (tránh lỗi khi dev chạy local với DB chưa up)
-if (app.Environment.IsProduction())
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<HushStoreDbContext>();
-    await db.Database.MigrateAsync();
-}
+// Migration KHÔNG chạy ở startup nữa. Từ Task 13 trở đi, schema do một ECS
+// task riêng chạy EF Core migration bundle dựng lên, và pipeline chỉ deploy
+// khi task đó exit 0. Lý do: migration ở startup không ai gate được, fail thì
+// container crash-loop, và nhiều task cùng lên sẽ race trên bảng
+// __EFMigrationsHistory.
+// Xem docs/superpowers/specs/2026-08-17-aws-terraform-ecs-infra-design.md
 
 // Seed "Technician" role if it doesn't exist
 using (var roleScope = app.Services.CreateScope())
@@ -258,7 +279,15 @@ app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
         new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
 }));
 
-app.UseHttpsRedirection();
+// UseForwardedHeaders phải chạy TRƯỚC mọi middleware đọc scheme hoặc IP.
+app.UseForwardedHeaders();
+
+// Ở Production, ALB đã redirect 80 -> 443 ở tầng listener rồi. Bật thêm ở
+// đây sẽ gây redirect loop khi ALB forward request HTTP xuống container.
+if (!app.Environment.IsProduction())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("AllowClient");
 
@@ -304,7 +333,17 @@ app.Use(async (context, next) =>
 
 app.UseAuthorization();
 
-// Health check endpoint for Docker
+// /health/live: chỉ trả lời "process còn sống", không chạm dependency nào.
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false
+}).AllowAnonymous();
+
+// /health/ready: chạy toàn bộ health check, gồm cả DbContextCheck.
+// Trả 200 Healthy / 503 Unhealthy. Đây là endpoint ALB tg-api trỏ vào.
+app.MapHealthChecks("/health/ready").AllowAnonymous();
+
+// Giữ /health cũ để tương thích với script và bookmark hiện có.
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
    .AllowAnonymous();
 

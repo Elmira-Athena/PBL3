@@ -21,5 +21,3 @@ Infrastructure/
 .git/
 .gitignore
 
-# Client (not built in API image)
-src/Client/
