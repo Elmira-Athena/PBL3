@@ -15,6 +15,7 @@
 - **Terraform** `>= 1.10` — bắt buộc, vì backend S3 dùng `use_lockfile = true` (native lockfile, không DynamoDB).
 - **AWS provider** `~> 6.0`.
 - **`terraform test` với `command = plan` chỉ được assert trên giá trị biết-ở-plan-time.** Đó là: literal trong `locals`, giá trị `variable`, key của `for_each`, và attribute được set trực tiếp từ chúng (`from_port`, `cidr_ipv4`, `rule_number`, `network_mode`, `type`...). **KHÔNG được so sánh hai attribute mà cả hai là `(known after apply)`** — ví dụ `r.security_group_id == aws_security_group.x.id`, `taskdef.task_role_arn == aws_iam_role.y.arn`, `listener.target_group_arn == aws_lb_target_group.z.arn`. Terraform không chứng minh được hai unknown bằng nhau nên **báo lỗi `Unknown condition value` và bỏ luôn các run còn lại trong file**, chứ không trả `false`. Muốn biết một rule thuộc resource nào thì đếm theo **key của `for_each`** (`startswith(k, "alb-")`), và muốn chứng minh source là SG chứ không phải CIDR thì assert `cidr_ipv4 == null`.
+  **Cạm bẫy sắc hơn: attribute `Optional+Computed` là unknown ở plan-time NGAY CẢ KHI config không đặt nó.** Ví dụ `aws_db_instance.db_name` — dù `main.tf` hoàn toàn không có argument đó, plan vẫn hiện `(known after apply)` và assert `== null` sẽ lỗi. Muốn biết một attribute có thuộc loại này không: `terraform providers schema -json | jq` rồi xem cặp `"optional": true, "computed": true`. Với những attribute như vậy, đừng assert bằng test — hãy assert các attribute mà config đặt tường minh, và kiểm "không đặt X" bằng `grep` trên `main.tf`.
 - **Mỗi module phải có `versions.tf`** khai báo `required_version >= 1.10` và `aws ~> 6.0`. Không có nó, `terraform init` khi chạy `terraform test` trong thư mục module sẽ lấy provider mới nhất thay vì bản root đang dùng — test có thể validate trên provider khác với bản thật sự apply. Nội dung giống nhau ở mọi module:
   ```hcl
   terraform {
@@ -2794,12 +2795,33 @@ run "rds_nam_trong_db_subnet_va_dung_sg_rds" {
   }
 }
 
-run "rds_khong_dat_db_name_vi_sql_server_khong_ho_tro" {
+# KHÔNG assert `aws_db_instance.this.db_name == null`: attribute này là
+# Optional+Computed trong AWS provider, nên ở plan-time nó là (known after apply)
+# NGAY CẢ KHI config không đặt nó — Terraform báo `Unknown condition value` và bỏ
+# luôn các run còn lại. Việc "không đặt db_name" được bảo đảm bằng chính việc
+# main.tf không có argument đó (SQL Server không hỗ trợ), kiểm bằng grep; còn
+# database HushStoreDB do EF Core migration bundle tạo ở Task 13.
+# Thay bằng các thuộc tính đặc thù SQL Server mà plan-time biết được.
+run "rds_dung_cau_hinh_sql_server_express" {
   command = plan
 
   assert {
-    condition     = aws_db_instance.this.db_name == null || aws_db_instance.this.db_name == ""
-    error_message = "Không được đặt db_name cho engine SQL Server — database do EF Core migration bundle tạo."
+    condition     = aws_db_instance.this.engine == "sqlserver-ex"
+    error_message = "Phải dùng engine sqlserver-ex (Express) — đây là edition nằm trong free tier."
+  }
+
+  assert {
+    condition     = aws_db_instance.this.license_model == "license-included"
+    error_message = "SQL Server trên RDS bắt buộc license_model = license-included."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_db_instance.this.storage_encrypted == true,
+      aws_db_instance.this.allocated_storage == 20,
+      aws_db_instance.this.storage_type == "gp2",
+    ])
+    error_message = "Storage phải mã hoá, 20GB, gp2 — mức tối thiểu của SQL Server Express và nằm trong free tier."
   }
 }
 
