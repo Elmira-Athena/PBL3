@@ -42,3 +42,33 @@ output "nat_gateway_id" {
   description = "ID của NAT Gateway, rỗng khi enable_nat = false"
   value       = var.enable_nat ? aws_nat_gateway.this[0].id : ""
 }
+
+output "nacl_public_id" {
+  description = "ID của NACL public tier"
+  value       = aws_network_acl.public.id
+}
+
+output "nacl_app_id" {
+  description = "ID của NACL app tier"
+  value       = aws_network_acl.app.id
+}
+
+output "nacl_db_id" {
+  description = "ID của NACL db tier"
+  value       = aws_network_acl.db.id
+}
+
+output "public_tier_cidr" {
+  description = "CIDR /23 gộp của public tier — dùng trong rule NACL"
+  value       = local.public_tier_cidr
+}
+
+output "app_tier_cidr" {
+  description = "CIDR /23 gộp của app tier"
+  value       = local.app_tier_cidr
+}
+
+output "db_tier_cidr" {
+  description = "CIDR /23 gộp của db tier"
+  value       = local.db_tier_cidr
+}
