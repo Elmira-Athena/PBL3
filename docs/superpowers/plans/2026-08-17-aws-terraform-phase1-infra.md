@@ -538,7 +538,7 @@ use_lockfile (native S3 locking, Terraform >= 1.10) nên không cần DynamoDB."
 - Modify: `infra/tf/envs/prod/outputs.tf`
 
 **Interfaces:**
-- Consumes: `var.project`, `var.region`, `var.azs` từ root (Task 2).
+- Consumes: `var.project`, `var.azs`, và các biến CIDR từ root (Task 2). Module **không** nhận `var.region` — region lấy từ provider qua `data.aws_region.current.region` (chú ý: AWS provider v6 dùng `.region`, v5 dùng `.name`).
 - Produces — outputs của `module.network` mà các task sau dùng:
   - `vpc_id` (string)
   - `vpc_cidr` (string)
