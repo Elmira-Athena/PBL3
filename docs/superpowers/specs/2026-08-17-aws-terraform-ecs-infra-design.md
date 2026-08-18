@@ -1,8 +1,23 @@
 # AWS Terraform + ECS Infrastructure Design — HushStore (Đề tài 513)
 
 **Date:** 2026-08-17
-**Status:** Approved
+**Status:** Approved (sửa 2026-08-18 — xem "Đính chính")
 **Supersedes:** [2026-05-13-ec2-deployment-design.md](2026-05-13-ec2-deployment-design.md)
+
+---
+
+## Đính chính 2026-08-18 — đổi AWS account
+
+Spec này viết khi còn giả định triển khai trên account `408194747451`. Sau đó xác định lại: account đó **đã bị xoá sạch tài nguyên** sau báo cáo kỳ trước (không còn S3 bucket, EC2, RDS, snapshot, EIP, NAT, ALB, EBS hay ECR) và **đã hết free tier**, nên kỳ này dùng một AWS account khác.
+
+Bốn điều chỉnh so với nội dung bên dưới:
+
+1. **Danh tính là IAM Identity Center (SSO)**, permission set `AdministratorAccess`, session 8 giờ — không phải IAM user + access key. Không còn credential dài hạn nào trên máy, khớp với chủ đề "không còn static credential" của chính thiết kế này. Điểm least-privilege của đề bài nằm ở 4 role workload, không nằm ở role vận hành.
+2. **Không có bước migrate/teardown nào.** Mọi mô tả về stack cũ, snapshot RDS cũ, giữ đường lùi đều không còn áp dụng. Đây là greenfield thật sự.
+3. **Bỏ `import` block cho bucket ảnh sản phẩm.** Mục "Registry và S3" gọi đây là ngoại lệ duy nhất của stack greenfield; giờ không còn ngoại lệ nào — cả 3 bucket đều tạo mới, vì `hushstore-public-assets` không còn tồn tại và DB kỳ này seed từ đầu nên không có URL ảnh cũ nào để giữ.
+4. **`hushstore-artifacts` và `hushstore-alb-logs` gắn hậu tố account ID.** Tên bucket S3 là duy nhất **toàn cầu**, không chỉ trong account, và hai tên đó quá phổ thông. Bucket ảnh giữ tên không hậu tố nếu còn trống, vì tên nó hiện trong URL ảnh công khai.
+
+Account ID không xuất hiện cứng ở đâu ngoài `backend.tf` (block `backend "s3"` không nhận biến).
 
 ---
 

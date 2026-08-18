@@ -14,8 +14,14 @@
 
 - **Terraform** `>= 1.10` — bắt buộc, vì backend S3 dùng `use_lockfile = true` (native lockfile, không DynamoDB).
 - **AWS provider** `~> 6.0`.
-- **Region** `ap-southeast-1`. **AWS CLI profile** `hushstore`. **Account ID** `408194747451`.
-- **VPC CIDR** `10.20.0.0/16` — CIDR mới, KHÔNG trùng `10.0.0.0/16` của stack cũ đang chạy.
+- **Region** `ap-southeast-1`. **AWS CLI profile** `hushstore` — trỏ vào **account mới của kỳ này** (account cũ `408194747451` đã hết free tier và đã bị xoá sạch tài nguyên, không dùng nữa).
+- **Danh tính là IAM Identity Center (SSO)**, không phải IAM user + access key. Mỗi ngày làm việc chạy `aws sso login --profile hushstore` một lần. Permission set `AdministratorAccess`, session 8 giờ.
+- **Account ID không hardcode trong plan.** Mọi lệnh dùng biến `$ACCT`; đặt nó ở đầu mỗi phiên làm việc:
+  ```bash
+  export ACCT=$(aws sts get-caller-identity --query Account --output text --profile hushstore)
+  ```
+  Ngoại lệ duy nhất là `backend.tf` — block `backend "s3"` không nhận biến, phải điền chuỗi thật (Task 2 Step 6).
+- **VPC CIDR** `10.20.0.0/16`.
 - Mọi resource phải có tag `Project = "hushstore"` và `ManagedBy = "terraform"` (đặt bằng `default_tags` ở provider).
 - **Tuyệt đối không có Security Group rule nào mở port 22**, ở bất kỳ đâu. Admin access chỉ qua SSM Session Manager và ECS Exec.
 - **ASG `max_size = 1`**, instance type `t3.micro` (free tier).
@@ -36,9 +42,13 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: Terraform CLI khả dụng; stack cũ đã stop (không tính phí compute) nhưng CHƯA bị xoá — vẫn là đường lùi cho tới Task 17; `infra/tf/` là thư mục trống sẵn sàng cho Task 2.
+- Produces: Terraform CLI khả dụng; profile `hushstore` đăng nhập được vào **account mới** bằng SSO; `infra/tf/` là thư mục trống sẵn sàng cho Task 2.
 
-> **Lý do stop mà không teardown ngay:** spec đặt teardown ở bước 0, nhưng làm vậy mất đường lùi và làm website chết trong suốt thời gian dựng stack mới. VPC mới dùng CIDR `10.20.0.0/16` nên không xung đột gì với stack cũ. Ta stop EC2 + RDS cũ để không tốn phí compute, giữ nguyên resource, và chỉ teardown ở Task 17 sau khi stack mới đã chạy được. Đây là thay đổi có ý thức so với spec.
+> **Không còn gì để migrate.** Spec ban đầu giả định stack cũ đang chạy trên account `408194747451` và đặt teardown ở bước 0. Thực tế đã kiểm tra: account đó **không còn tài nguyên nào** — không S3 bucket, không EC2, không RDS, không snapshot, không EIP/NAT/ALB/EBS/ECR. Toàn bộ đã bị xoá sau báo cáo kỳ trước, và account cũng đã hết free tier nên kỳ này dùng account khác.
+>
+> Hệ quả với plan: **không có bước stop/teardown/snapshot nào**, **không có `import` block cho bucket ảnh** (bucket đó không còn tồn tại), và **không cần giữ đường lùi**. Đây là greenfield thật sự. Các thay đổi tương ứng đã áp vào Task 6, Task 7 và Task 17.
+>
+> Hai thứ còn sót ở account cũ là 2 VPC `10.0.0.0/16` và key pair `hushstore-key` — đều **miễn phí**, dọn lúc nào cũng được (Task 17 Step tuỳ chọn).
 
 - [ ] **Step 1: Cài Terraform và xác nhận version**
 
@@ -49,39 +59,47 @@ terraform version
 
 Expected: `Terraform v1.10.x` hoặc mới hơn. Nếu ra version < 1.10, chạy `brew upgrade terraform` — backend `use_lockfile` cần ≥ 1.10.
 
-- [ ] **Step 2: Xác nhận AWS profile hoạt động**
+- [ ] **Step 2: Bật IAM Identity Center trên account mới (thao tác tay trên Console)**
+
+Đăng nhập account mới bằng **root** — đây là một trong số ít việc chính đáng phải dùng root, vì account mới chưa có identity nào khác. Sau bước này không dùng root nữa.
+
+1. **Bật MFA cho root trước tiên**: tên account (góc phải) → Security credentials → MFA.
+2. **IAM Identity Center** → Enable. Chọn region **`ap-southeast-1`** — region này gần như không đổi được sau khi bật.
+3. **Users** → Add user (username + email của bạn). Mở mail kích hoạt, đặt mật khẩu và MFA.
+4. **Permission sets** → Create → Predefined `AdministratorAccess` → **Session duration: 8 hours** (mặc định 1 giờ sẽ hết hạn giữa lúc `terraform apply` tạo RDS, mất ~15 phút).
+5. **AWS accounts** → chọn account → Assign users → gán user + permission set vừa tạo.
+6. **Settings** → copy **AWS access portal URL**, dạng `https://d-xxxxxxxxxx.awsapps.com/start`.
+
+> `AdministratorAccess` là rộng, và đó là lựa chọn có ý thức: Terraform phải tạo IAM role, VPC, ECS, RDS, ACM — một policy siết chặt cho chính Terraform tốn nhiều công dò hơn giá trị nó mang lại trên một account chuyên dụng. Điểm least-privilege của đề bài nằm ở **4 role workload** (Task 11), không nằm ở role của người vận hành. Trong báo cáo nên tách bạch đúng như vậy.
+
+- [ ] **Step 3: Cấu hình profile `hushstore` trỏ vào account mới bằng SSO**
+
+Giữ nguyên tên profile là `hushstore` để không phải sửa dòng nào trong plan — plan dùng `--profile hushstore` ở khoảng 50 chỗ, gồm cả provider block của Terraform và các file `.tftest.hcl`.
+
+```bash
+aws configure sso --profile hushstore
+#   SSO session name          : hushstore
+#   SSO start URL             : https://d-xxxxxxxxxx.awsapps.com/start
+#   SSO region                : ap-southeast-1
+#   SSO registration scopes   : (Enter để lấy mặc định)
+#   → trình duyệt mở, đăng nhập, chọn account + AdministratorAccess
+#   CLI default client Region : ap-southeast-1
+#   CLI default output format : json
+
+aws sso login --profile hushstore
+```
+
+- [ ] **Step 4: Xác nhận danh tính và đặt biến `$ACCT`**
 
 ```bash
 aws sts get-caller-identity --profile hushstore --no-cli-pager
+export ACCT=$(aws sts get-caller-identity --query Account --output text --profile hushstore)
+echo "Account đang dùng: $ACCT"
 ```
 
-Expected: JSON có `"Account": "408194747451"`. Nếu lỗi credential, dừng lại và cấu hình `aws configure --profile hushstore` trước khi tiếp tục.
+Expected: `Arn` dạng `arn:aws:sts::<ACCT>:assumed-role/AWSReservedSSO_AdministratorAccess_xxx/<email>` — chữ `assumed-role` xác nhận đây là credential ngắn hạn từ SSO, không phải access key dài hạn. `$ACCT` **không** được là `408194747451`.
 
-- [ ] **Step 3: Stop EC2 + RDS của stack cũ để ngừng tính phí compute**
-
-```bash
-bash infra/stop.sh
-```
-
-Expected: script in `✓ Hệ thống đã tắt.` Script này đọc `infra/resources.env`. Nếu file không tồn tại (resources.env là file local, không commit), stop bằng tay:
-
-```bash
-aws ec2 stop-instances  --instance-ids i-01fa96072d16e846a --profile hushstore --no-cli-pager
-aws rds stop-db-instance --db-instance-identifier hushstore-db --profile hushstore --no-cli-pager
-```
-
-- [ ] **Step 4: Xác nhận stack cũ đã stopped**
-
-```bash
-aws ec2 describe-instances --instance-ids i-01fa96072d16e846a \
-  --query 'Reservations[0].Instances[0].State.Name' --output text \
-  --profile hushstore --no-cli-pager
-aws rds describe-db-instances --db-instance-identifier hushstore-db \
-  --query 'DBInstances[0].DBInstanceStatus' --output text \
-  --profile hushstore --no-cli-pager
-```
-
-Expected: `stopped` và `stopped` (RDS mất ~5 phút mới về `stopped`, nếu thấy `stopping` thì đợi rồi chạy lại).
+> Đặt lại `export ACCT=...` ở đầu mỗi phiên làm việc mới, cùng lúc với `aws sso login`. Nhiều lệnh verify ở các task sau dùng biến này.
 
 - [ ] **Step 5: Archive script legacy**
 
@@ -181,7 +199,7 @@ giữ làm đường lùi tới khi stack Terraform mới chạy được (Task 
 
 **Interfaces:**
 - Consumes: Terraform CLI + AWS profile `hushstore` (Task 1).
-- Produces: S3 bucket `hushstore-tfstate-408194747451` (versioned, encrypted, private); thư mục `infra/tf/envs/prod` đã `terraform init` thành công với backend S3; biến root `project`, `region`, `profile`, `azs`, `my_ip` sẵn sàng cho các module sau.
+- Produces: S3 bucket `hushstore-tfstate-<ACCT>` (versioned, encrypted, private); thư mục `infra/tf/envs/prod` đã `terraform init` thành công với backend S3; biến root `project`, `region`, `profile`, `azs`, `my_ip` sẵn sàng cho các module sau.
 
 > `bootstrap/` dùng backend **local** (state của nó nằm trong file `terraform.tfstate` cạnh nó, không commit). Đây là ngoại lệ cố ý: không thể lưu state của bucket state vào chính bucket đó. Chạy một lần rồi gần như không bao giờ chạm lại.
 
@@ -310,12 +328,12 @@ terraform init
 terraform apply
 ```
 
-Expected: `Apply complete! Resources: 6 added`. Output in ra `state_bucket = "hushstore-tfstate-408194747451"`.
+Expected: `Apply complete! Resources: 6 added`. Output in ra `state_bucket = "hushstore-tfstate-<ACCT>"` với `<ACCT>` là account ID thật.
 
 - [ ] **Step 5: Xác nhận bucket tồn tại và đã bật versioning**
 
 ```bash
-aws s3api get-bucket-versioning --bucket hushstore-tfstate-408194747451 \
+aws s3api get-bucket-versioning --bucket "hushstore-tfstate-${ACCT}" \
   --profile hushstore --no-cli-pager
 ```
 
@@ -323,14 +341,20 @@ Expected: `{"Status": "Enabled"}`.
 
 - [ ] **Step 6: Viết `infra/tf/envs/prod/backend.tf`**
 
-> Backend block KHÔNG nhận biến — mọi giá trị phải là literal. Dùng đúng tên bucket từ output ở Step 4.
+> Backend block **KHÔNG nhận biến** — mọi giá trị phải là literal. Đây là chỗ duy nhất trong plan phải điền account ID thật. Thay `<ACCT>` bằng giá trị từ output ở Step 4, hoặc sinh file bằng lệnh:
+>
+> ```bash
+> cd infra/tf/envs/prod
+> sed -i '' "s|hushstore-tfstate-<ACCT>|hushstore-tfstate-${ACCT}|" backend.tf
+> grep bucket backend.tf
+> ```
 
 ```hcl
 terraform {
   required_version = ">= 1.10"
 
   backend "s3" {
-    bucket       = "hushstore-tfstate-408194747451"
+    bucket       = "hushstore-tfstate-<ACCT>"
     key          = "prod/terraform.tfstate"
     region       = "ap-southeast-1"
     profile      = "hushstore"
@@ -480,7 +504,7 @@ Expected: `grep` in ra IP thật của bạn. `terraform init` in `Successfully 
 
 ```bash
 terraform apply -auto-approve
-aws s3 ls s3://hushstore-tfstate-408194747451/prod/ --profile hushstore --no-cli-pager
+aws s3 ls s3://hushstore-tfstate-${ACCT}/prod/ --profile hushstore --no-cli-pager
 ```
 
 Expected: `apply` báo `No changes` hoặc `0 added` (chưa có resource nào), và `s3 ls` liệt kê `terraform.tfstate`.
@@ -492,7 +516,7 @@ cd "$(git rev-parse --show-toplevel)"
 git add infra/tf
 git commit -m "feat(infra): bootstrap Terraform S3 backend + skeleton envs/prod
 
-State bucket hushstore-tfstate-408194747451 bật versioning, encryption,
+State bucket hushstore-tfstate-<account-id> bat versioning, encryption,
 block public access, lifecycle xoá version cũ sau 90 ngày. Backend dùng
 use_lockfile (native S3 locking, Terraform >= 1.10) nên không cần DynamoDB."
 ```
@@ -2059,16 +2083,27 @@ cach bao dam 'khong rule nao mo port 22' o pham vi ca module."
   - `artifacts_bucket_name`, `artifacts_bucket_arn` (string)
   - `alb_logs_bucket_name` (string) — dùng ở Task 14
 
-> **Bucket `hushstore-public-assets` là ngoại lệ duy nhất dùng `import`** trong stack greenfield này. Nó đang chứa ảnh sản phẩm thật, tạo lại sẽ làm chết toàn bộ URL ảnh trong DB. `import` chỉ đưa bucket vào state, không xoá và không tạo lại object nào.
+> **Không còn `import` block nào.** Spec ban đầu dự tính `import` bucket ảnh sản phẩm `hushstore-public-assets` vì nó chứa ảnh thật. Nhưng account cũ đã bị xoá sạch — kiểm tra thực tế cho thấy **không còn S3 bucket nào**, nên bucket đó không tồn tại và DB kỳ này cũng seed từ đầu, không có URL ảnh cũ nào để giữ. Cả 3 bucket đều tạo mới.
+>
+> **Tên S3 bucket là duy nhất toàn cầu**, không chỉ trong account. `hushstore-artifacts` và `hushstore-alb-logs` là tên quá phổ thông, dễ bị account khác chiếm. Vì vậy hai bucket này gắn hậu tố account ID cho chắc chắn tạo được. Riêng bucket ảnh thì **giữ tên đẹp không hậu tố** nếu còn trống, vì tên nó hiện trong URL ảnh công khai mà người dùng nhìn thấy — Step 1 kiểm tra trước, còn trống thì dùng, bị chiếm thì mới thêm hậu tố.
 
-- [ ] **Step 1: Xác nhận bucket ảnh sản phẩm đang tồn tại và có object**
+- [ ] **Step 1: Kiểm tra tên bucket ảnh còn trống không, rồi chốt tên**
 
 ```bash
-aws s3api head-bucket --bucket hushstore-public-assets --profile hushstore --no-cli-pager && echo "bucket OK"
-aws s3 ls s3://hushstore-public-assets/ --recursive --summarize --profile hushstore --no-cli-pager | tail -3
+export ACCT=${ACCT:-$(aws sts get-caller-identity --query Account --output text --profile hushstore)}
+
+if aws s3api head-bucket --bucket hushstore-public-assets --profile hushstore --no-cli-pager 2>&1 | grep -q '404'; then
+  echo "ASSETS_BUCKET=hushstore-public-assets   # tên trống, dùng được"
+elif aws s3api head-bucket --bucket hushstore-public-assets --profile hushstore --no-cli-pager 2>&1 | grep -q '403'; then
+  echo "ASSETS_BUCKET=hushstore-public-assets-${ACCT}   # tên đã bị account khác chiếm"
+else
+  echo "ASSETS_BUCKET=hushstore-public-assets   # bucket đã thuộc account này"
+fi
 ```
 
-Expected: in `bucket OK` và dòng `Total Objects: <n>` với n > 0. Ghi lại số n — Step 12 sẽ so lại để chắc chắn `import` không xoá gì.
+Expected: in ra đúng một dòng `ASSETS_BUCKET=...`. Ghi lại giá trị đó — Step 9 sẽ đặt nó vào `terraform.tfvars`.
+
+> `head-bucket` trả `404` nghĩa là tên hoàn toàn trống; `403` nghĩa là tên đã tồn tại nhưng thuộc account khác (không được phép dùng); không lỗi nghĩa là bucket đã thuộc account này.
 
 - [ ] **Step 2: Viết test trước — `infra/tf/modules/storage/tests/storage.tftest.hcl`**
 
@@ -2179,7 +2214,7 @@ variable "region" {
 }
 
 variable "assets_bucket_name" {
-  description = "Tên bucket ảnh sản phẩm đang tồn tại — được import vào state, KHÔNG tạo mới"
+  description = "Tên bucket ảnh sản phẩm. Tên này hiện trong URL ảnh công khai nên ưu tiên tên đẹp không hậu tố; nếu bị account khác chiếm thì thêm hậu tố account ID (xem Task 6 Step 1)"
   type        = string
   default     = "hushstore-public-assets"
 }
@@ -2255,17 +2290,19 @@ resource "aws_ecr_lifecycle_policy" "this" {
 - [ ] **Step 6: Viết `infra/tf/modules/storage/s3.tf`**
 
 ```hcl
-# ─── BUCKET ẢNH SẢN PHẨM (import, không tạo mới) ─────────────────
+data "aws_caller_identity" "current" {}
+
+# ─── BUCKET ẢNH SẢN PHẨM ─────────────────────────────────────────
 resource "aws_s3_bucket" "assets" {
   bucket = var.assets_bucket_name
 
   tags = { Name = var.assets_bucket_name }
 
-  # Bucket này chứa ảnh sản phẩm thật. Xoá nó là làm chết toàn bộ URL ảnh
-  # đang lưu trong DB. Phải bỏ dòng này rồi apply mới destroy được.
-  lifecycle {
-    prevent_destroy = true
-  }
+  # force_destroy = false (mặc định) là lưới an toàn đúng mức ở đây:
+  # terraform destroy sẽ THẤT BẠI nếu bucket còn object, buộc phải xoá ảnh
+  # một cách có ý thức trước. Không dùng prevent_destroy vì nó chặn cả
+  # nuke.sh ngay cả khi bucket rỗng.
+  force_destroy = false
 }
 
 # S3StorageService trả về URL public dạng
@@ -2315,7 +2352,7 @@ resource "aws_s3_bucket_cors_configuration" "assets" {
 
 # ─── BUCKET ARTIFACTS ────────────────────────────────────────────
 resource "aws_s3_bucket" "artifacts" {
-  bucket        = "${var.project}-artifacts"
+  bucket        = "${var.project}-artifacts-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
 
   tags = { Name = "${var.project}-artifacts" }
@@ -2357,7 +2394,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
 
 # ─── BUCKET ALB ACCESS LOGS ──────────────────────────────────────
 resource "aws_s3_bucket" "alb_logs" {
-  bucket        = "${var.project}-alb-logs"
+  bucket        = "${var.project}-alb-logs-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
 
   tags = { Name = "${var.project}-alb-logs" }
@@ -2498,7 +2535,7 @@ terraform test
 
 Expected: `3 passed, 0 failed.`
 
-- [ ] **Step 9: Thêm `module "storage"` và `import` block vào `infra/tf/envs/prod/main.tf`**
+- [ ] **Step 9: Thêm `module "storage"` vào `infra/tf/envs/prod/main.tf` và chốt tên bucket ảnh**
 
 Thêm sau `module "security"`:
 
@@ -2506,19 +2543,30 @@ Thêm sau `module "security"`:
 module "storage" {
   source = "../../modules/storage"
 
-  project = local.name
-  region  = var.region
-}
-
-# Bucket ảnh sản phẩm đã tồn tại từ trước Terraform — import vào state thay
-# vì tạo mới. Đây là ngoại lệ duy nhất trong stack greenfield này.
-import {
-  to = module.storage.aws_s3_bucket.assets
-  id = "hushstore-public-assets"
+  project            = local.name
+  region             = var.region
+  assets_bucket_name = var.assets_bucket_name
 }
 ```
 
-- [ ] **Step 10: Plan và kiểm tra kỹ rằng bucket assets được import, không bị replace**
+Thêm vào `infra/tf/envs/prod/variables.tf`:
+
+```hcl
+variable "assets_bucket_name" {
+  description = "Tên bucket ảnh sản phẩm. Chốt bằng Task 6 Step 1 — tên này hiện trong URL ảnh công khai"
+  type        = string
+  default     = "hushstore-public-assets"
+}
+```
+
+Nếu Step 1 báo tên đã bị chiếm, đặt tên có hậu tố vào `terraform.tfvars`:
+
+```bash
+cd infra/tf/envs/prod
+echo "assets_bucket_name = \"hushstore-public-assets-${ACCT}\"" >> terraform.tfvars
+```
+
+- [ ] **Step 10: Plan và kiểm tra không có gì bị destroy**
 
 ```bash
 cd infra/tf/envs/prod
@@ -2526,7 +2574,7 @@ terraform init
 terraform plan
 ```
 
-Expected: trong output có dòng `module.storage.aws_s3_bucket.assets: Preparing import... ` và `1 to import`. **Tuyệt đối không được có dòng `must be replaced` hay `-/+ destroy and then create replacement` cho resource này.** Nếu thấy, DỪNG LẠI — plan đang định xoá bucket ảnh sản phẩm.
+Expected: chỉ có `to add`, **`0 to destroy`**. Không có `import` block nào trong stack này — cả 3 bucket đều tạo mới. Nếu `plan` báo lỗi `BucketAlreadyExists` ở bước apply sau, quay lại Step 1 để chốt lại tên.
 
 - [ ] **Step 11: Apply**
 
@@ -2534,31 +2582,32 @@ Expected: trong output có dòng `module.storage.aws_s3_bucket.assets: Preparing
 terraform apply
 ```
 
-Expected: `Apply complete!` với `1 imported` và các resource khác `added`.
+Expected: `Apply complete!` với 3 `aws_ecr_repository`, 3 `aws_ecr_lifecycle_policy`, 3 `aws_s3_bucket` và các resource cấu hình bucket đi kèm.
 
-- [ ] **Step 12: Verify import không làm mất object nào**
-
-```bash
-aws s3 ls s3://hushstore-public-assets/ --recursive --summarize \
-  --profile hushstore --no-cli-pager | tail -3
-```
-
-Expected: `Total Objects` bằng đúng con số đã ghi ở Step 1.
-
-- [ ] **Step 13: Verify 3 ECR repository và bucket assets vẫn đọc public được**
+- [ ] **Step 12: Verify 3 ECR repository đều IMMUTABLE**
 
 ```bash
 aws ecr describe-repositories \
-  --query 'repositories[?starts_with(repositoryName, `hushstore-`)].{Name:repositoryName,Mutability:imageTagMutability}' \
+  --query 'repositories[?starts_with(repositoryName, `hushstore-`)].{Name:repositoryName,Mutability:imageTagMutability,Scan:imageScanningConfiguration.scanOnPush}' \
   --output table --profile hushstore --no-cli-pager
-
-FIRST_KEY=$(aws s3api list-objects-v2 --bucket hushstore-public-assets --max-items 1 \
-  --query 'Contents[0].Key' --output text --profile hushstore --no-cli-pager)
-curl -s -o /dev/null -w "%{http_code}\n" \
-  "https://hushstore-public-assets.s3.ap-southeast-1.amazonaws.com/${FIRST_KEY}"
 ```
 
-Expected: bảng có 3 dòng `hushstore-api`, `hushstore-web`, `hushstore-migrator` với `IMMUTABLE`; `curl` trả `200` (ảnh vẫn đọc công khai được, không làm chết URL nào).
+Expected: 3 dòng `hushstore-api`, `hushstore-web`, `hushstore-migrator`, tất cả `IMMUTABLE` và `True`.
+
+- [ ] **Step 13: Verify bucket ảnh đọc công khai được (điều kiện để upload ảnh hoạt động ở Task 16)**
+
+```bash
+ASSETS=$(terraform output -raw assets_bucket 2>/dev/null || echo hushstore-public-assets)
+echo "probe" > /tmp/probe.txt
+aws s3 cp /tmp/probe.txt "s3://${ASSETS}/probe/probe.txt" --profile hushstore --no-cli-pager
+curl -s -o /dev/null -w "public-read=%{http_code}\n" \
+  "https://${ASSETS}.s3.ap-southeast-1.amazonaws.com/probe/probe.txt"
+aws s3 rm "s3://${ASSETS}/probe/probe.txt" --profile hushstore --no-cli-pager
+```
+
+Expected: `public-read=200`. Nếu ra `403`, bucket policy hoặc public access block chưa đúng — `S3StorageService` trả URL công khai nên ảnh phải đọc được mà không cần credential.
+
+> Thêm output `assets_bucket` vào `infra/tf/envs/prod/outputs.tf` ở Step 14 để lệnh trên lấy được tên bucket.
 
 - [ ] **Step 14: Thêm output vào `infra/tf/envs/prod/outputs.tf` và commit**
 
@@ -2576,6 +2625,11 @@ output "artifacts_bucket" {
   description = "Bucket chứa migrate SQL và file ops"
   value       = module.storage.artifacts_bucket_name
 }
+
+output "assets_bucket" {
+  description = "Bucket ảnh sản phẩm — tên này hiện trong URL ảnh công khai"
+  value       = module.storage.assets_bucket_name
+}
 ```
 
 ```bash
@@ -2587,9 +2641,11 @@ ECR api/web/migrator, image_tag_mutability IMMUTABLE (tag la git SHA nen
 khong duoc ghi de — dieu kien de rollback dang tin), scan_on_push, lifecycle
 giu 5 image gan nhat.
 
-S3: bucket anh san pham duoc IMPORT (khong tao moi) de khong lam chet URL anh
-dang luu trong DB; artifacts va alb-logs chan public hoan toan, co lifecycle
-30/7 ngay. Policy alb-logs cap cho ca ELB account ID cua region va service
+S3: ca 3 bucket deu tao moi — account cu da bi xoa sach nen khong con bucket
+anh nao de import, va DB ky nay cung seed tu dau. artifacts va alb-logs gan hau
+to account ID vi ten bucket S3 la duy nhat toan cau va hai ten do qua pho thong;
+bucket anh giu ten dep khong hau to vi no hien trong URL anh cong khai. Ca hai
+bucket rieng tu chan public hoan toan, lifecycle 30/7 ngay. Policy alb-logs cap cho ca ELB account ID cua region va service
 principal logdelivery de chay dung o ap-southeast-1."
 ```
 
@@ -2620,7 +2676,7 @@ principal logdelivery de chay dung o ap-southeast-1."
 > **Ba điểm quan trọng:**
 > 1. **Không đặt `db_name`.** `aws_db_instance.db_name` không được hỗ trợ cho engine SQL Server. Database `HushStoreDB` sẽ do EF Core migration bundle tự tạo ở Task 13 (`Migrate()` tạo DB nếu chưa có).
 > 2. **Dùng SSM Parameter Store SecureString, không dùng Secrets Manager.** Parameter Store với KMS key mặc định `alias/aws/ssm` là **miễn phí**; Secrets Manager tốn $0.40/secret/tháng. ECS inject được cả hai qua khối `secrets`.
-> 3. **RDS identifier là `hushstore-db-tf`**, khác `hushstore-db` của stack cũ — hai instance phải cùng tồn tại tới Task 17.
+> 3. **RDS identifier là `hushstore-db-tf`.** Hậu tố `-tf` để phân biệt rõ đây là instance do Terraform quản, tránh nhầm với `hushstore-db` dựng tay ở kỳ trước (đã xoá).
 
 - [ ] **Step 1: Lấy engine version mới nhất của SQL Server Express**
 
@@ -3090,8 +3146,8 @@ Mat khau sinh bang random_password (32 ky tu, da loai / ' \" @ va space vi RDS
 SQL Server cam), luu vao SSM Parameter Store SecureString — mien phi, thay vi
 Secrets Manager \$0.40/secret/thang. JWT secret 64 ky tu cung o day.
 
-identifier la hushstore-db-tf, khac hushstore-db cua stack cu de hai instance
-cung ton tai toi Task 17."
+identifier la hushstore-db-tf — hau to -tf de phan biet ro day la instance do
+Terraform quan."
 ```
 
 ---
@@ -3793,9 +3849,9 @@ variables {
   project                   = "hushstore-tftest"
   assets_bucket_arn         = "arn:aws:s3:::hushstore-public-assets"
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
-  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:408194747451:repository/hushstore-api"]
-  ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:408194747451:parameter/hushstore/prod/connection-string"
-  ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:408194747451:parameter/hushstore/prod/jwt-secret"
+  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:000000000000:repository/hushstore-api"]
+  ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
+  ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
 }
 
 run "container_instance_role_khong_co_quyen_s3_hay_secret" {
@@ -4185,7 +4241,7 @@ Expected: `Apply complete!` với 4 `aws_iam_role`, 1 `aws_iam_instance_profile`
 
 ```bash
 aws iam simulate-principal-policy \
-  --policy-source-arn "arn:aws:iam::408194747451:role/hushstore-task-app-role" \
+  --policy-source-arn "arn:aws:iam::${ACCT}:role/hushstore-task-app-role" \
   --action-names rds:DescribeDBInstances ssm:GetParameter ecr:GetAuthorizationToken \
   --query 'EvaluationResults[].{Action:EvalActionName,Decision:EvalDecision}' \
   --output table --profile hushstore --no-cli-pager
@@ -4197,7 +4253,7 @@ Expected: cả 3 action đều `implicitDeny`. Đây là bằng chứng cho kị
 
 ```bash
 aws iam simulate-principal-policy \
-  --policy-source-arn "arn:aws:iam::408194747451:role/hushstore-task-app-role" \
+  --policy-source-arn "arn:aws:iam::${ACCT}:role/hushstore-task-app-role" \
   --action-names s3:PutObject \
   --resource-arns "arn:aws:s3:::hushstore-public-assets/products/test.jpg" \
   --query 'EvaluationResults[].{Action:EvalActionName,Decision:EvalDecision}' \
@@ -4210,7 +4266,7 @@ Expected: `s3:PutObject` → `allowed`. Nếu ra `implicitDeny`, upload ảnh s�
 
 ```bash
 aws iam simulate-principal-policy \
-  --policy-source-arn "arn:aws:iam::408194747451:role/hushstore-container-instance-role" \
+  --policy-source-arn "arn:aws:iam::${ACCT}:role/hushstore-container-instance-role" \
   --action-names ssm:GetParameter s3:PutObject \
   --query 'EvaluationResults[].{Action:EvalActionName,Decision:EvalDecision}' \
   --output table --profile hushstore --no-cli-pager
@@ -4284,9 +4340,9 @@ variables {
   project                   = "hushstore-tftest"
   assets_bucket_arn         = "arn:aws:s3:::hushstore-public-assets"
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
-  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:408194747451:repository/hushstore-api"]
-  ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:408194747451:parameter/hushstore/prod/connection-string"
-  ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:408194747451:parameter/hushstore/prod/jwt-secret"
+  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:000000000000:repository/hushstore-api"]
+  ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
+  ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
   web_sg_id                 = "sg-00000000000000000"
   instance_count            = 1
@@ -4832,16 +4888,16 @@ variables {
   project                   = "hushstore-tftest"
   assets_bucket_arn         = "arn:aws:s3:::hushstore-public-assets"
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
-  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:408194747451:repository/hushstore-api"]
-  ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:408194747451:parameter/hushstore/prod/connection-string"
-  ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:408194747451:parameter/hushstore/prod/jwt-secret"
+  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:000000000000:repository/hushstore-api"]
+  ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
+  ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
   web_sg_id                 = "sg-00000000000000000"
   instance_count            = 1
   instance_type             = "t3.micro"
-  ecr_api_url               = "408194747451.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
-  ecr_web_url               = "408194747451.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
-  ecr_migrator_url          = "408194747451.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
+  ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
+  ecr_web_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
+  ecr_migrator_url          = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
   image_tag                 = "abc123def456"
   assets_bucket_name        = "hushstore-public-assets"
   allowed_origins           = "https://hushstore.io.vn"
@@ -6076,22 +6132,22 @@ variables {
   project                   = "hushstore-tftest"
   assets_bucket_arn         = "arn:aws:s3:::hushstore-public-assets"
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
-  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:408194747451:repository/hushstore-api"]
-  ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:408194747451:parameter/hushstore/prod/connection-string"
-  ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:408194747451:parameter/hushstore/prod/jwt-secret"
+  ecr_arns                  = ["arn:aws:ecr:ap-southeast-1:000000000000:repository/hushstore-api"]
+  ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
+  ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
   web_sg_id                 = "sg-00000000000000000"
   instance_count            = 1
   instance_type             = "t3.micro"
-  ecr_api_url               = "408194747451.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
-  ecr_web_url               = "408194747451.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
-  ecr_migrator_url          = "408194747451.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
+  ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
+  ecr_web_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
+  ecr_migrator_url          = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
   image_tag                 = "abc123def456"
   assets_bucket_name        = "hushstore-public-assets"
   allowed_origins           = "https://hushstore.io.vn"
   enable_alb                = true
-  tg_web_arn                = "arn:aws:elasticloadbalancing:ap-southeast-1:408194747451:targetgroup/hushstore-tg-web/aaaaaaaaaaaaaaaa"
-  tg_api_arn                = "arn:aws:elasticloadbalancing:ap-southeast-1:408194747451:targetgroup/hushstore-tg-api/bbbbbbbbbbbbbbbb"
+  tg_web_arn                = "arn:aws:elasticloadbalancing:ap-southeast-1:000000000000:targetgroup/hushstore-tg-web/aaaaaaaaaaaaaaaa"
+  tg_api_arn                = "arn:aws:elasticloadbalancing:ap-southeast-1:000000000000:targetgroup/hushstore-tg-api/bbbbbbbbbbbbbbbb"
 }
 
 run "deployment_percent_phu_hop_voi_static_host_port_1_instance" {
@@ -6772,17 +6828,19 @@ Da kiem chung 5 hanh vi:
 
 ---
 
-### Task 17: Cắt DNS sang ALB, teardown stack cũ, viết runbook
+### Task 17: Cắt DNS sang ALB, viết runbook
 
 **Files:**
 - Create: `docs/terraform-runbook.md`
 - Modify: `README.md` (cập nhật phần deploy)
 
 **Interfaces:**
-- Consumes: stack mới đã kiểm chứng end-to-end (Task 16).
-- Produces: `https://hushstore.io.vn` và `https://api.hushstore.io.vn` phục vụ từ stack Terraform; stack cũ đã xoá hoàn toàn; runbook đủ để vận hành Phase 1.
+- Consumes: stack đã kiểm chứng end-to-end (Task 16).
+- Produces: `https://hushstore.io.vn` và `https://api.hushstore.io.vn` phục vụ từ stack Terraform; runbook đủ để vận hành Phase 1.
 
-> **Đây là task duy nhất được xoá resource của stack cũ.** Làm theo đúng thứ tự: cắt DNS trước, xác nhận traffic đã sang stack mới, snapshot RDS cũ, rồi mới teardown. Nếu bước nào sai, đường lùi là trỏ DNS về IP cũ.
+> **Cắt DNS ở đây gần như không có rủi ro.** Record `A @` và `A api` hiện đang trỏ vào IP của EC2 kỳ trước — instance đó đã bị xoá, nên hai record đang chết sẵn. Không có traffic thật nào để làm gián đoạn.
+>
+> **Nhưng có một lý do thật để phải cắt DNS:** `AllowedOrigins` của API đặt là `https://hushstore.io.vn` (Task 13). Khi test qua ALB DNS name, trình duyệt gửi `Origin` là hostname của ALB nên **CORS sẽ chặn** — nghĩa là không thể kiểm chứng luồng thật trên trình duyệt cho tới khi domain trỏ đúng. `curl` không bị ảnh hưởng vì nó không gửi `Origin`, đó là lý do Task 16 vẫn verify được bằng `curl`. Nếu muốn mở trình duyệt kiểm tra sớm, làm Step 1-4 của task này ngay sau Task 15.
 
 - [ ] **Step 1: Xác nhận stack mới đang chạy và khoẻ trước khi chạm vào DNS**
 
@@ -6805,12 +6863,11 @@ Expected: cả 2 service `Running = 1`, `web=200`, `api=200`. **Không đi tiế
 
 Trong Cloudflare dashboard → `hushstore.io.vn` → DNS → Records:
 
-1. **Ghi lại IP hiện tại** của record `A @` và `A api` — đó là đường lùi.
-2. **Xoá** record `A @` và `A api` (đang trỏ IP EC2 cũ).
-3. **Thêm** record mới:
+1. **Xoá** record `A @` và `A api` — chúng đang trỏ vào IP của EC2 kỳ trước đã bị xoá, tức là record chết.
+2. **Thêm** record mới:
    - Type `CNAME`, Name `@`, Target `<ALB_DNS ở Step 1>`, Proxy **Proxied** (mây vàng), TTL Auto
    - Type `CNAME`, Name `api`, Target `<ALB_DNS ở Step 1>`, Proxy **Proxied** (mây vàng), TTL Auto
-4. SSL/TLS → Overview → đặt encryption mode **Full (strict)**.
+3. SSL/TLS → Overview → đặt encryption mode **Full (strict)**.
 
 > Cloudflare tự làm CNAME flattening ở apex nên `CNAME @` hợp lệ. Mây vàng dùng được vì ALB có ACM cert hợp lệ cho cả 2 hostname — đó là điều kiện của Full (strict). Giữ record CNAME validation của ACM ở trạng thái **DNS only** (mây xám) như đã đặt ở Task 14.
 
@@ -6842,83 +6899,61 @@ curl -s -X POST https://api.hushstore.io.vn/api/auth/login \
 
 Expected: `https-cert-hop-le=200` (không cần `-k` nữa — cert khớp domain), `http-redirect=301`, và login trả token. Mở `https://hushstore.io.vn` trên browser, kiểm tra biểu tượng khoá và duyệt được danh sách sản phẩm.
 
-- [ ] **Step 5: Snapshot RDS cũ trước khi teardown**
+- [ ] **Step 5: Verify account chỉ chứa đúng stack Terraform, không có gì lạc**
 
 ```bash
-aws rds create-db-snapshot \
-  --db-instance-identifier hushstore-db \
-  --db-snapshot-identifier hushstore-db-final-before-tf-migration \
-  --profile hushstore --no-cli-pager
-aws rds wait db-snapshot-available \
-  --db-snapshot-identifier hushstore-db-final-before-tf-migration \
-  --profile hushstore --no-cli-pager
-aws rds describe-db-snapshots \
-  --db-snapshot-identifier hushstore-db-final-before-tf-migration \
-  --query 'DBSnapshots[0].{Status:Status,Size:AllocatedStorage,Created:SnapshotCreateTime}' \
-  --profile hushstore --no-cli-pager
-```
-
-Expected: `Status: available`. Snapshot 20GB tốn ~$0.4/tháng — giữ lại vài tuần rồi xoá.
-
-> RDS cũ đang `stopped` từ Task 1. `create-db-snapshot` trên instance stopped vẫn hoạt động.
-
-- [ ] **Step 6: Teardown stack cũ**
-
-```bash
-cd "$(git rev-parse --show-toplevel)"
-bash infra/legacy-cli/teardown.sh
-```
-
-Nếu `teardown.sh` cần `resources.env` mà file không còn, xoá tay theo đúng thứ tự phụ thuộc:
-
-```bash
-AWS="aws --profile hushstore --no-cli-pager --region ap-southeast-1"
-
-# 1. EC2 cũ
-$AWS ec2 terminate-instances --instance-ids i-01fa96072d16e846a
-$AWS ec2 wait instance-terminated --instance-ids i-01fa96072d16e846a
-
-# 2. RDS cũ (đã có snapshot ở Step 5)
-$AWS rds delete-db-instance --db-instance-identifier hushstore-db --skip-final-snapshot
-$AWS rds wait db-instance-deleted --db-instance-identifier hushstore-db
-$AWS rds delete-db-subnet-group --db-subnet-group-name hushstore-db-subnet-group
-
-# 3. Tìm VPC cũ (CIDR 10.0.0.0/16) rồi xoá subnet, route table, SG, IGW, VPC
-OLD_VPC=$($AWS ec2 describe-vpcs --filters "Name=cidr,Values=10.0.0.0/16" \
-  --query 'Vpcs[0].VpcId' --output text)
-echo "VPC cũ: $OLD_VPC"
-```
-
-Expected: EC2 `terminated`, RDS `deleted`. Với VPC, xoá theo thứ tự: subnet → route table (trừ main) → security group (trừ default) → detach + delete IGW → delete VPC.
-
-- [ ] **Step 7: Verify chỉ còn stack mới**
-
-```bash
-AWS="aws --profile hushstore --no-cli-pager --region ap-southeast-1"
+a() { command aws --profile hushstore --no-cli-pager --region ap-southeast-1 "$@"; }
 echo "--- VPC ---"
-$AWS ec2 describe-vpcs --query 'Vpcs[].{Id:VpcId,Cidr:CidrBlock,Name:Tags[?Key==`Name`].Value|[0]}' --output table
-echo "--- EC2 đang chạy ---"
-$AWS ec2 describe-instances --filters "Name=instance-state-name,Values=running" \
-  --query 'Reservations[].Instances[].{Id:InstanceId,Vpc:VpcId,PublicIp:PublicIpAddress}' --output table
+a ec2 describe-vpcs --query 'Vpcs[].[VpcId,CidrBlock,IsDefault]' --output text
+echo "--- EC2 dang chay ---"
+a ec2 describe-instances --filters "Name=instance-state-name,Values=running" \
+  --query 'Reservations[].Instances[].[InstanceId,PublicIpAddress]' --output text
 echo "--- RDS ---"
-$AWS rds describe-db-instances --query 'DBInstances[].{Id:DBInstanceIdentifier,Status:DBInstanceStatus}' --output table
-echo "--- Key pair (phải rỗng) ---"
-$AWS ec2 describe-key-pairs --query 'KeyPairs[].KeyName' --output text
+a rds describe-db-instances --query 'DBInstances[].[DBInstanceIdentifier,DBInstanceStatus]' --output text
+echo "--- Key pair (phai rong) ---"
+a ec2 describe-key-pairs --query 'KeyPairs[].KeyName' --output text
+echo "--- EIP chua gan (tinh phi neu co) ---"
+a ec2 describe-addresses --query 'Addresses[?AssociationId==null].PublicIp' --output text
 ```
 
-Expected: chỉ còn VPC `10.20.0.0/16` (và default VPC nếu có); EC2 đang chạy không có `PublicIp`; RDS chỉ còn `hushstore-db-tf`; **key pair rỗng** — không còn SSH key nào trong account.
+Expected: VPC chỉ có `10.20.0.0/16` (cộng default VPC `172.31.0.0/16` nếu account mới còn giữ); EC2 đang chạy **không có public IP**; RDS chỉ có `hushstore-db-tf`; **key pair rỗng**; không có EIP nào chưa gắn.
 
-- [ ] **Step 8: Xoá key pair cũ và file `.pem` trên máy**
+`KeyPairs` rỗng là bằng chứng nửa đầu cho kịch bản kiểm thử số 5 — không có SSH key nào tồn tại trong account. Nửa còn lại là Task 5 Step 9 (không SG rule nào mở port 22).
+
+- [ ] **Step 6: (Tuỳ chọn) Dọn nốt account cũ `408194747451`**
+
+Account kỳ trước còn sót 2 VPC `10.0.0.0/16` và key pair `hushstore-key`. Cả hai **miễn phí**, không ảnh hưởng gì tới đồ án kỳ này — chỉ là dọn cho gọn. Cần profile riêng vì `hushstore` giờ trỏ account mới:
 
 ```bash
-aws ec2 delete-key-pair --key-name hushstore-key --profile hushstore --no-cli-pager 2>/dev/null || true
-rm -f ~/.ssh/hushstore-key.pem
-aws ec2 describe-key-pairs --query 'KeyPairs[].KeyName' --output text --profile hushstore --no-cli-pager
+o() { command aws --profile hushstore-old --no-cli-pager --region ap-southeast-1 "$@"; }
+o sts get-caller-identity --query Account --output text   # phai in 408194747451
+
+o ec2 delete-key-pair --key-name hushstore-key
+
+for V in $(o ec2 describe-vpcs --filters "Name=isDefault,Values=false" \
+             --query 'Vpcs[].VpcId' --output text); do
+  echo "=== $V ==="
+  for S in $(o ec2 describe-subnets --filters "Name=vpc-id,Values=$V" \
+               --query 'Subnets[].SubnetId' --output text); do o ec2 delete-subnet --subnet-id "$S"; done
+  for R in $(o ec2 describe-route-tables --filters "Name=vpc-id,Values=$V" \
+               --query 'RouteTables[?length(Associations[?Main==`true`])==`0`].RouteTableId' --output text); do
+    o ec2 delete-route-table --route-table-id "$R"; done
+  for G in $(o ec2 describe-security-groups --filters "Name=vpc-id,Values=$V" \
+               --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text); do
+    o ec2 delete-security-group --group-id "$G"; done
+  for I in $(o ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$V" \
+               --query 'InternetGateways[].InternetGatewayId' --output text); do
+    o ec2 detach-internet-gateway --internet-gateway-id "$I" --vpc-id "$V"
+    o ec2 delete-internet-gateway --internet-gateway-id "$I"; done
+  o ec2 delete-vpc --vpc-id "$V"
+done
 ```
 
-Expected: không in gì. Kết hợp với Task 5 Step 9 (không có SG rule nào mở 22), đây là bằng chứng đầy đủ cho kịch bản kiểm thử số 5.
+Expected: không lỗi. Nếu `delete-vpc` báo `DependencyViolation`, còn ENI hoặc resource nào đó bám vào — bỏ qua, VPC không tốn phí.
 
-- [ ] **Step 9: Viết `docs/terraform-runbook.md`**
+> Bỏ qua step này hoàn toàn cũng được. Nó không phải điều kiện của bất kỳ task nào.
+
+- [ ] **Step 7: Viết `docs/terraform-runbook.md`**
 
 ```markdown
 # Terraform Runbook — HushStore Phase 1
@@ -6929,7 +6964,7 @@ Vận hành hạ tầng AWS của HushStore. Spec kiến trúc:
 ## Yêu cầu
 
 - Terraform ≥ 1.10 (backend dùng `use_lockfile`)
-- AWS CLI v2 với profile `hushstore` (account `408194747451`, region `ap-southeast-1`)
+- AWS CLI v2 với profile `hushstore` (IAM Identity Center / SSO, region `ap-southeast-1`). Đầu mỗi phiên: `aws sso login --profile hushstore`
 - Docker (để build image)
 - `jq`
 
@@ -7124,7 +7159,7 @@ RDS nằm trong db subnet isolated nên không seed được từ laptop.
 NAT Gateway là khoản đắt nhất và không có bậc free tier. Tắt khi không dùng.
 ```
 
-- [ ] **Step 10: Cập nhật phần deploy trong `README.md`**
+- [ ] **Step 8: Cập nhật phần deploy trong `README.md`**
 
 Thay mục hướng dẫn deploy EC2 thủ công hiện có bằng:
 
@@ -7146,7 +7181,7 @@ Script AWS CLI cũ nằm ở [infra/legacy-cli/](infra/legacy-cli/) chỉ để 
 **không chạy nữa** (sẽ tạo resource nằm ngoài Terraform state).
 ```
 
-- [ ] **Step 11: Hạ chi phí và commit**
+- [ ] **Step 9: Hạ chi phí và commit**
 
 ```bash
 cd infra/tf/envs/prod
@@ -7158,23 +7193,26 @@ aws rds stop-db-instance --db-instance-identifier hushstore-db-tf --profile hush
 
 cd "$(git rev-parse --show-toplevel)"
 git add docs/terraform-runbook.md README.md infra/tf
-git commit -m "docs(infra): runbook Terraform + cat DNS sang ALB, teardown stack cu
+git commit -m "docs(infra): runbook Terraform + cat DNS sang ALB
 
 DNS hushstore.io.vn va api.hushstore.io.vn da tro CNAME sang ALB (Cloudflare
 proxied, SSL Full strict — ACM cert hop le cho ca 2 hostname nen dung duoc may
 vang). Da verify cert that khong can curl -k.
 
-Stack cu da teardown sau khi snapshot RDS thanh
-hushstore-db-final-before-tf-migration. Da xoa key pair hushstore-key va file
-.pem tren may — ket hop voi viec khong co SG rule nao mo port 22, day la bang
-chung day du cho kich ban kiem thu so 5.
+Cat DNS la dieu kien de kiem chung tren trinh duyet: AllowedOrigins cua API dat
+la https://hushstore.io.vn nen truy cap qua ALB DNS name se bi CORS chan. curl
+khong bi anh huong vi khong gui Origin.
+
+Account chi chua dung stack Terraform: EC2 khong public IP, key pair rong,
+khong EIP thua. Key pair rong la nua dau bang chung cho kich ban kiem thu so 5;
+nua con lai la khong SG rule nao mo port 22.
 
 runbook phu: toggle chi phi, thu tu bat/tat (NAT truoc instance khi bat, service
 truoc instance khi tat), deploy tay voi migration gate, rollback, vao he thong
 bang SSM/ECS Exec, seed lai du lieu, 7 su co thuong gap."
 ```
 
-- [ ] **Step 12: Xác nhận Phase 1 hoàn thành**
+- [ ] **Step 10: Xác nhận Phase 1 hoàn thành**
 
 ```bash
 cd infra/tf/envs/prod
@@ -7198,7 +7236,8 @@ Expected: `terraform plan` in `No changes`; cả 6 module đều `passed, 0 fail
 
 **2. Ba chỗ plan lệch khỏi spec, có chủ ý:**
 
-- **Teardown stack cũ chuyển từ bước 0 xuống Task 17.** Spec đặt teardown đầu tiên, nhưng làm vậy mất đường lùi và website chết suốt thời gian dựng stack mới. VPC mới dùng `10.20.0.0/16` nên không xung đột. Task 1 chỉ *stop* EC2 + RDS cũ để ngừng phí compute.
+- **Bỏ hoàn toàn phần teardown/migrate stack cũ.** Spec giả định stack cũ đang chạy trên account `408194747451`. Kiểm tra thực tế cho thấy account đó đã bị xoá sạch tài nguyên sau báo cáo kỳ trước và đã hết free tier, nên kỳ này dùng account mới với IAM Identity Center. Không có gì để stop, snapshot hay teardown; Task 1 chuyển thành thiết lập danh tính SSO.
+- **Bỏ `import` block cho bucket ảnh sản phẩm.** Spec gọi đây là "ngoại lệ duy nhất" của stack greenfield, nhưng bucket `hushstore-public-assets` không còn tồn tại (account cũ không còn S3 bucket nào) và DB kỳ này seed từ đầu nên không có URL ảnh cũ nào để giữ. Cả 3 bucket đều tạo mới; `hushstore-artifacts` và `hushstore-alb-logs` thêm hậu tố account ID vì tên bucket S3 duy nhất toàn cầu.
 - **Spec nói 3 IAM role, plan làm 4.** Thêm `task-migrator-role` (rỗng, chỉ có trust policy) để migrator không phải dùng chung role với API — migrator chỉ cần TCP 1433, không cần quyền AWS API nào.
 - **Spec nói `enable_alb` gate ALB; plan gate cả target group và 2 ECS service.** Bắt buộc: ECS `CreateService` fail nếu target group chưa gắn vào load balancer. ACM cert thì *không* gate — cert miễn phí và DNS validation mất thời gian.
 
