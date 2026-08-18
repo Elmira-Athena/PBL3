@@ -14,6 +14,20 @@
 
 - **Terraform** `>= 1.10` — bắt buộc, vì backend S3 dùng `use_lockfile = true` (native lockfile, không DynamoDB).
 - **AWS provider** `~> 6.0`.
+- **Mỗi module phải có `versions.tf`** khai báo `required_version >= 1.10` và `aws ~> 6.0`. Không có nó, `terraform init` khi chạy `terraform test` trong thư mục module sẽ lấy provider mới nhất thay vì bản root đang dùng — test có thể validate trên provider khác với bản thật sự apply. Nội dung giống nhau ở mọi module:
+  ```hcl
+  terraform {
+    required_version = ">= 1.10"
+
+    required_providers {
+      aws = {
+        source  = "hashicorp/aws"
+        version = "~> 6.0"
+      }
+    }
+  }
+  ```
+  Riêng module `data` thêm `random = { source = "hashicorp/random", version = "~> 3.6" }`.
 - **Region** `ap-southeast-1`. **AWS CLI profile** `hushstore` — trỏ vào **account mới của kỳ này** (account cũ `408194747451` đã hết free tier và đã bị xoá sạch tài nguyên, không dùng nữa).
 - **Danh tính là IAM Identity Center (SSO)**, không phải IAM user + access key. Mỗi ngày làm việc chạy `aws sso login --profile hushstore` một lần. Permission set `AdministratorAccess`, session 8 giờ.
 - **Account ID không hardcode trong plan.** Mọi lệnh dùng biến `$ACCT`; đặt nó ở đầu mỗi phiên làm việc:
@@ -1653,6 +1667,8 @@ nacl-db: đúng 1 rule mỗi chiều — 1433 từ app tier, ephemeral về app 
 ### Task 5: Module `security` — 3 Security Group, không có rule port 22 nào
 
 **Files:**
+- Create: `infra/tf/modules/security/versions.tf`
+- Create: `infra/tf/modules/network/versions.tf` (bù cho Task 3 — cùng dạng file, làm gộp ở đây)
 - Create: `infra/tf/modules/security/variables.tf`
 - Create: `infra/tf/modules/security/main.tf`
 - Create: `infra/tf/modules/security/outputs.tf`
@@ -2089,6 +2105,7 @@ cach bao dam 'khong rule nao mo port 22' o pham vi ca module."
 ### Task 6: Module `storage` — 3 ECR repository + 3 S3 bucket
 
 **Files:**
+- Create: `infra/tf/modules/storage/versions.tf`
 - Create: `infra/tf/modules/storage/variables.tf`
 - Create: `infra/tf/modules/storage/ecr.tf`
 - Create: `infra/tf/modules/storage/s3.tf`
@@ -3836,6 +3853,7 @@ HAI bien ConnectionStrings__DefaultConnection va JwtSettings__SecretKey."
 ### Task 11: Module `ecs` — 3 IAM role tách phạm vi
 
 **Files:**
+- Create: `infra/tf/modules/ecs/versions.tf`
 - Create: `infra/tf/modules/ecs/variables.tf`
 - Create: `infra/tf/modules/ecs/iam.tf`
 - Create: `infra/tf/modules/ecs/outputs.tf`
@@ -5515,6 +5533,7 @@ HushStoreDB do efbundle tu tao."
 ### Task 14: Module `alb` — ACM cert, ALB, 2 target group, listener theo Host header
 
 **Files:**
+- Create: `infra/tf/modules/alb/versions.tf`
 - Create: `infra/tf/modules/alb/variables.tf`
 - Create: `infra/tf/modules/alb/acm.tf`
 - Create: `infra/tf/modules/alb/alb.tf`
