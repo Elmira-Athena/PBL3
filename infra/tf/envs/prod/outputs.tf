@@ -28,3 +28,13 @@ output "assets_bucket" {
   description = "Bucket ảnh sản phẩm — tên này hiện trong URL ảnh công khai"
   value       = module.storage.assets_bucket_name
 }
+
+output "rds_endpoint" {
+  description = "Hostname RDS — chỉ truy cập được từ trong app tier"
+  value       = module.data.rds_endpoint
+}
+
+output "rds_identifier" {
+  description = "DB identifier để start/stop tiết kiệm chi phí"
+  value       = module.data.rds_identifier
+}

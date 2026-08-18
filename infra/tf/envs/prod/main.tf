@@ -41,3 +41,12 @@ module "storage" {
   project = local.name
   region  = var.region
 }
+
+module "data" {
+  source = "../../modules/data"
+
+  project        = local.name
+  db_subnet_ids  = module.network.db_subnet_ids
+  rds_sg_id      = module.security.rds_sg_id
+  engine_version = var.db_engine_version
+}

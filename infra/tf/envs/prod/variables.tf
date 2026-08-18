@@ -78,3 +78,8 @@ variable "enable_deny_demo" {
   type        = bool
   default     = false
 }
+
+variable "db_engine_version" {
+  description = "Version của sqlserver-ex. Lấy bằng: aws rds describe-db-engine-versions --engine sqlserver-ex --query 'sort_by(DBEngineVersions,&EngineVersion)[-1].EngineVersion' --output text"
+  type        = string
+}

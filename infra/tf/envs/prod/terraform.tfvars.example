@@ -18,3 +18,9 @@ enable_flow_logs = false
 
 # NACL deny rule theo my_ip — chỉ bật khi demo kịch bản test số 8.
 enable_deny_demo = false
+
+# Version sqlserver-ex. Lấy bằng:
+#   aws rds describe-db-engine-versions --engine sqlserver-ex \
+#     --query 'sort_by(DBEngineVersions,&EngineVersion)[-1].EngineVersion' \
+#     --output text --profile hushstore
+db_engine_version = "16.00.4210.1.v1"
