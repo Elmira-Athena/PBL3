@@ -34,3 +34,10 @@ module "security" {
   project = local.name
   vpc_id  = module.network.vpc_id
 }
+
+module "storage" {
+  source = "../../modules/storage"
+
+  project = local.name
+  region  = var.region
+}
