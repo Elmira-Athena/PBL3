@@ -102,3 +102,19 @@ local-up.sh
 local-down.sh
 local-import-azure.sh
 local-dev/
+
+# ── Terraform ────────────────────────────────────────────────────
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+# tfvars chứa my_ip và có thể chứa giá trị nhạy cảm — chỉ commit file mẫu
+*.tfvars
+!*.tfvars.example
