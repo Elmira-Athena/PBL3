@@ -2372,6 +2372,16 @@ resource "aws_s3_bucket_public_access_block" "assets" {
   restrict_public_buckets = false
 }
 
+# CẢNH BÁO CÓ CHỦ Ý: policy này làm MỌI object trong bucket đọc được công khai,
+# không chỉ ảnh sản phẩm. Đó là yêu cầu của S3StorageService (nó trả URL công
+# khai và Blazor render trực tiếp), nhưng kéo theo hai điều phải nhớ:
+#   1. TUYỆT ĐỐI không đặt dữ liệu không công khai vào bucket này. Thứ gì cần
+#      riêng tư thì để ở bucket artifacts (đã chặn public hoàn toàn).
+#   2. `ImageController.Upload` nhận `folder` từ query param với default
+#      "general" và KHÔNG có allowlist, nên admin ghi được vào bất kỳ prefix
+#      nào. Không siết được bằng bucket policy theo prefix cố định vì prefix do
+#      caller quyết định. Cách sửa đúng là validate `folder` theo allowlist ở
+#      tầng app — ghi nhận vào docs/security-validation-report.md (Phase 3).
 data "aws_iam_policy_document" "assets_public_read" {
   statement {
     sid     = "PublicReadObjects"
@@ -2498,6 +2508,12 @@ data "aws_iam_policy_document" "alb_logs" {
     resources = ["${aws_s3_bucket.alb_logs.arn}/*"]
   }
 
+  # Service principal dùng CHUNG cho mọi khách hàng AWS, nên nếu không có
+  # condition thì load balancer của account khác cũng có thể được trỏ vào bucket
+  # này mà ghi log vào — đây đúng là lỗ hổng confused deputy. aws:SourceAccount
+  # giới hạn chỉ ALB của chính account này.
+  # Không dùng thêm aws:SourceArn được vì ARN của ALB chưa tồn tại ở Task 6
+  # (ALB tạo ở Task 14 và còn bị enable_alb gate).
   statement {
     sid     = "LogDeliveryServiceWrite"
     effect  = "Allow"
@@ -2509,6 +2525,12 @@ data "aws_iam_policy_document" "alb_logs" {
     }
 
     resources = ["${aws_s3_bucket.alb_logs.arn}/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
   }
 }
 
