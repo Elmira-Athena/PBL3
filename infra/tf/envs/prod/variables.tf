@@ -5,7 +5,7 @@ variable "project" {
 }
 
 variable "region" {
-  description = "AWS region"
+  description = "Vùng AWS"
   type        = string
   default     = "ap-southeast-1"
 }

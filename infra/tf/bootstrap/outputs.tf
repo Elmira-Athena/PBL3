@@ -4,6 +4,6 @@ output "state_bucket" {
 }
 
 output "account_id" {
-  description = "AWS account ID"
+  description = "ID tài khoản AWS"
   value       = data.aws_caller_identity.current.account_id
 }
