@@ -27,3 +27,10 @@ module "network" {
   enable_flow_logs    = var.enable_flow_logs
   enable_deny_demo    = var.enable_deny_demo
 }
+
+module "security" {
+  source = "../../modules/security"
+
+  project = local.name
+  vpc_id  = module.network.vpc_id
+}
