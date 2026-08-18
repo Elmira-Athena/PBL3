@@ -12,3 +12,18 @@
 locals {
   name = var.project
 }
+
+module "network" {
+  source = "../../modules/network"
+
+  project             = local.name
+  vpc_cidr            = var.vpc_cidr
+  azs                 = var.azs
+  public_subnet_cidrs = var.public_subnet_cidrs
+  app_subnet_cidrs    = var.app_subnet_cidrs
+  db_subnet_cidrs     = var.db_subnet_cidrs
+  my_ip               = var.my_ip
+  enable_nat          = var.enable_nat
+  enable_flow_logs    = var.enable_flow_logs
+  enable_deny_demo    = var.enable_deny_demo
+}
