@@ -22,3 +22,23 @@ output "task_migrator_role_arn" {
   description = "ARN role container migrator (không có quyền AWS API nào)"
   value       = aws_iam_role.task_migrator.arn
 }
+
+output "cluster_name" {
+  description = "Tên ECS cluster"
+  value       = aws_ecs_cluster.this.name
+}
+
+output "cluster_arn" {
+  description = "ARN của ECS cluster"
+  value       = aws_ecs_cluster.this.arn
+}
+
+output "asg_name" {
+  description = "Tên ASG — dùng cho aws autoscaling set-desired-capacity khi bật/tắt"
+  value       = aws_autoscaling_group.this.name
+}
+
+output "capacity_provider_name" {
+  description = "Tên capacity provider — dùng trong capacity_provider_strategy của service"
+  value       = aws_ecs_capacity_provider.this.name
+}

@@ -94,3 +94,15 @@ variable "monthly_budget_usd" {
   type        = number
   default     = 20
 }
+
+variable "instance_count" {
+  description = "Số EC2 container instance (0 hoặc 1). 0 = tắt hoàn toàn, về $0"
+  type        = number
+  default     = 0
+}
+
+variable "instance_type" {
+  description = "Instance type của container instance. t3.micro free tier, 1GB RAM"
+  type        = string
+  default     = "t3.micro"
+}

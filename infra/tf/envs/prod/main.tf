@@ -60,6 +60,11 @@ module "ecs" {
 
   ssm_connection_string_arn = module.data.ssm_connection_string_arn
   ssm_jwt_secret_arn        = module.data.ssm_jwt_secret_arn
+
+  app_subnet_ids = module.network.app_subnet_ids
+  web_sg_id      = module.security.web_sg_id
+  instance_count = var.instance_count
+  instance_type  = var.instance_type
 }
 
 # Dựng sớm hơn thứ tự plan (Phase 3) theo yêu cầu: bịt rủi ro "quên tắt NAT

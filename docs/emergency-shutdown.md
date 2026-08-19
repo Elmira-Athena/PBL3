@@ -77,6 +77,34 @@ for arn in $(a elbv2 describe-load-balancers --query 'LoadBalancers[].LoadBalanc
   a elbv2 delete-load-balancer --load-balancer-arn "$arn" && echo "da xoa ALB"
 done
 
+# ── 3b. ĐỢI instance terminate THẬT rồi mới xoá NAT ──
+# Gắn ASG vào ECS capacity provider khiến ECS tạo lifecycle hook
+# `ecs-managed-draining-termination-hook` (timeout 3600s) — dù
+# managed_termination_protection đã DISABLED, vì đây là tính năng managed
+# draining khác. Hạ desired về 0 KHÔNG terminate ngay: instance vào trạng thái
+# `Terminating:Wait` và chờ ECS drain xong.
+# Nếu xoá NAT trước khi instance drain, ECS agent mất đường ra control plane và
+# ECS không bao giờ drain -> instance treo ở Terminating:Wait tới 1 GIỜ.
+echo "doi instance terminate (co the mat 1-2 phut)..."
+for i in $(seq 1 12); do
+  ST=$(a ec2 describe-instances --filters "Name=tag:Name,Values=hushstore-container-instance" \
+       --query 'Reservations[].Instances[?State.Name!=`terminated`].State.Name' --output text)
+  [ -z "$ST" ] && echo "instance da terminate" && break
+  echo "  con: $ST"; sleep 15
+done
+
+# Neu treo o Terminating:Wait, giai phong hook thu cong:
+for iid in $(a autoscaling describe-auto-scaling-groups \
+      --auto-scaling-group-names hushstore-asg \
+      --query 'AutoScalingGroups[0].Instances[?LifecycleState==`Terminating:Wait`].InstanceId' \
+      --output text); do
+  echo "giai phong lifecycle hook cho $iid"
+  a autoscaling complete-lifecycle-action \
+    --auto-scaling-group-name hushstore-asg \
+    --lifecycle-hook-name ecs-managed-draining-termination-hook \
+    --lifecycle-action-result CONTINUE --instance-id "$iid"
+done
+
 # ── 4. Xoá NAT Gateway ($0.045/giờ) ──
 for nat in $(a ec2 describe-nat-gateways \
       --filter "Name=state,Values=available,pending" \
@@ -99,6 +127,12 @@ a rds stop-db-instance --db-instance-identifier hushstore-db-tf >/dev/null 2>&1 
 
 > Nếu bước 5 báo `AuthFailure` hoặc EIP vẫn còn gắn, đợi thêm 2 phút rồi chạy lại
 > riêng bước đó. NAT Gateway mất một lúc mới nhả EIP.
+>
+> **Đã gặp thật:** lần đầu tôi xoá NAT chỉ 40 giây sau khi instance launch, nên ECS
+> agent chưa kịp đăng ký vào cluster. ECS không biết instance tồn tại nên không
+> drain, và nó treo ở `Terminating:Wait`. Đó là lý do bước 3b tồn tại và phải đứng
+> TRƯỚC bước 4. Instance treo không tốn tiền (t3.micro + EBS 30GB đều free tier)
+> nhưng gây hoang mang khi kiểm tra.
 
 ---
 

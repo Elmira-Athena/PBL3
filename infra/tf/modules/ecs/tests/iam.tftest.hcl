@@ -9,6 +9,8 @@ variables {
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
   ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
   ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
+  app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
+  web_sg_id                 = "sg-00000000000000000"
 }
 
 run "container_instance_role_khong_co_quyen_s3_hay_secret" {

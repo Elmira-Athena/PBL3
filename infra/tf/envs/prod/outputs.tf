@@ -43,3 +43,18 @@ output "budget_name" {
   description = "Tên budget theo dõi chi phí tháng"
   value       = module.costguard.budget_name
 }
+
+output "ecs_cluster_name" {
+  description = "Tên ECS cluster"
+  value       = module.ecs.cluster_name
+}
+
+output "asg_name" {
+  description = "Tên ASG — dùng để bật/tắt instance tiết kiệm chi phí"
+  value       = module.ecs.asg_name
+}
+
+output "capacity_provider_name" {
+  description = "Tên ECS capacity provider — dùng cho aws ecs run-task"
+  value       = module.ecs.capacity_provider_name
+}
