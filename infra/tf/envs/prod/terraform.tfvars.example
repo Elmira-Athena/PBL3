@@ -24,3 +24,10 @@ enable_deny_demo = false
 #     --query 'sort_by(DBEngineVersions,&EngineVersion)[-1].EngineVersion' \
 #     --output text --profile hushstore
 db_engine_version = "16.00.4210.1.v1"
+
+# Email nhận cảnh báo chi phí. AWS gửi mail xác nhận đăng ký — phải bấm xác nhận.
+alert_email = "you@example.com"
+
+# Ngưỡng ngân sách tháng. Cảnh báo ở 25% ($5), 50% ($10), 100% ($20) thực tế,
+# và 100% dự báo (bắn TRƯỚC khi tiền thật sự bị tiêu).
+monthly_budget_usd = 20

@@ -38,3 +38,8 @@ output "rds_identifier" {
   description = "DB identifier để start/stop tiết kiệm chi phí"
   value       = module.data.rds_identifier
 }
+
+output "budget_name" {
+  description = "Tên budget theo dõi chi phí tháng"
+  value       = module.costguard.budget_name
+}

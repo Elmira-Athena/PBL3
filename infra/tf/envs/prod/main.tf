@@ -50,3 +50,25 @@ module "data" {
   rds_sg_id      = module.security.rds_sg_id
   engine_version = var.db_engine_version
 }
+
+module "ecs" {
+  source = "../../modules/ecs"
+
+  project              = local.name
+  assets_bucket_arn    = module.storage.assets_bucket_arn
+  artifacts_bucket_arn = module.storage.artifacts_bucket_arn
+
+  ssm_connection_string_arn = module.data.ssm_connection_string_arn
+  ssm_jwt_secret_arn        = module.data.ssm_jwt_secret_arn
+}
+
+# Dựng sớm hơn thứ tự plan (Phase 3) theo yêu cầu: bịt rủi ro "quên tắt NAT
+# Gateway / ALB" ngay từ bây giờ thay vì đợi tới cuối. Phase 3 sẽ mở rộng module
+# này thêm Lambda cost-guard + EventBridge Scheduler.
+module "costguard" {
+  source = "../../modules/costguard"
+
+  project            = local.name
+  alert_email        = var.alert_email
+  monthly_budget_usd = var.monthly_budget_usd
+}

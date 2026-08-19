@@ -83,3 +83,14 @@ variable "db_engine_version" {
   description = "Version của sqlserver-ex. Lấy bằng: aws rds describe-db-engine-versions --engine sqlserver-ex --query 'sort_by(DBEngineVersions,&EngineVersion)[-1].EngineVersion' --output text"
   type        = string
 }
+
+variable "alert_email" {
+  description = "Email nhận cảnh báo chi phí từ AWS Budgets. Phải bấm xác nhận trong mail AWS gửi mới nhận được cảnh báo"
+  type        = string
+}
+
+variable "monthly_budget_usd" {
+  description = "Ngưỡng ngân sách tháng (USD). Cảnh báo ở 25%, 50%, 100% thực tế và 100% dự báo"
+  type        = number
+  default     = 20
+}
