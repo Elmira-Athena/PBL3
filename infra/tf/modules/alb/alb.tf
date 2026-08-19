@@ -188,12 +188,18 @@ resource "aws_lb_listener_rule" "api" {
   }
 }
 
-# Host-based routing: hushstore.io.vn + www.hushstore.io.vn -> Blazor client.
+# Host-based routing: hushstore.io.vn -> Blazor client.
 # Phải là rule tường minh (không dùng default action) để default action giữ
-# được vai trò 403 cho mọi Host lạ. www.* nằm cùng rule vì cùng target group;
-# lưu ý cert ACM hiện chỉ có SAN cho web_domain + api_domain nên www.* sẽ lỗi
-# tên miền ở tầng TLS trước khi tới rule này — giữ sẵn để khi thêm SAN thì
-# không phải sửa routing.
+# được vai trò 403 cho mọi Host lạ.
+#
+# KHÔNG có www.* trong allowlist, có chủ ý. www.hushstore.io.vn không tồn tại
+# trong DNS, không được tham chiếu ở đâu trong ứng dụng, và không có SAN trong
+# cert ACM — nên nó sẽ lỗi tên miền ở tầng TLS trước khi tới được rule này.
+# Một entry allowlist không bao giờ tới được thì tệ hơn là không có: nó làm
+# người đọc tin rằng www đang được hỗ trợ.
+# Muốn hỗ trợ www thì phải làm CẢ BA cùng lúc: thêm record DNS, thêm SAN vào
+# cert (kéo theo một record validation mới trên Cloudflare), rồi mới thêm vào
+# allowlist này.
 resource "aws_lb_listener_rule" "web" {
   count = var.enable_alb ? 1 : 0
 
@@ -202,7 +208,7 @@ resource "aws_lb_listener_rule" "web" {
 
   condition {
     host_header {
-      values = [var.web_domain, "www.${var.web_domain}"]
+      values = [var.web_domain]
     }
   }
 

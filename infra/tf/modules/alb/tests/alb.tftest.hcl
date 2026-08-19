@@ -233,8 +233,10 @@ run "default_action_443_tra_403_va_chi_allowlist_dung_2_rule_host" {
     error_message = "Default action phải trả fixed-response 403 với content_type text/plain."
   }
 
-  # Đúng 2 rule host-based, và tập Host được cho qua đúng bằng 3 tên miền của
+  # Đúng 2 rule host-based, và tập Host được cho qua đúng bằng 2 tên miền của
   # dự án — thêm "*" hay một hostname lạ vào values là ĐỎ ngay.
+  # Cố tình KHÔNG có www.*: nó không có record DNS và không có SAN trong cert,
+  # nên một entry như vậy không bao giờ tới được rule mà chỉ gây hiểu sai.
   assert {
     condition = setunion(
       toset(flatten([for c in aws_lb_listener_rule.api[0].condition : [for h in c.host_header : tolist(h.values)]])),
@@ -242,9 +244,8 @@ run "default_action_443_tra_403_va_chi_allowlist_dung_2_rule_host" {
       ) == toset([
         "api.hushstore.io.vn",
         "hushstore.io.vn",
-        "www.hushstore.io.vn",
     ])
-    error_message = "Allowlist Host header phải đúng 3 tên: api.hushstore.io.vn, hushstore.io.vn, www.hushstore.io.vn."
+    error_message = "Allowlist Host header phải đúng 2 tên: api.hushstore.io.vn và hushstore.io.vn. Thêm www.* vào đây mà chưa thêm record DNS và SAN cho cert là tạo rule không bao giờ tới được."
   }
 
   # Mỗi rule chỉ có ĐÚNG 1 condition, và condition đó phải là host_header:

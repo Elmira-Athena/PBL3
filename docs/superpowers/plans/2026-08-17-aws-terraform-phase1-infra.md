@@ -6207,13 +6207,35 @@ Expected: `enable_alb = true`. `apply` tạo `aws_acm_certificate_validation`, A
 ```bash
 ALB_DNS=$(terraform output -raw alb_dns_name)
 echo "ALB: $ALB_DNS"
-curl -s -o /dev/null -w "http-redirect=%{http_code} -> %{redirect_url}\n" "http://${ALB_DNS}/"
-curl -sk -o /dev/null -w "https=%{http_code}\n" "https://${ALB_DNS}/"
+curl -s  -o /dev/null -w "http-redirect=%{http_code} -> %{redirect_url}\n" "http://${ALB_DNS}/"
+curl -sk -o /dev/null -w "host-la=%{http_code}\n"      "https://${ALB_DNS}/"
+curl -sk -o /dev/null -w "host-web=%{http_code}\n"     -H "Host: hushstore.io.vn"     "https://${ALB_DNS}/"
+curl -sk -o /dev/null -w "host-api=%{http_code}\n"     -H "Host: api.hushstore.io.vn" "https://${ALB_DNS}/health/ready"
+curl -sk -o /dev/null -w "host-evil=%{http_code}\n"    -H "Host: evil.com"            "https://${ALB_DNS}/"
 ```
 
-Expected: `http-redirect=301` với `redirect_url` là `https://...`, và `https=503`. **503 là đúng ở bước này** — ALB đã chạy và TLS đã hoạt động, chỉ chưa có target nào vì ECS service chưa tồn tại (Task 15).
+Expected:
 
-> `curl -k` vì đang gọi bằng ALB DNS name, không khớp CN của cert (`hushstore.io.vn`). Đúng như vậy.
+| Kiểm | Mong đợi | Nghĩa là gì |
+|---|---|---|
+| `http-redirect` | `301` → `https://...` | listener 80 redirect bất kể Host |
+| `host-la` (gọi thẳng ALB DNS) | **`403`** | Host allowlist chặn — ai biết tên ALB cũng không vào được origin |
+| `host-web` | `503` | rule khớp, nhưng chưa có target nào (ECS service là Task 15) |
+| `host-api` | `503` | rule khớp target group api |
+| `host-evil` | **`403`** | kịch bản kiểm thử số 7 của đề bài |
+
+**Cả `403` và `503` đều là kết quả ĐÚNG ở bước này**, và chúng nói hai điều khác nhau:
+`403` là **default action của listener chặn Host lạ** (bằng chứng cho nguyên tắc tối
+thiểu — chụp lại cho báo cáo bảo mật); `503` là **rule đã khớp nhưng target group còn
+rỗng** vì Task 15 chưa chạy.
+
+> Ba lưu ý khi đọc kết quả:
+> - `curl -k` vì đang gọi bằng ALB DNS name, không khớp CN của cert
+>   (`hushstore.io.vn`). Đúng như vậy.
+> - Nếu `host-la` trả `503` thay vì `403` thì **allowlist Host chưa có hiệu lực** —
+>   nghĩa là default action vẫn forward sang target group web. Đó là lỗi, không phải
+>   biến thể chấp nhận được.
+> - Nếu `host-web` trả `403` thì rule host-based sai giá trị `var.web_domain`.
 
 - [ ] **Step 15: Verify chỉ 80 và 443 mở trên ALB — kịch bản kiểm thử số 1 và 4**
 
