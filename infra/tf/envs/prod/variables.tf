@@ -106,3 +106,20 @@ variable "instance_type" {
   type        = string
   default     = "t3.micro"
 }
+
+variable "image_tag" {
+  description = "Git SHA của 3 image trên ECR. Lấy bằng: git rev-parse HEAD"
+  type        = string
+}
+
+variable "web_domain" {
+  description = "Domain của Blazor client"
+  type        = string
+  default     = "hushstore.io.vn"
+}
+
+variable "api_domain" {
+  description = "Domain của API"
+  type        = string
+  default     = "api.hushstore.io.vn"
+}

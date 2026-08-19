@@ -11,6 +11,12 @@ variables {
   ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
   web_sg_id                 = "sg-00000000000000000"
+  ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
+  ecr_web_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
+  ecr_migrator_url          = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
+  image_tag                 = "abc123def456"
+  assets_bucket_name        = "hushstore-public-assets"
+  allowed_origins           = "https://hushstore.io.vn"
 }
 
 run "container_instance_role_khong_co_quyen_s3_hay_secret" {

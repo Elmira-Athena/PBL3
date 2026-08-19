@@ -13,6 +13,12 @@ variables {
   web_sg_id                 = "sg-00000000000000000"
   instance_count            = 1
   instance_type             = "t3.micro"
+  ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
+  ecr_web_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
+  ecr_migrator_url          = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
+  image_tag                 = "abc123def456"
+  assets_bucket_name        = "hushstore-public-assets"
+  allowed_origins           = "https://hushstore.io.vn"
 }
 
 run "asg_gioi_han_dung_1_instance" {
@@ -78,6 +84,35 @@ run "capacity_provider_tat_managed_scaling_va_termination_protection" {
   assert {
     condition     = aws_ecs_capacity_provider.this.auto_scaling_group_provider[0].managed_scaling[0].status == "DISABLED"
     error_message = "managed_scaling phải DISABLED: max_size = 1 nên không có gì để scale, và bật lên sẽ tranh desired_capacity với Terraform."
+  }
+}
+
+run "user_data_tao_swap_truoc_khi_khoi_dong_ecs_agent" {
+  command = plan
+
+  # Thứ tự này là lý do task tồn tại: t3.micro có 1GB RAM phải chạy ECS agent +
+  # nginx + .NET API, nên swap phải có TRƯỚC khi agent lên, nếu không agent có thể
+  # đã bị OOM-kill. Trước đây thứ tự chỉ được kiểm bằng mắt một lần khi decode
+  # user_data từ plan — một lần sửa template đảo thứ tự sẽ pass test mà lặng lẽ
+  # đưa rủi ro OOM trở lại.
+  #
+  # Cách assert: cắt chuỗi tại dòng khởi động agent, rồi đòi `swapon` phải nằm
+  # trong PHẦN TRƯỚC đó. Nếu ai đó chuyển swapon xuống sau, phần trước sẽ không
+  # còn chứa nó và test đỏ.
+  assert {
+    condition = strcontains(
+      split("systemctl enable --now ecs", base64decode(aws_launch_template.this.user_data))[0],
+      "swapon /swapfile"
+    )
+    error_message = "user_data phải tạo và bật swap TRƯỚC khi khởi động ECS agent — t3.micro chỉ có 1GB RAM, agent lên trước swap có thể bị OOM-kill."
+  }
+
+  assert {
+    condition = strcontains(
+      base64decode(aws_launch_template.this.user_data),
+      "ECS_CLUSTER=hushstore-tftest"
+    )
+    error_message = "user_data phải ghi ECS_CLUSTER vào /etc/ecs/ecs.config, nếu không instance không đăng ký được vào cluster."
   }
 }
 

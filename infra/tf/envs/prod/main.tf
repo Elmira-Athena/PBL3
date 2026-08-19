@@ -65,6 +65,13 @@ module "ecs" {
   web_sg_id      = module.security.web_sg_id
   instance_count = var.instance_count
   instance_type  = var.instance_type
+
+  ecr_api_url        = module.storage.ecr_api_url
+  ecr_web_url        = module.storage.ecr_web_url
+  ecr_migrator_url   = module.storage.ecr_migrator_url
+  image_tag          = var.image_tag
+  assets_bucket_name = module.storage.assets_bucket_name
+  allowed_origins    = "https://${var.web_domain}"
 }
 
 # Dựng sớm hơn thứ tự plan (Phase 3) theo yêu cầu: bịt rủi ro "quên tắt NAT

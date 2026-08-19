@@ -42,3 +42,33 @@ output "capacity_provider_name" {
   description = "Tên capacity provider — dùng trong capacity_provider_strategy của service"
   value       = aws_ecs_capacity_provider.this.name
 }
+
+output "taskdef_api_arn" {
+  description = "ARN revision hiện tại của task definition API"
+  value       = aws_ecs_task_definition.api.arn
+}
+
+output "taskdef_web_arn" {
+  description = "ARN revision hiện tại của task definition web"
+  value       = aws_ecs_task_definition.web.arn
+}
+
+output "taskdef_migrator_arn" {
+  description = "ARN revision hiện tại của task definition migrator"
+  value       = aws_ecs_task_definition.migrator.arn
+}
+
+output "taskdef_api_family" {
+  description = "Family của task definition API — dùng cho ecs update-service"
+  value       = aws_ecs_task_definition.api.family
+}
+
+output "taskdef_web_family" {
+  description = "Family của task definition web"
+  value       = aws_ecs_task_definition.web.family
+}
+
+output "taskdef_migrator_family" {
+  description = "Family của task definition migrator — dùng cho ecs run-task"
+  value       = aws_ecs_task_definition.migrator.family
+}

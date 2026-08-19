@@ -1,0 +1,165 @@
+locals {
+  aws_region = data.aws_region.current.region
+
+  # Cấu hình log dùng chung cho cả 3 task definition.
+  log_config = {
+    api = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.api.name
+        "awslogs-region"        = local.aws_region
+        "awslogs-stream-prefix" = "api"
+      }
+    }
+    web = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.web.name
+        "awslogs-region"        = local.aws_region
+        "awslogs-stream-prefix" = "web"
+      }
+    }
+    migrator = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.migrator.name
+        "awslogs-region"        = local.aws_region
+        "awslogs-stream-prefix" = "migrator"
+      }
+    }
+  }
+
+  # Secret dùng khối `secrets` với valueFrom, KHÔNG dùng `environment`.
+  # Giá trị trong `environment` hiện nguyên văn trong output của
+  # `aws ecs describe-task-definition` — ai có quyền đọc task definition là
+  # đọc được connection string.
+  app_secrets = [
+    {
+      name      = "ConnectionStrings__DefaultConnection"
+      valueFrom = var.ssm_connection_string_arn
+    },
+    {
+      name      = "JwtSettings__SecretKey"
+      valueFrom = var.ssm_jwt_secret_arn
+    },
+  ]
+}
+
+# ─── TASK DEFINITION: API ────────────────────────────────────────
+resource "aws_ecs_task_definition" "api" {
+  family                   = "${var.project}-api"
+  requires_compatibilities = ["EC2"]
+
+  # bridge, không phải awsvpc: awsvpc cấp 1 ENI riêng cho mỗi task, mà
+  # t3.micro chỉ hỗ trợ 2 ENI (1 primary + 1 khả dụng) nên không đủ cho 2
+  # service. ENI trunking cần instance type lớn hơn.
+  network_mode = "bridge"
+
+  execution_role_arn = aws_iam_role.task_execution.arn
+  task_role_arn      = aws_iam_role.task_app.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "api"
+      image     = "${var.ecr_api_url}:${var.image_tag}"
+      essential = true
+
+      memory            = var.api_memory_hard
+      memoryReservation = var.api_memory_reservation
+
+      # Static host port 8080: nhờ vậy sg-web ingress giữ đúng 2 rule thay vì
+      # phải mở dải ephemeral 32768-65535 như khi dùng dynamic port mapping.
+      portMappings = [
+        { containerPort = 8080, hostPort = 8080, protocol = "tcp" }
+      ]
+
+      environment = [
+        { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
+        { name = "ASPNETCORE_URLS", value = "http://+:8080" },
+        { name = "AllowedOrigins", value = var.allowed_origins },
+        { name = "AwsSettings__BucketName", value = var.assets_bucket_name },
+        { name = "AwsSettings__Region", value = local.aws_region },
+      ]
+
+      secrets = local.app_secrets
+
+      linuxParameters = {
+        # initProcessEnabled bắt buộc để ECS Exec vào được container.
+        initProcessEnabled = true
+        # t3.micro chỉ 1GB RAM. Cho container dùng swap của host để không bị
+        # OOM-kill khi task migrator chạy chồng lên.
+        maxSwap    = 1024
+        swappiness = 60
+      }
+
+      logConfiguration = local.log_config.api
+
+      # KHÔNG đặt healthCheck ở tầng container: image aspnet:10.0 không có
+      # curl. Sức khoẻ do ALB target group kiểm tra qua /health/ready.
+    }
+  ])
+
+  tags = { Name = "${var.project}-api" }
+}
+
+# ─── TASK DEFINITION: WEB ────────────────────────────────────────
+resource "aws_ecs_task_definition" "web" {
+  family                   = "${var.project}-web"
+  requires_compatibilities = ["EC2"]
+  network_mode             = "bridge"
+
+  execution_role_arn = aws_iam_role.task_execution.arn
+  # KHÔNG đặt task_role_arn: nginx serve static file, không gọi AWS API nào.
+
+  container_definitions = jsonencode([
+    {
+      name      = "web"
+      image     = "${var.ecr_web_url}:${var.image_tag}"
+      essential = true
+
+      memory            = 192
+      memoryReservation = 96
+
+      portMappings = [
+        { containerPort = 80, hostPort = 80, protocol = "tcp" }
+      ]
+
+      logConfiguration = local.log_config.web
+    }
+  ])
+
+  tags = { Name = "${var.project}-web" }
+}
+
+# ─── TASK DEFINITION: MIGRATOR (one-off, không có service) ───────
+resource "aws_ecs_task_definition" "migrator" {
+  family                   = "${var.project}-migrator"
+  requires_compatibilities = ["EC2"]
+  network_mode             = "bridge"
+
+  execution_role_arn = aws_iam_role.task_execution.arn
+  task_role_arn      = aws_iam_role.task_migrator.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "migrator"
+      image     = "${var.ecr_migrator_url}:${var.image_tag}"
+      essential = true
+
+      memory            = 512
+      memoryReservation = 256
+
+      # KHÔNG map port: đây là one-off task, chạy rồi thoát.
+      portMappings = []
+
+      # Cả HAI secret đều bắt buộc. efbundle chạy lại entry point của API để
+      # dựng DbContext, và Program.cs throw nếu JwtSettings:SecretKey chưa đặt
+      # — dòng đó nằm trước builder.Build(). Task 10 Step 3 đã chứng minh.
+      secrets = local.app_secrets
+
+      logConfiguration = local.log_config.migrator
+    }
+  ])
+
+  tags = { Name = "${var.project}-migrator" }
+}

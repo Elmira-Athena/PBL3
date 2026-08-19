@@ -31,3 +31,7 @@ alert_email = "you@example.com"
 # Ngưỡng ngân sách tháng. Cảnh báo ở 25% ($5), 50% ($10), 100% ($20) thực tế,
 # và 100% dự báo (bắn TRƯỚC khi tiền thật sự bị tiêu).
 monthly_budget_usd = 20
+
+# Git SHA của 3 image đã push lên ECR. Lấy bằng: git rev-parse HEAD
+# Phase 2 sẽ truyền giá trị này tự động từ GitHub Actions.
+image_tag = "0000000000000000000000000000000000000000"

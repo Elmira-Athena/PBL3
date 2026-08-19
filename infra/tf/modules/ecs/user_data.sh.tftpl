@@ -26,4 +26,12 @@ fi
   echo "ECS_CONTAINER_STOP_TIMEOUT=30s"
 } >> /etc/ecs/ecs.config
 
-systemctl enable --now ecs || true
+# KHÔNG dùng `|| true`. ECS agent là process DUY NHẤT mà instance này tồn tại để
+# chạy — nếu nó không lên thì boot phải báo lỗi, không được exit 0 im lặng.
+# `|| true` ở đây từng che mất đúng một sự cố thật: instance chạy nhưng không có
+# trong cluster, và không có tín hiệu nào phân biệt "agent không start được" với
+# "không có đường mạng ra ECS control plane".
+# Với set -e, lỗi ở đây làm cloud-init báo failed và `cloud-init status --long`
+# chỉ ra ngay. Unit `ecs` có sẵn trong AMI ECS-optimized nên `enable --now` chỉ
+# thất bại khi thật sự có vấn đề.
+systemctl enable --now ecs

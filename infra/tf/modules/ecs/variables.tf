@@ -61,3 +61,50 @@ variable "log_retention_days" {
   type        = number
   default     = 3
 }
+
+variable "ecr_api_url" {
+  description = "URL repository ECR của image API"
+  type        = string
+}
+
+variable "ecr_web_url" {
+  description = "URL repository ECR của image web"
+  type        = string
+}
+
+variable "ecr_migrator_url" {
+  description = "URL repository ECR của image migrator"
+  type        = string
+}
+
+variable "image_tag" {
+  description = "Tag của cả 3 image — LUÔN là git SHA đầy đủ, không bao giờ dùng latest"
+  type        = string
+
+  validation {
+    condition     = var.image_tag != "latest"
+    error_message = "image_tag không được là 'latest' — rollback về task definition revision cũ chỉ đáng tin khi tag immutable."
+  }
+}
+
+variable "assets_bucket_name" {
+  description = "Tên bucket ảnh sản phẩm — truyền vào container API qua AwsSettings__BucketName"
+  type        = string
+}
+
+variable "allowed_origins" {
+  description = "Origin được CORS cho phép, phân cách bằng dấu phẩy"
+  type        = string
+}
+
+variable "api_memory_hard" {
+  description = "Giới hạn cứng RAM (MiB) của container API"
+  type        = number
+  default     = 512
+}
+
+variable "api_memory_reservation" {
+  description = "RAM (MiB) đặt trước cho container API. Dùng soft limit để không bị OOM-kill sớm trên t3.micro"
+  type        = number
+  default     = 384
+}
