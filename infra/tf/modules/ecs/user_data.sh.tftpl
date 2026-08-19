@@ -26,12 +26,20 @@ fi
   echo "ECS_CONTAINER_STOP_TIMEOUT=30s"
 } >> /etc/ecs/ecs.config
 
-# KHÔNG dùng `|| true`. ECS agent là process DUY NHẤT mà instance này tồn tại để
-# chạy — nếu nó không lên thì boot phải báo lỗi, không được exit 0 im lặng.
-# `|| true` ở đây từng che mất đúng một sự cố thật: instance chạy nhưng không có
-# trong cluster, và không có tín hiệu nào phân biệt "agent không start được" với
-# "không có đường mạng ra ECS control plane".
-# Với set -e, lỗi ở đây làm cloud-init báo failed và `cloud-init status --long`
-# chỉ ra ngay. Unit `ecs` có sẵn trong AMI ECS-optimized nên `enable --now` chỉ
-# thất bại khi thật sự có vấn đề.
-systemctl enable --now ecs
+# ─── KHÔNG KHỞI ĐỘNG ECS AGENT Ở ĐÂY ─────────────────────────────
+# Ghi ECS_CLUSTER ở trên là TOÀN BỘ việc cần làm. Trên AMI ECS-optimized, unit
+# `ecs` đã được enable sẵn và tự lên sau khi cloud-init xong.
+#
+# Tuyệt đối KHÔNG thêm `systemctl enable --now ecs` (hay `systemctl start ecs`)
+# vào đây. `ecs.service` có `After=docker.service cloud-final.service`, mà
+# user_data chạy TRONG `cloud-final`. Gọi `systemctl start` từ trong cloud-init
+# tạo deadlock: `systemctl` chờ unit active, unit chờ cloud-final xong,
+# cloud-final chờ user_data trả về. Sự cố thật đã gặp hai lần:
+#   cloud-init status  → running (đứng ở modules-final)
+#   systemctl is-active ecs → inactive (dead)
+#   ps → `systemctl enable --now ecs` treo, là con của `cloud-init modules --mode=final`
+# Instance chạy nhưng không bao giờ đăng ký vào cluster. Gỡ bằng cách kill tiến
+# trình systemctl đang treo — agent lên ngay và đăng ký được.
+#
+# Muốn kiểm tra agent có lên không thì xem từ ngoài, không phải từ user_data:
+#   aws ecs list-container-instances --cluster ${cluster_name}

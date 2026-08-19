@@ -87,24 +87,35 @@ run "capacity_provider_tat_managed_scaling_va_termination_protection" {
   }
 }
 
-run "user_data_tao_swap_truoc_khi_khoi_dong_ecs_agent" {
+run "user_data_dung_thu_tu_va_khong_tu_khoi_dong_ecs_agent" {
   command = plan
 
-  # Thứ tự này là lý do task tồn tại: t3.micro có 1GB RAM phải chạy ECS agent +
-  # nginx + .NET API, nên swap phải có TRƯỚC khi agent lên, nếu không agent có thể
-  # đã bị OOM-kill. Trước đây thứ tự chỉ được kiểm bằng mắt một lần khi decode
-  # user_data từ plan — một lần sửa template đảo thứ tự sẽ pass test mà lặng lẽ
-  # đưa rủi ro OOM trở lại.
-  #
-  # Cách assert: cắt chuỗi tại dòng khởi động agent, rồi đòi `swapon` phải nằm
-  # trong PHẦN TRƯỚC đó. Nếu ai đó chuyển swapon xuống sau, phần trước sẽ không
-  # còn chứa nó và test đỏ.
+  # Assertion 1 — CHỐNG DEADLOCK, là bug thật đã làm hai instance không đăng ký
+  # được vào cluster. `ecs.service` có `After=cloud-final.service`, mà user_data
+  # chạy trong cloud-final; gọi `systemctl start ecs` từ đây thì systemctl chờ
+  # unit, unit chờ cloud-final, cloud-final chờ user_data → treo vô hạn.
+  # Không thể assert bằng `!strcontains(user_data, "systemctl")` vì template có
+  # một khối comment giải thích chính điều này (và comment đó PHẢI được giữ).
+  # Nên bỏ comment ra trước rồi mới kiểm: chỉ dòng lệnh thật bị soi.
+  assert {
+    condition = length([
+      for l in split("\n", base64decode(aws_launch_template.this.user_data)) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "systemctl")
+    ]) == 0
+    error_message = "user_data KHÔNG được gọi systemctl: ecs.service order sau cloud-final.service, nên start nó từ trong cloud-init tạo deadlock và instance sẽ không bao giờ đăng ký vào cluster. AMI ECS-optimized tự khởi động agent sau khi cloud-init xong."
+  }
+
+  # Assertion 2 — swap phải xong TRƯỚC khi ghi ECS_CLUSTER, vì dòng ghi đó là thứ
+  # duy nhất quyết định agent (khởi động sau cloud-init) sẽ vào cluster nào.
+  # t3.micro có 1GB RAM phải chạy ECS agent + nginx + .NET API, thiếu swap là OOM.
+  # Cắt chuỗi tại dòng ghi config rồi đòi `swapon` nằm trong phần TRƯỚC đó — ai
+  # chuyển swapon xuống sau thì phần trước không còn chứa nó và test đỏ.
   assert {
     condition = strcontains(
-      split("systemctl enable --now ecs", base64decode(aws_launch_template.this.user_data))[0],
+      split("/etc/ecs/ecs.config", base64decode(aws_launch_template.this.user_data))[0],
       "swapon /swapfile"
     )
-    error_message = "user_data phải tạo và bật swap TRƯỚC khi khởi động ECS agent — t3.micro chỉ có 1GB RAM, agent lên trước swap có thể bị OOM-kill."
+    error_message = "user_data phải tạo và bật swap TRƯỚC khi ghi ECS_CLUSTER — t3.micro chỉ có 1GB RAM, agent lên khi chưa có swap có thể bị OOM-kill."
   }
 
   assert {
