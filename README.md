@@ -6,108 +6,73 @@ Hệ thống thương mại điện tử và quản lý phần cứng IT, xây d
 
 ## Kiến trúc
 
-    EC2 Instance
-    ├── nginx (SSL termination + reverse proxy)
-    │   ├── yourdomain.com      → Blazor WASM static files
-    │   └── api.yourdomain.com  → ASP.NET Core API (Docker)
-    ├── Docker: hushstore_api (port 8080)
-    └── AWS RDS SQL Server (external)
+Hạ tầng dựng hoàn toàn bằng **Terraform** (`infra/tf/`), chạy trên **ECS EC2
+launch type** — container thật, nhưng vẫn là EC2 instance thật.
+
+    Internet
+      │
+      ├── Cloudflare DNS (proxied, Full strict)
+      │
+      ▼
+    VPC 10.20.0.0/16 — 3 tier × 2 AZ, mỗi tier một Network ACL riêng
+      │
+      ├── public tier   ALB (ACM cert, listener 80→443) + NAT Gateway
+      │                 └── allowlist Host header; Host lạ → 403
+      │
+      ├── app tier      EC2 t3.micro, KHÔNG public IP, ECS container instance
+      │                 ├── container web  nginx :80   (Blazor WASM bake trong image)
+      │                 ├── container api  .NET :8080
+      │                 └── one-off task   migrator (EF bundle) · seeder (sqlcmd)
+      │
+      └── db tier       RDS SQL Server Express, isolated, chỉ nhận :1433 từ app tier
+
+**Không có SSH.** Hệ thống không có key pair nào và không có Security Group rule
+nào mở port 22. Truy cập quản trị đi qua **SSM Session Manager** (vào host) và
+**ECS Exec** (vào trong container).
+
+**Không có credential dài hạn nào.** Đã kiểm chứng từ bên trong container đang
+chạy: 0 static AWS key trong env, 0 file `.env` trên disk; credential đến từ ECS
+task role qua `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`, connection string do ECS
+inject từ SSM Parameter Store.
+
+| Tier | Rule vào | Rule ra |
+|---|---|---|
+| ALB | 80, 443 ← `0.0.0.0/0` | chỉ tới `sg-web` cổng 80 và 8080 |
+| app | 80, 8080 ← **chỉ từ `sg-alb`** | 1433 → `sg-rds`, 80/443 → internet (ECR, SSM) |
+| db | 1433 ← **chỉ từ `sg-web`** | **rỗng** |
 
 ---
 
+## Deploy lên AWS
 
-## Deploy lên AWS EC2 (lần đầu)
+Toàn bộ quy trình nằm ở **[docs/terraform-runbook.md](docs/terraform-runbook.md)**
+— bật/tắt, deploy phiên bản mới, rollback, seed, chẩn đoán sự cố, và chi phí.
 
-### 1. Chuẩn bị EC2
+Ba điều cần biết trước khi chạy bất cứ thứ gì:
 
-```bash
-# Cài dependencies (Ubuntu 22.04+)
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y nginx certbot python3-certbot-nginx docker.io rsync
+**Mặc định NAT Gateway và ALB đều tắt.** Cả hai tính theo giờ và không có bậc free
+tier. Bật khi làm việc, tắt ngay khi xong. Giữa hai cửa sổ làm việc, domain cố ý
+không hoạt động.
 
-# Cài .NET SDK 10 (để build Blazor WASM)
-wget https://dot.net/v1/dotnet-install.sh
-bash dotnet-install.sh --channel 10.0
-echo 'export PATH="$HOME/.dotnet:$PATH"' >> ~/.bashrc && source ~/.bashrc
+**Thứ tự bật là ràng buộc, không phải khuyến nghị.** RDS phải `available` trước
+khi bật ECS service, và phải chạy `infra/tf/scripts/wait-for-capacity.sh` sau khi
+apply — `terraform apply` xanh không có nghĩa là instance đã đăng ký vào cluster.
+Runbook giải thích vì sao.
 
-# Cài Docker Compose v2
-sudo apt install -y docker-compose-plugin
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER  # logout & login lại để có hiệu lực
-```
-
-### 2. Clone repo & cấu hình secrets
+**Migration là gate của deploy.** Nó chạy như một one-off ECS task; exit code khác
+0 thì không deploy, bản cũ vẫn phục vụ. `MigrateAsync()` lúc app khởi động đã bị
+xoá khỏi `Program.cs`.
 
 ```bash
-git clone https://github.com/<your-org>/PBL3.git /opt/hushstore
-cd /opt/hushstore
-
-# Tạo file .env từ template
-cp .env.example .env
-nano .env   # Điền RDS endpoint, JWT secret, AWS credentials
+aws sso login --profile hushstore
+cd infra/tf/envs/prod
+terraform init
+# rồi theo đúng thứ tự trong runbook
 ```
 
-### 3. Cấu hình API URL cho Blazor WASM
-
-Sửa `src/Client/wwwroot/appsettings.json`:
-```json
-{
-  "ApiBaseUrl": "https://api.yourdomain.com"
-}
-```
-
-### 4. Cấu hình nginx
-
-```bash
-sudo cp nginx/hushstore.conf /etc/nginx/sites-available/hushstore
-# Thay "yourdomain.com" bằng domain thật:
-sudo sed -i 's/yourdomain.com/your-actual-domain.com/g' /etc/nginx/sites-available/hushstore
-
-sudo ln -s /etc/nginx/sites-available/hushstore /etc/nginx/sites-enabled/
-sudo nginx -t   # Kiểm tra config hợp lệ
-sudo nginx -s reload
-```
-
-### 5. Lấy SSL certificate (Let's Encrypt)
-
-```bash
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com -d api.yourdomain.com
-```
-
-> Certbot sẽ tự động cập nhật nginx config với SSL. Sau đó: `sudo systemctl reload nginx`
-
-### 6. Deploy lần đầu
-
-```bash
-cd /opt/hushstore
-bash deploy.sh
-```
-
-### 7. Kiểm tra
-
-- **Frontend:** Mở `https://yourdomain.com` → trang chủ load
-- **API:** `curl https://api.yourdomain.com/health` → `{"status":"healthy"}`
-- **Login:** Đăng nhập với tài khoản test → nhận JWT token thành công
-
----
-
-## Update sau khi có thay đổi code
-
-```bash
-cd /opt/hushstore && bash deploy.sh
-```
-
----
-
-## AWS Security Groups (EC2)
-
-| Port | Protocol | Source | Mục đích |
-|------|----------|--------|----------|
-| 22   | TCP | Your IP only | SSH |
-| 80   | TCP | 0.0.0.0/0 | HTTP (redirect → HTTPS) |
-| 443  | TCP | 0.0.0.0/0 | HTTPS |
-
-> Port 8080 (API container) **không mở** ra internet — nginx proxy nội bộ.
+Thư mục **[infra/legacy-cli/](infra/legacy-cli/)** chứa bộ script bash + AWS CLI
+của kỳ trước, giữ lại làm spec tham chiếu. **Đừng chạy lại chúng** — chúng tạo
+resource nằm ngoài Terraform state, và chúng mở port 22 kèm SSH key pair.
 
 ---
 
@@ -134,25 +99,43 @@ dotnet ef database update --project src/Infrastructure --startup-project src/API
 
 ## Troubleshooting
 
-**API container không start:**
+### Trên AWS
+
+Xem bảng "Sự cố thường gặp" trong
+**[docs/terraform-runbook.md](docs/terraform-runbook.md)** — nó liệt kê hiện
+tượng, nguyên nhân và cách xử lý cho 13 sự cố đã gặp thật, kèm cả hai trường hợp
+dễ đọc sai: gọi ALB bằng tên DNS thô trả **403** là *đúng thiết kế* (allowlist Host
+header), còn trả **503** mới là lỗi.
+
+Log và cách vào hệ thống:
+
 ```bash
-docker compose logs api --tail=100
+aws logs tail /ecs/hushstore-api --since 15m --follow --profile hushstore
+aws ecs execute-command --cluster hushstore --task <arn> --container api \
+  --interactive --command /bin/sh --profile hushstore
 ```
 
-**Lỗi migration khi startup:**
+Không dùng `ssh` và không dùng `certbot` — TLS do ACM cấp và ALB terminate, gia
+hạn tự động.
+
+### Local
+
+**API không start:**
 ```bash
-docker compose logs api | grep -i "migration\|error"
+docker compose -f Infrastructure/db/docker-compose.yml ps
+dotnet run --project src/API/API.csproj
 ```
 
-**nginx 502 Bad Gateway:**
+**Lỗi kết nối SQL Server:**
 ```bash
-docker compose ps
-docker compose restart api
+docker compose -f Infrastructure/db/docker-compose.yml logs --tail=50
 ```
 
-**SSL cert hết hạn:**
-```bash
-sudo certbot renew --dry-run  # Test trước
-sudo certbot renew
-```
+Nếu mật khẩu trong `.env` không có tác dụng, khả năng cao volume cũ vẫn còn dữ
+liệu của lần chạy trước — `MSSQL_SA_PASSWORD` chỉ có tác dụng khi khởi tạo volume
+mới.
 
+**Schema chưa có:**
+```bash
+dotnet ef database update --project src/Infrastructure --startup-project src/API
+```
