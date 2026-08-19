@@ -66,11 +66,19 @@ run "task_execution_role_chi_doc_dung_2_parameter_khong_dung_wildcard_toan_bo" {
   command = plan
 
   assert {
+    # Assert tập Resource của statement đọc SSM BẰNG ĐÚNG 2 ARN, không chỉ "không
+    # chứa wildcard". Bản trước chỉ kiểm không có "parameter/*", nên ai đó thêm ARN
+    # của db-password vào cạnh 2 ARN kia thì test vẫn pass — đúng thứ yêu cầu
+    # "KHÔNG được đọc db-password" cấm.
     condition = alltrue([
       for s in jsondecode(data.aws_iam_policy_document.task_execution_extra.json).Statement :
-      !contains(flatten([try(s.Resource, [])]), "arn:aws:ssm:*:*:parameter/*")
+      !anytrue([for a in flatten([s.Action]) : startswith(a, "ssm:")]) ||
+      length(setsubtract(
+        toset(flatten([try(s.Resource, [])])),
+        toset([var.ssm_connection_string_arn, var.ssm_jwt_secret_arn])
+      )) == 0
     ])
-    error_message = "Task execution role không được đọc toàn bộ Parameter Store — phải liệt kê đúng ARN của 2 parameter cần dùng."
+    error_message = "Statement đọc SSM của task execution role phải giới hạn ĐÚNG 2 ARN (connection-string và jwt-secret) — thêm bất kỳ ARN nào khác, kể cả db-password, là vi phạm."
   }
 
   assert {
@@ -88,17 +96,17 @@ run "moi_role_chi_cho_dung_service_principal_duoc_assume" {
   assert {
     condition = alltrue([
       for s in jsondecode(data.aws_iam_policy_document.ec2_assume.json).Statement :
-      contains(flatten([s.Principal.Service]), "ec2.amazonaws.com")
+      flatten([s.Principal.Service]) == ["ec2.amazonaws.com"]
     ])
-    error_message = "Trust policy của instance role chỉ cho ec2.amazonaws.com assume."
+    error_message = "Trust policy của instance role phải cho ĐÚNG ec2.amazonaws.com assume — dùng so khớp chính xác chứ không phải contains(), vì contains() sẽ pass kể cả khi trust policy bị nới thêm service khác."
   }
 
   assert {
     condition = alltrue([
       for s in jsondecode(data.aws_iam_policy_document.ecs_tasks_assume.json).Statement :
-      contains(flatten([s.Principal.Service]), "ecs-tasks.amazonaws.com")
+      flatten([s.Principal.Service]) == ["ecs-tasks.amazonaws.com"]
     ])
-    error_message = "Trust policy của task role chỉ cho ecs-tasks.amazonaws.com assume."
+    error_message = "Trust policy của task role phải cho ĐÚNG ecs-tasks.amazonaws.com assume — so khớp chính xác, không dùng contains()."
   }
 }
 
@@ -106,10 +114,21 @@ run "instance_role_bi_deny_doc_secret_cua_ta_du_managed_policy_cho_phep" {
   command = plan
 
   assert {
+    # Yêu cầu Deny phủ ĐỦ BỐN action đọc parameter, không chỉ có mặt một cái.
+    # Bản trước chỉ kiểm `a == "ssm:GetParameter"` nên xoá GetParameterHistory khỏi
+    # danh sách vẫn pass — đúng lỗ hổng mà review Task 11 bắt được.
     condition = anytrue([
       for s in jsondecode(data.aws_iam_policy_document.instance_extra.json).Statement :
-      s.Effect == "Deny" && anytrue([for a in flatten([s.Action]) : a == "ssm:GetParameter"])
+      s.Effect == "Deny" && length(setsubtract(
+        toset([
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParameterHistory",
+          "ssm:GetParametersByPath",
+        ]),
+        toset(flatten([s.Action]))
+      )) == 0
     ])
-    error_message = "instance_extra phải có statement Deny bao gồm ssm:GetParameter — nếu không, AmazonSSMManagedInstanceCore (Resource = *) sẽ cho host đọc mọi SecureString, kể cả db-password."
+    error_message = "instance_extra phải có statement Deny phủ ĐỦ 4 action: GetParameter, GetParameters, GetParameterHistory, GetParametersByPath. Thiếu bất kỳ cái nào là còn một đường đọc SecureString — GetParameterHistory với WithDecryption=true trả plaintext của các version cũ."
   }
 }

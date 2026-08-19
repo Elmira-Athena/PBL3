@@ -66,9 +66,16 @@ data "aws_iam_policy_document" "instance_extra" {
     sid    = "DenyReadingOurSecrets"
     effect = "Deny"
 
+    # Liệt kê ĐỦ BỐN action đọc parameter, không phải ba. GetParameterHistory với
+    # WithDecryption=true trả về plaintext của SecureString qua các version cũ, nên
+    # thiếu nó là thiếu một đường đọc secret. Hiện AmazonSSMManagedInstanceCore
+    # không cấp GetParameterHistory (nên nó đang là implicitDeny), nhưng mục đích
+    # của statement này là chặn TRƯỚC bất kể managed policy cấp gì về sau —
+    # explicitDeny không bao giờ bị override, implicitDeny thì có.
     actions = [
       "ssm:GetParameter",
       "ssm:GetParameters",
+      "ssm:GetParameterHistory",
       "ssm:GetParametersByPath",
     ]
 
