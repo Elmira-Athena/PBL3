@@ -67,6 +67,12 @@ variable "enable_nat" {
   default     = false
 }
 
+variable "enable_alb" {
+  description = "Bật serving stack: ALB + 2 target group + listener + 2 ECS service. $0.0225/giờ"
+  type        = bool
+  default     = false
+}
+
 variable "enable_flow_logs" {
   description = "Bật VPC Flow Logs (chỉ REJECT) cho báo cáo bảo mật"
   type        = bool

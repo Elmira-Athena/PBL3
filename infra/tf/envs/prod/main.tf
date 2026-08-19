@@ -74,6 +74,19 @@ module "ecs" {
   allowed_origins    = "https://${var.web_domain}"
 }
 
+module "alb" {
+  source = "../../modules/alb"
+
+  project           = local.name
+  vpc_id            = module.network.vpc_id
+  public_subnet_ids = module.network.public_subnet_ids
+  alb_sg_id         = module.security.alb_sg_id
+  logs_bucket       = module.storage.alb_logs_bucket_name
+  web_domain        = var.web_domain
+  api_domain        = var.api_domain
+  enable_alb        = var.enable_alb
+}
+
 # Dựng sớm hơn thứ tự plan (Phase 3) theo yêu cầu: bịt rủi ro "quên tắt NAT
 # Gateway / ALB" ngay từ bây giờ thay vì đợi tới cuối. Phase 3 sẽ mở rộng module
 # này thêm Lambda cost-guard + EventBridge Scheduler.

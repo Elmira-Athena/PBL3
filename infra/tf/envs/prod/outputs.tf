@@ -58,3 +58,26 @@ output "capacity_provider_name" {
   description = "Tên ECS capacity provider — dùng cho aws ecs run-task"
   value       = module.ecs.capacity_provider_name
 }
+
+output "alb_dns_name" {
+  description = "Hostname ALB — trỏ CNAME của Cloudflare vào đây"
+  value       = module.alb.alb_dns_name
+}
+
+output "acm_certificate_arn" {
+  description = "ARN của ACM certificate phục vụ cả hushstore.io.vn và api.hushstore.io.vn"
+  value       = module.alb.certificate_arn
+}
+
+output "acm_validation_records" {
+  description = "CNAME cần thêm vào Cloudflare để ACM cấp cert. Bắt buộc để Proxy status = DNS only (mây xám) — mây vàng làm ACM không đọc được record nên cert đứng mãi ở PENDING_VALIDATION"
+  value       = module.alb.acm_validation_records
+}
+
+output "tg_arns" {
+  description = "ARN 2 target group — Task 15 gắn vào ECS service"
+  value = {
+    web = module.alb.tg_web_arn
+    api = module.alb.tg_api_arn
+  }
+}
