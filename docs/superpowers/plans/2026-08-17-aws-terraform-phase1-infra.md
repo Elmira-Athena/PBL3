@@ -3964,11 +3964,22 @@ HAI bien ConnectionStrings__DefaultConnection va JwtSettings__SecretKey."
 >
 > | Role | Ai dùng | Được làm gì |
 > |---|---|---|
-> | `role-container-instance` | EC2 host | Chỉ đăng ký vào ECS cluster + SSM Session Manager. **Không có quyền S3, không có quyền đọc secret nào.** |
+> | `role-container-instance` | EC2 host | Đăng ký vào ECS cluster + SSM Session Manager, và `s3:GetObject` **chỉ trên bucket artifacts** (để Task 16 đọc seed SQL). Kèm một statement **Deny tường minh** chặn `ssm:GetParameter*` trên `/hushstore/*` — bắt buộc, xem ghi chú dưới. **Không chạm được bucket ảnh, không đọc được secret của ta, không gọi được API RDS.** |
 > | `role-task-execution` | ECS agent, lúc khởi task | Pull ECR, ghi CloudWatch Logs, đọc 2 SSM parameter cụ thể. Hết. |
 > | `role-task-app` | Container API, lúc runtime | **Chỉ** `s3:PutObject`/`GetObject` trên bucket ảnh + `ssmmessages` cho ECS Exec. |
 >
 > Nếu container API bị chiếm quyền, kẻ tấn công chỉ ghi được ảnh vào một bucket — không đọc được secret, không chạm được RDS API, không sờ được ECR. Kịch bản kiểm thử số 10 chứng minh điều này.
+>
+> **`AmazonSSMManagedInstanceCore` rộng hơn tên nó gợi ý — phải chặn thêm.** Policy này cấp `ssm:GetParameter` và `ssm:GetParameters` trên `Resource: "*"`, nên nếu chỉ attach nó thì EC2 host **đọc được mọi SecureString của ta**, gồm cả `/hushstore/prod/db-password`. Kiểm chứng bằng `aws iam simulate-principal-policy` với ARN parameter cụ thể: cả ba đều trả `allowed`.
+>
+> Ba cách xử lý đã cân nhắc:
+> 1. *Chấp nhận và sửa lời tuyên bố.* Lập luận: connection string mà host đọc được qua `docker inspect` trên container đang chạy vốn đã chứa mật khẩu, nên đọc thêm `db-password` không thêm phơi nhiễm thực tế. Đúng về mức độ, nhưng để lại một claim yếu trong báo cáo.
+> 2. *Thay managed policy bằng inline policy tự viết,* scope `ssm:GetParameter*` chỉ vào `arn:aws:ssm:*:*:parameter/aws/ssm/*`. Siết nhất, nhưng **rủi ro cao**: thiếu một action mà SSM Agent cần là mất Session Manager, và đây là đường admin DUY NHẤT vào instance ở private subnet (không có SSH, không có key pair).
+> 3. **Thêm statement `Deny` tường minh** cho `ssm:GetParameter*` trên `arn:aws:ssm:*:*:parameter/hushstore/*`. Explicit Deny luôn thắng Allow, nên nó bịt đúng lỗ hổng mà **không đụng** vào managed policy — Session Manager giữ nguyên. Host không cần đọc parameter của ta: việc inject secret vào container do **ECS agent** làm bằng **task execution role**, không phải instance role.
+>
+> Chọn cách 3.
+>
+> **Nói chính xác về host:** nó KHÔNG phải "không có quyền S3 nào". Nó có `s3:GetObject` trên bucket artifacts, vì Task 16 seed DB bằng cách vào host qua SSM rồi `aws s3 cp` file seed SQL về — thao tác đó dùng credential của instance role. Bucket artifacts chỉ chứa seed SQL và file ops, **không chứa secret** (secret nằm ở Parameter Store). Nên tuyên bố đúng là: host không chạm được bucket ảnh, không đọc được secret, không gọi được API RDS. Đã cân nhắc bỏ quyền này và pipe seed SQL từ laptop qua SSM session, nhưng như vậy `seed-db.sh` không còn chạy độc lập được.
 
 - [ ] **Step 1: Viết test trước — `infra/tf/modules/ecs/tests/iam.tftest.hcl`**
 
@@ -4174,6 +4185,27 @@ data "aws_iam_policy_document" "instance_extra" {
     actions = ["s3:GetObject"]
 
     resources = ["${var.artifacts_bucket_arn}/*"]
+  }
+
+  # AmazonSSMManagedInstanceCore cấp ssm:GetParameter và ssm:GetParameters trên
+  # Resource: "*", nên nếu không chặn thì EC2 host đọc được MỌI SecureString của
+  # ta, gồm cả /hushstore/prod/db-password. Explicit Deny luôn thắng Allow, nên
+  # statement này bịt đúng lỗ hổng mà không phải bỏ managed policy — giữ được
+  # Session Manager, tức giữ được đường admin DUY NHẤT vào instance ở private
+  # subnet (không có SSH, không có key pair).
+  # Host KHÔNG cần đọc parameter của ta: việc inject secret vào container do ECS
+  # agent làm bằng task execution role, không phải instance role.
+  statement {
+    sid    = "DenyReadingOurSecrets"
+    effect = "Deny"
+
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+      "ssm:GetParametersByPath",
+    ]
+
+    resources = ["arn:aws:ssm:*:*:parameter/${var.project}/*"]
   }
 }
 
