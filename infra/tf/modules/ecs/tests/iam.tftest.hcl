@@ -14,7 +14,7 @@ variables {
   ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
   ecr_web_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
   ecr_migrator_url          = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
-  image_tag                 = "abc123def456"
+  image_tag                 = "abc123def456abc123def456abc123def456ab12"
   assets_bucket_name        = "hushstore-public-assets"
   allowed_origins           = "https://hushstore.io.vn"
 }

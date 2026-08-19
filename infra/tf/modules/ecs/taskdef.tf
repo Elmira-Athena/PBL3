@@ -58,6 +58,14 @@ resource "aws_ecs_task_definition" "api" {
   execution_role_arn = aws_iam_role.task_execution.arn
   task_role_arn      = aws_iam_role.task_app.arn
 
+  # skip_destroy = true: hầu hết attribute của task definition là ForceNew, nên
+  # đổi image_tag sẽ tạo revision mới VÀ (nếu không có dòng này) deregister
+  # revision cũ. AWS không cho chạy task/service mới từ một revision đã
+  # deregister, nên thiếu skip_destroy làm mất đúng khả năng "rollback về
+  # revision trước" mà comment ở variables.tf viện dẫn. Revision cũ không tốn
+  # phí, nên chấp nhận tích luỹ revision để đổi lấy rollback tin cậy được.
+  skip_destroy = true
+
   container_definitions = jsonencode([
     {
       name      = "api"
@@ -111,6 +119,11 @@ resource "aws_ecs_task_definition" "web" {
   execution_role_arn = aws_iam_role.task_execution.arn
   # KHÔNG đặt task_role_arn: nginx serve static file, không gọi AWS API nào.
 
+  # skip_destroy = true: giữ ACTIVE các revision cũ khi image_tag đổi (ForceNew
+  # thay resource), để luôn có revision hợp lệ để rollback. Xem giải thích đầy
+  # đủ ở resource "aws_ecs_task_definition" "api" phía trên.
+  skip_destroy = true
+
   container_definitions = jsonencode([
     {
       name      = "web"
@@ -139,6 +152,11 @@ resource "aws_ecs_task_definition" "migrator" {
 
   execution_role_arn = aws_iam_role.task_execution.arn
   task_role_arn      = aws_iam_role.task_migrator.arn
+
+  # skip_destroy = true: giữ ACTIVE các revision cũ khi image_tag đổi (ForceNew
+  # thay resource), để luôn có revision hợp lệ để rollback. Xem giải thích đầy
+  # đủ ở resource "aws_ecs_task_definition" "api" phía trên.
+  skip_destroy = true
 
   container_definitions = jsonencode([
     {

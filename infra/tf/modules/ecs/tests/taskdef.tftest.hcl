@@ -16,7 +16,7 @@ variables {
   ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
   ecr_web_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
   ecr_migrator_url          = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
-  image_tag                 = "abc123def456"
+  image_tag                 = "abc123def456abc123def456abc123def456ab12"
   assets_bucket_name        = "hushstore-public-assets"
   allowed_origins           = "https://hushstore.io.vn"
 }
@@ -75,7 +75,12 @@ run "khong_container_nao_nhan_secret_qua_environment" {
         ) : alltrue([
           for e in try(c.environment, []) :
           !anytrue([
-            for kw in ["Password", "SecretKey", "ConnectionStrings"] : strcontains(e.name, kw)
+            # So sánh không phân biệt hoa thường (lower()) và mở rộng danh sách
+            # keyword: PascalCase thuần trước đây bỏ lọt AWS_SECRET_ACCESS_KEY
+            # hay SA_PASSWORD_HASH — chính dạng credential tĩnh mà task role
+            # (iam.tf) được dựng ra để thay thế.
+            for kw in ["password", "pwd", "secret", "key", "token", "connectionstring"] :
+            strcontains(lower(e.name), kw)
           ])
       ])
     ])
@@ -137,9 +142,27 @@ run "image_tag_khong_bao_gio_la_latest" {
 run "api_bat_ecs_exec_va_co_task_role_rieng" {
   command = plan
 
-  # KHÔNG so task_role_arn với aws_iam_role.x.arn — cả hai là (known after
-  # apply). Thay bằng tính chất biết-ở-plan-time và có giá trị bảo mật thật:
-  # container web KHÔNG được gán task role nào cả.
+  # KHÔNG so task_role_arn với aws_iam_role.x.arn trực tiếp — cả hai là (known
+  # after apply), so sánh hai giá trị unknown làm Terraform báo "Unknown
+  # condition value" và bỏ luôn các run còn lại trong file.
+  # override_resource với override_during = plan làm arn của role BIẾT ĐƯỢC ở
+  # plan-time (giá trị giả cố định), nhờ đó so sánh task_role_arn của API
+  # không còn là unknown nữa — assert được đúng cái tên run block đã hứa.
+  override_resource {
+    target          = aws_iam_role.task_app
+    override_during = plan
+    values = {
+      arn = "arn:aws:iam::000000000000:role/hushstore-tftest-task-app-role"
+    }
+  }
+
+  assert {
+    condition     = aws_ecs_task_definition.api.task_role_arn == "arn:aws:iam::000000000000:role/hushstore-tftest-task-app-role"
+    error_message = "Task definition API PHẢI gắn task-app-role: không có nó thì SDK trong container không lấy được credential tạm thời, upload S3 và ECS Exec đều chết."
+  }
+
+  # Web vẫn giữ tính chất biết-ở-plan-time không cần override: container web
+  # KHÔNG được gán task role nào cả.
   assert {
     condition     = aws_ecs_task_definition.web.task_role_arn == null || aws_ecs_task_definition.web.task_role_arn == ""
     error_message = "Task definition web KHÔNG được có task_role_arn — nginx serve static file, không gọi AWS API nào."

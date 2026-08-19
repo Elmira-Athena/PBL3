@@ -82,8 +82,8 @@ variable "image_tag" {
   type        = string
 
   validation {
-    condition     = var.image_tag != "latest"
-    error_message = "image_tag không được là 'latest' — rollback về task definition revision cũ chỉ đáng tin khi tag immutable."
+    condition     = can(regex("^[0-9a-f]{40}$", var.image_tag))
+    error_message = "image_tag phải là git SHA đầy đủ (40 ký tự hex thường) — không được là 'latest', tên nhánh, hay SHA rút gọn."
   }
 }
 

@@ -16,7 +16,7 @@ variables {
   ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
   ecr_web_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
   ecr_migrator_url          = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
-  image_tag                 = "abc123def456"
+  image_tag                 = "abc123def456abc123def456abc123def456ab12"
   assets_bucket_name        = "hushstore-public-assets"
   allowed_origins           = "https://hushstore.io.vn"
 }
@@ -92,30 +92,57 @@ run "user_data_dung_thu_tu_va_khong_tu_khoi_dong_ecs_agent" {
 
   # Assertion 1 — CHỐNG DEADLOCK, là bug thật đã làm hai instance không đăng ký
   # được vào cluster. `ecs.service` có `After=cloud-final.service`, mà user_data
-  # chạy trong cloud-final; gọi `systemctl start ecs` từ đây thì systemctl chờ
-  # unit, unit chờ cloud-final, cloud-final chờ user_data → treo vô hạn.
+  # chạy trong cloud-final; gọi `systemctl start ecs` (hay tương đương như
+  # `service ecs start`) từ đây thì bên chờ unit active, unit chờ cloud-final,
+  # cloud-final chờ user_data → treo vô hạn.
   # Không thể assert bằng `!strcontains(user_data, "systemctl")` vì template có
   # một khối comment giải thích chính điều này (và comment đó PHẢI được giữ).
   # Nên bỏ comment ra trước rồi mới kiểm: chỉ dòng lệnh thật bị soi.
+  # Bắt cả token "systemctl" lẫn các cách gọi tương đương thực sự có người sẽ
+  # viết: "service ecs ..." và "... start ecs" (kể cả qua biến, vd `$CMD start
+  # ecs`). Không cố bắt mọi khả năng lý thuyết (heredoc, drop-in unit) — chỉ
+  # chặn những dạng một người sẽ thật sự gõ tay.
   assert {
     condition = length([
       for l in split("\n", base64decode(aws_launch_template.this.user_data)) :
-      l if !startswith(trimspace(l), "#") && strcontains(l, "systemctl")
+      l if !startswith(trimspace(l), "#") && (
+        strcontains(l, "systemctl") ||
+        strcontains(l, "service ecs") ||
+        strcontains(l, "start ecs")
+      )
     ]) == 0
-    error_message = "user_data KHÔNG được gọi systemctl: ecs.service order sau cloud-final.service, nên start nó từ trong cloud-init tạo deadlock và instance sẽ không bao giờ đăng ký vào cluster. AMI ECS-optimized tự khởi động agent sau khi cloud-init xong."
+    error_message = "user_data KHÔNG được khởi động ecs agent thủ công (systemctl, service ecs, ... start ecs): ecs.service order sau cloud-final.service, nên start nó từ trong cloud-init tạo deadlock và instance sẽ không bao giờ đăng ký vào cluster. AMI ECS-optimized tự khởi động agent sau khi cloud-init xong."
   }
 
-  # Assertion 2 — swap phải xong TRƯỚC khi ghi ECS_CLUSTER, vì dòng ghi đó là thứ
-  # duy nhất quyết định agent (khởi động sau cloud-init) sẽ vào cluster nào.
-  # t3.micro có 1GB RAM phải chạy ECS agent + nginx + .NET API, thiếu swap là OOM.
-  # Cắt chuỗi tại dòng ghi config rồi đòi `swapon` nằm trong phần TRƯỚC đó — ai
-  # chuyển swapon xuống sau thì phần trước không còn chứa nó và test đỏ.
+  # Assertion 2 — kiểm ĐÚNG đích ghi (/etc/ecs/ecs.config), không chỉ nội dung.
+  # Reviewer đã chứng minh: đổi đích thành /etc/ecs/ecs.conf (thiếu 1 chữ "g")
+  # thì agent không bao giờ đọc được ECS_CLUSTER, instance không đăng ký vào
+  # cluster — mà assertion "ECS_CLUSTER=..." bên dưới vẫn pass, vì chuỗi đó vẫn
+  # có mặt, chỉ là bị ghi sai file. Assertion này cũng là anchor bắt buộc phải
+  # tồn tại trước khi assertion 3 dùng split() dựa vào nó.
   assert {
     condition = strcontains(
-      split("/etc/ecs/ecs.config", base64decode(aws_launch_template.this.user_data))[0],
+      base64decode(aws_launch_template.this.user_data),
+      "} >> /etc/ecs/ecs.config"
+    )
+    error_message = "user_data phải ghi block config vào ĐÚNG /etc/ecs/ecs.config (agent chỉ đọc file này) — không phải /etc/ecs/ecs.conf hay đường dẫn tương tự."
+  }
+
+  # Assertion 3 — swap phải tạo và bật xong TRƯỚC khi cloud-init kết thúc: agent
+  # chỉ khởi động sau TOÀN BỘ cloud-init (không phải ngay sau dòng ghi config),
+  # nên chỉ cần swap sẵn sàng trước khi instance kết thúc boot. t3.micro có 1GB
+  # RAM phải chạy ECS agent + nginx + .NET API, thiếu swap là OOM. Giữ thứ tự
+  # "swap trước, ghi config sau" trong script cho dễ đọc: cắt chuỗi tại dòng ghi
+  # config rồi đòi `swapon` nằm trong phần TRƯỚC đó.
+  # split() "fail open": nếu anchor "} >> /etc/ecs/ecs.config" không còn trong
+  # chuỗi, split() trả nguyên chuỗi ở phần tử [0] và assertion này sẽ pass giả.
+  # Assertion 2 ở trên đã đảm bảo anchor tồn tại nên split() ở đây an toàn.
+  assert {
+    condition = strcontains(
+      split("} >> /etc/ecs/ecs.config", base64decode(aws_launch_template.this.user_data))[0],
       "swapon /swapfile"
     )
-    error_message = "user_data phải tạo và bật swap TRƯỚC khi ghi ECS_CLUSTER — t3.micro chỉ có 1GB RAM, agent lên khi chưa có swap có thể bị OOM-kill."
+    error_message = "user_data phải tạo và bật swap TRƯỚC khi ghi ECS_CLUSTER — t3.micro chỉ có 1GB RAM, agent lên sau cloud-final nên cần swap sẵn sàng trước khi instance kết thúc boot."
   }
 
   assert {
@@ -123,7 +150,7 @@ run "user_data_dung_thu_tu_va_khong_tu_khoi_dong_ecs_agent" {
       base64decode(aws_launch_template.this.user_data),
       "ECS_CLUSTER=hushstore-tftest"
     )
-    error_message = "user_data phải ghi ECS_CLUSTER vào /etc/ecs/ecs.config, nếu không instance không đăng ký được vào cluster."
+    error_message = "user_data phải chứa ECS_CLUSTER=hushstore-tftest, nếu không instance không đăng ký được vào cluster."
   }
 }
 
