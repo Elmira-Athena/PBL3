@@ -8,6 +8,16 @@ output "ecr_web_url" {
   value       = aws_ecr_repository.this["web"].repository_url
 }
 
+output "ecr_seeder_url" {
+  description = "URL repository ECR của image seeder (sqlcmd + file seed bake sẵn)"
+  value       = aws_ecr_repository.this["seeder"].repository_url
+}
+
+output "ecr_seeder_arn" {
+  description = "ARN repository ECR của image seeder"
+  value       = aws_ecr_repository.this["seeder"].arn
+}
+
 output "ecr_migrator_url" {
   description = "URL repository ECR của image migrator (EF Core bundle)"
   value       = aws_ecr_repository.this["migrator"].repository_url

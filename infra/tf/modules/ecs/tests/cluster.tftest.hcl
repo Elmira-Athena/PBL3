@@ -9,6 +9,11 @@ variables {
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
   ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
   ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
+  ssm_db_password_arn       = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/db-password"
+  ecr_seeder_url            = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-seeder"
+  seeder_image_tag          = "0123456789abcdef0123456789abcdef01234567"
+  rds_host                  = "hushstore-db-tf.abcdefghijkl.ap-southeast-1.rds.amazonaws.com"
+  db_username               = "hushadmin"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
   web_sg_id                 = "sg-00000000000000000"
   instance_count            = 1

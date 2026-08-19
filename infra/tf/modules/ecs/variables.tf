@@ -137,3 +137,39 @@ variable "service_desired_count" {
     error_message = "service_desired_count chỉ được 0 hoặc 1 — static host port không cho phép 2 task cùng port trên 1 instance."
   }
 }
+
+variable "ssm_db_password_arn" {
+  description = "ARN của SSM parameter chứa mật khẩu master của RDS. CHỈ task seeder dùng — sqlcmd không nhận connection string kiểu .NET nên phải truyền mật khẩu rời"
+  type        = string
+}
+
+variable "ecr_seeder_url" {
+  description = "URL repository ECR của image seeder"
+  type        = string
+}
+
+variable "seeder_image_tag" {
+  description = "Git SHA của image seeder. Tách riêng khỏi image_tag vì image seeder được thêm sau 3 image kia; Phase 2 sẽ build cả 4 ở cùng một SHA rồi bỏ biến này"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{40}$", var.seeder_image_tag))
+    error_message = "seeder_image_tag phải là git SHA đầy đủ 40 ký tự hex — không dùng latest hay tag tự đặt."
+  }
+}
+
+variable "rds_host" {
+  description = "Hostname của RDS (không kèm port). Task seeder truyền vào sqlcmd -S"
+  type        = string
+}
+
+variable "db_name" {
+  description = "Tên database để seed"
+  type        = string
+  default     = "HushStoreDB"
+}
+
+variable "db_username" {
+  description = "User đăng nhập SQL Server cho task seeder"
+  type        = string
+}

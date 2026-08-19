@@ -81,3 +81,8 @@ output "tg_arns" {
     api = module.alb.tg_api_arn
   }
 }
+
+output "taskdef_seeder_family" {
+  description = "Family task definition seeder — dùng cho aws ecs run-task khi seed"
+  value       = module.ecs.taskdef_seeder_family
+}

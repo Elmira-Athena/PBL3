@@ -79,6 +79,16 @@ module "ecs" {
   enable_alb = var.enable_alb
   tg_web_arn = module.alb.tg_web_arn
   tg_api_arn = module.alb.tg_api_arn
+
+  # Task seeder (Task 16). Mat khau di qua `secrets` cua ECS bang mot execution
+  # role RIENG chi doc dung db-password — role cua api/web/migrator khong he
+  # duoc mo rong. Xem modules/ecs/iam.tf.
+  ssm_db_password_arn = module.data.ssm_db_password_arn
+  ecr_seeder_url      = module.storage.ecr_seeder_url
+  seeder_image_tag    = var.seeder_image_tag
+  rds_host            = module.data.rds_endpoint
+  db_username         = module.data.db_username
+  db_name             = module.data.db_name
 }
 
 module "alb" {

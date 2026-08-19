@@ -9,6 +9,11 @@ variables {
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
   ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
   ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
+  ssm_db_password_arn       = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/db-password"
+  ecr_seeder_url            = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-seeder"
+  seeder_image_tag          = "0123456789abcdef0123456789abcdef01234567"
+  rds_host                  = "hushstore-db-tf.abcdefghijkl.ap-southeast-1.rds.amazonaws.com"
+  db_username               = "hushadmin"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
   web_sg_id                 = "sg-00000000000000000"
   ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
@@ -138,5 +143,48 @@ run "instance_role_bi_deny_doc_secret_cua_ta_du_managed_policy_cho_phep" {
       )) == 0
     ])
     error_message = "instance_extra phải có statement Deny phủ ĐỦ 4 action: GetParameter, GetParameters, GetParameterHistory, GetParametersByPath. Thiếu bất kỳ cái nào là còn một đường đọc SecureString — GetParameterHistory với WithDecryption=true trả plaintext của các version cũ."
+  }
+}
+
+run "execution_role_cua_seeder_va_cua_app_giao_nhau_bang_rong" {
+  command = plan
+
+  # Đây là điểm least-privilege của Task 16. Seeder cần db-password; api/web/
+  # migrator cần connection-string + jwt-secret. Dùng CHUNG một execution role là
+  # cấp cả ba thứ cho cả bốn task. Hai role riêng thì mỗi bên chỉ thấy phần mình
+  # cần, và tập secret của hai bên KHÔNG giao nhau.
+  #
+  # Assert theo hai chiều để không thể pass rỗng:
+  #   (a) role seeder đọc ĐÚNG 1 ARN, là db-password
+  #   (b) role seeder KHÔNG chứa connection-string và KHÔNG chứa jwt-secret
+  assert {
+    condition = alltrue([
+      for s in jsondecode(data.aws_iam_policy_document.task_execution_seeder_extra.json).Statement :
+      !anytrue([for a in flatten([s.Action]) : startswith(a, "ssm:")]) ||
+      toset(flatten([try(s.Resource, [])])) == toset([var.ssm_db_password_arn])
+    ])
+    error_message = "Execution role của seeder phải đọc ĐÚNG 1 parameter là db-password — thêm ARN nào khác vào đây là mở rộng phạm vi secret của một task chỉ cần nói chuyện với RDS."
+  }
+
+  assert {
+    condition = length(setintersection(
+      toset(flatten([
+        for s in jsondecode(data.aws_iam_policy_document.task_execution_seeder_extra.json).Statement :
+        anytrue([for a in flatten([s.Action]) : startswith(a, "ssm:")]) ? flatten([try(s.Resource, [])]) : []
+      ])),
+      toset([var.ssm_connection_string_arn, var.ssm_jwt_secret_arn])
+    )) == 0
+    error_message = "Execution role của seeder KHÔNG được đọc connection-string hay jwt-secret — hai tập secret phải giao nhau bằng rỗng."
+  }
+
+  # kms:Decrypt trên "*" là bắt buộc (ARN của alias/aws/ssm không cố định theo
+  # account), nên phải có điều kiện ViaService giới hạn khoá chỉ dùng qua SSM.
+  # Không có điều kiện đó thì role này giải mã được mọi thứ mã hoá bằng khoá đó.
+  assert {
+    condition = alltrue([
+      for s in jsondecode(data.aws_iam_policy_document.task_execution_seeder_extra.json).Statement :
+      !contains(flatten([s.Action]), "kms:Decrypt") || try(s.Condition.StringEquals["kms:ViaService"], null) != null
+    ])
+    error_message = "Statement kms:Decrypt của role seeder phải có điều kiện kms:ViaService — Resource là \"*\" nên điều kiện là thứ duy nhất giới hạn nó."
   }
 }

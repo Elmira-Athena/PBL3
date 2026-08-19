@@ -1,0 +1,61 @@
+# Build context là REPO ROOT.
+#   docker build -f src/Infrastructure/Dockerfile.seeder -t hushstore-seeder:tag .
+#
+# ─── TẠI SAO CÓ IMAGE NÀY ────────────────────────────────────────────────────
+# Kế hoạch ban đầu là seed bằng cách vào container instance qua SSM rồi
+# `docker run mcr.microsoft.com/mssql-tools18 ...`, đọc mật khẩu DB bằng
+# `aws ssm get-parameter` NGAY TRÊN HOST. Hai lý do phải bỏ cách đó:
+#
+#   1. role của container instance bị DENY tường minh
+#      ssm:GetParameter* trên arn:aws:ssm:*:*:parameter/hushstore/* — đó là một
+#      deliverable của đồ án (host bị chiếm thì không đọc được secret nào), đã
+#      kiểm chứng bằng IAM simulator và trên instance thật. Không nới ra.
+#   2. `mcr.microsoft.com/mssql-tools18` KHÔNG TỒN TẠI dưới dạng container image.
+#      Kiểm trực tiếp trên registry:
+#        GET /v2/mssql-tools18/manifests/latest -> 404  (không có repo)
+#        GET /v2/mssql-tools/manifests/latest   -> 200  (v17)
+#      mssql-tools18 chỉ được phát hành dạng package apt/yum.
+#      Và KHÔNG dùng mssql-tools v17: nó mặc định không mã hoá, sẽ phá vỡ
+#      Encrypt=True;TrustServerCertificate=False mà API và migrator đang giữ.
+#
+# Nên: seed bằng một one-off ECS task. Mật khẩu đi theo đường `secrets` của ECS
+# (execution role đọc SSM), KHÔNG BAO GIỜ chạm host và không nằm trong shell
+# history. Đây đúng là con đường mà task migrator đã chạy thành công.
+
+FROM --platform=linux/amd64 debian:12-slim
+
+# msodbcsql18 + mssql-tools18 từ packages.microsoft.com. ACCEPT_EULA là bắt buộc
+# cho cả hai package, không có nó thì apt dừng chờ tương tác.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl gnupg apt-transport-https; \
+    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+        | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg; \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" \
+        > /etc/apt/sources.list.d/mssql-release.list; \
+    apt-get update; \
+    ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 mssql-tools18; \
+    apt-get purge -y --auto-remove gnupg apt-transport-https; \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/opt/mssql-tools18/bin:${PATH}"
+
+# Amazon RDS CA cho ap-southeast-1. Bắt buộc: sqlcmd chạy KHÔNG có cờ -C nghĩa là
+# nó XÁC THỰC cert của server, nên CA của RDS phải nằm trong trust store của hệ
+# thống. Thiếu bước này thì lỗi hiện ra là "SSL Provider: certificate verify
+# failed" chứ không phải lỗi mạng — dễ mất thời gian đoán sai.
+ADD https://truststore.pki.rds.amazonaws.com/ap-southeast-1/ap-southeast-1-bundle.pem \
+    /usr/local/share/ca-certificates/rds-ap-southeast-1.crt
+RUN chmod 644 /usr/local/share/ca-certificates/rds-ap-southeast-1.crt \
+    && update-ca-certificates
+
+# File seed BAKE VÀO IMAGE, không tải từ S3 lúc chạy: image không cần AWS CLI,
+# không cần quyền S3, và nội dung seed được version cùng image tag.
+WORKDIR /seed
+COPY Infrastructure/db/seed_data.sql         ./01-seed_data.sql
+COPY Infrastructure/db/seed_product_data.sql ./02-seed_product_data.sql
+COPY src/Infrastructure/seed-entrypoint.sh   /usr/local/bin/seed
+RUN chmod +x /usr/local/bin/seed
+
+ENTRYPOINT ["/usr/local/bin/seed"]

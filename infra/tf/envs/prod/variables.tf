@@ -129,3 +129,8 @@ variable "api_domain" {
   type        = string
   default     = "api.hushstore.io.vn"
 }
+
+variable "seeder_image_tag" {
+  description = "Git SHA của image seeder trên ECR. Tách riêng khỏi image_tag vì image seeder được thêm sau 3 image kia — Phase 2 sẽ build cả 4 ở cùng một SHA rồi bỏ biến này"
+  type        = string
+}

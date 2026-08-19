@@ -82,3 +82,13 @@ output "service_api_name" {
   description = "Tên ECS service của API. Rỗng khi enable_alb = false"
   value       = var.enable_alb ? aws_ecs_service.api[0].name : ""
 }
+
+output "taskdef_seeder_arn" {
+  description = "ARN revision hiện tại của task definition seeder"
+  value       = aws_ecs_task_definition.seeder.arn
+}
+
+output "taskdef_seeder_family" {
+  description = "Family của task definition seeder — dùng cho aws ecs run-task"
+  value       = aws_ecs_task_definition.seeder.family
+}

@@ -201,3 +201,61 @@ resource "aws_iam_role" "task_migrator" {
   description        = "Container migrator: khong can quyen AWS API nao, chi TCP 1433 toi RDS"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }
+
+# ─── EXECUTION ROLE RIÊNG CHO TASK SEEDER ────────────────────────
+# Vì sao KHÔNG dùng chung aws_iam_role.task_execution: seeder cần đọc
+# /hushstore/prod/db-password, mà role kia được api + web + migrator dùng chung.
+# Thêm db-password vào đó là cấp quyền đọc mật khẩu DB cho execution role của MỌI
+# task trong module — nới quyền cho ba thứ không cần nó, chỉ vì thứ thứ tư cần.
+# Một test đang canh đúng điều này (`task_execution_role_chi_doc_dung_2_parameter`)
+# và nó đã ĐỎ khi tôi thử nới; test đỏ là đúng, thiết kế mới là cái phải sửa.
+#
+# Role riêng này chỉ đọc ĐÚNG MỘT parameter: db-password. Nó KHÔNG đọc được
+# connection-string hay jwt-secret — nghịch lại chiều với role kia. Giao nhau
+# bằng rỗng.
+resource "aws_iam_role" "task_execution_seeder" {
+  name               = "${var.project}-task-execution-seeder-role"
+  description        = "Execution role rieng cho task seeder: chi doc db-password"
+  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
+}
+
+# Managed policy chuẩn của AWS: pull image từ ECR + ghi CloudWatch Logs. Không
+# cấp quyền đọc parameter nào.
+resource "aws_iam_role_policy_attachment" "task_execution_seeder_managed" {
+  role       = aws_iam_role.task_execution_seeder.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+data "aws_iam_policy_document" "task_execution_seeder_extra" {
+  statement {
+    sid     = "ReadOnlyTheDbPassword"
+    effect  = "Allow"
+    actions = ["ssm:GetParameters"]
+
+    resources = [var.ssm_db_password_arn]
+  }
+
+  statement {
+    sid     = "DecryptSecureStringWithDefaultSsmKey"
+    effect  = "Allow"
+    actions = ["kms:Decrypt"]
+
+    # SecureString dùng khoá mặc định alias/aws/ssm; ARN của nó không cố định
+    # theo account nên không liệt kê được tường minh ở đây. Điều kiện
+    # ViaService giới hạn: khoá chỉ được dùng qua SSM, không dùng để giải mã
+    # thứ khác.
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${local.aws_region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "task_execution_seeder_extra" {
+  name   = "${var.project}-task-execution-seeder-read-db-password"
+  role   = aws_iam_role.task_execution_seeder.id
+  policy = data.aws_iam_policy_document.task_execution_seeder_extra.json
+}

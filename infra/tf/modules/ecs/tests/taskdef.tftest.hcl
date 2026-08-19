@@ -9,6 +9,11 @@ variables {
   artifacts_bucket_arn      = "arn:aws:s3:::hushstore-artifacts"
   ssm_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string"
   ssm_jwt_secret_arn        = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/jwt-secret"
+  ssm_db_password_arn       = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/db-password"
+  ecr_seeder_url            = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-seeder"
+  seeder_image_tag          = "0123456789abcdef0123456789abcdef01234567"
+  rds_host                  = "hushstore-db-tf.abcdefghijkl.ap-southeast-1.rds.amazonaws.com"
+  db_username               = "hushadmin"
   app_subnet_ids            = ["subnet-00000000000000001", "subnet-00000000000000002"]
   web_sg_id                 = "sg-00000000000000000"
   instance_count            = 1
@@ -174,5 +179,73 @@ run "api_bat_ecs_exec_va_co_task_role_rieng" {
       try(c.linuxParameters.initProcessEnabled, false) == true
     ])
     error_message = "Phải bật initProcessEnabled trên container API để ECS Exec hoạt động (kịch bản kiểm thử số 10)."
+  }
+}
+
+run "seeder_khong_co_task_role_va_mat_khau_di_qua_secrets" {
+  command = plan
+
+  # Seeder chỉ mở TCP tới RDS, không gọi API AWS nào — nên KHÔNG cấp task role.
+  # Không có role thì blast radius bằng 0 nếu image bị chiếm.
+  # aws_ecs_task_definition.task_role_arn là Optional+Computed nên KHÔNG assert
+  # được `== null` ở plan-time (nó unknown ngay cả khi config không đặt). Kiểm
+  # bằng cách khác: cắt đúng block resource seeder ra khỏi file .tf rồi đòi block
+  # đó không chứa task_role_arn.
+  #
+  # LẦN ĐẦU TÔI VIẾT ASSERTION NÀY BẰNG `[^}]*` VÀ NÓ RỖNG: `"${var.project}-seeder"`
+  # có dấu } ngay dòng đầu của block, nên `[^}]*` dừng ở đó và không bao giờ chạm
+  # tới task_role_arn — thêm task_role_arn vào vẫn pass. Phải dùng (?s) với .*?
+  # để cắt tới dấu } ở đầu dòng.
+  #
+  # Assertion đầu bắt buộc phải có: nếu regex không tìm thấy block nào thì
+  # assertion thứ hai pass RỖNG. Đòi đúng 1 block trước, rồi mới kiểm nội dung.
+  assert {
+    condition = length(regexall(
+      "(?s)resource \"aws_ecs_task_definition\" \"seeder\" \\{.*?\n\\}",
+      file("${path.module}/taskdef.tf")
+    )) == 1
+    error_message = "Không cắt được đúng 1 block resource aws_ecs_task_definition.seeder từ taskdef.tf — assertion sau sẽ pass rỗng nên phải sửa regex này trước."
+  }
+
+  # Phải lọc bỏ dòng COMMENT trước khi kiểm: chính block seeder có comment
+  # "KHÔNG có task_role_arn: ..." giải thích lý do, nên strcontains trên cả block
+  # sẽ khớp vào comment đó và assertion đỏ oan. (Đúng cùng bài học với assertion
+  # chống deadlock trong tests/cluster.tftest.hcl.)
+  assert {
+    condition = length([
+      for l in flatten([
+        for blk in regexall(
+          "(?s)resource \"aws_ecs_task_definition\" \"seeder\" \\{.*?\n\\}",
+          file("${path.module}/taskdef.tf")
+        ) : split("\n", blk)
+      ]) : l if !startswith(trimspace(l), "#") && strcontains(l, "task_role_arn")
+    ]) == 0
+    error_message = "Task definition seeder KHÔNG được có task_role_arn — nó chỉ nói chuyện TCP với RDS, không gọi API AWS nào."
+  }
+
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.seeder.container_definitions) :
+      length([for s in c.secrets : s if s.name == "DB_PASSWORD" && s.valueFrom == var.ssm_db_password_arn]) == 1
+    ])
+    error_message = "DB_PASSWORD phải đi qua khối `secrets` trỏ vào SSM db-password — không được đặt trong `environment`."
+  }
+
+  # Ba giá trị không bí mật đi qua environment. Assert đủ cả ba, và assert
+  # environment KHÔNG chứa gì tên giống mật khẩu.
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.seeder.container_definitions) :
+      toset([for e in c.environment : e.name]) == toset(["DB_HOST", "DB_NAME", "DB_USER"])
+    ])
+    error_message = "environment của seeder phải đúng 3 biến DB_HOST/DB_NAME/DB_USER — thêm biến thứ tư vào đây là lối để mật khẩu lọt ra ngoài `secrets`."
+  }
+
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.seeder.container_definitions) :
+      length(c.portMappings) == 0
+    ])
+    error_message = "Seeder là one-off task, không được map port nào."
   }
 }

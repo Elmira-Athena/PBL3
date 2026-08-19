@@ -32,3 +32,16 @@ output "ssm_path_prefix" {
   description = "Path prefix của mọi parameter — dùng cho IAM policy wildcard"
   value       = local.ssm_prefix
 }
+
+# Export để module ecs (task seeder) dùng đúng cùng giá trị, thay vì lặp lại
+# literal ở envs/prod rồi lệch nhau khi ai đó đổi một bên. sqlcmd cần user và
+# tên database rời vì nó không nhận connection string kiểu .NET.
+output "db_username" {
+  description = "User master của RDS — task seeder truyền vào sqlcmd -U"
+  value       = var.db_username
+}
+
+output "db_name" {
+  description = "Tên database — task seeder truyền vào sqlcmd -d"
+  value       = var.db_name
+}

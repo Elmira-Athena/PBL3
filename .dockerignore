@@ -16,6 +16,11 @@ docs/
 AI_context/
 scratch/
 Infrastructure/
+# ...nhưng image seeder cần đúng 2 file seed này (bake vào image, không tải từ S3).
+# Ngoại lệ hẹp theo tên file, KHÔNG mở cả thư mục — Infrastructure/db/ còn chứa
+# .env của môi trường dev local.
+!Infrastructure/db/seed_data.sql
+!Infrastructure/db/seed_product_data.sql
 
 # Git
 .git/

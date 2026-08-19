@@ -27,6 +27,14 @@ locals {
         "awslogs-stream-prefix" = "migrator"
       }
     }
+    seeder = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.seeder.name
+        "awslogs-region"        = local.aws_region
+        "awslogs-stream-prefix" = "seeder"
+      }
+    }
   }
 
   # Secret dùng khối `secrets` với valueFrom, KHÔNG dùng `environment`.
@@ -180,4 +188,55 @@ resource "aws_ecs_task_definition" "migrator" {
   ])
 
   tags = { Name = "${var.project}-migrator" }
+}
+
+# ─── TASK DEFINITION: SEEDER (one-off, không có service) ─────────
+# Kế hoạch ban đầu là seed bằng cách vào host qua SSM rồi đọc mật khẩu bằng
+# `aws ssm get-parameter`. Không làm được: role của container instance bị DENY
+# tường minh ssm:GetParameter* trên /hushstore/* — đó là một deliverable của đồ
+# án, đã kiểm chứng cả bằng IAM simulator lẫn trên instance thật. Nên mật khẩu đi
+# theo đường `secrets` của ECS (execution role đọc), y như task migrator: nó
+# không bao giờ chạm host và không nằm trong shell history.
+resource "aws_ecs_task_definition" "seeder" {
+  family                   = "${var.project}-seeder"
+  requires_compatibilities = ["EC2"]
+  network_mode             = "bridge"
+
+  execution_role_arn = aws_iam_role.task_execution_seeder.arn
+
+  # KHÔNG có task_role_arn: seeder chỉ nói chuyện với RDS bằng TCP, không gọi
+  # API AWS nào. Không cấp role là blast radius bằng 0 nếu image bị chiếm.
+  skip_destroy = true
+
+  container_definitions = jsonencode([
+    {
+      name      = "seeder"
+      image     = "${var.ecr_seeder_url}:${var.seeder_image_tag}"
+      essential = true
+
+      memory            = 256
+      memoryReservation = 128
+
+      # KHÔNG map port: one-off task, chạy rồi thoát.
+      portMappings = []
+
+      # sqlcmd không nhận connection string kiểu .NET nên truyền 4 giá trị rời.
+      # Ba giá trị không bí mật đi qua `environment`; chỉ mật khẩu đi qua
+      # `secrets`. Tách như vậy để đọc task definition là thấy ngay đúng một thứ
+      # là bí mật.
+      environment = [
+        { name = "DB_HOST", value = var.rds_host },
+        { name = "DB_NAME", value = var.db_name },
+        { name = "DB_USER", value = var.db_username },
+      ]
+
+      secrets = [
+        { name = "DB_PASSWORD", valueFrom = var.ssm_db_password_arn },
+      ]
+
+      logConfiguration = local.log_config.seeder
+    }
+  ])
+
+  tags = { Name = "${var.project}-seeder" }
 }
