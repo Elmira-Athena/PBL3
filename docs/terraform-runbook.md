@@ -386,6 +386,7 @@ phải bọc ngoặc nhọn: `$ACCT:role` bị zsh hiểu `:r` là modifier và 
 | `ForwardLimit = 1` chưa đặt tường minh trong `Program.cs` | Giá trị default đã là 1 nên hành vi hiện tại đúng | Quan trọng hơn tưởng: `drop_invalid_header_fields` **không** chặn giả mạo `X-Forwarded-*` (ALB *append* chứ không thay thế), nên `ForwardLimit` là lớp duy nhất chặn. Đặt tường minh khi rebuild image |
 | `ADD --checksum` cho RDS CA bundle | Cần rebuild image | Gộp với lần rebuild tiếp theo |
 | Test module `ecs` không chạy được offline | Module đọc data source SSM để lấy AMI ECS-optimized, nên `terraform test` cần credential AWS | Thêm `override_data` trong file test. Module `alb` thì đã chạy được offline (không đọc data source nào) |
+| IAM user `athena232` vẫn tồn tại | Quyết định giữ nguyên (2026-08-19) | `AdministratorAccess` gắn trực tiếp, có console password, **không MFA**, không có access key. Dùng đúng một lần lúc setup (2026-08-18T01:27:21Z) rồi không dùng lại. Đây là một đường admin đứng sẵn nằm **ngoài** SSO, tức nó ngược với tuyên bố "danh tính là IAM Identity Center" trong spec. Root đã có MFA nên đã đủ làm break-glass. Nếu đổi ý: bật MFA cho user này, hoặc xoá nó (`delete-login-profile` → `detach-user-policy` → `delete-user`) |
 | 4 package NuGet có CVE | Đã quyết định để sau khi xong hạ tầng | `AutoMapper` 16.0.0→16.1.1, `Microsoft.OpenApi` 2.4.1→2.7.5, `System.Security.Cryptography.Xml` 9.0.0→9.0.18 và 10.0.0→10.0.10. Cả 4 là DoS qua đệ quy không kiểm soát, CVSS 7.5, đánh giá là không tới được trong codebase này |
 
 ## Chi phí
