@@ -1,6 +1,17 @@
 variable "project" {
   description = "Tiền tố tên cho mọi resource"
   type        = string
+
+  # AWS cap tên của cả aws_lb và aws_lb_target_group ở 32 ký tự. Hậu tố dài
+  # nhất module này thêm vào là "-tg-web"/"-tg-api" (7 ký tự), nên trần thực tế
+  # của project là 32 - 7 = 25.
+  # Không có block này thì plan vẫn fail, nhưng bằng lỗi của provider
+  # (`"name" cannot be longer than 32 characters`) — lỗi đó không nói biến nào
+  # sai và cũng không nói trần là 25. Block này fail sớm hơn, đúng tên biến.
+  validation {
+    condition     = length(var.project) <= 25
+    error_message = "Tên target group là \"${var.project}-tg-web\" mà AWS giới hạn 32 ký tự, nên project không được dài quá 25 ký tự."
+  }
 }
 
 variable "vpc_id" {

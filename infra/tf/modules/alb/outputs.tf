@@ -25,11 +25,13 @@ output "certificate_arn" {
 
 output "acm_validation_records" {
   description = "CNAME phải thêm TAY vào Cloudflare để ACM cấp cert — bắt buộc để chế độ DNS only (mây xám), bật proxy mây vàng thì ACM không validate được"
-  value = [
+  # distinct(): hai tên trong cert có thể dùng chung một validation record, khi
+  # đó ACM trả entry trùng — không bắt operator thêm hai lần cùng một CNAME.
+  value = distinct([
     for o in aws_acm_certificate.this.domain_validation_options : {
       name  = o.resource_record_name
       type  = o.resource_record_type
       value = o.resource_record_value
     }
-  ]
+  ])
 }

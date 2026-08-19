@@ -19,8 +19,18 @@ resource "aws_lb" "this" {
     enabled = true
   }
 
-  # Bỏ header X-Forwarded-* mà client tự gửi, thay bằng giá trị ALB tự tính.
-  # Không có cái này thì client có thể giả mạo X-Forwarded-For.
+  # Loại bỏ (không forward xuống target) những header có TÊN chứa ký tự không
+  # hợp lệ theo RFC 7230. Đây là hardening chung, giữ true.
+  #
+  # LƯU Ý — nó KHÔNG chống giả mạo X-Forwarded-For: ALB APPEND IP client vào
+  # cuối chuỗi XFF chứ không thay thế chuỗi client gửi, nên giá trị client tự
+  # chèn vẫn tới được container (nằm ở BÊN TRÁI). Thứ thật sự chặn giả mạo là
+  # phía ASP.NET: ForwardedHeadersMiddleware đọc XFF từ PHẢI sang, và
+  # ForwardedHeadersOptions.ForwardLimit đang để mặc định = 1
+  # (src/API/Program.cs chỉ set ForwardedHeaders + KnownNetworks/KnownProxies
+  # .Clear()), nên nó chỉ lấy đúng 1 entry phải nhất — entry do ALB thêm, tức
+  # IP client thật. Code nào đọc XFF phải lấy phần tử CUỐI, tuyệt đối không lấy
+  # phần tử đầu.
   drop_invalid_header_fields = true
 
   tags = { Name = "${var.project}-alb" }
@@ -38,9 +48,14 @@ resource "aws_lb_target_group" "web" {
   target_type = "instance"
   vpc_id      = var.vpc_id
 
-  # 30s thay vì 300s mặc định: rút ngắn thời gian deploy đáng kể, và nginx
-  # serve static nên không có request nào chạy lâu cần chờ.
-  deregistration_delay = 30
+  # 5s thay vì 300s mặc định. Draining chỉ có ích khi ĐÃ có target thay thế
+  # đang serve; ở topology này static host port 80/8080 + max_size = 1 buộc ECS
+  # service dùng deployment_minimum_healthy_percent = 0, tức STOP task cũ RỒI
+  # mới start task mới — lúc deregister thì chẳng còn connection nào để drain,
+  # nên mỗi giây delay chỉ là downtime cộng thêm.
+  # TĂNG LẠI (30-60s) khi và chỉ khi: chuyển sang dynamic host port (hoặc
+  # awsvpc) VÀ có tối thiểu 2 instance, để hai task cùng tồn tại lúc deploy.
+  deregistration_delay = 5
 
   health_check {
     path                = "/healthz"
@@ -64,7 +79,8 @@ resource "aws_lb_target_group" "api" {
   target_type = "instance"
   vpc_id      = var.vpc_id
 
-  deregistration_delay = 30
+  # Xem lý do ở tg-web bên trên: deploy là stop-rồi-start nên draining vô ích.
+  deregistration_delay = 5
 
   health_check {
     # /health/ready CHẠM DB (AddDbContextCheck). Trỏ vào /health cũ sẽ khiến
@@ -93,8 +109,18 @@ resource "aws_lb_listener" "http" {
     type = "redirect"
 
     redirect {
-      protocol    = "HTTPS"
-      port        = "443"
+      protocol = "HTTPS"
+      port     = "443"
+
+      # Ghi tường minh 3 giá trị này dù chúng đúng bằng default của ELB API:
+      # (1) người đọc thấy ngay là 301 giữ nguyên host/path/query, không phải
+      # redirect mọi thứ về "/" (deep link của Blazor sẽ chết nếu ai đó sửa
+      # thành path = "/"); (2) tránh perpetual diff — nếu để null trong config
+      # thì state đọc về "#{host}" và plan có thể báo thay đổi mãi.
+      host  = "#{host}"
+      path  = "/#{path}"
+      query = "#{query}"
+
       status_code = "HTTP_301"
     }
   }
@@ -106,15 +132,39 @@ resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.this[0].arn
   port              = 443
   protocol          = "HTTPS"
-  certificate_arn   = aws_acm_certificate_validation.this.certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.this[0].certificate_arn
 
-  # TLS 1.3 only. Policy cũ hơn cho phép TLS 1.0/1.1 đã hết hạn hỗ trợ.
+  # Sàn TLS 1.2, hỗ trợ cả TLS 1.3 (xác nhận bằng
+  # `aws elbv2 describe-ssl-policies`: SslProtocols = TLSv1.2, TLSv1.3).
+  # KHÔNG phải "TLS 1.3 only" — policy 1.3-only là ELBSecurityPolicy-TLS13-1-3.
+  # Đây là policy AWS khuyến nghị. Tuyệt đối không đổi sang TLS13-1-0/1-1: tên
+  # trông mới hơn nhưng chúng hạ sàn xuống TLS 1.0/1.1.
   ssl_policy = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 
-  # Mặc định: Blazor client.
+  # ALLOWLIST HOST HEADER — default action là 403, KHÔNG forward.
+  # Chỉ 2 rule host-based bên dưới mới được vào target group. Nếu default action
+  # forward sang tg-web thì bất kỳ ai biết tên DNS thô của ALB
+  # (<project>-alb-*.ap-southeast-1.elb.amazonaws.com) đều vào được origin,
+  # bỏ qua hoàn toàn Cloudflare (WAF, rate limit, che IP gốc).
+  #
+  # HEALTH CHECK KHÔNG BỊ ẢNH HƯỞNG (câu hỏi đầu tiên ai đọc cũng sẽ có): ALB
+  # gọi health check THẲNG tới target theo IP:port của instance, không đi qua
+  # listener và không qua listener rule, nên nó không mang Host header nào cần
+  # match và không bao giờ nhận 403 này.
+  #
+  # Test trước khi cắt DNS sang Cloudflare: gọi ALB DNS thô giờ trả 403, phải
+  # giả Host header —
+  #   curl --resolve hushstore.io.vn:443:<IP-ALB> https://hushstore.io.vn/
+  # (cách này cert vẫn valid). Hoặc: curl -k -H "Host: hushstore.io.vn"
+  # https://<alb-dns>/ — ALB match rule theo Host header, không theo SNI.
   default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web[0].arn
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "403 Forbidden: unknown host\n"
+      status_code  = "403"
+    }
   }
 }
 
@@ -135,5 +185,29 @@ resource "aws_lb_listener_rule" "api" {
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api[0].arn
+  }
+}
+
+# Host-based routing: hushstore.io.vn + www.hushstore.io.vn -> Blazor client.
+# Phải là rule tường minh (không dùng default action) để default action giữ
+# được vai trò 403 cho mọi Host lạ. www.* nằm cùng rule vì cùng target group;
+# lưu ý cert ACM hiện chỉ có SAN cho web_domain + api_domain nên www.* sẽ lỗi
+# tên miền ở tầng TLS trước khi tới rule này — giữ sẵn để khi thêm SAN thì
+# không phải sửa routing.
+resource "aws_lb_listener_rule" "web" {
+  count = var.enable_alb ? 1 : 0
+
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 200
+
+  condition {
+    host_header {
+      values = [var.web_domain, "www.${var.web_domain}"]
+    }
+  }
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.web[0].arn
   }
 }
