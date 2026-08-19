@@ -72,6 +72,13 @@ module "ecs" {
   image_tag          = var.image_tag
   assets_bucket_name = module.storage.assets_bucket_name
   allowed_origins    = "https://${var.web_domain}"
+
+  # Service bi enable_alb gate cung voi ALB/TG/listener: ECS CreateService fail
+  # neu target group chua gan vao load balancer nao. Khi enable_alb = false thi
+  # tg_*_arn tra ve "" (KHONG phai null) — module ecs khong doc chung luc do.
+  enable_alb = var.enable_alb
+  tg_web_arn = module.alb.tg_web_arn
+  tg_api_arn = module.alb.tg_api_arn
 }
 
 module "alb" {

@@ -108,3 +108,32 @@ variable "api_memory_reservation" {
   type        = number
   default     = 384
 }
+
+variable "enable_alb" {
+  description = "Bật serving stack. Service bị gate theo biến này vì ECS CreateService fail nếu target group chưa gắn vào load balancer"
+  type        = bool
+  default     = false
+}
+
+variable "tg_web_arn" {
+  description = "ARN target group của Blazor client. Rỗng khi enable_alb = false — module alb trả về \"\" chứ không phải null"
+  type        = string
+  default     = ""
+}
+
+variable "tg_api_arn" {
+  description = "ARN target group của API. Rỗng khi enable_alb = false — module alb trả về \"\" chứ không phải null"
+  type        = string
+  default     = ""
+}
+
+variable "service_desired_count" {
+  description = "Số task mỗi service. Giữ 1 — max_size của ASG là 1 và host port là static"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.service_desired_count >= 0 && var.service_desired_count <= 1
+    error_message = "service_desired_count chỉ được 0 hoặc 1 — static host port không cho phép 2 task cùng port trên 1 instance."
+  }
+}

@@ -72,3 +72,13 @@ output "taskdef_migrator_family" {
   description = "Family của task definition migrator — dùng cho ecs run-task"
   value       = aws_ecs_task_definition.migrator.family
 }
+
+output "service_web_name" {
+  description = "Tên ECS service của Blazor client. Rỗng khi enable_alb = false"
+  value       = var.enable_alb ? aws_ecs_service.web[0].name : ""
+}
+
+output "service_api_name" {
+  description = "Tên ECS service của API. Rỗng khi enable_alb = false"
+  value       = var.enable_alb ? aws_ecs_service.api[0].name : ""
+}
