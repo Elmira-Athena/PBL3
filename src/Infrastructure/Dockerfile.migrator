@@ -1,0 +1,57 @@
+# Build context là REPO ROOT.
+#   docker build -f src/Infrastructure/Dockerfile.migrator -t hushstore-migrator:tag .
+#
+# Sinh ra một executable độc lập chứa toàn bộ migration của EF Core. Chạy nó
+# là áp dụng migration; exit code 0 = thành công. Pipeline dùng exit code này
+# làm gate: migration fail thì KHÔNG deploy, app cũ vẫn phục vụ.
+
+# ─── Stage 1: sinh migration bundle ──────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+RUN dotnet tool install --global dotnet-ef --version 10.0.*
+ENV PATH="/root/.dotnet/tools:${PATH}"
+
+COPY src/Shared/Shared.csproj src/Shared/
+COPY src/Core/Core.csproj src/Core/
+COPY src/Infrastructure/Infrastructure.csproj src/Infrastructure/
+COPY src/Service/Service.csproj src/Service/
+COPY src/API/API.csproj src/API/
+RUN dotnet restore src/API/API.csproj
+
+COPY src/Shared/ src/Shared/
+COPY src/Core/ src/Core/
+COPY src/Infrastructure/ src/Infrastructure/
+COPY src/Service/ src/Service/
+COPY src/API/ src/API/
+
+# --self-contained nên image runtime chỉ cần runtime-deps.
+RUN dotnet ef migrations bundle \
+        --project src/Infrastructure/Infrastructure.csproj \
+        --startup-project src/API/API.csproj \
+        --configuration Release \
+        --self-contained -r linux-x64 \
+        --force \
+        -o /app/efbundle
+
+# ─── Stage 2: runtime tối giản ───────────────────────────────────
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
+WORKDIR /app
+
+# Amazon RDS CA cho region ap-southeast-1 — bắt buộc vì connection string
+# production dùng Encrypt=True;TrustServerCertificate=False, nên efbundle phải
+# xác thực được cert của RDS. Nếu update-ca-certificates không có sẵn trong
+# runtime-deps thì cài package ca-certificates trước rồi báo lại.
+ADD https://truststore.pki.rds.amazonaws.com/ap-southeast-1/ap-southeast-1-bundle.pem \
+    /usr/local/share/ca-certificates/rds-ap-southeast-1.crt
+RUN chmod 644 /usr/local/share/ca-certificates/rds-ap-southeast-1.crt \
+    && update-ca-certificates
+
+COPY --from=build /app/efbundle .
+RUN chmod +x ./efbundle
+
+# efbundle chạy lại entry point của API để dựng DbContext, nên nó đọc cấu hình
+# theo đúng cơ chế của app: biến môi trường ConnectionStrings__DefaultConnection.
+# LƯU Ý: Program.cs throw nếu JwtSettings__SecretKey chưa đặt (dòng đó nằm
+# trước builder.Build()), nên task definition PHẢI inject cả hai biến.
+ENTRYPOINT ["./efbundle", "--verbose"]
