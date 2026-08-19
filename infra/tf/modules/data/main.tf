@@ -82,12 +82,22 @@ resource "aws_ssm_parameter" "connection_string" {
   description = "Connection string day du, inject vao container qua khoi secrets cua ECS"
   type        = "SecureString"
 
+  # Encrypt=True + TrustServerCertificate=False: bắt buộc TLS VÀ xác thực cert của
+  # RDS thật, không tin mù. TrustServerCertificate=True (bản trước) vẫn mã hoá
+  # nhưng bỏ qua kiểm cert, tức về nguyên tắc vẫn bị MITM ngay trong VPC.
+  # ĐIỀU KIỆN: cert của RDS do Amazon RDS CA cấp, mà CA đó KHÔNG có trong trust
+  # store mặc định — nên cả image API (Dockerfile) và image migrator
+  # (Dockerfile.migrator) đều đã cài bundle CA của region ap-southeast-1. Thiếu
+  # bước đó là app không kết nối được DB.
+  # Chỉ chuỗi PRODUCTION này xác thực cert; chuỗi local dev vẫn dùng
+  # TrustServerCertificate=True vì SQL Server trong container dùng cert tự ký.
   value = join("", [
     "Server=${aws_db_instance.this.address},1433;",
     "Database=${var.db_name};",
     "User Id=${var.db_username};",
     "Password=${random_password.db.result};",
-    "TrustServerCertificate=True;",
+    "Encrypt=True;",
+    "TrustServerCertificate=False;",
     "MultipleActiveResultSets=True;",
   ])
 
