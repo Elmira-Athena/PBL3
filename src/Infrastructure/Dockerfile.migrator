@@ -6,7 +6,12 @@
 # làm gate: migration fail thì KHÔNG deploy, app cũ vẫn phục vụ.
 
 # ─── Stage 1: sinh migration bundle ──────────────────────────────
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# Pin platform: stage 1 build binary self-contained voi -r linux-x64, nen base cua
+# stage 2 PHAI cung la amd64. Neu khong pin, `FROM` resolve theo kien truc cua may
+# build — tren CI runner arm64 (Apple Silicon, Graviton) se duoc base arm64 chua
+# binary chi chay x64, va loi hien ra luc container START chu khong luc build.
+# Deployment target la t3.micro (Intel) nen amd64 la dung.
+FROM --platform=linux/amd64 mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 RUN dotnet tool install --global dotnet-ef --version 10.0.*
@@ -35,7 +40,7 @@ RUN dotnet ef migrations bundle \
         -o /app/efbundle
 
 # ─── Stage 2: runtime tối giản ───────────────────────────────────
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
+FROM --platform=linux/amd64 mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
 WORKDIR /app
 
 # Amazon RDS CA cho region ap-southeast-1 — bắt buộc vì connection string
