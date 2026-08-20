@@ -167,7 +167,8 @@ render() {
     iid="$(jq -r '.Reservations[0].Instances[0].InstanceId // ""' "$TMP/ec2.json")"
     typ="$(jq -r '.Reservations[0].Instances[0].InstanceType // ""' "$TMP/ec2.json")"
     case "$st" in running) tally up ;; *) tally transit ;; esac
-    row "EC2 ${typ}" "$st" "$(hs_hms "${age:-0}")" "free" "-" "$iid"
+    c="$(hs_cost "${age:-0}" "$HS_RATE_EC2")"; add_spent "$c"
+    row "EC2 ${typ}" "$st" "$(hs_hms "${age:-0}")" "$HS_RATE_EC2" "$c" "$iid"
   else
     tally down; row "EC2" "-" "-" "-" "-" "chưa dựng (instance_count = 0)"
   fi
@@ -272,7 +273,7 @@ render() {
     echo "  Cửa sổ    : $(hs_hms "$w") tính từ lần up.sh gần nhất"
   fi
   echo "  Chi phí   : ${C_B}\$${TOTAL_SPENT}${C_RESET} ${C_DIM}giá niêm yết — ALB + NAT + RDS, tính từ lúc mỗi cái được tạo/start${C_RESET}"
-  echo "              ${C_DIM}EC2 free tier. Thực trả hiện vẫn \$0 vì credit bù hết — kiểm số dư ở Billing > Credits.${C_RESET}"
+  echo "              ${C_DIM}Account này KHÔNG có free tier — mọi thứ trừ vào credit trả trước.${C_RESET}"
 
   if [ "$code" = "0" ]; then
     echo

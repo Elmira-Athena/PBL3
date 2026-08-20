@@ -32,24 +32,28 @@ không cần plugin.
 |---|---|---|
 | `enable_nat` | NAT Gateway cho egress (pull ECR, SSM, yum) | **$0.045/giờ** + $0.045/GB |
 | `enable_alb` | Serving stack: ALB + 2 target group + 2 listener + 2 listener rule + 2 ECS service + waiter ACM | **$0.0225/giờ** |
-| `instance_count` | 0 hoặc 1 EC2 container instance | free tier 750h/tháng |
+| `instance_count` | 0 hoặc 1 EC2 container instance | **$0.0132/giờ** |
 | `enable_flow_logs` | VPC Flow Logs (chỉ REJECT) | phí ingest CloudWatch |
 | `enable_deny_demo` | NACL rule 50 DENY `my_ip` | $0 |
 
 RDS bật/tắt bằng AWS CLI, không phải bằng Terraform — `aws rds stop-db-instance`
-giữ nguyên instance và chỉ ngừng tính giờ compute. Storage 20GB vẫn tính (trong
-free tier).
+giữ nguyên instance và chỉ ngừng tính giờ compute. Storage 20GB vẫn tính
+(~$2.76/tháng, chạy 24/7 kể cả khi stopped).
+
+**RDS là khoản đắt nhất, không phải NAT hay ALB** — $0.098/giờ, trong đó
+$0.0674 là CPU credit surplus. Xem mục "Chi phí" ở cuối.
 
 Chi phí đo được từ hai cửa sổ thật, **giá niêm yết** (thực trả $0 khi credit
 còn bù — xem mục "Chi phí" ở cuối):
 
 | Việc | Thời gian | Bật những gì | Tốn |
 |---|---|---|---|
-| Task 15 — verify toàn bộ website | 25 phút | NAT + ALB + EC2 + RDS | ~$0.069 |
-| Task 16 — chạy seed | 19 phút | NAT + EC2 + RDS (không ALB) | ~$0.045 |
+| Task 15 — verify toàn bộ website | 25 phút | NAT + ALB + EC2 + RDS | ~$0.081 |
+| Task 16 — chạy seed | 19 phút | NAT + EC2 + RDS (không ALB) | ~$0.054 |
 
-Đơn giá tổng khi bật đủ là **$0.166/giờ**, không phải $0.0675 như tưởng lúc đầu.
-Khoản còn lại là RDS, và nó không miễn phí — xem mục dưới.
+Đơn giá tổng khi bật đủ là **$0.1954/giờ**, không phải $0.0675 như tưởng lúc
+đầu. Hai nguyên nhân: RDS không miễn phí (CPU credit surplus là khoản lớn nhất
+của cả account), và đơn giá cũ lấy theo us-east-1. Xem mục "Chi phí" ở cuối.
 
 ## Bật / tắt bằng script
 
@@ -390,7 +394,7 @@ order tham chiếu tới product thì `DELETE` sẽ vướng khoá ngoại.
 | `terraform apply` xanh nhưng không có task nào chạy | Instance không đăng ký vào cluster; ASG vẫn báo Healthy | `bash infra/tf/scripts/wait-for-capacity.sh` rồi theo hướng dẫn chẩn đoán nó in ra |
 | `cloud-init status` = `running` + `systemctl` treo dưới cloud-init | `user_data` gọi `systemctl start ecs` → deadlock với `cloud-final.service` | `pkill -f "systemctl enable --now ecs"` để gỡ tạm; sửa hẳn là **bỏ dòng đó** khỏi `user_data.sh.tftpl` |
 | `tg-api` unhealthy, task bị replace liên tục | RDS chưa `available`; `/health/ready` chạm DbContext | Chờ RDS available rồi mới bật service — xem mục thứ tự bật |
-| ECS task `RESOURCE:MEMORY` | t3.micro 1GB hết RAM | Giảm `api_memory_hard` xuống 448, hoặc `instance_type = "t3.small"` (ngoài free tier) |
+| ECS task `RESOURCE:MEMORY` | t3.micro 1GB hết RAM | Giảm `api_memory_hard` xuống 448, hoặc `instance_type = "t3.small"` ($0.0264/giờ, gấp đôi micro) |
 | `CannotPullContainerError` | `image_tag` không có trên ECR, hoặc `enable_nat = false` | `aws ecr describe-images`; bật NAT |
 | SSM `TargetNotConnected` | NAT tắt, hoặc SSM Agent chưa đăng ký | Bật NAT, đợi ~2 phút |
 | `SessionManagerPlugin is not found` | Thiếu plugin trên máy | `brew install --cask session-manager-plugin`; hoặc dùng `ssm send-command` |
@@ -493,24 +497,51 @@ tier — tổng ra xấp xỉ bằng. Đường duy nhất thoát hẳn là bỏ
 Kết luận: đòn bẩy duy nhất là **uptime**, tức đúng việc `down.sh` đang làm. Chỉ
 cần sửa lại con số trong đầu: mỗi giờ bật là **$0.166**, không phải $0.0675.
 
-**Thực trả hiện tại vẫn $0.** Toàn bộ $1.5102 usage của account từ tháng 6 bị
-credit bù đúng bằng $1.5102, net còn $0.0000000015. Nhưng không có API công khai
-nào đọc được **số dư** credit, nên không tự động cảnh báo được: nếu đó là
-promotional credit (hữu hạn) chứ không phải free tier 12 tháng thì nó đang cạn
-dần. Kiểm ở console **Billing → Credits**.
+**Trừ vào credit, không phải free tier.** Toàn bộ $1.5102 usage của account bị
+credit bù đúng bằng $1.5102, net còn $0.0000000015 — nhưng đó là **credit trả
+trước hữu hạn** (số dư $200 tính tới 2026-08-20), không phải free tier 12 tháng.
+Không có API công khai nào đọc được số dư nên không tự cảnh báo được; theo dõi
+bằng AWS Budgets (đã có, ngưỡng $20) và xem số dư ở console
+**Billing → Credits**.
+
+### Account này KHÔNG có free tier
+
+Account tạo 2026-08-18, thuộc mô hình **free plan mới** (credit trả trước) chứ
+không phải free tier 12 tháng. Bằng chứng đo được, không phải suy luận:
+`APS1-InstanceUsage:db.t3.micro` nằm ở `RECORD_TYPE = Usage` với đúng $0.031/giờ
+giá niêm yết — nếu còn 750h free tier thì dòng đó phải là $0.
+
+Hệ quả: **EC2 và RDS cũng tính tiền**, và mọi thứ trừ vào credit. Mọi chỗ nào
+trong tài liệu này còn nói "free tier" đều là sai và đã được sửa.
+
+### Đơn giá — dùng giá ap-southeast-1, không phải us-east-1
+
+Sai sót đã sửa: bảng cũ dùng $0.045 cho NAT và $0.0225 cho ALB, đó là giá
+us-east-1. Giá APS1 lấy từ Pricing API (miễn phí, khác Cost Explorer $0.01/lần):
+
+| | us-east-1 (sai) | ap-southeast-1 (đúng) |
+|---|---|---|
+| NAT Gateway | $0.045 | **$0.0590** |
+| ALB | $0.0225 | **$0.0252** |
+| EC2 t3.micro | — | $0.0132 |
 
 ### Tổng
 
-| | 24/7 | Bật ~3h/ngày |
-|---|---|---|
-| NAT Gateway | $32.90/mo | ~$4.10/mo |
-| ALB | $16.40/mo | ~$2.05/mo |
-| **RDS (instance + CPU surplus)** | **$71.50/mo** | **~$8.90/mo** |
-| EC2 + EBS | free tier | free tier |
-| RDS storage 20GB (tính cả khi stopped) | ~$2.76/mo | ~$2.76/mo |
-| ECR + S3 + CloudWatch + phần còn lại | ~$0.85/mo | ~$0.65/mo |
-| **Tổng giá niêm yết** | **~$124/mo** | **~$18.5/mo** |
-| **Thực trả khi credit còn bù** | **$0** | **$0** |
+| | $/giờ | 24/7 | Bật ~3h/ngày |
+|---|---|---|---|
+| **RDS CPU credit surplus** | **$0.0674** | $49.20/mo | ~$6.10/mo |
+| NAT Gateway | $0.0590 | $43.10/mo | ~$5.40/mo |
+| RDS instance | $0.0310 | $22.60/mo | ~$2.80/mo |
+| ALB | $0.0252 | $18.40/mo | ~$2.30/mo |
+| EC2 t3.micro | $0.0132 | $9.60/mo | ~$1.20/mo |
+| RDS storage 20GB (tính cả khi stopped) | $0.0038 | ~$2.76/mo | ~$2.76/mo |
+| EBS + ECR + S3 + CloudWatch | — | ~$4.50/mo | ~$4.00/mo |
+| **Tổng** | **$0.1954** | **~$150/mo** | **~$24.5/mo** |
+
+Với $200 credit và nhịp ~3h/ngày thì còn khoảng **8 tháng**. Rủi ro lớn nhất
+không phải đơn giá mà là **để quên bật**: AWS tự start lại RDS sau 7 ngày stop,
+và ở $0.098/giờ thì một tuần không ai để ý là **$16.5** bay âm thầm. Đó là lý do
+Lambda cost-guard của Phase 3 là bắt buộc, không phải tuỳ chọn.
 
 Bài học từ lần trước, đáng nhắc: tôi từng để RDS chạy qua đêm vì nghĩ "free tier
 nên không sao", trong khi vẫn cẩn thận tắt NAT. Kết quả thật là **RDS 9.71

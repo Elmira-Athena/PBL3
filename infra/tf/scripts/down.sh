@@ -128,9 +128,10 @@ esac
 
 hs_head "XONG — tổng $(hs_hms $((SECONDS - T_ALL)))"
 if [ -n "$WINDOW" ]; then
-  echo "  Cửa sổ tính phí : $(hs_hms "$WINDOW")  ·  ~\$$(hs_cost "$WINDOW" 0.1655)  ${C_DIM}giá niêm yết${C_RESET}"
-  echo "  ${C_DIM}  NAT \$0.045 + ALB \$0.0225 + RDS \$0.098 (trong đó \$0.067 là CPU credit surplus).${C_RESET}"
-  echo "  ${C_DIM}  Chặn trên: NAT/ALB sống ngắn hơn cửa sổ. Thực trả \$0 khi credit còn bù.${C_RESET}"
+  echo "  Cửa sổ tính phí : $(hs_hms "$WINDOW")  ·  ~\$$(hs_cost "$WINDOW" 0.1954)"
+  echo "  ${C_DIM}  NAT \$0.059 + ALB \$0.0252 + RDS \$0.098 + EC2 \$0.0132 (giá APS1).${C_RESET}"
+  echo "  ${C_DIM}  Trong đó \$0.067 là CPU credit surplus của RDS — khoản lớn nhất.${C_RESET}"
+  echo "  ${C_DIM}  Chặn trên: NAT/ALB sống ngắn hơn cửa sổ. Trừ vào credit trả trước.${C_RESET}"
 fi
 hs_window_close
 

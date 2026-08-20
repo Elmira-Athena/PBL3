@@ -56,9 +56,15 @@ HS_DB="${HS_PROJECT}-db-tf"
 #
 # Cho tới khi free tier / credit hết thì thực trả vẫn là $0. Các số dưới đây là
 # giá niêm yết, tức cái sẽ phải trả khi credit hết.
-HS_RATE_ALB=0.0225
-HS_RATE_NAT=0.045
+# KHÔNG có free tier nào trên account này. Account tạo 2026-08-18, thuộc mô hình
+# free plan mới (credit trả trước) chứ không phải free tier 12 tháng. Bằng chứng:
+# APS1-InstanceUsage:db.t3.micro nằm ở RECORD_TYPE = Usage với đúng $0.031/giờ
+# giá niêm yết. Nếu còn 750h free tier thì dòng đó phải là $0. Mọi thứ trừ vào
+# credit, nên EC2 cũng phải tính tiền.
+HS_RATE_ALB=0.0252        # APS1, không phải $0.0225 của us-east-1
+HS_RATE_NAT=0.0590        # APS1, không phải $0.045 của us-east-1
 HS_RATE_EIP_IDLE=0.005
+HS_RATE_EC2=0.0132        # t3.micro APS1
 HS_RATE_RDS_UP=0.098      # instance $0.031 + CPU surplus $0.067
 HS_RATE_RDS_STOPPED=0.004 # storage gp2 20GB — tính cả khi stopped
 
