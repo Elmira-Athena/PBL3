@@ -43,11 +43,24 @@ HS_SVC_WEB="${HS_PROJECT}-web"
 HS_SVC_API="${HS_PROJECT}-api"
 HS_DB="${HS_PROJECT}-db-tf"
 
-# Đơn giá ap-southeast-1, USD/giờ. EC2 và RDS nằm trong free tier 750h/tháng
-# nên KHÔNG cộng vào tổng — cộng vào thì con số không còn khớp với hoá đơn.
+# Đơn giá ap-southeast-1, USD/giờ — GIÁ NIÊM YẾT, đo được từ Cost Explorer
+# ngày 2026-08-20 (13.67 giờ uptime thật), không phải ước lượng từ bảng giá.
+#
+# RDS KHÔNG miễn phí như tưởng. db.t3.micro có baseline CPU 10%, mà SQL Server
+# Express chạy không tải vẫn ngồi ở ~36% suốt (đo bằng CloudWatch: trung bình
+# 38.8%, CPUCreditBalance = 0 phẳng cả cửa sổ, CPUSurplusCreditBalance leo tới
+# 44.9). Phần vượt baseline bị tính vào usage type CPUCredits:db.t3, và nó tốn
+# $0.0674/giờ — nhiều gấp đôi tiền instance hours, và xấp xỉ ĐÚNG BẰNG NAT + ALB
+# cộng lại. RDS T3 không có cách tắt unlimited mode: khác EC2, cả
+# create-db-instance lẫn modify-db-instance đều không có tham số credit nào.
+#
+# Cho tới khi free tier / credit hết thì thực trả vẫn là $0. Các số dưới đây là
+# giá niêm yết, tức cái sẽ phải trả khi credit hết.
 HS_RATE_ALB=0.0225
 HS_RATE_NAT=0.045
 HS_RATE_EIP_IDLE=0.005
+HS_RATE_RDS_UP=0.098      # instance $0.031 + CPU surplus $0.067
+HS_RATE_RDS_STOPPED=0.004 # storage gp2 20GB — tính cả khi stopped
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'

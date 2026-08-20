@@ -228,14 +228,21 @@ render() {
     ev="$(jq -r '[.Events[]? | select(.Message | test("^DB instance (started|stopped)$"))] | last | .Date // ""' "$TMP/rdsev.json" 2>/dev/null)"
     age="$(hs_age "$ev")"
     tstr="-"; [ -n "$age" ] && tstr="$(hs_hms "$age")"
+    rate="$HS_RATE_RDS_STOPPED"; rcost="-"
     case "$st" in
-      available) tally up;      note="nhận kết nối được" ;;
+      available)
+        tally up; note="nhận kết nối được"
+        # Tính phí theo giá niêm yết: 2/3 số này là CPU credit surplus vì SQL
+        # Server ngồi ~36% CPU trên baseline 10%. Xem comment trong lib.sh.
+        rate="$HS_RATE_RDS_UP"
+        rcost="$(hs_cost "${age:-0}" "$rate")"; add_spent "$rcost"
+        ;;
       starting)  tally transit; note="thường 5-10m — đây là bước lâu nhất" ;;
       stopping)  tally transit; note="thường ~5m" ;;
-      stopped)   tally down;    note="chỉ còn phí storage 20GB (free tier)" ;;
+      stopped)   tally down;    note="chỉ còn phí storage 20GB" ;;
       *)         tally transit; note="" ;;
     esac
-    row RDS "$st" "$tstr" "free" "-" "$note"
+    row RDS "$st" "$tstr" "$rate" "$rcost" "$note"
   else
     row RDS "?" "-" "-" "-" "không đọc được — kiểm tra SSO session"
   fi
@@ -264,7 +271,8 @@ render() {
   if [ -n "$w" ]; then
     echo "  Cửa sổ    : $(hs_hms "$w") tính từ lần up.sh gần nhất"
   fi
-  echo "  Chi phí   : ${C_B}\$${TOTAL_SPENT}${C_RESET} ${C_DIM}(ALB + NAT tính từ lúc chúng được tạo; EC2/RDS trong free tier)${C_RESET}"
+  echo "  Chi phí   : ${C_B}\$${TOTAL_SPENT}${C_RESET} ${C_DIM}giá niêm yết — ALB + NAT + RDS, tính từ lúc mỗi cái được tạo/start${C_RESET}"
+  echo "              ${C_DIM}EC2 free tier. Thực trả hiện vẫn \$0 vì credit bù hết — kiểm số dư ở Billing > Credits.${C_RESET}"
 
   if [ "$code" = "0" ]; then
     echo

@@ -40,12 +40,16 @@ RDS bật/tắt bằng AWS CLI, không phải bằng Terraform — `aws rds stop
 giữ nguyên instance và chỉ ngừng tính giờ compute. Storage 20GB vẫn tính (trong
 free tier).
 
-Chi phí đo được từ hai cửa sổ thật:
+Chi phí đo được từ hai cửa sổ thật, **giá niêm yết** (thực trả $0 khi credit
+còn bù — xem mục "Chi phí" ở cuối):
 
 | Việc | Thời gian | Bật những gì | Tốn |
 |---|---|---|---|
-| Task 15 — verify toàn bộ website | 25 phút | NAT + ALB + EC2 + RDS | ~$0.028 |
-| Task 16 — chạy seed | 19 phút | NAT + EC2 + RDS (không ALB) | ~$0.014 |
+| Task 15 — verify toàn bộ website | 25 phút | NAT + ALB + EC2 + RDS | ~$0.069 |
+| Task 16 — chạy seed | 19 phút | NAT + EC2 + RDS (không ALB) | ~$0.045 |
+
+Đơn giá tổng khi bật đủ là **$0.166/giờ**, không phải $0.0675 như tưởng lúc đầu.
+Khoản còn lại là RDS, và nó không miễn phí — xem mục dưới.
 
 ## Bật / tắt bằng script
 
@@ -447,13 +451,66 @@ phải bọc ngoặc nhọn: `$ACCT:role` bị zsh hiểu `:r` là modifier và 
 
 ## Chi phí
 
+### RDS không miễn phí — CPU credit surplus là khoản lớn nhất
+
+Đo bằng Cost Explorer ngày 2026-08-20 sau 13.67 giờ uptime thật, tách theo
+`RECORD_TYPE` để thấy phần usage trước khi credit bù:
+
+| Usage type | Giá niêm yết | Quy ra $/giờ uptime |
+|---|---|---|
+| `APS1-CPUCredits:db.t3` | **$0.9208** | **$0.0674** |
+| `APS1-InstanceUsage:db.t3.micro` | $0.4237 | $0.0310 |
+| `APS1-RDS:GP2-Storage` | $0.0583 | tính cả khi stopped |
+| **Tổng RDS** | **$1.4028** | **~$0.098/giờ** |
+
+Tức riêng phần CPU credit đã **xấp xỉ đúng bằng NAT + ALB cộng lại**
+($0.0675/giờ) — hai thứ mà cả bộ script này tồn tại để tắt đi. Mô hình "RDS
+nằm trong free tier nên chỉ NAT với ALB tốn tiền" là **sai**.
+
+Nguyên nhân, đo bằng CloudWatch trong cửa sổ 00:15–01:44 UTC:
+
+| Metric | Giá trị |
+|---|---|
+| `CPUUtilization` | trung bình **38.8%**, max 74% — baseline `db.t3.micro` là **10%** |
+| `CPUCreditBalance` | **0 phẳng** cả cửa sổ — không bao giờ tích được credit nào |
+| `CPUSurplusCreditBalance` | leo lên **44.9** — đang vay |
+| `CPUSurplusCreditsCharged` | 0 trong cửa sổ — được quyết toán lúc stop |
+
+SQL Server Express **không tải** vẫn ngồi ở ~36% CPU liên tục. Đồ thị theo thời
+gian cho thấy nó không phải hiện tượng lúc khởi động: spike 63% trong lúc
+recovery, rồi phẳng 36% suốt 70 phút còn lại. Nên "bật/tắt ít lần hơn" không
+giúp gì — surplus tỉ lệ thuận với uptime.
+
+**Không tắt được unlimited mode.** Khác EC2 (chọn được standard/unlimited), RDS
+T3 không có tham số nào cho việc này: cả `create-db-instance` lẫn
+`modify-db-instance` đều không có option credit. Đã kiểm bằng `aws rds ... help`.
+
+**Đổi instance class cũng không rẻ hơn.** `db.t3.small` có baseline 20% (gấp
+đôi) nên surplus giảm ~40%, nhưng instance hours gấp đôi và rơi ra khỏi free
+tier — tổng ra xấp xỉ bằng. Đường duy nhất thoát hẳn là bỏ burstable
+(`db.m5.large`), đắt hơn nhiều lần.
+
+Kết luận: đòn bẩy duy nhất là **uptime**, tức đúng việc `down.sh` đang làm. Chỉ
+cần sửa lại con số trong đầu: mỗi giờ bật là **$0.166**, không phải $0.0675.
+
+**Thực trả hiện tại vẫn $0.** Toàn bộ $1.5102 usage của account từ tháng 6 bị
+credit bù đúng bằng $1.5102, net còn $0.0000000015. Nhưng không có API công khai
+nào đọc được **số dư** credit, nên không tự động cảnh báo được: nếu đó là
+promotional credit (hữu hạn) chứ không phải free tier 12 tháng thì nó đang cạn
+dần. Kiểm ở console **Billing → Credits**.
+
+### Tổng
+
 | | 24/7 | Bật ~3h/ngày |
 |---|---|---|
 | NAT Gateway | $32.90/mo | ~$4.10/mo |
 | ALB | $16.40/mo | ~$2.05/mo |
-| EC2 + EBS + RDS | free tier | free tier |
+| **RDS (instance + CPU surplus)** | **$71.50/mo** | **~$8.90/mo** |
+| EC2 + EBS | free tier | free tier |
+| RDS storage 20GB (tính cả khi stopped) | ~$2.76/mo | ~$2.76/mo |
 | ECR + S3 + CloudWatch + phần còn lại | ~$0.85/mo | ~$0.65/mo |
-| **Tổng** | **~$50/mo** | **~$6.8/mo** |
+| **Tổng giá niêm yết** | **~$124/mo** | **~$18.5/mo** |
+| **Thực trả khi credit còn bù** | **$0** | **$0** |
 
 Bài học từ lần trước, đáng nhắc: tôi từng để RDS chạy qua đêm vì nghĩ "free tier
 nên không sao", trong khi vẫn cẩn thận tắt NAT. Kết quả thật là **RDS 9.71
