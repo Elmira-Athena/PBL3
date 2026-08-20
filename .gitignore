@@ -121,3 +121,6 @@ terraform.rc
 
 # SDD scratch workspace (khong commit)
 .superpowers/
+
+# Runtime cua bo script up/down/status: log apply va moc thoi gian cua so
+infra/tf/.local/

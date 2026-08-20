@@ -47,6 +47,60 @@ Chi phí đo được từ hai cửa sổ thật:
 | Task 15 — verify toàn bộ website | 25 phút | NAT + ALB + EC2 + RDS | ~$0.028 |
 | Task 16 — chạy seed | 19 phút | NAT + EC2 + RDS (không ALB) | ~$0.014 |
 
+## Bật / tắt bằng script
+
+Đây là đường dùng hằng ngày. Bốn script nằm ở `infra/tf/scripts/`, đều nhận
+`--help`:
+
+```bash
+bash infra/tf/scripts/up.sh          # bật đủ để mở browser (~8-12 phút)
+bash infra/tf/scripts/status.sh      # đang chạy gì, bao lâu rồi, tốn bao nhiêu
+bash infra/tf/scripts/status.sh -w   # theo dõi liên tục, làm mới 15 giây
+bash infra/tf/scripts/down.sh        # tắt sạch rồi tự kiểm chứng (~6-8 phút)
+bash infra/tf/scripts/nuke.sh        # terraform destroy — hỏi xác nhận
+```
+
+Thêm `up.sh --no-alb` khi chỉ cần chạy migrate/seed: bỏ ALB thì website không
+mở được nhưng tiết kiệm $0.0225/giờ và bớt ~3 phút chờ.
+
+`status.sh` là thứ trả lời câu "bật rồi chưa". Nó in **ý muốn** (giá trị trong
+`terraform.tfvars`) cạnh **thực tế** (đọc trực tiếp từ AWS API), nên hai cột lệch
+nhau là dấu hiệu có apply chạy dở. Thời gian lấy từ timestamp của AWS
+(`CreatedTime`, `LaunchTime`, `registeredAt`, RDS event stream) chứ không phải từ
+đồng hồ của script — tắt máy rồi mở lại vẫn ra số đúng. Exit code dùng được
+trong script khác: `0` đang bật, `10` đang tắt, `20` đang chuyển trạng thái.
+
+| Bước lâu nhất | Thường mất |
+|---|---|
+| RDS `stopped` → `available` | **5-10 phút** — bước quyết định tổng thời gian |
+| Tạo NAT Gateway | ~2 phút |
+| Tạo ALB + target group + service | ~3 phút |
+| Instance đăng ký vào ECS cluster | ~2 phút |
+| Target group chuyển `healthy` | 1-3 phút sau khi task lên |
+| Service drain khi tắt | ~2 phút 30 |
+
+Ba điều các script làm mà chạy tay dễ quên:
+
+**`up.sh` phát lệnh start RDS rồi apply NAT + ALB trong lúc RDS đang `starting`**,
+thay vì chờ tuần tự như phần dưới viết. An toàn vì `instance_count = 0` nghĩa là
+cluster không có capacity, task không xếp lên đâu được, nên không có gì
+crash-loop. Cửa chặn thật — RDS `available` trước khi bật instance — vẫn nguyên.
+Tiết kiệm ~4 phút mỗi lần bật.
+
+**`down.sh` chạy một watcher nền giải phóng `ecs-managed-draining-termination-hook`**
+ngay khi thấy instance vào `Terminating:Wait`, nên không phải chờ heartbeat và
+apply không bị treo. Xem mục dưới để hiểu vì sao hook này luôn xuất hiện.
+
+**`down.sh` reset luôn `enable_flow_logs` và `enable_deny_demo` về false.** Cái
+đầu để quên thì tốn phí ingest CloudWatch. Cái sau tốn $0 nhưng tệ hơn: lần bật
+sau nó chặn đúng IP của mình ở tầng NACL, và triệu chứng là browser timeout —
+trông y như hạ tầng lỗi.
+
+Log của mọi lần apply/destroy nằm ở `infra/tf/.local/logs/` (gitignored).
+
+Phần dưới là các lệnh tay tương ứng, giữ lại vì chúng giải thích **vì sao** thứ
+tự phải như vậy. Script chỉ là bản tự động của đúng những bước này.
+
 ## Bật hệ thống — THỨ TỰ LÀ RÀNG BUỘC, KHÔNG PHẢI KHUYẾN NGHỊ
 
 ```bash
@@ -341,6 +395,8 @@ order tham chiếu tới product thì `DELETE` sẽ vướng khoá ngoại.
 | Gọi ALB bằng tên DNS thô trả **503** thay vì 403 | Allowlist Host **chưa có hiệu lực** — default action vẫn forward | Đây là lỗi. Kiểm `aws elbv2 describe-rules` |
 | `terraform apply` treo 30 phút rồi fail ở ACM | Record validation chưa tồn tại | Thêm CNAME vào Cloudflare trước; waiter đã được gate theo `enable_alb` nên chỉ ảnh hưởng khi bật serving stack |
 | State lock treo, `OperationTypeApply` | Một tiến trình apply bị kill giữa đường | Kiểm không còn process terraform nào, đối chiếu thời điểm ghi state cuối trên S3, rồi `terraform force-unlock <ID>` |
+| Browser timeout với MỌI URL, nhưng `status.sh` báo tất cả healthy | `enable_deny_demo = true` — NACL rule 50 đang chặn `my_ip` ở tầng mạng | `status.sh` in cảnh báo này ở đầu bảng. Đặt `enable_deny_demo = false` rồi apply. `down.sh` tự reset |
+| Browser không mở được ngay sau `up.sh`, curl trả `000` | Record `alb` ở Cloudflare còn trỏ vào ALB của cửa sổ trước — tên DNS của ALB đổi mỗi lần tạo lại | `up.sh` đã so sánh và in giá trị mới cần dán. Sửa đúng một record `alb`, chờ ~1-2 phút |
 | Deploy có downtime ~20–40s | Static host port + 1 instance, đúng như thiết kế | Xem mục đánh đổi trong spec |
 
 ## Kiểm thử bảo mật — lệnh đã dùng, kết quả đã đo

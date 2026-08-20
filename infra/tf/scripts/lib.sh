@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# HushStore — thư viện chung cho up.sh / down.sh / status.sh / nuke.sh.
+# File này KHÔNG chạy trực tiếp, chỉ được `source`.
+#
+# Ba thứ trong đây đáng đọc trước khi sửa:
+#
+# 1. hs_apply KHÔNG BAO GIỜ pipe terraform qua grep/tail. Đã bị lừa hai lần:
+#    `terraform apply | grep ...` trả exit code của grep, nên một apply THẤT BẠI
+#    hiện ra là thành công và mình đi tiếp trên một hạ tầng chưa đổi. Ở đây
+#    terraform chạy nền, ghi thẳng ra file log, và exit code lấy bằng `wait $pid`.
+#
+# 2. Mọi biến đứng ngay trước dấu ':' phải viết ${VAR}. zsh (và cả bash trong
+#    một số ngữ cảnh) hiểu `$A:role` là modifier `:r` và ăn mất ký tự — đã làm
+#    hỏng cả một bảng kết quả IAM. Script này dùng bash, nhưng giữ quy ước.
+#
+# 3. Thời gian luôn lấy từ timestamp của AWS (CreatedTime, LaunchTime,
+#    registeredAt...) chứ không phải từ đồng hồ nội bộ của script. Đóng/mở máy
+#    tính giữa hai lần chạy vẫn ra số đúng.
+
+set -euo pipefail
+
+HS_PROFILE="${AWS_PROFILE:-hushstore}"
+HS_REGION="${AWS_REGION:-ap-southeast-1}"
+HS_PROJECT="${HS_PROJECT:-hushstore}"
+
+HS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HS_TF_DIR="$(cd "${HS_SCRIPT_DIR}/../envs/prod" && pwd)"
+HS_TFVARS="${HS_TF_DIR}/terraform.tfvars"
+
+# Thư mục runtime: log apply và mốc thời gian cửa sổ làm việc. Gitignored.
+HS_LOCAL_DIR="$(cd "${HS_SCRIPT_DIR}/.." && pwd)/.local"
+HS_WINDOW_FILE="${HS_LOCAL_DIR}/window"
+
+# Tên resource — đều dẫn xuất từ var.project nên suy ra được, không cần đọc
+# state. Nhờ vậy status.sh chạy được cả khi terraform chưa init.
+HS_CLUSTER="${HS_PROJECT}"
+HS_ASG="${HS_PROJECT}-asg"
+HS_CP="${HS_PROJECT}-cp"
+HS_ALB="${HS_PROJECT}-alb"
+HS_TG_WEB="${HS_PROJECT}-tg-web"
+HS_TG_API="${HS_PROJECT}-tg-api"
+HS_SVC_WEB="${HS_PROJECT}-web"
+HS_SVC_API="${HS_PROJECT}-api"
+HS_DB="${HS_PROJECT}-db-tf"
+
+# Đơn giá ap-southeast-1, USD/giờ. EC2 và RDS nằm trong free tier 750h/tháng
+# nên KHÔNG cộng vào tổng — cộng vào thì con số không còn khớp với hoá đơn.
+HS_RATE_ALB=0.0225
+HS_RATE_NAT=0.045
+HS_RATE_EIP_IDLE=0.005
+
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'
+  C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[31m'; C_CYAN=$'\033[36m'
+else
+  C_RESET=; C_DIM=; C_B=; C_GREEN=; C_YELLOW=; C_RED=; C_CYAN=
+fi
+
+AWSQ=(--profile "$HS_PROFILE" --region "$HS_REGION" --no-cli-pager --output json)
+AWSQT=(--profile "$HS_PROFILE" --region "$HS_REGION" --no-cli-pager --output text)
+
+hs_die()  { echo "${C_RED}LỖI:${C_RESET} $*" >&2; exit 1; }
+hs_warn() { echo "${C_YELLOW}!${C_RESET} $*" >&2; }
+hs_ok()   { echo "${C_GREEN}✓${C_RESET} $*"; }
+hs_info() { echo "${C_CYAN}·${C_RESET} $*"; }
+
+hs_head() {
+  echo
+  echo "${C_B}$*${C_RESET}"
+  echo "${C_DIM}────────────────────────────────────────────────────────────${C_RESET}"
+}
+
+# ── Thời gian ───────────────────────────────────────────────────
+# hs_hms 3725 -> "1h 02m". Dưới 60 giây in ra giây để lúc chờ thấy nó nhích.
+hs_hms() {
+  s=${1:-0}
+  [ "$s" -lt 0 ] && s=0
+  if [ "$s" -lt 60 ]; then printf '%ds' "$s"
+  else printf '%dh %02dm' $((s / 3600)) $(((s % 3600) / 60))
+  fi
+}
+
+# hs_age <ISO8601> -> số giây tính tới hiện tại. Rỗng/None -> rỗng.
+hs_age() {
+  ts="${1:-}"
+  case "$ts" in ''|None|null) return 0 ;; esac
+  python3 - "$ts" <<'PY' 2>/dev/null || true
+import sys, datetime
+t = sys.argv[1].replace('Z', '+00:00')
+try:
+    d = datetime.datetime.fromisoformat(t)
+except ValueError:
+    sys.exit(0)
+if d.tzinfo is None:
+    d = d.replace(tzinfo=datetime.timezone.utc)
+print(int((datetime.datetime.now(datetime.timezone.utc) - d).total_seconds()))
+PY
+}
+
+# hs_cost <giây> <đơn giá/giờ> -> USD, 3 chữ số thập phân.
+hs_cost() {
+  awk -v s="${1:-0}" -v r="${2:-0}" 'BEGIN { printf "%.3f", s / 3600 * r }'
+}
+
+# ── tfvars ──────────────────────────────────────────────────────
+hs_tfvar_get() {
+  grep -E "^[[:space:]]*$1[[:space:]]*=" "$HS_TFVARS" 2>/dev/null \
+    | head -1 | sed -E 's/^[^=]*=[[:space:]]*//' | tr -d '"' | awk '{print $1}'
+}
+
+# Đặt giá trị và ĐỌC LẠI để xác nhận. sed không báo lỗi khi pattern không khớp,
+# nên không verify thì một lần đổi tên biến sẽ thành "apply mà không đổi gì".
+hs_tfvar_set() {
+  key="$1"; val="$2"
+  grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$HS_TFVARS" \
+    || hs_die "không thấy biến '${key}' trong ${HS_TFVARS}"
+  sed -i '' -E "s|^[[:space:]]*${key}[[:space:]]*=.*|${key} = ${val}|" "$HS_TFVARS"
+  cur="$(hs_tfvar_get "$key")"
+  [ "$cur" = "$val" ] || hs_die "đặt ${key} = ${val} không có tác dụng (đang là '${cur}')"
+}
+
+# ── terraform ───────────────────────────────────────────────────
+hs_tf_check() {
+  command -v terraform >/dev/null || hs_die "chưa cài terraform"
+  command -v aws >/dev/null       || hs_die "chưa cài aws cli"
+  command -v jq >/dev/null        || hs_die "chưa cài jq (brew install jq)"
+  [ -d "${HS_TF_DIR}/.terraform" ] \
+    || hs_die "terraform chưa init. Chạy: terraform -chdir=${HS_TF_DIR} init"
+  [ -f "$HS_TFVARS" ] || hs_die "không thấy ${HS_TFVARS}"
+}
+
+hs_sso_check() {
+  aws sts get-caller-identity "${AWSQ[@]}" >/dev/null 2>&1 \
+    || hs_die "SSO session hết hạn. Chạy: aws sso login --profile ${HS_PROFILE}"
+}
+
+# hs_apply "<nhãn>" — chạy terraform apply, in tiến độ trực tiếp, trả exit code
+# THẬT của terraform. Không pipe. Log đầy đủ nằm ở $HS_LAST_LOG.
+hs_apply() {
+  label="$1"
+  mkdir -p "$HS_LOCAL_DIR/logs"
+  HS_LAST_LOG="${HS_LOCAL_DIR}/logs/apply-$(date +%Y%m%d-%H%M%S).log"
+  t0=$SECONDS
+
+  terraform -chdir="$HS_TF_DIR" apply -auto-approve -input=false -lock-timeout=5m -no-color \
+    >"$HS_LAST_LOG" 2>&1 &
+  pid=$!
+
+  while kill -0 "$pid" 2>/dev/null; do
+    last="$(grep -E 'Still (creating|destroying|modifying)|Creating\.\.\.|Destroying\.\.\.|Modifying\.\.\.|Creation complete|Destruction complete|Modifications complete' \
+             "$HS_LAST_LOG" 2>/dev/null | tail -1 | cut -c1-72)"
+    printf '\r  %-74s' "$(hs_hms $((SECONDS - t0)))  ${last}"
+    sleep 5
+  done
+
+  set +e; wait "$pid"; rc=$?; set -e
+  printf '\r%-78s\r' ' '
+
+  if [ "$rc" -ne 0 ]; then
+    echo "${C_RED}✗${C_RESET} ${label} — thất bại sau $(hs_hms $((SECONDS - t0))))" >&2
+    echo "${C_DIM}--- 25 dòng cuối của log ---${C_RESET}" >&2
+    tail -25 "$HS_LAST_LOG" >&2
+    echo "${C_DIM}Log đầy đủ: ${HS_LAST_LOG}${C_RESET}" >&2
+    return "$rc"
+  fi
+
+  changes="$(grep -E '^Apply complete!' "$HS_LAST_LOG" | tail -1)"
+  hs_ok "${label} — $(hs_hms $((SECONDS - t0)))  ${C_DIM}${changes}${C_RESET}"
+}
+
+hs_tf_out() { terraform -chdir="$HS_TF_DIR" output -raw "$1" 2>/dev/null || true; }
+
+# ── Chờ có tiến độ nhìn thấy được ───────────────────────────────
+# hs_wait_until "<nhãn>" <timeout> <gợi ý thường mất> <lệnh kiểm tra...>
+# Lệnh kiểm tra trả 0 = xong. In ra đồng hồ đếm lên để biết nó còn sống.
+hs_wait_until() {
+  label="$1"; timeout="$2"; hint="$3"; shift 3
+  t0=$SECONDS
+  while :; do
+    if "$@" >/dev/null 2>&1; then
+      printf '\r%-78s\r' ' '
+      hs_ok "${label} — $(hs_hms $((SECONDS - t0)))"
+      return 0
+    fi
+    if [ $((SECONDS - t0)) -ge "$timeout" ]; then
+      printf '\r%-78s\r' ' '
+      hs_warn "${label} — HẾT THỜI GIAN CHỜ sau $(hs_hms "$timeout")"
+      return 1
+    fi
+    printf '\r  %-74s' "$(hs_hms $((SECONDS - t0)))  ${label}  ${C_DIM}(thường ${hint})${C_RESET}"
+    sleep 10
+  done
+}
+
+# ── Mốc cửa sổ tính phí ─────────────────────────────────────────
+hs_window_open() {
+  mkdir -p "$HS_LOCAL_DIR"
+  date +%s > "$HS_WINDOW_FILE"
+}
+
+hs_window_seconds() {
+  [ -f "$HS_WINDOW_FILE" ] || { echo ""; return 0; }
+  start="$(cat "$HS_WINDOW_FILE" 2>/dev/null || echo)"
+  case "$start" in ''|*[!0-9]*) echo ""; return 0 ;; esac
+  echo $(( $(date +%s) - start ))
+}
+
+hs_window_close() { rm -f "$HS_WINDOW_FILE"; }

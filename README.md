@@ -48,6 +48,20 @@ inject từ SSM Parameter Store.
 Toàn bộ quy trình nằm ở **[docs/terraform-runbook.md](docs/terraform-runbook.md)**
 — bật/tắt, deploy phiên bản mới, rollback, seed, chẩn đoán sự cố, và chi phí.
 
+Đường dùng hằng ngày là bốn script ở [infra/tf/scripts/](infra/tf/scripts/):
+
+```bash
+bash infra/tf/scripts/up.sh          # bật đủ để mở browser (~8-12 phút)
+bash infra/tf/scripts/status.sh -w   # đang chạy gì, bao lâu rồi, tốn bao nhiêu
+bash infra/tf/scripts/down.sh        # tắt sạch rồi tự kiểm chứng (~6-8 phút)
+bash infra/tf/scripts/nuke.sh        # terraform destroy — hỏi xác nhận
+```
+
+`status.sh` in ý muốn (`terraform.tfvars`) cạnh thực tế (AWS API), kèm đồng hồ
+cho từng resource và chi phí đã phát sinh. Bật/tắt mất nhiều phút và
+`terraform apply` xanh **không** có nghĩa là hệ thống dùng được, nên đây là thứ
+trả lời câu "xong chưa".
+
 Ba điều cần biết trước khi chạy bất cứ thứ gì:
 
 **Mặc định NAT Gateway và ALB đều tắt.** Cả hai tính theo giờ và không có bậc free
@@ -65,9 +79,8 @@ xoá khỏi `Program.cs`.
 
 ```bash
 aws sso login --profile hushstore
-cd infra/tf/envs/prod
-terraform init
-# rồi theo đúng thứ tự trong runbook
+terraform -chdir=infra/tf/envs/prod init
+bash infra/tf/scripts/up.sh
 ```
 
 Thư mục **[infra/legacy-cli/](infra/legacy-cli/)** chứa bộ script bash + AWS CLI
