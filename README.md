@@ -43,6 +43,17 @@ inject từ SSM Parameter Store.
 
 ---
 
+## Tài liệu cho người mới
+
+Hai tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
+
+1. **[thiet-ke-he-thong-aws.md](docs/thiet-ke-he-thong-aws.md)** — *cái gì* và
+   *vì sao thiết kế vậy*. Có phần kiến thức nền về mạng máy tính và AWS ở đầu,
+   rồi giải thích từng thành phần, và đối chiếu với yêu cầu đề bài.
+2. **[nhat-ky-trien-khai.md](docs/nhat-ky-trien-khai.md)** — *làm thế nào*. Cách
+   doanh nghiệp triển khai hạ tầng và vì sao, nhật ký 10 giai đoạn, và 12 issue
+   chính đã gặp kèm bài học.
+
 ## Deploy lên AWS
 
 Toàn bộ quy trình nằm ở **[docs/terraform-runbook.md](docs/terraform-runbook.md)**
