@@ -1,0 +1,11 @@
+### KB-03/KB-02: truy cap truc tiep vao tier private tu internet
+May tan cong: laptop, IP cong khai 42.1.89.156
+
+RDS qua ten DNS cong khai              hushstore-db-tf.c5ew4s44uz0u.ap-southeast-1.rds.amazonaws.com -> 10.20.21.81:1433
+                                       ket qua: TIMEOUT sau 10s — khong co duong di (no route)  (10.0s)
+RDS qua IP rieng truc tiep             10.20.21.81 -> 10.20.21.81:1433
+                                       ket qua: TIMEOUT sau 10s — khong co duong di (no route)  (10.0s)
+EC2 container instance (IP rieng)      10.20.11.22 -> 10.20.11.22:8080
+                                       ket qua: TIMEOUT sau 10s — khong co duong di (no route)  (10.0s)
+EC2 container instance - port 22       10.20.11.22 -> 10.20.11.22:22
+                                       ket qua: TIMEOUT sau 10s — khong co duong di (no route)  (10.0s)

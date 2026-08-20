@@ -1,0 +1,33 @@
+### Nghiem thu Phase 1 tren DOMAIN THAT — 2026-08-20
+Khong dung -k o bat ky lenh nao: cert phai tu dung vung.
+
+$ curl https://hushstore.io.vn/
+  code=200  tls_verify=0 (0=hop le)  bytes=3589
+$ curl https://api.hushstore.io.vn/health/ready
+Healthy  body=  code=200  tls_verify=0
+$ curl http://hushstore.io.vn/
+  code=301 -> https://hushstore.io.vn:443/
+
+### Du lieu that qua domain that
+$ curl https://api.hushstore.io.vn/api/products?pageSize=3
+  totalCount = 49
+   - Microsoft Windows 11 Home
+   - Microsoft Office 2024 Home & Student
+   - PC Gaming Tầm Trung RTX 4060 Ti
+
+### KB-07: Host header la — allowlist tren ALB
+$ curl --resolve evil.com:443:<ip-alb> https://evil.com/   (goi thang ALB, bo qua Cloudflare)
+
+  code=000
+
+### Hai lop TLS (Cloudflare Full strict)
+-- Client <-> Cloudflare edge --
+  subject=CN=hushstore.io.vn
+  issuer=C=US, O=Let's Encrypt, CN=YE1
+  notBefore=Jul 12 08:17:07 2026 GMT
+  notAfter=Oct 10 08:17:06 2026 GMT
+-- Cloudflare <-> ALB (origin, cert ACM) --
+  subject=CN=hushstore.io.vn
+  issuer=C=US, O=Amazon, CN=Amazon RSA 2048 M01
+  notBefore=Aug 19 00:00:00 2026 GMT
+  notAfter=Mar  4 23:59:59 2027 GMT

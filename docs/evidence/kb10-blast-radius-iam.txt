@@ -1,0 +1,20 @@
+### KB-10: ban kinh anh huong (blast radius) cua tung role
+Dung iam simulate-principal-policy — danh gia truc tiep tren policy that dang gan.
+
+ROLE                                 ACTION                       KET QUA
+------------------------------------ ---------------------------- -------
+-- doc secret db-password (chi seeder duoc phep) --
+hushstore-container-instance-role    ssm:GetParameter             explicitDeny
+hushstore-task-app-role              ssm:GetParameter             implicitDeny
+hushstore-task-execution-role        ssm:GetParameters            implicitDeny
+hushstore-task-execution-seeder-role ssm:GetParameters            allowed
+-- doc connection-string (chi execution role cua app duoc phep) --
+hushstore-task-execution-role        ssm:GetParameters            allowed
+hushstore-task-execution-seeder-role ssm:GetParameters            implicitDeny
+-- ghi anh len bucket assets (chi task role cua app) --
+hushstore-task-app-role              s3:PutObject                 allowed
+hushstore-container-instance-role    s3:PutObject                 implicitDeny
+-- thao tac RDS: khong role nao duoc phep --
+hushstore-task-app-role              rds:DescribeDBInstances      implicitDeny
+hushstore-task-app-role              rds:DeleteDBInstance         implicitDeny
+hushstore-container-instance-role    rds:DeleteDBInstance         implicitDeny

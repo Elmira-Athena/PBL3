@@ -1,0 +1,14 @@
+### KB-04: goi thang port ung dung (8080) tren ALB
+$ curl -m 10 http://hushstore-alb-395664435.ap-southeast-1.elb.amazonaws.com:8080/
+ket qua: code=000 exit=28
+curl that bai, exit=28
+
+### KB-05: SSH vao ALB va vao dai VPC
+$ nc -z -w 6 hushstore-alb-395664435.ap-southeast-1.elb.amazonaws.com 22
+exit=1 (0=mo, khac 0=khong mo)
+
+$ ssh -o ConnectTimeout=6 -o StrictHostKeyChecking=no ec2-user@hushstore-alb-395664435.ap-southeast-1.elb.amazonaws.com
+ssh: connect to host hushstore-alb-395664435.ap-southeast-1.elb.amazonaws.com port 22: No route to host
+exit=255
+
+Ghi chu: he thong khong co key pair nao va khong co SG rule nao mo port 22.

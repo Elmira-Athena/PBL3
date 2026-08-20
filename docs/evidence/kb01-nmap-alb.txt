@@ -1,0 +1,36 @@
+### KB-01: quet port ALB tu may tan cong (laptop, 42.1.89.156)
+
+Ghi chu phuong phap: lan dau toi quet toan 65535 port (-p-) va nmap het han
+900s ma chua ra ket qua. Nguyen nhan la bang chung, khong phai loi: SG cua ALB
+DROP goi im lang (filtered) thay vi tra RST, nen moi port dong phai cho het
+timeout. Neu SG tra 'refused' thi scan se xong trong vai giay. Do do quet lai
+theo pham vi khai bao ro: 1000 port pho bien nhat + cac port ung dung/DB/admin.
+
+$ nmap -Pn -T4 --top-ports 1000 54.251.216.176
+Starting Nmap 7.991 ( https://nmap.org ) at 2026-08-20 07:51 +0700
+Nmap scan report for ec2-54-251-216-176.ap-southeast-1.compute.amazonaws.com (54.251.216.176)
+Host is up (0.074s latency).
+Not shown: 998 filtered tcp ports (no-response)
+PORT    STATE SERVICE
+80/tcp  open  http
+443/tcp open  https
+Nmap done: 1 IP address (1 host up) scanned in 56.83 seconds
+
+$ nmap -Pn -T4 -p 22,1433,3306,5432,3389,8080,8443,9200,6379,27017,5000,5001 54.251.216.176
+Starting Nmap 7.991 ( https://nmap.org ) at 2026-08-20 07:52 +0700
+Nmap scan report for ec2-54-251-216-176.ap-southeast-1.compute.amazonaws.com (54.251.216.176)
+Host is up.
+PORT      STATE    SERVICE
+22/tcp    filtered ssh
+1433/tcp  filtered ms-sql-s
+3306/tcp  filtered mysql
+3389/tcp  filtered ms-wbt-server
+5000/tcp  filtered upnp
+5001/tcp  filtered commplex-link
+5432/tcp  filtered postgresql
+6379/tcp  filtered redis
+8080/tcp  filtered http-proxy
+8443/tcp  filtered https-alt
+9200/tcp  filtered wap-wsp
+27017/tcp filtered mongod
+Nmap done: 1 IP address (1 host up) scanned in 4.09 seconds

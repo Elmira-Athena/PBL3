@@ -1,0 +1,25 @@
+### KB-08: Network ACL chan theo IP — dieu Security Group KHONG lam duoc
+
+Cau hinh: nacl-public rule 50 = DENY all tu 42.1.89.156/32 (IP laptop).
+SG chi co allow-list, khong the dien dat 'chan rieng mot IP'. Day la ly do
+de bai bat buoc co NACL ben canh SG.
+
+PHEP THU A/B tu CUNG mot may, chi khac IP nguon nhin thay o AWS:
+
+  A. Goi TRUC TIEP vao ALB  -> nguon = 42.1.89.156 (IP bi DENY)
+     $ curl -m 15 https://alb.hushstore.io.vn/  (Host: hushstore.io.vn)
+       ket qua: HTTP 000
+TIMEOUT (exit 28) — bi NACL chan
+     $ curl -m 15 --resolve hushstore.io.vn:443:54.251.216.176 https://hushstore.io.vn/
+       ket qua: HTTP 000
+TIMEOUT (exit 28) — bi NACL chan
+
+  B. Goi QUA Cloudflare proxy -> nguon = IP cua Cloudflare (KHONG bi DENY)
+     $ curl -m 15 https://hushstore.io.vn/
+       ket qua: HTTP 200  bytes=3589
+     $ curl -m 15 https://api.hushstore.io.vn/health/ready
+       ket qua: HTTP 200
+
+Ket luan: cung mot lenh curl, cung mot may. Duong A bi chan, duong B khong.
+Khac biet duy nhat la IP nguon ma AWS nhin thay => rule 50 cua NACL dang
+hoat dong chinh xac o tang network, truoc khi goi tin cham den ALB.

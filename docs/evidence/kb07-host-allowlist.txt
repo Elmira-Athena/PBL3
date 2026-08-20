@@ -1,0 +1,13 @@
+### KB-07: allowlist Host header tren ALB (goi thang ALB, bo qua Cloudflare)
+IP ALB dung trong test: 54.251.216.176
+
+  Host: hushstore.io.vn          -> HTTP 200
+  Host: api.hushstore.io.vn      -> HTTP 404
+  Host: evil.com                 -> HTTP 403
+  Host: www.hushstore.io.vn      -> HTTP 403
+
+  Host: (khong khai bao, dung ten DNS tho cua ALB) -> 
+  HTTP 403
+
+Ket luan: chi 2 host trong allowlist duoc route; moi host khac — ke ca ten DNS
+that cua chinh ALB — nhan 403 tu default action fixed-response.
