@@ -28,7 +28,7 @@ Kiểm thử thực hiện trên hạ tầng **do chính nhóm sở hữu**, tro
 | 6 | Brute-force `/api/auth/login` | 429 từ request 6 | ✅ req 1-5 → 400, **req 6-20 → 429** | rate limiter `LoginRateLimit` | `kb06-rate-limit-login.txt` |
 | 7 | Host header lạ | không lọt sang backend | ✅ `evil.com` → 403, `www` → 403, tên DNS thô của ALB → 403 | ALB listener rule + default `fixed-response` | `kb07-host-allowlist.txt` |
 | 8 | NACL DENY theo IP | chặn đúng 1 IP | ✅ **A/B từ cùng một máy**: đường trực tiếp timeout, đường qua Cloudflare 200 | `nacl-public` rule 50 | `kb08-nacl-deny-theo-ip.txt` |
-| 9 | VPC Flow Logs `REJECT` | có bản ghi khớp | ✅ (mục 3.9) | Flow Logs `REJECT`, gom 600s | `kb09-flowlog-reject.txt` |
+| 9 | VPC Flow Logs `REJECT` | có bản ghi khớp | ✅ khớp cả 3 nhóm: máy tấn công, egress EC2, scanner ngoài | Flow Logs `REJECT`, gom 600s | `kb09-flowlog-reject.txt` |
 | 10 | Bán kính ảnh hưởng của IAM role | mỗi role chỉ thấy phần của mình | ✅ ma trận 12 phép thử, host bị **explicitDeny** | 5 role tách biệt | `kb10-blast-radius-iam.txt` |
 | 11 | Giả mạo OIDC assume-role | AccessDenied | ⏳ **chưa làm** — phụ thuộc Phase 2 (module `cicd` chưa tồn tại) | `role-github-actions` trust condition | — |
 
@@ -179,6 +179,60 @@ nằm trong allowlist đều bị chặn tại ALB, không chạm tới containe
 Điều dễ đọc sai: gọi ALB bằng tên DNS thô trả **403 là đúng thiết kế**. Nếu
 trả **503** thì mới là lỗi (không có target healthy).
 
+### 3.9 — VPC Flow Logs: bằng chứng ở tầng network, độc lập với `curl`
+
+Bật `enable_flow_logs = true` (`TrafficType = REJECT`, gom mỗi 600 giây). Ba
+nhóm bản ghi, mỗi nhóm nói một điều khác nhau:
+
+**Nhóm A — gói tin từ máy tấn công bị chặn.** Đây là bằng chứng tầng network
+cho kịch bản 8, hoàn toàn độc lập với kết quả `curl`:
+
+```
+42.1.89.156 -> 10.20.0.135  dport=443   proto=6  REJECT
+42.1.89.156 -> 10.20.0.135  dport=80    proto=6  REJECT
+42.1.89.156 -> 10.20.1.38   dport=8080  proto=6  REJECT
+42.1.89.156 -> 10.20.1.38   dport=22    proto=6  REJECT
+42.1.89.156 -> 10.20.1.38   dport=1433  proto=6  REJECT
+42.1.89.156 -> 10.20.0.135  dport=3389  proto=6  REJECT
+```
+
+Chú ý **port 80 và 443 cũng bị `REJECT`**. Bình thường hai port này được
+`ACCEPT` — chúng bị chặn ở đây chỉ vì rule 50 DENY theo IP nguồn. `10.20.0.135`
+và `10.20.1.38` là ENI của ALB trong hai subnet public.
+
+**Nhóm B — egress của EC2 bị chặn.** `sg-web` egress chỉ cho `1433`, `80`, `443`:
+
+```
+10.20.11.22 -> 52.207.222.50   dport=123  proto=17  REJECT
+10.20.11.22 -> 54.210.225.137  dport=123  proto=17  REJECT
+10.20.11.22 -> 3.86.4.106      dport=123  proto=17  REJECT
+```
+
+`proto 17` là UDP, `dport 123` là NTP. **Một phát hiện thật, không phải bài test
+dàn dựng**: host không ra được NTP công khai. Egress tối thiểu đang hoạt động
+đúng thiết kế. Đồng hồ hệ thống vẫn đúng vì Amazon Linux đồng bộ qua Amazon
+Time Sync Service ở địa chỉ link-local `169.254.169.123` — không đi qua NAT nên
+không cần rule egress; các gói bị chặn ở đây là `chrony` thử thêm nguồn NTP công
+khai dự phòng.
+
+**Nhóm C — quét không mời từ internet.** Không phải traffic của nhóm:
+
+```
+125.88.205.65   -> 10.20.0.135  dport=6379   proto=6   (Redis)
+145.255.160.146 -> 10.20.0.37   dport=22     proto=6   (SSH)
+142.93.228.104  -> 10.20.1.38   dport=23     proto=6   (Telnet)
+123.158.36.73   -> 10.20.0.135  dport=8090   proto=6
+147.185.132.181 -> 10.20.1.38   dport=47320  proto=6
+```
+
+Đây là bằng chứng có giá trị nhất trong cả báo cáo, vì nó không do nhóm tạo ra.
+Trong khoảng một giờ hạ tầng mở ra internet, các máy quét tự động đã dò thử
+SSH, Telnet và Redis — và tất cả đều bị chặn trước khi chạm tới bất kỳ ứng dụng
+nào. Các rule đang làm việc thật, không chỉ trong bài test.
+
+*(Sau khi thu bằng chứng, `enable_flow_logs` đã tắt lại — mặc định là `false`
+để không tốn phí ingest.)*
+
 ### 3.10 — Xem mục 2.3.
 
 ---
@@ -194,6 +248,7 @@ Một báo cáo chỉ liệt kê thành công thì không dùng được. Các g
 | **`drop_invalid_header_fields` KHÔNG chặn được giả mạo `X-Forwarded-*`** | ALB **thêm vào** header này chứ không thay thế | Phòng thủ thật là `ForwardLimit` của `UseForwardedHeaders` — app chỉ tin proxy gần nhất. **Việc còn nợ:** đặt `ForwardLimit = 1` tường minh trong `Program.cs` |
 | **WAF / chống DDoS tầng 7** | Chưa có AWS WAF | Cloudflare proxy đang che apex + api và cung cấp một phần; WAF của AWS là bước tiếp theo nếu cần |
 | **Không có IDS/IPS trong VPC** | GuardDuty chưa bật | GuardDuty có bậc dùng thử 30 ngày; nên bật khi trình bày |
+| **Host không ra được NTP công khai** | `sg-web` egress chỉ cho `1433`/`80`/`443` — hệ quả cố ý của egress tối thiểu | Không cần sửa: Amazon Linux dùng Amazon Time Sync ở `169.254.169.123` (link-local, không qua NAT). Ghi lại để không ai nhầm các bản ghi `REJECT` port 123 là sự cố |
 | **IAM user `athena232`** có `AdministratorAccess` trực tiếp, **không MFA** | Sót lại từ lúc khởi tạo account | Chủ dự án đã quyết định giữ nguyên. Đây là lỗ hổng lớn nhất còn lại của account và đã ghi vào mục việc còn nợ của runbook |
 
 ---

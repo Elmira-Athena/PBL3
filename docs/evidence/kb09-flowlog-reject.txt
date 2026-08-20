@@ -1,0 +1,67 @@
+### KB-09: VPC Flow Logs — ban ghi REJECT khop voi tung kich ban
+
+Log group: /vpc/hushstore/flowlogs   TrafficType: REJECT   gom moi 600s
+Dinh dang ban ghi: version account eni srcaddr dstaddr srcport dstport
+                   protocol packets bytes start end ACTION log-status
+
+=== A. Goi tin tu MAY TAN CONG 42.1.89.156 (kich ban 8 — NACL rule 50) ===
+Chu y: ca port 80 va 443 cung bi REJECT. Binh thuong hai port nay ACCEPT;
+chung bi chan vi rule 50 DENY theo IP nguon. Day la bang chung TANG NETWORK
+cho kich ban 8, doc lap voi ket qua curl.
+
+  42.1.89.156    -> 10.20.1.38    dport=1433  proto=6   pkts=2   REJECT
+  42.1.89.156    -> 10.20.1.38    dport=1433  proto=6   pkts=4   REJECT
+  42.1.89.156    -> 10.20.1.38    dport=22    proto=6   pkts=2   REJECT
+  42.1.89.156    -> 10.20.1.38    dport=22    proto=6   pkts=3   REJECT
+  42.1.89.156    -> 10.20.1.38    dport=3389  proto=6   pkts=3   REJECT
+  42.1.89.156    -> 10.20.1.38    dport=443   proto=6   pkts=3   REJECT
+  42.1.89.156    -> 10.20.1.38    dport=443   proto=6   pkts=4   REJECT
+  42.1.89.156    -> 10.20.1.38    dport=80    proto=6   pkts=4   REJECT
+  42.1.89.156    -> 10.20.1.38    dport=8080  proto=6   pkts=3   REJECT
+  42.1.89.156    -> 10.20.1.38    dport=8080  proto=6   pkts=4   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=1433  proto=6   pkts=2   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=1433  proto=6   pkts=4   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=22    proto=6   pkts=2   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=22    proto=6   pkts=3   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=3389  proto=6   pkts=2   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=443   proto=6   pkts=2   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=443   proto=6   pkts=4   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=80    proto=6   pkts=3   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=8080  proto=6   pkts=3   REJECT
+  42.1.89.156    -> 10.20.0.135   dport=8080  proto=6   pkts=4   REJECT
+
+=== B. Egress cua EC2 bi chan (sg-web egress chi cho 1433, 80, 443) ===
+  10.20.11.22   -> 52.207.222.50    dport=123   proto=17  REJECT
+  10.20.11.22   -> 54.210.225.137   dport=123   proto=17  REJECT
+  10.20.11.22   -> 3.86.4.106       dport=123   proto=17  REJECT
+  10.20.11.22   -> 54.197.201.248   dport=123   proto=17  REJECT
+  10.20.11.22   -> 3.94.91.31       dport=123   proto=17  REJECT
+  10.20.11.22   -> 13.218.199.213   dport=123   proto=17  REJECT
+  (proto 17 = UDP, dport 123 = NTP)
+
+  PHAT HIEN THAT: host khong ra duoc NTP cong khai. Egress toi thieu dang
+  hoat dong dung nhu thiet ke. Amazon Linux van dong bo gio qua Amazon Time
+  Sync Service o dia chi link-local 169.254.169.123 — khong di qua NAT nen
+  khong can rule egress. Cac goi bi REJECT nay la chrony thu them nguon
+  NTP cong khai du phong.
+
+=== C. Quet khong moi tu internet bi chan o public tier ===
+  123.158.36.73    -> 10.20.0.135   dport=8090   proto=6
+  125.88.205.65    -> 10.20.0.135   dport=6379   proto=6
+  13.214.173.166   -> 10.20.1.38    dport=0      proto=1
+  131.72.92.201    -> 10.20.0.37    dport=23     proto=6
+  142.93.228.104   -> 10.20.1.38    dport=23     proto=6
+  145.255.160.146  -> 10.20.0.37    dport=22     proto=6
+  145.255.160.146  -> 10.20.0.37    dport=23     proto=6
+  147.185.132.124  -> 10.20.1.38    dport=24172  proto=6
+  147.185.132.152  -> 10.20.1.38    dport=9767   proto=6
+  147.185.132.181  -> 10.20.1.38    dport=47320  proto=6
+  147.185.132.191  -> 10.20.1.38    dport=9580   proto=6
+  147.185.132.205  -> 10.20.1.38    dport=4222   proto=6
+  147.185.132.206  -> 10.20.0.135   dport=9651   proto=6
+  147.185.132.222  -> 10.20.1.38    dport=61337  proto=6
+  147.185.132.227  -> 10.20.0.135   dport=9848   proto=6
+
+  Day la traffic quet tu dong tu internet, khong phai cua nhom. Chung bi
+  chan truoc khi cham den bat ky ung dung nao — bang chung song rang cac
+  rule dang lam viec that, khong chi trong bai test dan dung.
