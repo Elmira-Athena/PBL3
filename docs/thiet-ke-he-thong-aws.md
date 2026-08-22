@@ -393,7 +393,7 @@ nên định tuyến được theo tên miền và đường dẫn, không chỉ
 
 | Target group | Cổng | Health check | Nhận traffic khi |
 |---|---|---|---|
-| `tg-web` | 80 | `/` | Host = `hushstore.io.vn` |
+| `tg-web` | 80 | `/healthz` | Host = `hushstore.io.vn` |
 | `tg-api` | 8080 | `/health/ready` | Host = `api.hushstore.io.vn` |
 
 **Allowlist Host header.** Default action của listener là **trả 403**, không phải
@@ -599,6 +599,109 @@ bảo vệ:
 | Không WAF | ALB có allowlist Host nhưng không lọc SQL injection ở tầng mạng. Phòng thủ nằm ở tầng ứng dụng (EF Core tham số hoá) |
 | Single-AZ RDS | SQL Server Express không hỗ trợ Multi-AZ |
 | Giữa hai phiên làm việc, domain không hoạt động | ALB chạy 24/7 tốn $18/tháng cho một đồ án |
+
+---
+
+# Phần VI — Lộ trình học trên AWS Study Group
+
+Trang **[cloudjourney.awsstudygroup.com/vi](https://cloudjourney.awsstudygroup.com/vi/)**
+là bộ workshop tiếng Việt do cộng đồng AWS Việt Nam biên soạn, làm trực tiếp trên
+console. Nó bổ trợ rất tốt cho tài liệu này: ở đây bạn đọc *vì sao*, ở đó bạn
+**tự tay bấm** để thấy resource thật.
+
+Cách dùng hiệu quả nhất: làm workshop trước để có cảm giác về resource, rồi quay
+lại đọc phần tương ứng ở Phần III để hiểu vì sao ta cấu hình khác họ.
+
+## Bản đồ: thành phần hệ thống → workshop tương ứng
+
+| Thành phần của ta | Workshop | Học được gì dùng ngay | Workshop KHÔNG dạy phần nào ta cần |
+|---|---|---|---|
+| VPC, subnet, SG, **NACL** | [Bắt đầu với Amazon VPC](https://000003.awsstudygroup.com/vi/) — chương 2 tên đúng là **"Tường lửa trong VPC"** | Đây là chương gần nhất với deliverable trọng tâm của đồ án: phân biệt SG và NACL trên console | Không dạy thứ tự rule NACL và bài toán dải ephemeral. Đó là phần Phần III của tài liệu này |
+| Mạng nâng cao, VPC Endpoint | [AWS Networking and Content Delivery](https://000092.awsstudygroup.com/vi/) — chương "VPC Endpoints cho AWS Services" | Hiểu S3 Gateway Endpoint của ta làm gì và vì sao nó miễn phí | Nặng về Transit Gateway / VPC Peering — ta không dùng |
+| EC2 | [Giới thiệu về Amazon EC2](https://000004.awsstudygroup.com/vi/) | AMI, instance type, key pair, user data, gắn SG | Workshop **có dùng key pair và SSH**; ta cố ý bỏ cả hai |
+| Launch Template, ASG, **Load Balancer** | [Triển khai ứng dụng với Auto Scaling Group](https://000006.awsstudygroup.com/vi/) — chương 3 và 4 | Đây là chỗ duy nhất trên site dạy **Launch Template + ALB + target group** cùng nhau | Không có allowlist Host header, không có listener rule theo tên miền |
+| ECS, task definition, service, ALB | [Triển khai ứng dụng trên Amazon ECS](https://000016.awsstudygroup.com/vi/) | **Workshop sát kiến trúc của ta nhất.** Có đủ cluster → task definition → ALB + target group → service, và cả chiến lược deploy | Dùng Fargate + `awsvpc`; ta dùng **EC2 launch type + `bridge`**. Khác biệt này chính là lý do SG của ta chỉ mở 2 port |
+| Docker, ECR | [Triển khai ứng dụng trên Docker với AWS](https://000015.awsstudygroup.com/vi/) — chương 8 "Image Registry" | Build image, đẩy lên ECR, xác thực bằng IAM | Không bật IMMUTABLE tag — phần làm rollback có nghĩa |
+| RDS | [Bắt đầu với Amazon RDS](https://000005.awsstudygroup.com/vi/) — chương 2 có sẵn phần **Security Group + DB Subnet Group** | Đúng ba thứ ta cần: subnet group 2 AZ, SG chỉ mở 1433, backup/restore | Không nói về `publicly_accessible`, và **không nói về CPU credit của lớp `t3`** — đúng cái đã làm ta trả tiền |
+| IAM cơ bản | [Quản trị quyền truy cập với AWS IAM](https://000002.awsstudygroup.com/vi/) | User, group, policy, role, và cơ chế chuyển role | Không có Deny tường minh — kỹ thuật ta dùng để bịt managed policy |
+| **IAM Role cho ứng dụng** | [Cấp quyền cho ứng dụng với IAM Role](https://000048.awsstudygroup.com/vi/) | **Nên làm sớm.** Workshop so sánh trực tiếp access key với IAM role và giải thích vì sao role tốt hơn — đúng thay đổi thứ 3 ta làm trong code | Chỉ có role cho EC2, không có task role của ECS |
+| Vào máy không cần SSH | [Systems Manager Session Manager](https://000058.awsstudygroup.com/vi/) | Chính đường quản trị của ta. Có cả session log và port forwarding | — |
+| Quản lý máy chủ | [Patch Manager và Run Command](https://000031.awsstudygroup.com/vi/) | `Run Command` là cách chạy lệnh trên host **không cần plugin** — hữu ích khi chẩn đoán | — |
+| CloudWatch | [Giám sát hệ thống với CloudWatch](https://000008.awsstudygroup.com/vi/) | Metrics, Logs Insights, Alarm, và **Container Insights** cho ECS | — |
+| Chi phí | [Trực quan hóa chi phí](https://000034.awsstudygroup.com/vi/) — chương 7 "Phân tích chi phí bằng Cost Explorer" | Đọc hoá đơn theo dịch vụ, theo tag | **Không dạy bóc theo `usage type`** — mà đó chính là cách ta tìm ra khoản CPU credit. Xem mục "Chi phí" trong runbook |
+| Quản lý bí mật | [Secrets Manager với RDS và Fargate](https://000096.awsstudygroup.com/vi/) | Bối cảnh chung về quản lý credential cho DB | Dạy **Secrets Manager**; ta dùng **Parameter Store SecureString** vì miễn phí. Đọc để biết vì sao ta chọn khác |
+| Khái niệm IaC | [Giới thiệu về Infrastructure as Code](https://000102.awsstudygroup.com/vi/) | Khái niệm IaC và kiến trúc three-tier | **Dạy CloudFormation, KHÔNG phải Terraform.** Xem mục khoảng trống bên dưới |
+
+## Lộ trình đề nghị — 3 tuần
+
+**Tuần 1 — nền tảng.** Làm đúng thứ tự, vì mỗi cái là điều kiện của cái sau:
+
+1. [IAM](https://000002.awsstudygroup.com/vi/) — không có quyền thì không làm được gì
+2. [VPC](https://000003.awsstudygroup.com/vi/) — **ưu tiên chương "Tường lửa trong VPC"**
+3. [EC2](https://000004.awsstudygroup.com/vi/)
+4. [RDS](https://000005.awsstudygroup.com/vi/) — chú ý chương chuẩn bị: SG + DB subnet group
+
+Sau tuần 1, đọc lại **Phần III mục "Mạng"**, **"Security Group"** và **"Network
+ACL"** của tài liệu này. Lúc đó bảng rule sẽ đọc được, và câu chuyện rule
+90/95/115 sẽ có nghĩa.
+
+**Tuần 2 — container và load balancer.** Đây là phần đúng kiến trúc của ta:
+
+5. [Docker trên AWS](https://000015.awsstudygroup.com/vi/) — nhất là chương ECR
+6. [Auto Scaling Group](https://000006.awsstudygroup.com/vi/) — Launch Template + ALB
+7. [Amazon ECS](https://000016.awsstudygroup.com/vi/) — **workshop quan trọng nhất**
+
+Sau tuần 2, đọc lại **Phần III mục "Application Load Balancer"** và **"EC2 và
+ECS"**. Sẽ hiểu vì sao ta chọn `bridge` + port cố định thay vì port động, và cái
+giá phải trả.
+
+**Tuần 3 — vận hành và bảo mật.**
+
+8. [IAM Role cho ứng dụng](https://000048.awsstudygroup.com/vi/)
+9. [Session Manager](https://000058.awsstudygroup.com/vi/)
+10. [CloudWatch](https://000008.awsstudygroup.com/vi/)
+11. [Trực quan hóa chi phí](https://000034.awsstudygroup.com/vi/)
+
+Sau tuần 3, đọc **Phần III mục "IAM"** và **Phần IV**. Lúc này đủ nền để hiểu vì
+sao bốn role tách rời là điểm least-privilege mạnh nhất của thiết kế.
+
+Ai chỉ có thời gian cho **ba** workshop: chọn
+[VPC](https://000003.awsstudygroup.com/vi/) →
+[ECS](https://000016.awsstudygroup.com/vi/) →
+[IAM Role cho ứng dụng](https://000048.awsstudygroup.com/vi/). Ba cái này phủ
+phần lớn những gì bị hỏi khi bảo vệ.
+
+## Ba khoảng trống — và học ở đâu thay thế
+
+Nói thẳng để không ai mất thời gian tìm:
+
+**Không có workshop Terraform.** Workshop IaC duy nhất trên site
+([000102](https://000102.awsstudygroup.com/vi/)) dạy **CloudFormation**. Khái
+niệm thì dùng chung được — IaC, state, plan trước khi apply, resource khai báo
+thay vì bấm tay — nhưng cú pháp thì khác hoàn toàn. Học Terraform ở
+[developer.hashicorp.com/terraform/tutorials/aws-get-started](https://developer.hashicorp.com/terraform/tutorials/aws-get-started),
+rồi đọc [terraform-runbook.md](terraform-runbook.md) của dự án.
+
+**Không có workshop riêng về Network ACL.** Chỉ có một chương trong workshop VPC.
+Mà NACL lại là thành phần đề bài nhấn mạnh nhất. Nên phần NACL ở Phần III của tài
+liệu này **là nguồn chính**, không phải phần bổ trợ — đọc kỹ đoạn giải thích vì
+sao rule 95 và 115 tồn tại.
+
+**Không có workshop riêng về ALB.** ALB nằm lẫn trong workshop
+[ASG](https://000006.awsstudygroup.com/vi/) (chương 4) và
+[ECS](https://000016.awsstudygroup.com/vi/) (chương 7). Cả hai đều **không** dạy
+định tuyến theo header Host và allowlist — phần chặn được tấn công Host header
+injection trong hệ thống của ta.
+
+Ngoài ra ba chỗ workshop dạy **khác có chủ ý** với hệ thống của ta, đừng nhầm là
+ta làm sai:
+
+| Workshop dạy | Ta làm | Vì sao |
+|---|---|---|
+| Dùng key pair + SSH vào EC2 | Không có key pair, vào bằng SSM | SSH là bề mặt tấn công lớn nhất; Flow Logs bắt được máy quét dò port 22 trong đúng một giờ |
+| ECS trên Fargate, network mode `awsvpc` | ECS trên **EC2 launch type**, `bridge` | Đề bài yêu cầu "triển khai website thông qua EC2 Instance" |
+| Secrets Manager | Parameter Store SecureString | Miễn phí, và ta không cần tự động luân chuyển mật khẩu |
+| Bật Multi-AZ cho RDS | Single-AZ | SQL Server Express không hỗ trợ Multi-AZ |
 
 ---
 

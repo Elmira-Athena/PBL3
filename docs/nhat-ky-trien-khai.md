@@ -6,6 +6,10 @@
 >
 > Đọc kèm [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) (giải thích *cái
 > gì* và *vì sao thiết kế vậy*). Tài liệu này giải thích *làm thế nào*.
+>
+> Chưa từng dùng AWS thì làm workshop tay trước cho có cảm giác về resource:
+> xem **Phần VI — Lộ trình học** trong tài liệu thiết kế, có bản đồ từ mỗi thành
+> phần của hệ thống sang workshop tiếng Việt tương ứng.
 
 ---
 
@@ -83,8 +87,15 @@ Bảy nguyên tắc này là khung của toàn bộ nhật ký dưới đây.
 
 # Phần II — Nhật ký triển khai
 
-Phase 1 gồm 17 việc, nhóm thành 10 giai đoạn. Mỗi giai đoạn ghi ba điều: **làm
-gì**, **vì sao phải theo thứ tự đó**, và **chỗ dễ sai**.
+Phase 1 gồm 17 việc, nhóm thành 10 giai đoạn. Mỗi giai đoạn ghi bốn mục:
+**resource nào được dựng**, **cấu hình cụ thể từng cái và vì sao chọn giá trị
+đó**, **vì sao phải theo thứ tự này**, và **chỗ dễ sai**.
+
+Các bảng cấu hình dưới đây là giá trị **thật đang chạy**, không phải ví dụ. Cột
+"vì sao" là phần đáng đọc — một thiết lập không giải thích được thì thường là
+một thiết lập sai.
+
+---
 
 ## Giai đoạn 0 — Khảo sát hiện trạng và quyết định làm lại
 
@@ -106,211 +117,547 @@ nửa-Terraform-nửa-thủ-công là thứ không ai dám chạm.
 song song, dùng dải IP khác (`10.20.0.0/16` thay vì `10.0.0.0/16`) để hai mạng
 không đụng nhau, và chỉ chuyển tên miền khi bản mới đã verify xong.
 
+---
+
 ## Giai đoạn 1 — Nơi lưu state
 
-**Làm gì.** Việc đầu tiên không phải tạo mạng, mà tạo chỗ lưu **state** của
-Terraform: một S3 bucket, bật versioning, bật lock.
+**Resource:** 1 S3 bucket.
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| Tên bucket | `hushstore-tfstate` | Tên S3 là **toàn cầu duy nhất** — trùng với bất kỳ ai trên thế giới là tạo thất bại |
+| Versioning | **bật** | State hỏng thì quay lại bản trước. Đây là lưới an toàn duy nhất cho file quan trọng nhất của hạ tầng |
+| Block public access | **bật toàn bộ** | State chứa mọi ID resource và có thể chứa giá trị nhạy cảm. Public là thảm hoạ |
+| Mã hoá | bật (SSE-S3) | Miễn phí, không có lý do để tắt |
+| Backend lock | `use_lockfile = true` | Terraform ≥ 1.10 lock ngay trên S3, **không cần bảng DynamoDB** như hướng dẫn cũ — bớt một resource phải quản |
 
 **Vì sao đây là việc đầu tiên.** Vì mọi thứ sau đó đều ghi vào state. Nếu state
 nằm trên laptop thì chỉ một người dựng được hạ tầng; nếu nó mất thì Terraform
 "quên" hết những gì đã tạo — và lần apply sau nó sẽ cố tạo lại tất cả, trong khi
-resource cũ vẫn còn. Versioning là lưới an toàn: state hỏng thì quay lại bản
-trước.
+resource cũ vẫn còn.
+
+**Vì sao bucket này dựng bằng backend local.** Không thể dùng S3 backend để tạo
+chính cái bucket chứa backend — vòng lặp. Nên thư mục `bootstrap/` chạy một lần
+với state trên máy, sau đó mọi thứ khác dùng S3.
 
 **Chỗ dễ sai.** Bỏ qua lock vì "chỉ mình mình dùng". Nhưng lock không chỉ chống
-hai người — nó còn chống **một người apply hai lần** (mở hai terminal, hoặc
-apply lại khi lần trước chưa xong). Đó là tình huống thật, và nó làm state lệch.
+hai người — nó còn chống **một người apply hai lần** (mở hai terminal, hoặc apply
+lại khi lần trước chưa xong). Đó là tình huống thật, và nó làm state lệch.
+
+---
 
 ## Giai đoạn 2 — Mạng
 
-**Làm gì.** VPC, 6 subnet, Internet Gateway, route table, NAT Gateway, 3 Network
-ACL, S3 Gateway Endpoint. NAT Gateway được đặt sau một công tắc bật/tắt ngay từ
-đầu.
+**Resource:** 1 VPC · 6 subnet · 1 Internet Gateway · 3 route table · 1 NAT
+Gateway + 1 Elastic IP · 1 S3 Gateway Endpoint · 3 Network ACL · (tuỳ chọn) Flow
+Logs.
+
+### VPC
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `cidr_block` | `10.20.0.0/16` | 65.536 địa chỉ, thừa sức. Chọn `10.20` để **không trùng** `10.0.0.0/16` của hạ tầng cũ đang chạy song song |
+| `enable_dns_support` | `true` | Cho phép dùng DNS resolver của AWS trong VPC |
+| `enable_dns_hostnames` | `true` | **Bắt buộc.** Không bật thì endpoint của RDS không phân giải được thành IP private, và app không kết nối được database |
+
+### Subnet — 6 cái, và một thiết lập quyết định toàn bộ bảo mật
+
+| Subnet | CIDR | AZ | `map_public_ip_on_launch` |
+|---|---|---|---|
+| `public-a` / `public-b` | `10.20.0.0/24` / `10.20.1.0/24` | 1a / 1b | **`true`** |
+| `app-a` / `app-b` | `10.20.10.0/24` / `10.20.11.0/24` | 1a / 1b | **`false`** |
+| `db-a` / `db-b` | `10.20.20.0/24` / `10.20.21.0/24` | 1a / 1b | **`false`** |
+
+`map_public_ip_on_launch = false` ở app và db tier là **thiết lập bảo mật quan
+trọng nhất của toàn hệ thống**. Nó nghĩa là máy tạo trong subnet đó **không có
+địa chỉ Internet**. Không có địa chỉ thì không ai gõ cửa được — mạnh hơn mọi
+firewall, vì firewall còn có thể cấu hình sai.
+
+Mỗi subnet cũng được gắn tag `Tier = public|app|db`. Tag không ảnh hưởng chức
+năng nhưng là cách duy nhất để sau này lọc resource theo tầng khi đọc hoá đơn
+hoặc viết script.
+
+**Vì sao dùng công thức tính CIDR thay vì gõ tay.** Ba dải tier trong NACL được
+tính bằng hàm (`10.20.0.0/23`, `10.20.10.0/23`, `10.20.20.0/23`) — mỗi dải `/23`
+gộp đúng hai subnet `/24` của tier đó. Gõ tay thì thêm một AZ là phải sửa nhiều
+chỗ và chắc chắn sẽ quên một chỗ.
+
+### Internet Gateway và route table
+
+| Route table | Gắn vào | Dòng route | Ý nghĩa |
+|---|---|---|---|
+| public | 2 subnet public | `0.0.0.0/0` → **IGW** | Có đường vào **và** ra |
+| private (app) | 2 subnet app | `0.0.0.0/0` → **NAT** *(chỉ khi bật NAT)* | **Chỉ** có đường ra |
+| db | 2 subnet db | **không có dòng `0.0.0.0/0` nào** | Không đường ra, không đường vào |
+
+Route table của db tier là ví dụ đẹp nhất của nguyên tắc tối thiểu: bảo mật ở đây
+đến từ **việc thiếu một dòng cấu hình**, không phải từ việc thêm một rule.
+
+### NAT Gateway
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| Vị trí | `public-a` | NAT **phải** nằm ở public subnet — nó cần đường ra IGW để làm việc của mình |
+| Elastic IP | 1 cái, gắn kèm | NAT bắt buộc có IP public tĩnh |
+| Số lượng | **1** cho cả 2 AZ | NAT tính phí theo giờ. Mỗi AZ một NAT chỉ cần khi thật sự chạy nhiều máy ở nhiều AZ; ta `max_size = 1` nên chỉ có một máy tại một thời điểm |
+| Công tắc | `count = enable_nat ? 1 : 0` | Đặt **ngay từ ngày đầu**, không để cuối dự án |
+
+**Lưu ý đáng ghi vào báo cáo:** NAT Gateway **không gắn được Security Group**
+(khác NAT instance là một EC2 tự dựng). Nên toàn bộ việc kiểm soát chiều ra phải
+làm ở `sg-web` và ở NACL của app tier.
+
+### S3 Gateway Endpoint
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| Loại | **Gateway** (không phải Interface) | Gateway endpoint **miễn phí**; Interface endpoint tốn ~$7/tháng mỗi cái |
+| Gắn vào | route table của app tier | Traffic S3 đi đường riêng, không qua NAT |
+
+Hai lợi ích: không bị tính phí data qua NAT ($0.045/GB), và **vẫn hoạt động khi
+NAT đã tắt**.
+
+### Network ACL — 3 cái
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| Số lượng | 3, mỗi tier một cái | Gắn NACL vào **subnet**, nên tách tier là điều kiện để viết rule khác nhau cho mỗi tier |
+| `subnet_ids` | cả 2 subnet của tier | Hai subnet cùng tier phải có cùng rule, nếu không thì hành vi phụ thuộc AZ — cực khó chẩn đoán |
+| Rule number | cách nhau 5–10 | Chừa khoảng trống để chèn rule mới vào giữa mà không phải đánh số lại |
+| Rule mặc định `*` | **deny** | AWS tự thêm, không xoá được. Đây là lý do NACL "an toàn theo mặc định" |
+
+Bảng rule đầy đủ và lý do từng rule nằm ở **Phần III của
+[tài liệu thiết kế](thiet-ke-he-thong-aws.md)**. Ở đây chỉ nhắc điều quan trọng
+nhất: rule 90, 95 và 115 là rule **DENY**, và chúng tồn tại **vì** rule 120 —
+không phải vì thừa.
+
+### VPC Flow Logs (tuỳ chọn)
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `traffic_type` | **`REJECT`** | Chỉ ghi kết nối **bị chặn**. Ghi cả `ALL` thì lượng log gấp hàng chục lần và tốn phí ingest, mà phần cần cho báo cáo chỉ là phần bị chặn |
+| Retention | 1 ngày | Chỉ cần trong lúc thu bằng chứng |
+| `max_aggregation_interval` | 600 giây | Gom bản ghi 10 phút một lần thay vì 1 phút → ít bản ghi hơn, ít tiền hơn |
+| Mặc định | **tắt** | Tính phí theo lượng log ghi vào CloudWatch |
 
 **Vì sao mạng trước tiên.** Vì mọi thứ khác đều phải *nằm trong* một subnet nào
 đó. Security Group cần biết VPC nào; RDS cần biết subnet nào; ALB cần biết subnet
-nào. Đây là nền, không có nó thì không dựng được gì.
+nào.
 
-**Vì sao NAT có công tắc ngay từ ngày đầu, chứ không để cuối.** Vì NAT Gateway
-là **khoản đắt nhất trong nhóm resource tính theo giờ** ($0.059/giờ, không có
-bậc miễn phí). Nếu để việc "làm cách tắt" xuống cuối dự án, thì suốt thời gian
-phát triển nó chạy 24/7. Kiến trúc phải *sinh ra đã tắt được*, không phải được
-gắn thêm khả năng đó về sau.
+**Chỗ dễ sai — quan trọng nhất của giai đoạn này.** Viết NACL mà không nghĩ tới
+stateless. Người mới thường viết rule cho chiều vào rồi tưởng xong. Kết quả: kết
+nối ra Internet không hoạt động, vì câu trả lời quay về bị chặn ở chiều vào. Chữa
+thì phải mở dải ephemeral 1024–65535 — nhưng mở xong lại vô tình mở luôn port
+1433 và 8080 ra Internet, vì hai port đó nằm trong dải. Phải chặn chúng bằng rule
+**số nhỏ hơn**.
 
-**Chỗ dễ sai — và đây là chỗ đáng học nhất của cả giai đoạn.** Viết NACL mà không
-nghĩ tới stateless. Người mới thường viết rule cho chiều vào rồi tưởng xong.
-Kết quả: kết nối ra Internet không hoạt động, vì câu trả lời quay về bị chặn ở
-chiều vào. Chữa thì phải mở dải ephemeral 1024–65535 — nhưng mở xong lại vô tình
-mở luôn port 1433 và 8080 ra Internet, vì hai port đó nằm trong dải. Phải chặn
-chúng bằng rule **số nhỏ hơn**. Toàn bộ chuỗi suy luận này được giải thích ở
-Phần III của tài liệu thiết kế.
+---
 
 ## Giai đoạn 3 — Security Group
 
-**Làm gì.** Ba SG tham chiếu lẫn nhau: `sg-alb` → `sg-web` → `sg-rds`.
+**Resource:** 3 Security Group · 5 rule vào · 4 rule ra.
 
-**Vì sao tham chiếu SG chứ không ghi dải IP.** Vì IP của EC2 đổi mỗi lần máy được
-tạo lại, còn SG thì không. Và nó chặt hơn: không có cách nào giả mạo được việc
-"tôi đang gắn SG kia".
+| SG | `description` | Rule vào | Rule ra |
+|---|---|---|---|
+| `hushstore-alb-sg` | ALB nhận 80/443 từ internet | 80 ← `0.0.0.0/0`<br>443 ← `0.0.0.0/0` | 80 → `sg-web`<br>8080 → `sg-web` |
+| `hushstore-web-sg` | container instance, không port 22 | 80 ← `sg-alb`<br>8080 ← `sg-alb` | 1433 → `sg-rds`<br>80 → `0.0.0.0/0`<br>443 → `0.0.0.0/0` |
+| `hushstore-rds-sg` | chỉ nhận 1433 từ sg-web | 1433 ← `sg-web` | **không có rule nào** |
+
+Thiết lập kỹ thuật cần biết:
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| Nguồn/đích của rule | **ID của SG khác**, không phải dải IP | IP của EC2 đổi mỗi lần máy được tạo lại; SG thì không. Rule tự đúng mãi |
+| `description` mỗi rule | bắt buộc điền | Sáu tháng sau, đây là thứ duy nhất cho biết rule đó mở để làm gì. Rule không có mô tả là rule không ai dám xoá |
+| `lifecycle create_before_destroy` | `true` | SG đang được dùng thì không xoá được. Tạo cái mới trước rồi mới bỏ cái cũ |
+| Rule khai ở đâu | resource **riêng**, ngoài định nghĩa SG | Xem "chỗ dễ sai" |
+| Egress mặc định | Terraform **không** tự thêm "cho phép tất cả" | Khác console: console tạo SG là tự thêm egress allow-all. Terraform không, nên mỗi đường ra đều là một quyết định có ý thức |
+
+**Vì sao egress của `sg-rds` rỗng hoàn toàn.** Database không bao giờ cần chủ
+động gọi ra ngoài. SG là stateful nên câu trả lời cho app vẫn đi được bình
+thường. Egress rỗng nghĩa là nếu kẻ tấn công chiếm được database, nó **không gửi
+được dữ liệu ra ngoài**. Đây là chặn đường rút, không phải chặn đường vào — và
+đó là loại rule người mới hầu như không bao giờ nghĩ tới.
 
 **Chỗ dễ sai.** Tham chiếu vòng. `sg-alb` cần trỏ tới `sg-web`, và `sg-web` cần
 trỏ tới `sg-alb`. Nếu khai rule *bên trong* định nghĩa SG thì Terraform gặp vòng
 lặp và không dựng được. Cách đúng: tạo ba SG rỗng trước, rồi khai rule thành
-resource riêng bên ngoài.
+resource riêng bên ngoài — đúng như bảng trên.
+
+---
 
 ## Giai đoạn 4 — Kho chứa: ECR và S3
 
-**Làm gì.** 4 ECR repository (api, web, migrator, seeder) và 3 S3 bucket (ảnh sản
-phẩm, artifact, log của ALB).
+**Resource:** 4 ECR repository · 3 S3 bucket.
 
-**Vì sao ECR chứ không phải một registry công cộng.** Vì với ECR, việc xác thực
-đi bằng IAM role — **không cần mật khẩu registry nào**. Dùng registry ngoài thì
-phải lưu một token dài hạn ở đâu đó, và đó đúng là thứ nguyên tắc số 4 muốn loại
-bỏ.
+### ECR — 4 repository (api, web, migrator, seeder)
 
-**Bật IMMUTABLE tag.** Một nhãn image đã push thì **không thể ghi đè**. Ý nghĩa:
-nó biến rollback từ "hy vọng" thành "chắc chắn". Nếu ghi đè được thì nhãn cũ có
-thể đã bị thay nội dung, và trỏ về nó không đảm bảo lấy lại đúng bản đang chạy
-tốt hôm qua.
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `image_tag_mutability` | **`IMMUTABLE`** | Một nhãn đã push **không thể ghi đè**. Đây là điều kiện để rollback có nghĩa: trỏ về nhãn cũ chắc chắn lấy đúng bản đã chạy tốt |
+| `scan_on_push` | `true` | AWS tự quét lỗ hổng mỗi lần push. Miễn phí ở mức cơ bản |
+| Lifecycle policy | giữ **5** image gần nhất | Image ~700MB/cái. Không có policy thì kho phình vô hạn và tốn tiền lưu trữ |
+| `force_delete` | `true` | Cho phép xoá repo còn image khi destroy. An toàn vì image build lại được từ Git |
+| Xác thực | **IAM role** | Không có mật khẩu registry nào phải lưu ở đâu |
 
-**Bucket ảnh sản phẩm là ngoại lệ duy nhất.** Nó đã tồn tại và **đang chứa ảnh
-thật** — URL của những ảnh đó đang nằm trong database. Tạo lại bucket là làm chết
-toàn bộ ảnh sản phẩm. Nên bucket này được *nhập* vào Terraform quản lý thay vì
-tạo mới, và nó được đặt cờ **không cho phép xoá tự động**: lệnh destroy sẽ *thất
-bại* ở bucket đó nếu nó còn file. Đó là lưới an toàn có chủ ý.
+Nhãn image dùng **mã commit Git**, không dùng `latest`. Lý do: `latest` nói dối —
+"latest" hôm nay và hôm qua là hai thứ khác nhau, nên rollback không có nghĩa gì.
 
-**Chỗ dễ sai.** Chạy `terraform destroy` để "dọn cho sạch" mà không biết nó sẽ
-kéo theo bucket dữ liệu thật.
+### S3 — 3 bucket, ba mục đích, ba cấu hình khác nhau
+
+| Bucket | `force_destroy` | Lifecycle | Vì sao cấu hình vậy |
+|---|---|---|---|
+| `hushstore-public-assets` (ảnh sản phẩm) | **`false`** | không | **Chứa dữ liệu thật.** URL của những ảnh này đang nằm trong database. `false` nghĩa là `terraform destroy` sẽ **thất bại** ở bucket này nếu nó còn file — đó là **lưới an toàn có chủ ý**, không phải lỗi |
+| `hushstore-artifacts` | `true` | xoá sau 30 ngày | Chứa file SQL migration và file tạm. Dựng lại được từ Git |
+| `hushstore-alb-logs` | `true` | xoá sau 7 ngày | Log của ALB. Chỉ cần trong lúc chẩn đoán |
+
+Cả ba bucket đều bật: block public access, mã hoá, và chặn ACL.
+
+**Riêng bucket ảnh là ngoại lệ duy nhất của toàn bộ hạ tầng greenfield:** nó
+được **nhập** (import) vào Terraform quản lý thay vì tạo mới. Tạo lại là làm chết
+toàn bộ ảnh sản phẩm hiện có.
+
+**Chỗ dễ sai.** Chạy `terraform destroy` để "dọn cho sạch" mà không biết nó kéo
+theo bucket dữ liệu thật. Đây là lý do `force_destroy = false` ở bucket ảnh, và
+lý do script `nuke.sh` in cảnh báo riêng về nó trước khi hỏi xác nhận.
+
+---
 
 ## Giai đoạn 5 — Database và bí mật
 
-**Làm gì.** RDS SQL Server Express trong db subnet, không public. Mật khẩu sinh
-tự động, lưu vào SSM Parameter Store dạng mã hoá cùng với connection string và
-khoá JWT. Database được tạo **rỗng** — không có schema, không có dữ liệu.
+**Resource:** 1 DB subnet group · 1 RDS instance · 2 mật khẩu sinh tự động · 3
+SSM Parameter.
 
-**Vì sao tạo rỗng.** Vì schema là việc của migration, và dữ liệu là việc của
-seeder. Cả hai đều phải chạy được **nhiều lần cho cùng kết quả** và phải nằm
-trong Git. Nếu dựng database bằng cách khôi phục một bản backup nào đó, thì không
-ai biết chính xác trong đó có gì, và không dựng lại được từ đầu.
+### DB subnet group
 
-**Vì sao mật khẩu sinh tự động và không ai biết.** Vì con người không cần biết
-nó. App lấy connection string từ Parameter Store; seeder lấy mật khẩu từ
-Parameter Store. Mật khẩu nào có người biết thì mật khẩu đó sẽ xuất hiện trong
-chat, trong file ghi chú, trong shell history.
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| Subnet | 2 cái, ở **2 AZ khác nhau** | RDS **bắt buộc** tối thiểu 2 AZ, kể cả khi chạy single-AZ. Đây là lý do phải có `db-b` dù nó không chứa gì |
+
+### RDS instance
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `engine` | `sqlserver-ex` (Express) | Bản miễn phí license của SQL Server. Giới hạn 10GB/database, đủ cho đồ án |
+| `license_model` | `license-included` | Express không phải trả phí license, nhưng AWS vẫn đòi khai rõ |
+| `instance_class` | `db.t3.micro` | Nhỏ nhất. **Nhưng xem Issue #11** — lớp `t3` có bẫy chi phí |
+| `allocated_storage` | 20 GB, `gp2` | Mức tối thiểu của SQL Server trên RDS |
+| `storage_encrypted` | **`true`** | Mã hoã ổ đĩa, miễn phí. **Chỉ đặt được lúc tạo** — sau này muốn bật phải tạo lại database |
+| `publicly_accessible` | **`false`** | Endpoint phân giải ra IP **private**. Kẻ tấn công tra được tên nhưng nhận về địa chỉ không tồn tại trên Internet |
+| `multi_az` | `false` | SQL Server Express **không hỗ trợ** Multi-AZ |
+| `vpc_security_group_ids` | chỉ `sg-rds` | Lớp bảo vệ thứ hai sau việc không có route |
+| `backup_retention_period` | 7 ngày | Miễn phí tới bằng dung lượng đã cấp. Cho phép khôi phục về một thời điểm bất kỳ trong 7 ngày |
+| `auto_minor_version_upgrade` | `true` | Vá lỗi bảo mật tự động trong cửa sổ bảo trì |
+| `deletion_protection` | `false` | Đồ án cần xoá/dựng lại nhiều lần. **Production phải là `true`** |
+| `skip_final_snapshot` | `true` | Destroy nhanh. **Đây là bẫy** — xoá là mất dữ liệu, không có snapshot cuối. `nuke.sh` cảnh báo riêng về nó |
+| `performance_insights_enabled` | `false` | Tốn phí, và ta đã có CloudWatch metrics |
+
+### Mật khẩu — sinh tự động, không ai biết
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| Mật khẩu DB | 32 ký tự, tối thiểu 2 chữ hoa / 2 chữ thường / 2 số / 2 ký tự đặc biệt | Đủ mạnh, và ràng buộc từng loại để chắc chắn thoả yêu cầu của SQL Server |
+| Ký tự đặc biệt | **danh sách chỉ định**, không dùng mặc định | Vài ký tự (`;` `'` `"` `/` `@`) **phá vỡ connection string** hoặc URL. Đây là lỗi rất khó chẩn đoán vì nó chỉ xảy ra với một số mật khẩu sinh ra |
+| Khoá JWT | 64 ký tự, **không** ký tự đặc biệt | Cần trên 256-bit entropy. Bỏ ký tự đặc biệt để tránh rắc rối khi đi qua biến môi trường |
+
+### SSM Parameter Store — 3 bí mật
+
+| Tên | Loại | Nội dung |
+|---|---|---|
+| `/hushstore/prod/db-password` | `SecureString` | Mật khẩu master, **chỉ** seeder đọc được |
+| `/hushstore/prod/connection-string` | `SecureString` | Chuỗi kết nối đầy đủ, có `Encrypt=True` và `TrustServerCertificate=False` |
+| `/hushstore/prod/jwt-secret` | `SecureString` | Khoá ký JWT |
+
+`SecureString` nghĩa là AWS mã hoá giá trị bằng KMS. Đọc được hay không do IAM
+quyết định — và đó là chỗ Deny tường minh ở Giai đoạn 7 phát huy tác dụng.
+
+Chú ý `TrustServerCertificate=False` trong connection string: nó buộc app
+**thật sự kiểm chứng** chứng chỉ TLS của RDS. Đặt `True` là bỏ qua kiểm tra — tức
+mã hoá mà không xác thực, và khi đó mã hoá gần như vô nghĩa. Đây là lý do image
+phải có sẵn chứng chỉ gốc của Amazon RDS.
+
+**Vì sao database tạo rỗng.** Vì schema là việc của migration, dữ liệu là việc
+của seeder. Cả hai phải chạy được nhiều lần cho cùng kết quả và phải nằm trong
+Git. Dựng database bằng cách khôi phục một bản backup nào đó thì không ai biết
+chính xác trong đó có gì.
 
 **Chỗ dễ sai.** Đặt `publicly_accessible = true` cho tiện kết nối từ máy cá nhân
-lúc phát triển. Đó là lỗ hổng lớn nhất mà người mới hay tạo ra: database mở ra
+lúc phát triển. Đó là lỗ hổng lớn nhất người mới hay tạo ra: database mở ra
 Internet, chỉ còn mật khẩu bảo vệ. Cách đúng là vào bằng SSM, hoặc chạy việc cần
 làm như một task bên trong VPC.
 
+---
+
 ## Giai đoạn 6 — Đóng gói ứng dụng và sửa 4 điểm trong code
 
-**Làm gì.** Đóng gói 4 image, và sửa 4 chỗ trong ứng dụng:
+**Resource:** 4 container image đẩy lên ECR.
+
+| Image | Nội dung | Điểm cấu hình đáng chú ý |
+|---|---|---|
+| `web` | Blazor WASM build sẵn + nginx | Bản build frontend **nướng vào image**, không copy file lên server. nginx chỉ `listen 80`, không SSL (ALB đã bóc TLS), không proxy (ALB tự định tuyến `api.*`) |
+| `api` | .NET 10 | Nghe `http://+:8080`. Không tự chạy migration |
+| `migrator` | EF Core migration bundle | Đóng gói toàn bộ migration thành **một chương trình chạy được**, chạy xong thoát. Có chứng chỉ gốc RDS |
+| `seeder` | công cụ dòng lệnh SQL + 2 file `.sql` | Nhận mật khẩu qua biến môi trường do ECS tiêm, **không** đọc từ file |
+
+Bốn thay đổi trong code ứng dụng:
 
 | Sửa gì | Vì sao |
 |---|---|
-| Thêm health check có kiểm tra database | Endpoint cũ trả 200 mà không chạm DB → ALB báo healthy dù database đã chết |
+| Thêm health check **có kiểm tra database** | Endpoint cũ trả 200 mà không chạm DB → ALB báo healthy dù database đã chết |
 | Đọc header `X-Forwarded-*` | ALB bóc TLS rồi chuyển HTTP vào; không đọc header này thì app tưởng request là HTTP và có thể tạo vòng lặp redirect |
-| Bỏ access key ghi cứng, dùng role | Loại bỏ credential dài hạn cuối cùng còn lại trong code |
+| Bỏ access key ghi cứng, dùng role | Loại bỏ credential dài hạn cuối cùng còn trong code. SDK tự lấy credential tạm từ task role — **chỉ cần xoá dòng cũ**, không phải viết thêm gì |
 | **Bỏ cập nhật schema lúc app khởi động** | Xem Issue #7 — quan trọng nhất trong bốn cái |
 
-**Vì sao đóng gói Blazor vào image thay vì copy file lên máy chủ.** Vì bản build
-frontend được **nướng sẵn vào image**. Nghĩa là không còn bước "đồng bộ file lên
-server" — bước dễ sai và dễ bị bỏ quên nhất. Image nào chạy thì frontend đúng
-phiên bản đó, không thể lệch.
+**Chỗ dễ sai.** Build image trên máy Mac chip ARM rồi push lên, trong khi EC2 là
+x86. Container sẽ không chạy với lỗi rất khó hiểu. Phải chỉ định rõ kiến trúc
+đích khi build.
 
-**Chỗ dễ sai.** Build image trên máy Mac dùng chip ARM rồi push lên, trong khi
-EC2 là x86 — container sẽ không chạy với lỗi rất khó hiểu. Phải chỉ định rõ kiến
-trúc đích khi build.
+---
 
-## Giai đoạn 7 — IAM và cluster
+## Giai đoạn 7 — IAM, cluster và máy chủ
 
-**Làm gì.** Bốn IAM role, launch template, Auto Scaling Group, ECS cluster,
-capacity provider.
+**Resource:** 4 IAM role · 1 instance profile · 1 launch template · 1 ASG · 1 ECS
+cluster · 1 capacity provider · 4 CloudWatch log group.
 
-**Vì sao tách bốn role thay vì một.** Chi tiết ở tài liệu thiết kế. Ý chính: mỗi
-role ứng với một *thời điểm* và một *chủ thể* khác nhau — bản thân máy chủ, ECS
-agent lúc khởi động container, code trong container lúc chạy, và ECS agent khi
-chạy seeder. Gộp lại thành một role thì mọi chủ thể đều có mọi quyền, và một chỗ
-bị chiếm là mất tất cả.
+### IAM — 4 role
 
-**Vì sao ASG có `min = 0`.** Để tắt được thật. Đặt về 0 thì máy bị xoá **cùng ổ
-đĩa**, chi phí về 0. Điều này chỉ an toàn vì **không có state nào nằm trên máy** —
-mọi thứ nằm trong image và Parameter Store. Đặt về 1 là một máy mới hoàn toàn
-được dựng lại và tự hoạt động. Việc đó đã được kiểm chứng, và nó là bằng chứng
-cho tính chất "hạ tầng bất biến".
+| Role | Trust policy cho phép ai assume | Quyền |
+|---|---|---|
+| `container-instance-role` | **đúng** `ec2.amazonaws.com` | 2 managed policy (tham gia ECS + dùng SSM), đọc bucket artifacts, **cộng một statement Deny tường minh** |
+| `task-execution-role` | **đúng** `ecs-tasks.amazonaws.com` | Pull ECR, ghi log, đọc **đúng 2** parameter |
+| `task-app-role` | **đúng** `ecs-tasks.amazonaws.com` | **Chỉ** S3 trên bucket ảnh + `ssmmessages` cho ECS Exec |
+| `task-execution-seeder-role` | **đúng** `ecs-tasks.amazonaws.com` | Đọc **đúng 1** parameter: mật khẩu DB |
 
-**Chỗ dễ sai.** Bật chế độ tự động điều chỉnh số máy của capacity provider. Nếu
-bật, nó sẽ tự tạo một chính sách scaling và **tranh quyền với Terraform** về số
-lượng máy: Terraform đặt 0, chính sách đó đặt lại 1, và cứ thế. Ta tắt nó và để
-số máy do Terraform quyết định — một nguồn sự thật duy nhất.
+Bốn điểm cấu hình đáng ghi:
+
+| Thiết lập | Vì sao |
+|---|---|
+| Trust policy khai **đúng một** service principal | So khớp chính xác, không dùng danh sách. Trust policy rộng là đường leo thang quyền |
+| Statement **Deny** `ssm:GetParameter*` trên `/hushstore/*` cho role máy EC2 | Managed policy dùng để có SSM **kèm theo** quyền đọc parameter. Deny bịt lại. Trong IAM, **Deny luôn thắng Allow** |
+| Deny phủ **đủ 4** action: `GetParameter`, `GetParameters`, `GetParameterHistory`, `GetParametersByPath` | Thiếu một cái là còn một đường đọc. Đặc biệt `GetParameterHistory` — nó trả về **các version cũ** của giá trị, tức vẫn đọc được mật khẩu |
+| `kms:Decrypt` kèm điều kiện `kms:ViaService` | Tài nguyên phải là `*` (ARN của khoá mặc định không cố định), nên **điều kiện là thứ duy nhất** giới hạn: khoá chỉ dùng được qua SSM, không dùng để giải mã thứ khác |
+
+**Hai tập bí mật giao nhau bằng rỗng.** `api/web/migrator` đọc connection string
++ khoá JWT nhưng **không** đọc mật khẩu DB. `seeder` đọc mật khẩu DB nhưng
+**không** đọc hai cái kia. Dùng chung một role thì cả bốn task đều thấy cả ba bí
+mật.
+
+### Launch Template — cấu hình của máy chủ
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `image_id` | đọc từ **SSM public parameter** của AWS | Luôn lấy bản AMI ECS-optimized mới nhất. **Không hardcode AMI ID** — nó khác nhau theo region và cũ đi theo thời gian |
+| `instance_type` | `t3.micro` | Nhỏ nhất chạy được. 1 GB RAM là **chật** — xem Issue bên dưới |
+| `iam_instance_profile` | `container-instance-role` | Cách gắn IAM role vào một EC2 |
+| `vpc_security_group_ids` | chỉ `sg-web` | |
+| **`metadata_options.http_tokens`** | **`required`** | Bắt buộc dùng **IMDSv2**. Đây là biện pháp chặn tấn công **SSRF** — với IMDSv1, một lỗ hổng trong app cho phép kẻ tấn công đọc credential của máy qua một request HTTP đơn giản. `required` bắt phải có token, và token không lấy được qua SSRF |
+| `metadata_options.http_put_response_hop_limit` | `1` | Gói tin lấy token không đi được quá 1 chặng — tức **container không thò tay ra lấy credential của host** được |
+| Ổ đĩa | `gp3`, mã hoá, **`delete_on_termination = true`** | `gp3` rẻ và nhanh hơn `gp2`. Xoá cùng máy là điều kiện để "tắt về $0" đúng nghĩa |
+| `user_data` | **chỉ** ghi tên cluster vào file cấu hình + tạo 2 GB swap | **Không** ra lệnh khởi động dịch vụ — xem Issue #2. Swap bù cho việc chỉ có 1 GB RAM |
+| `lifecycle create_before_destroy` | `true` | ASG đang dùng template thì không xoá được |
+
+### Auto Scaling Group
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `min_size` / `max_size` | **0** / **1** | `min = 0` là điều kiện để tắt về $0 thật. `max = 1` vì chi phí, RAM, và vì rate limiter đếm trong bộ nhớ |
+| `desired_capacity` | biến `instance_count` | Công tắc bật/tắt |
+| `vpc_zone_identifier` | 2 subnet **app** | Máy nằm ở tier không có IP public |
+| `health_check_type` | `EC2` | **Đây là nguồn của Issue #1.** Nó chỉ hỏi "máy có running không", **không** hỏi "ECS agent có đăng ký chưa" |
+| `health_check_grace_period` | 180 giây | Cho máy thời gian boot trước khi bị đánh giá |
+| `wait_for_capacity_timeout` | 10 phút | Terraform chờ máy vào phục vụ trước khi apply trả về |
+| `instance_refresh.min_healthy_percentage` | **0** | `max_size = 1` nên **không thể** giữ máy nào healthy trong lúc thay máy. Đặt khác 0 là refresh treo mãi |
+| Tag `propagate_at_launch` | `true` | Máy do ASG tạo mới có tag. Không bật thì máy không có tag, và mọi script lọc theo tag đều bỏ sót nó |
+
+### ECS cluster và capacity provider
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `containerInsights` | **`disabled`** | Tính phí theo metric. Bật khi cần chẩn đoán sâu, không bật mặc định |
+| `managed_scaling` | **`DISABLED`** | Nếu bật, ECS tự tạo một chính sách scaling và **tranh quyền với Terraform** về số máy: Terraform đặt 0, chính sách đặt lại 1, lặp vô hạn. Tắt nó để có **một nguồn sự thật duy nhất** |
+| `managed_termination_protection` | **`DISABLED`** | Bật thì capacity provider không cho xoá máy, và `nuke.sh` treo |
+
+### CloudWatch log group — 4 cái
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| Tên | `/ecs/hushstore-{api,web,migrator,seeder}` | Mỗi container một nhóm, tìm log dễ |
+| Retention | **3 ngày** | Log chiếm tiền. 3 ngày đủ để chẩn đoán. **Không đặt retention là giữ vĩnh viễn và trả tiền vĩnh viễn** — lỗi phổ biến |
+| Tạo bằng Terraform, không để ECS tự tạo | | Log group do ECS tự tạo **không có retention**, tức giữ mãi |
+
+**Vì sao ASG có `min = 0` mà vẫn an toàn.** Vì **không có state nào nằm trên
+máy** — mọi thứ nằm trong image và Parameter Store. Điều này đã được kiểm chứng:
+hạ về 0 rồi bật lại, máy mới và container mới hoàn toàn tự lên đủ, không cần thao
+tác tay nào.
+
+**Chỗ dễ sai.** Bật `managed_scaling` vì tưởng "cho nó tự động thì tốt hơn". Nó
+tạo ra cuộc tranh chấp âm thầm với Terraform mà triệu chứng là "số máy tự đổi
+không rõ lý do".
+
+---
 
 ## Giai đoạn 8 — Task definition, ALB, và service
 
-**Làm gì.** 4 task definition, ALB với chứng chỉ ACM, 2 target group, listener
-rule allowlist Host, và 2 ECS service.
+**Resource:** 4 task definition · 1 ACM certificate · 1 ALB · 2 target group · 2
+listener · 2 listener rule · 2 ECS service.
+
+### Task definition — lấy `api` làm ví dụ đầy đủ
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `requires_compatibilities` | `["EC2"]` | Chạy trên EC2 launch type, không phải Fargate — đúng yêu cầu đề bài |
+| `network_mode` | **`bridge`** | Container dùng mạng của host qua cầu nối. Cho phép **port cố định** ở host |
+| `execution_role_arn` | `task-execution-role` | Dùng **trước** khi container chạy: pull image, lấy bí mật, mở log |
+| `task_role_arn` | `task-app-role` | Dùng **trong khi** container chạy: code gọi API AWS |
+| `skip_destroy` | **`true`** | Revision cũ vẫn **ACTIVE** sau khi tạo revision mới → rollback là trỏ về revision cũ. Không bật thì Terraform xoá revision cũ và **rollback không còn đường về** |
+| `memory` (giới hạn cứng) | 512 MB | Vượt là container bị giết. Bảo vệ host khỏi một container ăn hết RAM |
+| `memoryReservation` (mềm) | 384 MB | Mức ECS **đảm bảo**. Có cả hai thì container mượn thêm được lúc cao điểm mà vẫn có sàn |
+| `portMappings` | `8080` → `8080` | Cố định. Đây là **lý do SG chỉ mở 2 port** thay vì dải 32768–65535 |
+| `environment` | 5 biến không nhạy cảm | Region, tên bucket, origin CORS, môi trường, URL nghe |
+| **`secrets`** | 2 mục, trỏ tới **ARN của SSM parameter** | Điểm quan trọng: giá trị **không nằm trong task definition**. ECS đọc lúc khởi động và tiêm vào. Ai xem task definition **không thấy bí mật** |
+| `linuxParameters.maxSwap` / `swappiness` | 1024 / 60 | Cho container dùng swap. **Chỉ EC2 launch type hỗ trợ**, Fargate không |
+| `linuxParameters.initProcessEnabled` | `true` | Cần cho **ECS Exec** — đường vào trong container để chẩn đoán |
+| `logConfiguration` | `awslogs` → log group tương ứng | |
+| Container-level `healthCheck` | **không đặt** | Image `.NET` không có `curl`. Việc kiểm tra sức khoẻ để target group của ALB làm |
+
+`migrator` và `seeder` khác ở ba chỗ: **không** `portMappings`, **không** có
+service, và `seeder` dùng **execution role riêng**.
+
+### ACM certificate
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| Tên miền | `hushstore.io.vn` + SAN `api.hushstore.io.vn` | Một chứng chỉ phục vụ cả hai hostname |
+| Phương thức xác thực | **DNS** | Tự động gia hạn được. Xác thực bằng email thì phải làm tay mỗi lần |
+| `lifecycle create_before_destroy` | `true` | Chứng chỉ đang gắn vào listener thì không xoá được |
+
+Bản ghi DNS xác thực **phải giữ mãi** — ACM đọc lại nó mỗi lần gia hạn. Xoá đi
+thì HTTPS chết âm thầm sau 13 tháng.
+
+### ALB
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `internal` | `false` | Internet-facing |
+| `subnets` | 2 public subnet, 2 AZ | AWS **bắt buộc** tối thiểu 2 AZ |
+| `security_groups` | `sg-alb` | |
+| `enable_deletion_protection` | `false` | Ta xoá ALB mỗi lần tắt để tiết kiệm |
+| `access_logs` | bật, ghi vào `hushstore-alb-logs` | Nguồn bằng chứng chính cho báo cáo bảo mật khi Flow Logs đang tắt |
+| **`drop_invalid_header_fields`** | **`true`** | Bỏ header không đúng chuẩn HTTP trước khi chuyển vào. Chặn một lớp tấn công **request smuggling**. *Lưu ý: nó **không** chặn giả mạo `X-Forwarded-*`, vì ALB **thêm vào** chứ không thay thế — chặn cái đó là việc của `ForwardLimit` trong app* |
+
+### Target group — 2 cái
+
+| Thiết lập | `tg-web` | `tg-api` | Vì sao |
+|---|---|---|---|
+| Port | 80 | 8080 | Khớp `hostPort` trong task definition |
+| `target_type` | `instance` | `instance` | Vì `bridge` mode đăng ký theo máy. Fargate/`awsvpc` sẽ là `ip` |
+| Health check path | `/healthz` | **`/health/ready`** | `/healthz` chỉ kiểm nginx sống. `/health/ready` **có mở kết nối database** — nguồn của Issue #3 |
+| `interval` / `timeout` | 15 / 5 giây | 15 / 5 | |
+| `healthy_threshold` | 2 | 2 | Đúng 2 lần liên tiếp là được nhận traffic → lên nhanh |
+| `unhealthy_threshold` | 3 | 3 | 3 × 15 = **45 giây** để kết luận chết. Đây là con số làm nên vòng lặp chết ở Issue #3 |
+| `matcher` | `200` | `200` | Chỉ 200 là healthy. Không nhận 3xx/4xx |
+| `deregistration_delay` | **5 giây** | 5 | Mặc định AWS là 300 giây. Giảm xuống 5 nên deploy và tắt nhanh hơn nhiều. Chấp nhận được vì request của ta ngắn |
+
+### Listener và rule
+
+| Listener | Cấu hình | Vì sao |
+|---|---|---|
+| `:80` | `redirect` **301** sang HTTPS, giữ nguyên host/path/query | Không phục vụ gì trên HTTP. 301 là vĩnh viễn, browser tự nhớ |
+| `:443` | chứng chỉ ACM, `ssl_policy = ELBSecurityPolicy-TLS13-1-2-2021-06` | Policy này **chỉ cho TLS 1.2 và 1.3**. Loại bỏ TLS 1.0/1.1 đã có lỗ hổng |
+| `:443` default action | **`fixed-response` 403** | **Không phải `forward`.** Tên miền không có trong danh sách nhận 403 và **không đi đến đâu cả** |
+| Rule priority 100 | `host_header = api.hushstore.io.vn` → `tg-api` | Số nhỏ xét trước |
+| Rule priority 200 | `host_header = hushstore.io.vn` → `tg-web` | |
+
+Đây là **allowlist Host header**. Nó chặn tấn công Host header injection và chặn
+việc người khác trỏ tên miền của họ vào hạ tầng của ta.
+
+### ECS service — 2 cái
+
+| Thiết lập | Giá trị | Vì sao |
+|---|---|---|
+| `capacity_provider_strategy` | dùng capacity provider, `weight = 1` | Cách nói "xếp task lên máy của ASG này" |
+| `deployment_minimum_healthy_percent` | **0** | `max_size = 1` + port cố định → **không thể** chạy hai bản song song. Đặt khác 0 là deploy treo mãi |
+| `deployment_maximum_percent` | **100** | Cùng lý do |
+| `load_balancer` | trỏ target group + tên container + port | Cách ECS tự đăng ký/rút container khỏi target group |
+| `health_check_grace_period_seconds` | web **60** / api **120** | Thời gian ALB bỏ qua health check lúc container mới lên. API cần lâu hơn vì .NET khởi động chậm hơn nginx. **Không nâng lên 600 để chữa Issue #3** — xem lý do ở đó |
+| `enable_execute_command` | `true` (chỉ `api`) | Bật ECS Exec để vào trong container chẩn đoán. Cần cả `initProcessEnabled` ở task definition và quyền `ssmmessages` ở task role |
+| `depends_on` capacity providers | có | Không có thì Terraform tạo service trước khi cluster biết lấy máy ở đâu |
 
 **Vì sao service phải dựng sau ALB.** Vì service cần đăng ký container vào target
 group, và AWS **từ chối tạo service nếu target group chưa gắn vào một load
-balancer nào**. Đây là ràng buộc cứng của AWS, không phải lựa chọn — nên hai thứ
-này được bật/tắt cùng nhau bằng một công tắc.
-
-**Chứng chỉ TLS.** ACM cấp miễn phí, tự động gia hạn. Nhưng để cấp, ACM đòi bạn
-chứng minh sở hữu tên miền bằng cách thêm một bản ghi DNS. Bản ghi đó **phải giữ
-mãi** — ACM đọc lại nó mỗi lần gia hạn. Xoá đi thì HTTPS chết âm thầm sau 13
-tháng.
+balancer nào**. Đây là ràng buộc cứng của AWS — nên hai thứ này bật/tắt cùng
+nhau bằng một công tắc.
 
 **Chỗ dễ sai.** Xem Issue #4 và #5 — cả hai đều ở giai đoạn này và cả hai đều
 làm mất nhiều giờ.
 
+---
+
 ## Giai đoạn 9 — Dựng schema, nạp dữ liệu, và verify
 
-**Làm gì.** Chạy migration như một task một lần → kiểm tra mã thoát → chạy seeder
-→ kiểm tra dữ liệu → verify ba tiêu chí nghiệm thu.
+**Resource:** không tạo resource mới. Chạy 2 one-off task.
 
-**Ba tiêu chí, và vì sao chọn đúng ba cái này:**
+| Bước | Cách chạy | Điều kiện đi tiếp |
+|---|---|---|
+| Migration | one-off ECS task, task definition `migrator`, chỉ định capacity provider | **mã thoát = 0**. Khác 0 là dừng, bản cũ vẫn phục vụ |
+| Seed | one-off ECS task, task definition `seeder` | mã thoát = 0, rồi đếm số bản ghi từng bảng |
 
-1. **Website mở được bằng HTTPS trên tên miền thật.** Chứng minh chuỗi
-   DNS → Cloudflare → ALB → target group → container hoạt động hoàn chỉnh.
-2. **Đăng nhập lấy được JWT.** Chứng minh API nói chuyện được với database, và
-   xác thực hoạt động. Kiểm luôn nội dung token: không có mật khẩu, không có dữ
-   liệu nhạy cảm — vì ai cũng giải mã được phần thân của JWT.
-3. **Upload ảnh lên S3 trả về URL thật, tải lại được.** Đây là tiêu chí **quan
-   trọng nhất và dễ bị bỏ sót nhất**: nó là bằng chứng duy nhất cho **đường
-   ghi** — rằng IAM role của container thật sự thay thế được access key ghi cứng.
-   Hai tiêu chí đầu chỉ chứng minh đường đọc. Nếu không test cái này, có thể tới
-   lúc bảo vệ mới phát hiện việc bỏ access key đã làm hỏng upload.
+**Ba tiêu chí nghiệm thu, và vì sao đúng ba cái này:**
 
-**Vì sao seed phải chạy như một task trong VPC, không phải từ laptop.** Vì
-database không có đường ra Internet, nên laptop không kết nối tới được — đúng
-như thiết kế. Chạy seed như một task bên trong VPC là cách duy nhất, và nó có
-lợi ích kèm theo: mật khẩu đi qua đường bí mật của ECS, **không bao giờ xuất hiện
-trên terminal hay trong shell history**.
+1. **Website mở được bằng HTTPS trên tên miền thật** — chứng minh chuỗi
+   DNS → Cloudflare → ALB → target group → container hoạt động hoàn chỉnh. Kiểm
+   **không dùng cờ bỏ qua chứng chỉ**, vì dùng cờ đó là bỏ qua đúng thứ cần kiểm.
+2. **Đăng nhập lấy được JWT** — chứng minh API nói chuyện được với database.
+   Kiểm luôn nội dung token: không có mật khẩu, không có dữ liệu nhạy cảm, vì ai
+   cũng giải mã được phần thân của JWT.
+3. **Upload ảnh lên S3 trả về URL thật, tải lại được** — **quan trọng nhất và dễ
+   bị bỏ sót nhất.** Đây là bằng chứng duy nhất cho **đường ghi**: rằng IAM role
+   của container thật sự thay thế được access key ghi cứng. Hai tiêu chí đầu chỉ
+   chứng minh đường đọc. Kiểm cả chiều ngược: gọi mà **không** có token phải
+   nhận 401.
 
-**Chỗ dễ sai.** Verify trên database rỗng rồi kết luận "hệ thống chạy được". Task
-verify lần đầu chạy khi chưa seed, nên nó chỉ chứng minh app không crash. Phải
-verify **lại** sau khi có dữ liệu thật — đó mới là lúc biết seed, app và database
-đồng ý với nhau.
+**Vì sao seed chạy như task trong VPC, không phải từ laptop.** Vì database không
+có đường ra Internet nên laptop không kết nối tới được — đúng như thiết kế. Chạy
+như task bên trong VPC là cách duy nhất, và có lợi ích kèm theo: mật khẩu đi qua
+đường bí mật của ECS, **không bao giờ xuất hiện trên terminal hay trong shell
+history**.
+
+**Chỗ dễ sai.** Verify trên database rỗng rồi kết luận "hệ thống chạy được". Lần
+verify đầu chạy khi chưa seed, nên nó chỉ chứng minh app không crash. Phải verify
+**lại** sau khi có dữ liệu thật — đó mới là lúc biết seed, app và database đồng ý
+với nhau.
+
+---
 
 ## Giai đoạn 10 — Kiểm thử bảo mật và viết báo cáo
 
-**Làm gì.** 11 kịch bản tấn công từ laptop, lưu lệnh và output thật vào một thư
-mục bằng chứng, rồi viết báo cáo **chỉ trích số từ đó** — không viết tay số nào.
+**Resource:** bật `enable_flow_logs` và `enable_deny_demo` tạm thời.
 
-**Vì sao lưu output thô.** Vì báo cáo không có bằng chứng thì chỉ là lời khai.
-Lưu nguyên lệnh và nguyên kết quả thì người chấm kiểm lại được, và bản thân nhóm
-cũng chạy lại được sau này để biết có gì thay đổi.
+11 kịch bản tấn công từ laptop. Với mỗi kịch bản: lưu **nguyên lệnh và nguyên
+output** vào một file bằng chứng, rồi báo cáo **chỉ trích số từ đó** — không viết
+tay số nào.
+
+| Cần chứng minh | Cách làm | Kết quả đúng |
+|---|---|---|
+| Chỉ 80/443 mở | quét cổng vào ALB | 80, 443 mở; 22, 1433, 8080, 3389… **filtered** |
+| Database không tới được | mở socket tới endpoint RDS :1433 | **timeout**, không phải "từ chối" |
+| Không có SSH | thử kết nối port 22 | không có đường tới |
+| Chống dò mật khẩu | gọi API đăng nhập 20 lần | từ lần thứ 6 trả **429** |
+| Allowlist Host | gọi ALB với Host lạ | **403** |
+| **NACL chặn theo IP** | bật `enable_deny_demo`, rồi gọi **hai đường** | trực tiếp vào ALB → **timeout**; qua tên miền → **200** |
+| Blast radius của IAM | dùng công cụ mô phỏng policy | role app: S3 `allowed`, RDS `implicitDeny`; role máy: bí mật `explicitDeny` |
+| Bằng chứng tầng mạng | bật Flow Logs, đọc bản ghi `REJECT` | khớp từng kịch bản |
+
+**Mẹo đáng nhớ.** Để chứng minh rule chặn-theo-IP hoạt động cần *hai* điểm quan
+sát: một máy bị chặn và một máy không. Nhưng **không cần dựng máy thứ hai** —
+proxy của Cloudflare chính là điểm quan sát thứ hai. Gọi trực tiếp vào ALB thì
+nguồn là IP laptop (bị chặn); gọi qua tên miền thì nguồn là IP Cloudflare (không
+bị chặn). Cùng một lệnh, khác biệt duy nhất là địa chỉ nguồn.
 
 **Vì sao thu bằng chứng ngay trong cùng cửa sổ đã bật.** Vì hạ tầng đang tính
 tiền theo giờ. Mở một cửa sổ riêng chỉ để test là trả tiền hai lần cho cùng một
 việc.
 
-**Một mẹo đáng nhớ.** Để chứng minh rule chặn-theo-IP hoạt động, cần *hai* điểm
-quan sát: một máy bị chặn và một máy không bị chặn. Nhưng không cần dựng máy thứ
-hai — **proxy của Cloudflare chính là điểm quan sát thứ hai**. Gọi trực tiếp vào
-ALB thì nguồn là IP laptop (bị chặn → timeout); gọi qua tên miền thì nguồn là IP
-của Cloudflare (không bị chặn → 200). Cùng một lệnh, khác biệt duy nhất là địa
-chỉ nguồn.
+**Chỗ dễ sai.** Quên tắt `enable_deny_demo` — xem Issue #12.
 
 ---
 

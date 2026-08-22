@@ -51,8 +51,13 @@ Hai tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
    *vì sao thiết kế vậy*. Có phần kiến thức nền về mạng máy tính và AWS ở đầu,
    rồi giải thích từng thành phần, và đối chiếu với yêu cầu đề bài.
 2. **[nhat-ky-trien-khai.md](docs/nhat-ky-trien-khai.md)** — *làm thế nào*. Cách
-   doanh nghiệp triển khai hạ tầng và vì sao, nhật ký 10 giai đoạn, và 12 issue
-   chính đã gặp kèm bài học.
+   doanh nghiệp triển khai hạ tầng và vì sao, nhật ký 10 giai đoạn với bảng cấu
+   hình cụ thể từng resource, và 12 issue chính đã gặp kèm bài học.
+
+Chưa từng dùng AWS: bắt đầu ở **Phần VI — Lộ trình học** của tài liệu số 1. Nó
+gắn từng thành phần trong hệ thống với workshop tiếng Việt tương ứng trên
+[cloudjourney.awsstudygroup.com](https://cloudjourney.awsstudygroup.com/vi/), kèm
+lộ trình 3 tuần và ghi rõ ba chỗ workshop **không** dạy mà đồ án cần.
 
 ## Deploy lên AWS
 
