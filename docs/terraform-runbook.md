@@ -385,9 +385,13 @@ aws ecs update-service --cluster hushstore --service hushstore-api \
   --task-definition hushstore-api:<revision-1> --profile hushstore --no-cli-pager
 ```
 
-Pipeline **tự rollback** khi `wait services-stable` fail: nó ghi lại revision
-đang chạy trước khi update, rồi trỏ về đó. Nên hai lệnh trên chỉ cần khi muốn
-rollback một bản đã deploy THÀNH CÔNG (bug lộ ra muộn hơn).
+Pipeline **tự rollback** khi có bước nào trong job `deploy` fail sau khi nó đã
+ghi lại revision đang chạy — không chỉ riêng `wait services-stable`. Nếu fail
+xảy ra ngay ở bước migrate, rollback vẫn chạy nhưng là no-op vì service chưa
+từng bị đổi; rollback có tác dụng thật khi fail xảy ra **sau** khi service đã
+trỏ sang revision mới (`wait services-stable`, hoặc chính bước update-service).
+Nên hai lệnh trên chỉ cần khi muốn rollback một bản đã deploy THÀNH CÔNG (bug
+lộ ra muộn hơn).
 
 Rollback code KHÔNG rollback migration. DB là **forward-only**: không dùng
 down-migration. Điểm quay về cho dữ liệu là snapshot `pre-migrate-<sha8>-<run>`

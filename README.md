@@ -105,6 +105,34 @@ resource nằm ngoài Terraform state, và chúng mở port 22 kèm SSH key pair
 
 ---
 
+## CI/CD
+
+Deploy = push vào `main`. Hai workflow ở
+[.github/workflows/](.github/workflows/):
+
+- **[deploy.yml](.github/workflows/deploy.yml)** — chạy khi push `main` (hoặc
+  `workflow_dispatch`): build 4 image, sinh script migration, rồi migrate +
+  deploy nếu hạ tầng đang bật.
+- **[ci.yml](.github/workflows/ci.yml)** — chạy trên PR và các nhánh khác:
+  `terraform fmt`/`validate`/`test`, và `dotnet build`.
+
+**Không còn credential dài hạn nào.** GitHub không giữ secret AWS nào — mỗi
+job xin một OIDC token ngắn hạn do GitHub ký, AWS đổi thành credential tạm 1
+giờ. Trước Phase 2, deploy đi bằng `EC2_SSH_KEY`, một private key không hết
+hạn nằm trong GitHub Secrets.
+
+**Pipeline không tự bật hạ tầng.** Push khi stack đang tắt vẫn xanh và vẫn
+push đủ 4 image lên ECR, nhưng chưa deploy — summary của job nói rõ điều đó.
+Lý do: mỗi giờ bật tốn $0.1954 nên để pipeline tự bật là chi phí không có
+trần; IAM role của nó cũng không có quyền `autoscaling:SetDesiredCapacity`
+hay `rds:StartDBInstance`.
+
+Migration vẫn là gate của deploy — xem mục "Deploy lên AWS" ở trên. Chi tiết
+đầy đủ (rollback, deploy tay, việc tay cấu hình GitHub) nằm ở
+**[docs/terraform-runbook.md](docs/terraform-runbook.md)**.
+
+---
+
 ## Development (local)
 
 ```bash

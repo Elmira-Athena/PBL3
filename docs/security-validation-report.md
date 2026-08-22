@@ -30,10 +30,12 @@ Kiểm thử thực hiện trên hạ tầng **do chính nhóm sở hữu**, tro
 | 8 | NACL DENY theo IP | chặn đúng 1 IP | ✅ **A/B từ cùng một máy**: đường trực tiếp timeout, đường qua Cloudflare 200 | `nacl-public` rule 50 | `kb08-nacl-deny-theo-ip.txt` |
 | 9 | VPC Flow Logs `REJECT` | có bản ghi khớp | ✅ khớp cả 3 nhóm: máy tấn công, egress EC2, scanner ngoài | Flow Logs `REJECT`, gom 600s | `kb09-flowlog-reject.txt` |
 | 10 | Bán kính ảnh hưởng của IAM role | mỗi role chỉ thấy phần của mình | ✅ ma trận 12 phép thử, host bị **explicitDeny** | 5 role tách biệt | `kb10-blast-radius-iam.txt` |
-| 11 | Giả mạo OIDC assume-role | AccessDenied | ⏳ **chưa làm** — phụ thuộc Phase 2 (module `cicd` chưa tồn tại) | `role-github-actions` trust condition | — |
+| 11 | Giả mạo OIDC assume-role | AccessDenied | ⏳ **chưa chạy** — module `cicd` đã có trong code, nhưng `terraform apply` chưa chạy nên hai IAM role (`hushstore-github-actions-deploy-role`, `hushstore-github-actions-plan-role`) chưa tồn tại trên AWS | `hushstore-github-actions-deploy-role` trust condition | — |
 
-**10/11 kịch bản đã có bằng chứng.** Kịch bản 11 không thể chạy vì đối tượng
-cần tấn công (OIDC role) chưa được tạo — sẽ bổ sung sau Phase 2.
+**10/11 kịch bản đã có bằng chứng.** Kịch bản 11 vẫn chưa chạy được: điều
+kiện tiên quyết (module `cicd`) đã xong ở Phase 2, nhưng role chỉ tồn tại
+trên AWS sau khi `terraform apply`. Xem mục "Kịch bản 11 — lệnh sẽ dùng khi
+`apply` xong" ở cuối tài liệu này.
 
 ---
 
@@ -271,3 +273,29 @@ cd infra/tf/envs/prod
 
 Mọi lệnh tấn công nằm nguyên văn trong các file `docs/evidence/kb*.txt`, kèm
 nguyên văn output. Không có số nào trong báo cáo này được viết tay.
+
+---
+
+## 6. Kịch bản 11 — lệnh sẽ dùng khi `apply` xong
+
+Chưa chạy được: `terraform apply` chưa thực thi cho module `cicd` nên hai
+role dưới đây chưa tồn tại trên AWS. Ghi sẵn lệnh ở đây để lần sau chỉ việc
+chạy và dán kết quả thật vào bảng ở mục 1 — không đoán trước kết quả.
+
+```bash
+# Tên role: hushstore-github-actions-deploy-role
+# Trust policy chỉ nhận StringEquals trên sub = repo:Elmira-Athena/PBL3:ref:refs/heads/main
+aws sts assume-role-with-web-identity \
+  --role-arn "$(terraform -chdir=infra/tf/envs/prod output -raw github_deploy_role_arn)" \
+  --role-session-name gia-mao \
+  --web-identity-token "token-bia-dat" \
+  --profile hushstore --no-cli-pager
+# Kỳ vọng: InvalidIdentityToken (token không do GitHub ký) — không phải AccessDenied,
+# vì AWS từ chối ở bước xác thực chữ ký trước cả bước xét trust policy.
+
+# Kiểm chứng trust policy bằng cách đọc thẳng nó:
+aws iam get-role --role-name hushstore-github-actions-deploy-role \
+  --query 'Role.AssumeRolePolicyDocument' --profile hushstore --no-cli-pager
+# Kỳ vọng: Condition dùng StringEquals (KHÔNG phải StringLike) trên cả aud và sub,
+# và giá trị sub không chứa ký tự *
+```
