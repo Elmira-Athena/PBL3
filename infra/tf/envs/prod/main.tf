@@ -113,6 +113,10 @@ module "costguard" {
   project            = local.name
   alert_email        = var.alert_email
   monthly_budget_usd = var.monthly_budget_usd
+
+  # Ngưỡng của người dùng chung account. Giá trị nằm trong terraform.tfvars
+  # (gitignore) vì đó là email của người khác. Xem modules/costguard/main.tf.
+  shared_notifications = var.shared_notifications
 }
 
 # ─── PHASE 2 ─────────────────────────────────────────────────────

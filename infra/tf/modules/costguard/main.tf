@@ -49,4 +49,34 @@ resource "aws_budgets_budget" "monthly" {
     notification_type          = "FORECASTED"
     subscriber_email_addresses = [var.alert_email]
   }
+
+  # ─── NGƯỠNG CỦA NGƯỜI DÙNG CHUNG ACCOUNT ────────────────────────────────────
+  # Account này còn được một người khác dùng để làm lab học AWS, và người đó đã
+  # tự thêm một ngưỡng cảnh báo qua console. Khối dynamic dưới đây tồn tại để
+  # `terraform apply` KHÔNG xoá nó.
+  #
+  # Vì sao phải khai tường minh chứ không "cứ để yên": `scripts/up.sh` chạy
+  # `terraform apply` đầy đủ mỗi lần bật hạ tầng. Terraform coi mọi notification
+  # không có trong config là thứ cần xoá, nên "để yên" thật ra là "xoá ở lần bật
+  # stack tới" — và người kia sẽ ngừng nhận cảnh báo chi phí mà không ai nói gì.
+  # Thứ duy nhất giữ được nó qua các lần apply là có mặt trong config.
+  #
+  # Địa chỉ email nằm trong `terraform.tfvars` (bị .gitignore), KHÔNG nằm trong
+  # code: đó là email của người khác, không phải cấu hình của dự án này.
+  #
+  # Đánh đổi phải biết: từ giờ Terraform SỞ HỮU ngưỡng này. Nếu người kia sửa nó
+  # qua console thì lần apply sau sẽ kéo về giá trị trong tfvars. Đó vẫn tốt hơn
+  # cách cũ — drift hiện ra trong `terraform plan` để có người thấy, thay vì bị
+  # xoá âm thầm.
+  dynamic "notification" {
+    for_each = var.shared_notifications
+
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = notification.value.threshold
+      threshold_type             = "PERCENTAGE"
+      notification_type          = notification.value.notification_type
+      subscriber_email_addresses = notification.value.emails
+    }
+  }
 }

@@ -135,3 +135,15 @@ variable "seeder_image_tag" {
   type        = string
   default     = ""
 }
+
+variable "shared_notifications" {
+  description = "Ngưỡng cảnh báo ngân sách của người khác dùng chung account. Khai ở đây để terraform apply không xoá chúng. Giá trị đặt trong terraform.tfvars (bị gitignore) vì chứa email của người ngoài dự án"
+
+  type = list(object({
+    threshold         = number
+    notification_type = string
+    emails            = list(string)
+  }))
+
+  default = []
+}

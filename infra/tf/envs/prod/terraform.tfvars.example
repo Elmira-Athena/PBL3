@@ -35,3 +35,9 @@ monthly_budget_usd = 20
 # Git SHA của 3 image đã push lên ECR. Lấy bằng: git rev-parse HEAD
 # Phase 2 sẽ truyền giá trị này tự động từ GitHub Actions.
 image_tag = "0000000000000000000000000000000000000000"
+
+# Ngưỡng cảnh báo ngân sách của người khác dùng chung AWS account. Khai ở đây
+# để `terraform apply` không xoá chúng — Terraform coi mọi notification không
+# có trong config là thứ cần xoá, nên "để yên" thật ra là "xoá ở lần apply tới".
+# Để [] nếu account chỉ có mình dự án này dùng.
+shared_notifications = []
