@@ -234,6 +234,28 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
+
+    // ForwardLimit = 1 là lớp phòng thủ đi cùng việc clear KnownProxies ở trên.
+    // Vì đã bỏ whitelist proxy, mọi giá trị trong X-Forwarded-For đều được coi
+    // là "do proxy tin cậy ghi" — nên số phần tử được đọc chính là ranh giới
+    // an toàn duy nhất còn lại.
+    //
+    // Cơ chế: ALB APPEND vào X-Forwarded-For, không replace. Client gửi
+    //     X-Forwarded-For: 1.2.3.4        (giả mạo)
+    // thì container nhận
+    //     X-Forwarded-For: 1.2.3.4, <IP thật của client>
+    // ASP.NET đọc từ PHẢI sang trái, nên đọc đúng 1 phần tử là lấy đúng IP mà
+    // ALB quan sát được, và phần client tự bơm bị bỏ lại. Đặt 2 trở lên là tự
+    // tay tin vào chuỗi do client kiểm soát — RemoteIpAddress sẽ thành giá trị
+    // kẻ tấn công chọn, và mọi thứ dựa trên nó (rate limit theo IP, log audit,
+    // chặn theo IP) đều bị lách.
+    //
+    // Đây cũng là giá trị mặc định của ASP.NET Core. Ghi tường minh vì
+    // `drop_invalid_header_fields` trên ALB KHÔNG chặn được X-Forwarded-*
+    // (ALB append, không phải reject), nên dòng này là chỗ duy nhất trong toàn
+    // hệ thống chặn giả mạo X-Forwarded-For — không phải chỗ nên để mặc định
+    // ngầm rồi có người đổi mà không biết mình đang mở gì.
+    options.ForwardLimit = 1;
 });
 
 var app = builder.Build();

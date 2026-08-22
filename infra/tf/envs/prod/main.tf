@@ -114,3 +114,40 @@ module "costguard" {
   alert_email        = var.alert_email
   monthly_budget_usd = var.monthly_budget_usd
 }
+
+# ─── PHASE 2 ─────────────────────────────────────────────────────
+# GitHub OIDC + 2 IAM role. Toàn bộ module này MIỄN PHÍ (IAM role, policy và
+# OIDC provider không tính tiền), nên nó tồn tại liên tục không cần toggle.
+#
+# Tên service truyền dạng CHUỖI, không phải module.ecs.service_*_name: service
+# bị enable_alb gate nên nó biến mất mỗi lần tắt stack, còn IAM policy thì phải
+# đứng yên. Dùng output kia sẽ khiến policy đổi nội dung theo trạng thái bật/tắt.
+module "cicd" {
+  source = "../../modules/cicd"
+
+  project = local.name
+
+  ecr_repository_arns = [
+    module.storage.ecr_api_arn,
+    module.storage.ecr_web_arn,
+    module.storage.ecr_migrator_arn,
+    module.storage.ecr_seeder_arn,
+  ]
+
+  cluster_arn             = module.ecs.cluster_arn
+  cluster_name            = module.ecs.cluster_name
+  service_names           = ["${local.name}-web", "${local.name}-api"]
+  migrator_taskdef_family = module.ecs.taskdef_migrator_family
+  migrator_log_group_arn  = module.ecs.migrator_log_group_arn
+
+  # Đúng 3 role được PassRole. KHÔNG có instance role (lớp bị cô lập có chủ ý)
+  # và KHÔNG có execution role của seeder (role duy nhất đọc được mật khẩu DB).
+  passable_role_arns = [
+    module.ecs.task_execution_role_arn,
+    module.ecs.task_app_role_arn,
+    module.ecs.task_migrator_role_arn,
+  ]
+
+  rds_instance_arn     = module.data.rds_arn
+  artifacts_bucket_arn = module.storage.artifacts_bucket_arn
+}

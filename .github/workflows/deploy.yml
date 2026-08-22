@@ -1,166 +1,556 @@
+# Deploy production.
+#
+# ─── KHÁC GÌ SO VỚI PIPELINE CŨ ──────────────────────────────────────────────
+# Pipeline trước Phase 2 deploy bằng SSH: một private key nằm trong GitHub
+# Secrets (`EC2_SSH_KEY`), không hết hạn, `rsync` file lên host rồi
+# `docker compose up`. Ba vấn đề, cả ba đều là vấn đề về bản chất chứ không phải
+# về cấu hình:
+#   • credential dài hạn — ai đọc được secret là vào được máy chủ, mãi mãi;
+#   • tag `latest` — không nói được "đang chạy commit nào", nên rollback là đoán;
+#   • migration chạy lúc app khởi động — không ai gate được, fail thì crash-loop.
+#
+# Pipeline này: OIDC (không credential), tag = git SHA (ECR bật IMMUTABLE nên
+# không ghi đè được), và migration là một ECS task riêng mà exit code của nó
+# quyết định có deploy hay không.
+#
+# ─── VÌ SAO NÓ KHÔNG TỰ BẬT HẠ TẦNG ──────────────────────────────────────────
+# `enable_alb`, `enable_nat`, `instance_count` mặc định TẮT, và mỗi giờ bật tốn
+# $0.1954 (đo thật — xem docs/terraform-runbook.md). Một pipeline tự bật hạ tầng
+# nghĩa là mỗi lần push vào main là một lần bắt đầu tính tiền, và không ai nhận
+# ra cho tới lúc đọc hoá đơn. Rủi ro đó không có trần trên.
+#
+# Nên pipeline chỉ ĐỌC trạng thái rồi phân nhánh (job `preflight`):
+#   • hạ tầng đang chạy  -> build, migrate, deploy
+#   • hạ tầng đang tắt   -> build và push thôi, job VẪN XANH
+# Nhánh thứ hai là trạng thái bình thường của dự án này, không phải lỗi. Nhưng
+# nó phải hiện rõ trong summary — "Actions xanh mà chưa deploy" đúng là loại
+# nhầm lẫn làm mất cả buổi debug.
+#
+# IAM role của pipeline KHÔNG có autoscaling:SetDesiredCapacity và không có
+# rds:StartDBInstance, nên ràng buộc này được canh ở tầng quyền chứ không chỉ ở
+# comment. Xem infra/tf/modules/cicd/policy.tf.
+
 name: Deploy to Production
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+# id-token: write là quyền BẮT BUỘC để job xin được OIDC token từ GitHub. Không
+# có nó, configure-aws-credentials báo "Could not load credentials" mà không nói
+# vì sao. contents: read là mặc định tối thiểu — pipeline không cần ghi gì vào repo.
+permissions:
+  contents: read
+  id-token: write
+
+# Không cho hai deploy chạy chồng nhau: cả hai sẽ cùng register task definition
+# và cùng update-service, kết quả là service trỏ vào revision của lần chạy tới
+# sau nhưng migration của lần chạy tới trước. cancel-in-progress = false vì hủy
+# giữa lúc migration đang chạy còn tệ hơn là chờ.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/elmira-athena/hushstore-api
+  AWS_REGION: ap-southeast-1
+  CLUSTER: hushstore
+  RDS_ID: hushstore-db-tf
+  MIGRATOR_FAMILY: hushstore-migrator
+  MIGRATOR_LOG_GROUP: /ecs/hushstore-migrator
+  CAPACITY_PROVIDER: hushstore-cp
+  SERVICE_WEB: hushstore-web
+  SERVICE_API: hushstore-api
+  API_BASE_URL: https://api.hushstore.io.vn
 
 jobs:
-  deploy-frontend:
-    name: Build & Deploy Frontend
+  # ───────────────────────────────────────────────────────────────
+  # BUILD — luôn chạy, không phụ thuộc trạng thái hạ tầng.
+  # Push được image lên ECR mà không cần hạ tầng bật: ECR là endpoint công khai,
+  # không đi qua NAT Gateway. Chỉ việc PULL từ trong private subnet mới cần NAT.
+  # ───────────────────────────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.image }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      # fail-fast: bốn image phải cùng một SHA mới deploy được. Nếu một cái
+      # fail thì ba cái kia là rác — dừng luôn để khỏi tốn phút runner.
+      fail-fast: true
+      matrix:
+        include:
+          - image: api
+            dockerfile: Dockerfile
+            build_args: ""
+          - image: web
+            dockerfile: src/Client/Dockerfile
+            # ApiBaseUrl bị BAKE vào bundle lúc build — đó là bản chất của
+            # Blazor WASM standalone, nó không đọc được biến môi trường lúc
+            # runtime. Nên URL phải là build-arg, không phải env của container.
+            build_args: API_BASE_URL=https://api.hushstore.io.vn
+          - image: migrator
+            dockerfile: src/Infrastructure/Dockerfile.migrator
+            build_args: ""
+          - image: seeder
+            dockerfile: src/Infrastructure/Dockerfile.seeder
+            build_args: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume role qua OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-build-${{ matrix.image }}
+
+      - name: Đăng nhập ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ECR bật image_tag_mutability = IMMUTABLE. Nghĩa là push lại cùng một tag
+      # bị TỪ CHỐI, không phải ghi đè — đó là điều kiện để rollback bằng cách trỏ
+      # lại revision cũ thực sự đáng tin. Hệ quả thực tế: bấm "Re-run jobs" trên
+      # một commit đã build xong sẽ fail ở bước push nếu không kiểm tra trước.
+      - name: Image đã tồn tại chưa
+        id: exists
+        env:
+          REPO: hushstore-${{ matrix.image }}
+        run: |
+          if aws ecr describe-images \
+               --repository-name "$REPO" \
+               --image-ids "imageTag=$GITHUB_SHA" \
+               --no-cli-pager >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Bỏ qua build $REPO::Image $REPO:$GITHUB_SHA đã có trên ECR (tag IMMUTABLE nên không push lại được, và không cần push lại)."
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Buildx
+        if: steps.exists.outputs.found == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build và push
+        if: steps.exists.outputs.found == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          # linux/amd64 tường minh: Dockerfile.migrator và Dockerfile.seeder đã
+          # pin --platform trong FROM, nhưng api và web thì chưa — và đích đến
+          # là t3.micro (Intel). Runner hiện là x64 nên đây là no-op, nhưng nó
+          # bảo hiểm cho ngày GitHub đổi runner mặc định sang arm64.
+          platforms: linux/amd64
+          tags: ${{ steps.ecr.outputs.registry }}/hushstore-${{ matrix.image }}:${{ github.sha }}
+          build-args: ${{ matrix.build_args }}
+          provenance: false
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  # ───────────────────────────────────────────────────────────────
+  # SCRIPT MIGRATION — artifact để người review đọc được đúng câu SQL sẽ chạy
+  # lên DB thật, trước khi nó chạy. Cũng là một bước kiểm tra: sinh script fail
+  # nghĩa là tập migration không nhất quán, và biết điều đó ở đây rẻ hơn nhiều
+  # so với biết nó lúc task migrator đã bắt đầu sửa schema.
+  # ───────────────────────────────────────────────────────────────
+  migration-script:
+    name: Sinh migrate-<sha>.sql
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check changed paths
-        id: changes
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            frontend:
-              - 'src/Client/**'
-              - 'src/Shared/**'
-
       - uses: actions/setup-dotnet@v4
-        if: steps.changes.outputs.frontend == 'true'
         with:
           dotnet-version: '10.0.x'
 
-      - name: Build Blazor WASM
-        if: steps.changes.outputs.frontend == 'true'
-        run: |
-          dotnet publish src/Client/Client.csproj \
-            -c Release -o /tmp/blazor-out \
-            --nologo -v q
+      - name: Assume role qua OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-migration-script
 
-      - name: Setup SSH
-        if: steps.changes.outputs.frontend == 'true'
+      - name: Sinh script idempotent
+        # --idempotent bọc mỗi migration trong IF NOT EXISTS, nên script chạy
+        # được trên một DB đang ở BẤT KỲ version nào — kể cả DB đã áp một phần.
+        #
+        # Hai biến môi trường dưới đây là GIẢ và chỉ tồn tại trong runner:
+        # `dotnet ef` dựng DbContext bằng cách chạy lại entry point của API, mà
+        # Program.cs throw nếu thiếu JwtSettings__SecretKey (dòng đó nằm trước
+        # builder.Build()). Sinh script KHÔNG kết nối DB — connection string chỉ
+        # cần phân tích được cú pháp, không cần tới được server.
         env:
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
+          JwtSettings__SecretKey: design-time-only-placeholder-not-a-real-secret-32b
+          ConnectionStrings__DefaultConnection: "Server=localhost;Database=design_time;User Id=sa;Password=placeholder;TrustServerCertificate=True"
         run: |
-          mkdir -p ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/deploy.pem
-          chmod 600 ~/.ssh/deploy.pem
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          dotnet tool install --global dotnet-ef --version '10.0.*'
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet ef migrations script \
+            --idempotent \
+            --project src/Infrastructure/Infrastructure.csproj \
+            --startup-project src/API/API.csproj \
+            --configuration Release \
+            -o "migrate-${GITHUB_SHA}.sql"
+          wc -l "migrate-${GITHUB_SHA}.sql"
 
-      - name: Rsync to EC2
-        if: steps.changes.outputs.frontend == 'true'
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
+      - name: Upload lên S3 và vào artifact của build
         run: |
-          rsync -a --delete \
-            -e "ssh -i ~/.ssh/deploy.pem" \
-            /tmp/blazor-out/wwwroot/ \
-            ubuntu@$EC2_HOST:/var/www/hushstore/wwwroot/
-          echo "Frontend deployed"
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          aws s3 cp "migrate-${GITHUB_SHA}.sql" \
+            "s3://hushstore-artifacts-${ACCOUNT}/migrations/migrate-${GITHUB_SHA}.sql"
 
-  build-api:
-    name: Build & Push API Image
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migration-script
+          path: migrate-*.sql
+          retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────
+  # PREFLIGHT — chỉ đọc. Quyết định có deploy hay không.
+  # ───────────────────────────────────────────────────────────────
+  preflight:
+    name: Hạ tầng đang chạy?
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+      reason: ${{ steps.check.outputs.reason }}
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Check changed paths
-        id: changes
-        uses: dorny/paths-filter@v3
+      - name: Assume role qua OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          filters: |
-            api:
-              - 'src/API/**'
-              - 'src/Service/**'
-              - 'src/Infrastructure/**'
-              - 'src/Core/**'
-              - 'src/Shared/**'
-              - 'Dockerfile'
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-preflight
 
-      - name: Login to ghcr.io
-        if: steps.changes.outputs.api == 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Đọc trạng thái thật trên AWS
+        id: check
+        run: |
+          set -uo pipefail
 
-      - name: Build & push image
-        if: steps.changes.outputs.api == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ env.IMAGE_NAME }}:latest
+          # RDS. `|| echo` để một DB chưa tồn tại không làm job đỏ — "chưa có"
+          # là một câu trả lời hợp lệ ở đây, không phải sự cố.
+          rds=$(aws rds describe-db-instances \
+                  --db-instance-identifier "$RDS_ID" \
+                  --query 'DBInstances[0].DBInstanceStatus' \
+                  --output text 2>/dev/null || echo "missing")
 
-  deploy-api:
-    name: Deploy API to EC2
+          # Container instance. Migration là task bridge trên EC2 launch type
+          # nên nó BẮT BUỘC cần một host đã đăng ký vào cluster — không có host
+          # thì run-task nằm ở PROVISIONING mãi rồi timeout.
+          hosts=$(aws ecs list-container-instances \
+                    --cluster "$CLUSTER" --status ACTIVE \
+                    --query 'length(containerInstanceArns)' \
+                    --output text 2>/dev/null || echo 0)
+
+          # Service. Lọc status == ACTIVE vì describe-services CÒN TRẢ VỀ service
+          # đã xoá với status INACTIVE trong một khoảng thời gian sau đó — đếm cả
+          # INACTIVE là kết luận sai rằng stack đang chạy.
+          svcs=$(aws ecs describe-services \
+                   --cluster "$CLUSTER" --services "$SERVICE_WEB" "$SERVICE_API" \
+                   --query 'length(services[?status==`ACTIVE`])' \
+                   --output text 2>/dev/null || echo 0)
+
+          echo "RDS=$rds  container_instance=$hosts  service_ACTIVE=$svcs"
+
+          reason=""
+          [ "$rds" = "available" ] || reason="$reason RDS đang ở trạng thái '$rds' (cần 'available')."
+          [ "$hosts" -ge 1 ]      || reason="$reason Không có container instance nào ACTIVE (instance_count = 0)."
+          [ "$svcs" -eq 2 ]       || reason="$reason Chỉ có $svcs/2 ECS service ACTIVE (enable_alb = false)."
+
+          if [ -z "$reason" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "reason=Hạ tầng đang chạy đủ để deploy." >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ───────────────────────────────────────────────────────────────
+  # DEPLOY — chỉ chạy khi hạ tầng đang bật.
+  # ───────────────────────────────────────────────────────────────
+  deploy:
+    name: Migrate rồi deploy
     runs-on: ubuntu-latest
-    needs: build-api
+    needs: [build, migration-script, preflight]
+    if: needs.preflight.outputs.ready == 'true'
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Check changed paths
-        id: changes
-        uses: dorny/paths-filter@v3
+      - name: Assume role qua OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          filters: |
-            api:
-              - 'src/API/**'
-              - 'src/Service/**'
-              - 'src/Infrastructure/**'
-              - 'src/Core/**'
-              - 'src/Shared/**'
-              - 'Dockerfile'
-              - 'docker-compose.yml'
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-deploy
 
-      - name: Setup SSH
-        if: steps.changes.outputs.api == 'true'
-        env:
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
+      - name: Ghi lại revision đang chạy (để rollback được)
         run: |
-          mkdir -p ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/deploy.pem
-          chmod 600 ~/.ssh/deploy.pem
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
-
-      - name: Pull & restart on EC2
-        if: steps.changes.outputs.api == 'true'
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_ACTOR: ${{ github.actor }}
-        run: |
-          ssh -i ~/.ssh/deploy.pem ubuntu@$EC2_HOST \
-            GH_TOKEN="$GH_TOKEN" GH_ACTOR="$GH_ACTOR" \
-            bash << 'ENDSSH'
-            set -e
-            cd /opt/hushstore
-            git pull origin main
-            echo "$GH_TOKEN" | sudo docker login ghcr.io -u "$GH_ACTOR" --password-stdin
-            sudo docker compose pull api
-            sudo docker compose up -d api
-            echo "API restarted"
-          ENDSSH
-
-      - name: Health check
-        if: steps.changes.outputs.api == 'true'
-        run: |
-          sleep 30
-          for i in 1 2 3 4 5; do
-            if curl -sf https://api.hushstore.io.vn/health > /dev/null; then
-              echo "✓ API is healthy"
-              exit 0
-            fi
-            echo "Retry $i/5..."
-            sleep 15
+          set -euo pipefail
+          for pair in "api:$SERVICE_API" "web:$SERVICE_WEB"; do
+            key=${pair%%:*}; svc=${pair#*:}
+            prev=$(aws ecs describe-services --cluster "$CLUSTER" --services "$svc" \
+                     --query 'services[0].taskDefinition' --output text)
+            # Tên biến VIẾT HOA: bước rollback đọc nó qua `env.PREV_API` trong
+            # biểu thức `if:`, và context env của GitHub phân biệt hoa thường.
+            echo "PREV_$(echo "$key" | tr '[:lower:]' '[:upper:]')=${prev}" >> "$GITHUB_ENV"
+            echo "$svc đang chạy $prev"
           done
-          echo "✗ Health check failed"
-          exit 1
+
+      # Snapshot = điểm quay về cho DỮ LIỆU. Chính sách migration là
+      # forward-only (không dùng down-migration), nên đây là đường rollback duy
+      # nhất nếu một migration làm hỏng dữ liệu chứ không chỉ hỏng schema.
+      #
+      # KHÔNG chờ snapshot chuyển sang `available`. Điểm khôi phục của một
+      # snapshot là THỜI ĐIỂM BẮT ĐẦU tạo, nên nó đã đúng ngay khi câu lệnh trả
+      # về; chờ thêm 3-5 phút chỉ để nhìn nó copy xong là chờ vô ích. Nhưng vẫn
+      # phải KIỂM CHỨNG nó thành công — làm ở bước sau, sau khi migrate.
+      - name: Snapshot trước khi migrate
+        run: |
+          set -euo pipefail
+          SNAP="pre-migrate-${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}"
+          echo "SNAP=$SNAP" >> "$GITHUB_ENV"
+          aws rds create-db-snapshot \
+            --db-instance-identifier "$RDS_ID" \
+            --db-snapshot-identifier "$SNAP" \
+            --query 'DBSnapshot.{id:DBSnapshotIdentifier,status:Status}' \
+            --no-cli-pager
+
+      - name: Chạy task migrator và lấy exit code
+        id: migrate
+        run: |
+          set -uo pipefail
+
+          TASK=$(aws ecs run-task \
+                   --cluster "$CLUSTER" \
+                   --task-definition "$MIGRATOR_FAMILY" \
+                   --capacity-provider-strategy "capacityProvider=${CAPACITY_PROVIDER},weight=1" \
+                   --query 'tasks[0].taskArn' --output text --no-cli-pager)
+
+          if [ -z "$TASK" ] || [ "$TASK" = "None" ]; then
+            echo "::error title=Không khởi được task migrator::run-task không trả về taskArn. Thường là do không còn container instance nào nhận được task (RAM không đủ), hoặc capacity provider sai tên."
+            exit 1
+          fi
+          echo "task=$TASK" >> "$GITHUB_OUTPUT"
+          echo "Task: $TASK"
+
+          # Poll thay vì `aws ecs wait tasks-stopped`: waiter không in gì trong
+          # lúc chờ, nên một job treo 10 phút trông y như một job chết. Ở đây mỗi
+          # 10 giây in một dòng, và timeout là tường minh.
+          deadline=$(( $(date +%s) + 900 ))
+          while :; do
+            read -r status exitcode reason <<<"$(aws ecs describe-tasks \
+              --cluster "$CLUSTER" --tasks "$TASK" \
+              --query 'tasks[0].[lastStatus,containers[0].exitCode,stoppedReason]' \
+              --output text --no-cli-pager)"
+            echo "  $(date -u +%H:%M:%S) lastStatus=$status exitCode=$exitcode"
+            [ "$status" = "STOPPED" ] && break
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error title=Migration timeout::Task vẫn ở $status sau 15 phút. Task KHÔNG bị hủy — nó vẫn chạy phía AWS; kiểm tra bằng describe-tasks."
+              exit 1
+            fi
+            sleep 10
+          done
+
+          echo "exit_code=$exitcode" >> "$GITHUB_OUTPUT"
+
+          if [ "$exitcode" != "0" ]; then
+            echo "::error title=Migration THẤT BẠI (exit $exitcode)::KHÔNG deploy. Bản đang chạy vẫn phục vụ bình thường. stoppedReason: $reason"
+            echo "── log của task migrator ─────────────────────────────"
+            # Stream name của awslogs driver: <prefix>/<container>/<task-id>
+            TASK_ID="${TASK##*/}"
+            aws logs get-log-events \
+              --log-group-name "$MIGRATOR_LOG_GROUP" \
+              --log-stream-name "migrator/migrator/${TASK_ID}" \
+              --query 'events[].message' --output text --no-cli-pager \
+              || echo "(không đọc được log — kiểm tra trên CloudWatch: $MIGRATOR_LOG_GROUP)"
+            exit 1
+          fi
+
+          echo "Migration thành công (exit 0)."
+
+      - name: Kiểm chứng snapshot đã hoàn tất
+        # Chạy sau migrate, không chặn migrate. Nếu snapshot fail thì phải biết
+        # NGAY — chứ không phải biết vào lúc cần nó để khôi phục.
+        run: |
+          set -uo pipefail
+          st=$(aws rds describe-db-snapshots --db-snapshot-identifier "$SNAP" \
+                 --query 'DBSnapshots[0].Status' --output text 2>/dev/null || echo missing)
+          if [ "$st" = "available" ] || [ "$st" = "creating" ]; then
+            echo "Snapshot $SNAP: $st"
+          else
+            echo "::warning title=Snapshot có vấn đề::$SNAP đang ở trạng thái '$st'. Migration ĐÃ chạy, nhưng điểm quay về cho dữ liệu không đáng tin. Kiểm tra thủ công."
+          fi
+
+      - name: Đăng ký task definition mới và trỏ service sang
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          REGISTRY="${ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+          for pair in "api:$SERVICE_API" "web:$SERVICE_WEB"; do
+            key=${pair%%:*}; svc=${pair#*:}
+
+            # Lấy revision ACTIVE mới nhất của family làm khuôn, rồi đổi ĐÚNG
+            # field image. Nghĩa là mọi thay đổi hình dạng do Terraform apply
+            # (RAM, secret, log) được kế thừa tự nhiên, và pipeline không cần
+            # biết gì về hình dạng đó.
+            aws ecs describe-task-definition --task-definition "hushstore-${key}" \
+              --query 'taskDefinition' --no-cli-pager > td.json
+
+            # Các field dưới đây là READ-ONLY do AWS sinh ra; gửi lại chúng vào
+            # register-task-definition là lỗi ValidationException.
+            # Chọn container THEO TÊN, không theo chỉ số [0]. Hôm nay mỗi task
+            # definition chỉ có một container nên hai cách tương đương, nhưng
+            # nếu mai có người thêm một sidecar thì [0] sẽ đổi image của sai
+            # container mà pipeline vẫn xanh.
+            jq --arg img "${REGISTRY}/hushstore-${key}:${GITHUB_SHA}" --arg name "$key" \
+               '.containerDefinitions |= map(if .name == $name then .image = $img else . end)
+                | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                      .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)' \
+               td.json > new-td.json
+
+            # Nếu tên container không khớp thì jq ở trên là no-op và ta sẽ deploy
+            # lại đúng image cũ — im lặng và rất khó phát hiện. Chặn ngay ở đây.
+            grep -q "hushstore-${key}:${GITHUB_SHA}" new-td.json || {
+              echo "::error title=Không đổi được image::Không tìm thấy container tên '${key}' trong task definition hushstore-${key}. Kiểm tra modules/ecs/taskdef.tf."
+              exit 1
+            }
+
+            NEW=$(aws ecs register-task-definition --cli-input-json file://new-td.json \
+                    --query 'taskDefinition.taskDefinitionArn' --output text --no-cli-pager)
+            echo "$key -> $NEW"
+
+            aws ecs update-service --cluster "$CLUSTER" --service "$svc" \
+              --task-definition "$NEW" --no-cli-pager >/dev/null
+          done
+
+      # `wait services-stable` là GATE THẬT của deploy, không phải curl ở dưới.
+      # Service chỉ được coi là stable khi deployment hoàn tất, mà điều đó đòi
+      # target trong target group phải healthy — và health check của tg-api là
+      # /health/ready, endpoint có AddDbContextCheck nên nó MỞ KẾT NỐI TỚI RDS.
+      # Nói cách khác: stable = container lên được VÀ nói được với DB.
+      - name: Chờ hai service stable
+        id: stable
+        run: |
+          set -euo pipefail
+          echo "Deploy có downtime ~20-40s theo thiết kế (static host port + 1 instance)."
+          aws ecs wait services-stable --cluster "$CLUSTER" \
+            --services "$SERVICE_WEB" "$SERVICE_API"
+          echo "Cả hai service đã stable."
+
+      # Chỉ để THÔNG BÁO, không phải gate — và đó là chủ ý. Bước này đi qua
+      # Cloudflare, nên nó fail cả khi DNS chưa trỏ đúng hoặc proxy sai chế độ.
+      # Rollback vì lỗi DNS trong khi container hoàn toàn khoẻ là rollback sai.
+      # Tín hiệu sức khoẻ có thẩm quyền là target group, đã kiểm ở bước trên.
+      - name: Kiểm tra qua domain công khai (không gate)
+        continue-on-error: true
+        run: |
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+                     "${API_BASE_URL}/health/ready" || echo 000)
+            echo "  lần $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          echo "::warning title=Không gọi được qua domain::Container đã stable (target group healthy) nhưng ${API_BASE_URL}/health/ready không trả 200. Nghi vấn ở tầng DNS/Cloudflare, không phải ở tầng ứng dụng. Kiểm tra CNAME của alb và chế độ proxy."
+
+      # ─── ROLLBACK ────────────────────────────────────────────────
+      # Chỉ chạy khi một bước phía trên fail. Không rollback migration: chính
+      # sách là forward-only, và schema mới phải tương thích ngược với app cũ
+      # (thêm column nullable trước, backfill, siết constraint ở lần sau). Nếu
+      # dữ liệu thật sự hỏng thì đường về là snapshot $SNAP, và đó là quyết định
+      # của người, không phải của pipeline.
+      - name: Rollback về revision trước
+        if: failure() && env.PREV_API != ''
+        run: |
+          set -uo pipefail
+          echo "::warning title=Đang rollback::Trỏ hai service về revision trước khi deploy."
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE_API" \
+            --task-definition "$PREV_API" --no-cli-pager >/dev/null || true
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE_WEB" \
+            --task-definition "$PREV_WEB" --no-cli-pager >/dev/null || true
+          aws ecs wait services-stable --cluster "$CLUSTER" \
+            --services "$SERVICE_WEB" "$SERVICE_API" || true
+          echo "Đã trỏ về: api=$PREV_API  web=$PREV_WEB"
+          echo "LƯU Ý: migration KHÔNG được rollback. Snapshot dữ liệu: $SNAP"
+
+      - name: Dọn snapshot cũ, giữ 3 cái mới nhất
+        if: always()
+        run: |
+          set -uo pipefail
+          # Quyền xoá bị ghim theo ARN pattern snapshot:pre-migrate-* trong IAM
+          # policy, nên bước này KHÔNG thể chạm tới snapshot người tạo tay hay
+          # final snapshot lúc destroy — ranh giới an toàn nằm ở IAM, không nằm
+          # ở logic của đoạn script này.
+          aws rds describe-db-snapshots --snapshot-type manual \
+            --query "reverse(sort_by(DBSnapshots[?starts_with(DBSnapshotIdentifier, 'pre-migrate-')], &SnapshotCreateTime))[3:].DBSnapshotIdentifier" \
+            --output text --no-cli-pager | tr '\t' '\n' | while read -r old; do
+              [ -n "$old" ] || continue
+              echo "Xoá snapshot cũ: $old"
+              aws rds delete-db-snapshot --db-snapshot-identifier "$old" --no-cli-pager >/dev/null || true
+            done
+
+  # ───────────────────────────────────────────────────────────────
+  # SUMMARY — luôn chạy. Đây là thứ trả lời câu "vừa rồi có deploy không".
+  # ───────────────────────────────────────────────────────────────
+  summary:
+    name: Tổng kết
+    runs-on: ubuntu-latest
+    needs: [build, migration-script, preflight, deploy]
+    if: always()
+
+    steps:
+      - name: Ghi summary
+        # Mọi giá trị động đi qua `env:` chứ không nội suy `${{ }}` thẳng vào
+        # thân shell. Ở đây chúng đến từ AWS API và từ script của chính ta nên
+        # không phải dữ liệu của kẻ tấn công, nhưng nội suy thẳng vào shell là
+        # thói quen sai — chỉ cần một ngày có người thêm một giá trị lấy từ
+        # event của GitHub là thành lỗ command injection.
+        env:
+          R_BUILD: ${{ needs.build.result }}
+          R_SCRIPT: ${{ needs.migration-script.result }}
+          R_PREFLIGHT: ${{ needs.preflight.result }}
+          R_DEPLOY: ${{ needs.deploy.result }}
+          READY: ${{ needs.preflight.outputs.ready }}
+          REASON: ${{ needs.preflight.outputs.reason }}
+        run: |
+          {
+            echo "## Deploy \`${GITHUB_SHA::8}\`"
+            echo
+            echo "| Bước | Kết quả |"
+            echo "|---|---|"
+            echo "| Build 4 image | \`$R_BUILD\` |"
+            echo "| Script migration | \`$R_SCRIPT\` |"
+            echo "| Preflight | \`$R_PREFLIGHT\` |"
+            echo "| Deploy | \`$R_DEPLOY\` |"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$READY" = "true" ]; then
+            if [ "$R_DEPLOY" = "success" ]; then
+              echo "**Đã deploy.** Hai service đang chạy image tag \`${GITHUB_SHA}\`." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "**Deploy KHÔNG thành công** (\`$R_DEPLOY\`). Xem log job \`deploy\`." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            {
+              echo "### CHƯA DEPLOY — chỉ build và push image"
+              echo
+              echo "Hạ tầng đang tắt. Đây là **trạng thái bình thường** của dự án này, không phải lỗi:"
+              echo
+              echo "> $REASON"
+              echo
+              echo "4 image đã nằm trên ECR ở tag \`${GITHUB_SHA}\`. Để đưa chúng lên chạy:"
+              echo
+              echo '```bash'
+              echo "sed -i '' 's|^image_tag = .*|image_tag = \"${GITHUB_SHA}\"|' infra/tf/envs/prod/terraform.tfvars"
+              echo "bash infra/tf/scripts/up.sh"
+              echo '```'
+              echo
+              echo "Pipeline **không tự bật hạ tầng** — mỗi giờ bật tốn \$0.1954, và một pipeline tự bật là chi phí không có trần. IAM role của nó cũng không có quyền để làm việc đó."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

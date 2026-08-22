@@ -1,5 +1,11 @@
 provider "aws" {
   region = "ap-southeast-1"
+  # Khai profile giống các file test khác của module này. Thiếu nó, provider rơi
+  # về default credential chain — trên máy cá nhân là KHÔNG có credential nào,
+  # nên cả 6 run block bị `skip` kèm InvalidClientTokenId. Đọc nhanh thì "skip"
+  # trông như "không cần chạy", trong khi thực tế là "chưa hề được kiểm" — và
+  # chính 6 test này canh service, gồm cả ignore_changes của Phase 2.
+  profile = "hushstore"
 }
 
 variables {

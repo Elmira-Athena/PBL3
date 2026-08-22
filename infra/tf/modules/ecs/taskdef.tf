@@ -1,6 +1,13 @@
 locals {
   aws_region = data.aws_region.current.region
 
+  # Seeder đi theo image_tag trừ khi bị ghim riêng. Trước Phase 2 hai giá trị
+  # buộc phải khác nhau (image seeder được build sau 3 image kia); từ Phase 2
+  # pipeline build cả 4 ở cùng một commit nên chúng luôn bằng nhau, và cách
+  # diễn đạt điều đó là để seeder_image_tag rỗng thay vì chép SHA hai lần rồi
+  # có ngày lệch.
+  seeder_tag = var.seeder_image_tag != "" ? var.seeder_image_tag : var.image_tag
+
   # Cấu hình log dùng chung cho cả 3 task definition.
   log_config = {
     api = {
@@ -211,7 +218,7 @@ resource "aws_ecs_task_definition" "seeder" {
   container_definitions = jsonencode([
     {
       name      = "seeder"
-      image     = "${var.ecr_seeder_url}:${var.seeder_image_tag}"
+      image     = "${var.ecr_seeder_url}:${local.seeder_tag}"
       essential = true
 
       memory            = 256

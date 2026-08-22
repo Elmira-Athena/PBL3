@@ -149,12 +149,13 @@ variable "ecr_seeder_url" {
 }
 
 variable "seeder_image_tag" {
-  description = "Git SHA của image seeder. Tách riêng khỏi image_tag vì image seeder được thêm sau 3 image kia; Phase 2 sẽ build cả 4 ở cùng một SHA rồi bỏ biến này"
+  description = "Git SHA riêng cho image seeder. Để RỖNG (mặc định) là đúng: khi rỗng, seeder dùng chung image_tag với 3 image kia. Chỉ đặt giá trị khi cần ghim seeder vào một SHA khác — trước Phase 2 điều đó là bắt buộc vì image seeder được build sau, còn từ Phase 2 pipeline build cả 4 ở cùng một commit"
   type        = string
+  default     = ""
 
   validation {
-    condition     = can(regex("^[0-9a-f]{40}$", var.seeder_image_tag))
-    error_message = "seeder_image_tag phải là git SHA đầy đủ 40 ký tự hex — không dùng latest hay tag tự đặt."
+    condition     = var.seeder_image_tag == "" || can(regex("^[0-9a-f]{40}$", var.seeder_image_tag))
+    error_message = "seeder_image_tag phải rỗng (dùng chung image_tag) hoặc là git SHA đầy đủ 40 ký tự hex — không dùng latest hay tag tự đặt."
   }
 }
 

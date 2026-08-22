@@ -33,6 +33,10 @@ T_ALL=$SECONDS
 hs_tf_check
 hs_sso_check
 
+# Kiểm tra trước khi bật bất cứ thứ gì: nếu CI đã push image mới hơn tag trong
+# tfvars thì nói ra ngay, lúc còn sửa được mà chưa tốn đồng nào.
+hs_image_tag_check
+
 rds_status() {
   aws rds describe-db-instances --db-instance-identifier "$HS_DB" \
     --query 'DBInstances[0].DBInstanceStatus' --output text \

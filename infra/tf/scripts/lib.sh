@@ -189,6 +189,35 @@ hs_apply() {
 
 hs_tf_out() { terraform -chdir="$HS_TF_DIR" output -raw "$1" 2>/dev/null || true; }
 
+# ─── CẢNH BÁO TAG LỆCH (Phase 2) ─────────────────────────────────────────────
+# Từ Phase 2, GitHub Actions push image lên ECR ở MỌI lần push vào main — kể cả
+# khi hạ tầng đang tắt. Nhưng `image_tag` trong terraform.tfvars thì chỉ đổi khi
+# có người sửa tay. Hệ quả: bật stack lên có thể đang chạy một image cũ hơn
+# commit mới nhất, và không có gì trên màn hình nói ra điều đó.
+#
+# Đây đúng là loại nhầm lẫn tốn cả buổi: sửa bug, push, thấy Actions xanh, bật
+# stack, rồi bug vẫn còn.
+hs_image_tag_check() {
+  local want newest
+  want="$(hs_tfvar_get image_tag)"
+  [ -n "$want" ] || return 0
+
+  # Tag mới nhất theo thời điểm push, không theo thứ tự chữ cái — git SHA không
+  # có thứ tự thời gian nào cả.
+  newest="$(aws ecr describe-images --repository-name "${HS_PROJECT}-api"               "${AWSQ[@]}" 2>/dev/null             | jq -r '[.imageDetails[] | select(.imageTags != null)]
+                     | sort_by(.imagePushedAt) | last | .imageTags[0] // ""' 2>/dev/null || true)"
+
+  [ -n "$newest" ] && [ "$newest" != "null" ] || return 0
+
+  if [ "$newest" != "$want" ]; then
+    hs_warn "ECR có image mới hơn tag đang dùng:"
+    hs_warn "    tfvars image_tag : ${want}"
+    hs_warn "    mới nhất trên ECR: ${newest}"
+    hs_warn "  Nếu muốn chạy bản mới nhất thì sửa tfvars TRƯỚC khi bật tiếp:"
+    hs_warn "    sed -i '' 's|^image_tag = .*|image_tag = \"${newest}\"|' infra/tf/envs/prod/terraform.tfvars"
+  fi
+}
+
 # ── Chờ có tiến độ nhìn thấy được ───────────────────────────────
 # hs_wait_until "<nhãn>" <timeout> <gợi ý thường mất> <lệnh kiểm tra...>
 # Lệnh kiểm tra trả 0 = xong. In ra đồng hồ đếm lên để biết nó còn sống.

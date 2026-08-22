@@ -48,6 +48,19 @@ resource "aws_ecs_service" "web" {
 
   # Service không tạo được trước khi cluster biết capacity provider của nó.
   depends_on = [aws_ecs_cluster_capacity_providers.this]
+
+  lifecycle {
+    # BẮT BUỘC từ Phase 2. Terraform vẫn ĐỊNH HÌNH task definition (image nào,
+    # bao nhiêu RAM, secret nào, log đi đâu), nhưng revision ĐANG CHẠY do
+    # GitHub Actions đăng ký: pipeline lấy taskdef hiện tại, đổi đúng field
+    # image sang :<git-sha>, register revision mới, rồi update-service.
+    #
+    # Thiếu dòng này thì lần `terraform apply` kế tiếp thấy service đang trỏ một
+    # revision không phải revision của mình và kéo nó về — tức ROLLBACK NGẦM về
+    # image trong var.image_tag, không cảnh báo, không ai chủ ý. Đó là loại lỗi
+    # chỉ lộ ra khi có người hỏi "sao bug đã sửa lại quay lại".
+    ignore_changes = [task_definition]
+  }
 }
 
 resource "aws_ecs_service" "api" {
@@ -89,4 +102,10 @@ resource "aws_ecs_service" "api" {
   tags = { Name = "${var.project}-api" }
 
   depends_on = [aws_ecs_cluster_capacity_providers.this]
+
+  lifecycle {
+    # Cùng lý do như service web ở trên: pipeline nắm revision, Terraform nắm
+    # hình dạng. Xem comment đầy đủ ở aws_ecs_service.web.
+    ignore_changes = [task_definition]
+  }
 }

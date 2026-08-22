@@ -86,3 +86,13 @@ output "taskdef_seeder_family" {
   description = "Family task definition seeder — dùng cho aws ecs run-task khi seed"
   value       = module.ecs.taskdef_seeder_family
 }
+
+output "github_deploy_role_arn" {
+  description = "Đặt vào repository variable AWS_DEPLOY_ROLE_ARN trên GitHub. Không phải secret — chỉ là tên vai, vô dụng nếu không có OIDC token do GitHub ký cho đúng repo và đúng nhánh main"
+  value       = module.cicd.deploy_role_arn
+}
+
+output "github_plan_role_arn" {
+  description = "Đặt vào repository variable AWS_PLAN_ROLE_ARN trên GitHub"
+  value       = module.cicd.plan_role_arn
+}

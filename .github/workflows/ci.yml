@@ -1,0 +1,168 @@
+# Kiểm tra trên PR và trên các nhánh không phải main.
+#
+# ─── VÌ SAO KHÔNG CÓ `terraform plan` Ở ĐÂY ──────────────────────────────────
+# Kế hoạch ban đầu là chạy `plan` rồi comment kết quả vào PR. Bỏ, có chủ ý.
+#
+# `plan` phải đọc terraform.tfstate, và state CHỨA master password của RDS ở
+# dạng plaintext — `random_password` luôn nằm trong state, đó là bản chất của
+# Terraform chứ không phải cấu hình sai ở phía ta. Nên một role đọc được state
+# là một role đọc được mật khẩu DB.
+#
+# Với trigger `pull_request`, claim `sub` của OIDC token là
+# `repo:Elmira-Athena/PBL3:pull_request` — giá trị này KHÔNG phân biệt được PR
+# do chủ repo mở với PR từ một fork. Đánh đổi sai chiều: tiện lợi của một comment
+# tự động không đáng bằng rủi ro để mật khẩu DB nằm sau một ranh giới mờ.
+#
+# Vì thế `hushstore-github-actions-plan-role` bị Deny tường minh `s3:GetObject`
+# (xem infra/tf/modules/cicd/policy.tf) — nó KHÔNG đọc được state, kể cả khi ai
+# đó thêm workflow gọi plan. Ràng buộc nằm ở IAM, không nằm ở file này.
+#
+# Đường nâng cấp nếu sau này muốn plan trên PR: dùng GitHub Environment có
+# required reviewer. Khi job khai báo `environment:`, claim sub thành
+# `repo:.../environment:<tên>` và fork không lấy được token mà không có người
+# bấm duyệt. Đó là cấu hình trên GitHub, không phải Terraform.
+#
+# Thứ CÓ ở đây và có giá trị hơn plan: `terraform test`. 17 file test đang canh
+# các assertion bảo mật (NACL stateless, SG không mở 22, IAM least privilege).
+# Chúng chạy được mà không cần state.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ap-southeast-1
+  TF_VERSION: 1.15.8
+
+jobs:
+  # ───────────────────────────────────────────────────────────────
+  # Định dạng và cú pháp — KHÔNG cần credential AWS.
+  # `init -backend=false` bỏ qua hoàn toàn cấu hình backend S3, nên bước này
+  # chạy được cả khi không có quyền nào trên AWS.
+  # ───────────────────────────────────────────────────────────────
+  terraform-static:
+    name: Terraform fmt + validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: fmt -check
+        run: terraform -chdir=infra/tf fmt -check -recursive -diff
+
+      - name: validate mọi module và env
+        run: |
+          set -euo pipefail
+          fail=0
+          for dir in infra/tf/envs/prod infra/tf/modules/*/; do
+            echo "── $dir"
+            terraform -chdir="$dir" init -backend=false -input=false -no-color >/dev/null
+            terraform -chdir="$dir" validate -no-color || fail=1
+          done
+          exit $fail
+
+  # ───────────────────────────────────────────────────────────────
+  # terraform test — CẦN credential vì một số module có data source gọi AWS
+  # thật (aws_caller_identity, và aws_ssm_parameter đọc AMI ECS-optimized do
+  # AWS công bố công khai).
+  # ───────────────────────────────────────────────────────────────
+  terraform-test:
+    name: Terraform test
+    runs-on: ubuntu-latest
+
+    # PR từ fork: GitHub KHÔNG cấp `id-token: write`, nên không có OIDC token và
+    # bước assume role sẽ đỏ. Bỏ qua job một cách tường minh thay vì để nó fail
+    # — job đỏ vì thiếu quyền theo thiết kế là tín hiệu nhiễu, và nó che mất
+    # những job đỏ thật. Hai job kia (fmt/validate và dotnet build) không cần
+    # credential nên vẫn chạy cho fork.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Assume role qua OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-tf-test
+
+      # 17 file test đều khai báo `provider "aws" { profile = "hushstore" }` —
+      # đó là profile SSO trên máy của người phát triển. Trên runner không có
+      # profile nào, nên tạo một profile CÙNG TÊN trỏ vào credential tạm mà
+      # configure-aws-credentials vừa export ra biến môi trường. Cách này giữ
+      # 17 file test nguyên vẹn, thay vì sửa provider block ở cả 17 chỗ rồi làm
+      # hỏng cách chạy test trên máy cá nhân.
+      #
+      # Credential ghi ra file ở đây là credential TẠM, hạn 1 giờ, trên một
+      # runner dùng một lần rồi hủy. Nó cũng bị Deny tường minh s3:GetObject và
+      # kms:Decrypt, nên kể cả bị lộ thì không đọc được state hay secret nào.
+      - name: Tạo profile hushstore từ credential OIDC
+        run: |
+          aws configure set --profile hushstore region        "$AWS_REGION"
+          aws configure set --profile hushstore aws_access_key_id     "$AWS_ACCESS_KEY_ID"
+          aws configure set --profile hushstore aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+          aws configure set --profile hushstore aws_session_token     "$AWS_SESSION_TOKEN"
+          aws sts get-caller-identity --profile hushstore --no-cli-pager
+
+      - name: Chạy test từng module
+        run: |
+          set -uo pipefail
+          fail=0
+          ran=0
+          for dir in infra/tf/modules/*/; do
+            [ -d "${dir}tests" ] || continue
+            ran=$((ran + 1))
+            echo "════ $dir"
+            terraform -chdir="$dir" init -backend=false -input=false -no-color >/dev/null
+            terraform -chdir="$dir" test -no-color || fail=1
+          done
+          echo "Đã chạy test cho $ran module."
+          # Không có module nào có test là một sự cố, không phải một kết quả tốt.
+          [ "$ran" -gt 0 ] || { echo "::error::Không tìm thấy thư mục tests/ nào."; exit 1; }
+          exit $fail
+
+  # ───────────────────────────────────────────────────────────────
+  # Biên dịch .NET. Dự án chưa có test tự động nào, nên `dotnet build` là cửa
+  # kiểm duy nhất cho code C# — và nó bắt được đúng loại lỗi mà pipeline deploy
+  # sẽ gặp muộn hơn nhiều (lúc build image, sau khi đã tốn phút runner).
+  # ───────────────────────────────────────────────────────────────
+  dotnet-build:
+    name: dotnet build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore và build
+        # -warnaserror KHÔNG bật: solution hiện còn warning, và biến chúng thành
+        # lỗi ở đây sẽ chặn mọi PR vì những thứ không liên quan tới PR đó. Dọn
+        # warning là việc riêng, không phải việc của cửa kiểm này.
+        run: |
+          dotnet restore PBL3.sln
+          dotnet build PBL3.sln -c Release --no-restore --nologo

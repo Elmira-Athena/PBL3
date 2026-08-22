@@ -131,6 +131,7 @@ variable "api_domain" {
 }
 
 variable "seeder_image_tag" {
-  description = "Git SHA của image seeder trên ECR. Tách riêng khỏi image_tag vì image seeder được thêm sau 3 image kia — Phase 2 sẽ build cả 4 ở cùng một SHA rồi bỏ biến này"
+  description = "Git SHA riêng cho image seeder. Để rỗng (mặc định) thì seeder dùng chung image_tag — đó là trạng thái đúng từ Phase 2 trở đi vì pipeline build cả 4 image ở cùng một commit"
   type        = string
+  default     = ""
 }

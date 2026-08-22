@@ -92,3 +92,8 @@ output "taskdef_seeder_family" {
   description = "Family của task definition seeder — dùng cho aws ecs run-task"
   value       = aws_ecs_task_definition.seeder.family
 }
+
+output "migrator_log_group_arn" {
+  description = "ARN log group của migrator — module cicd giới hạn quyền đọc log của pipeline đúng vào group này"
+  value       = aws_cloudwatch_log_group.migrator.arn
+}

@@ -1,4 +1,4 @@
-# Terraform Runbook — HushStore Phase 1
+# Terraform Runbook — HushStore
 
 Hạ tầng AWS của HushStore, dựng bằng Terraform. Tài liệu này là thứ cần đọc
 trước khi chạm vào hệ thống, và mọi con số trong đây đều đo được từ lần chạy
@@ -267,7 +267,72 @@ chết âm thầm sau 13 tháng. Lưu ý: cert chỉ chuyển
 `RenewalEligibility: ELIGIBLE` khi **đang được một service AWS sử dụng** — trước
 đó nó là `INELIGIBLE`, nên đừng lấy trạng thái đó làm dấu hiệu có gì sai.
 
-## Deploy phiên bản mới (Phase 1 — làm tay)
+## Deploy phiên bản mới
+
+Từ Phase 2, deploy là **push vào `main`**. Không còn bước tay nào trong đường
+bình thường.
+
+```
+push main
+  │
+  ├── build ×4 (song song)   api · web · migrator · seeder, tag = git SHA
+  ├── migration-script       migrate-<sha>.sql -> S3 artifacts
+  └── preflight              đọc RDS + container instance + service
+        │
+        ├── hạ tầng TẮT  -> dừng ở đây, job VẪN XANH, summary nói rõ
+        │
+        └── hạ tầng BẬT  -> snapshot -> migrate -> GATE exit code
+                              │
+                              ├── exit ≠ 0 -> in log CloudWatch, fail,
+                              │               KHÔNG deploy, bản cũ vẫn phục vụ
+                              │
+                              └── exit = 0 -> register 2 revision
+                                              -> update-service ×2
+                                              -> wait services-stable
+                                              -> (rollback nếu fail)
+```
+
+Ba điều phải biết trước khi trông chờ vào nó:
+
+**Pipeline KHÔNG tự bật hạ tầng.** Mỗi giờ bật tốn $0.1954, nên một pipeline tự
+bật là chi phí không có trần. Push khi stack đang tắt vẫn **xanh** và vẫn push
+đủ 4 image lên ECR — nhưng nó **chưa deploy**, và summary của job nói thẳng điều
+đó kèm câu lệnh cần chạy. Ràng buộc này nằm ở IAM (role không có
+`autoscaling:SetDesiredCapacity`, không có `rds:StartDBInstance`), không chỉ nằm
+ở comment trong workflow.
+
+**`image_tag` trong `terraform.tfvars` đổi nghĩa.** Nó không còn là "image đang
+chạy" — nó là **image dùng khi dựng lại từ đầu**. Revision đang chạy do CI đăng
+ký, và `aws_ecs_service` có `ignore_changes = [task_definition]` để `terraform
+apply` không kéo service về revision của Terraform (nếu thiếu dòng đó, mỗi lần
+apply là một lần **rollback ngầm**). `up.sh` cảnh báo khi ECR có tag mới hơn
+tfvars.
+
+**Migration là gate, không phải một bước trong danh sách.** Exit code khác 0 thì
+job dừng, log của task in thẳng vào output của Actions, và service **không** được
+cập nhật — bản cũ tiếp tục phục vụ.
+
+### Việc tay một lần: cấu hình GitHub
+
+```bash
+terraform -chdir=infra/tf/envs/prod output github_deploy_role_arn
+terraform -chdir=infra/tf/envs/prod output github_plan_role_arn
+```
+
+Đặt hai giá trị đó thành **repository variable** (Settings → Secrets and
+variables → Actions → Variables), tên `AWS_DEPLOY_ROLE_ARN` và
+`AWS_PLAN_ROLE_ARN`. Chúng là *variable* chứ không phải *secret* vì ARN của role
+không phải bí mật: không có OIDC token do GitHub ký cho đúng repo và đúng nhánh
+thì biết ARN cũng vô dụng.
+
+Rồi **xoá** ba secret của pipeline cũ: `EC2_SSH_KEY`, `EC2_HOST`, và GHCR token
+nếu còn. Sau bước này trong toàn hệ thống không còn credential dài hạn nào.
+
+### Deploy tay (đường dự phòng)
+
+Vẫn giữ vì có lúc cần: CI đang lỗi, hoặc muốn deploy một commit không nằm trên
+`main`.
+
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
@@ -320,10 +385,20 @@ aws ecs update-service --cluster hushstore --service hushstore-api \
   --task-definition hushstore-api:<revision-1> --profile hushstore --no-cli-pager
 ```
 
-DB thì **forward-only**: không dùng down-migration. Điểm quay về là snapshot
-`pre-migrate-<sha>` mà pipeline tạo trước mỗi lần migrate (Phase 2). Migration
-phải viết theo hướng tương thích ngược — thêm column nullable trước, backfill,
-siết constraint ở lần sau — để version cũ không chết trong lúc rolling deploy.
+Pipeline **tự rollback** khi `wait services-stable` fail: nó ghi lại revision
+đang chạy trước khi update, rồi trỏ về đó. Nên hai lệnh trên chỉ cần khi muốn
+rollback một bản đã deploy THÀNH CÔNG (bug lộ ra muộn hơn).
+
+Rollback code KHÔNG rollback migration. DB là **forward-only**: không dùng
+down-migration. Điểm quay về cho dữ liệu là snapshot `pre-migrate-<sha8>-<run>`
+mà pipeline tạo trước mỗi lần migrate; nó giữ 3 cái mới nhất và tự xoá cái cũ
+hơn (quyền xoá bị ghim theo ARN pattern `snapshot:pre-migrate-*` nên pipeline
+không chạm được snapshot người tạo tay).
+
+Hệ quả bắt buộc của forward-only: migration phải viết theo hướng **tương thích
+ngược** — thêm column nullable trước, backfill, siết constraint ở lần sau — để
+bản app cũ không chết trong khoảng thời gian schema mới đã lên mà code cũ vẫn
+đang chạy. Khôi phục snapshot là quyết định của người, không phải của pipeline.
 
 ## Vào hệ thống để chẩn đoán
 
@@ -446,10 +521,8 @@ phải bọc ngoặc nhọn: `$ACCT:role` bị zsh hiểu `:r` là modifier và 
 
 | Việc | Vì sao chưa làm | Điều kiện làm |
 |---|---|---|
-| Bản sửa cache của nginx chưa vào image đang chạy | Image trên ECR build ở Task 9, trước commit sửa `nginx.conf`. Đã kiểm chứng: `css/app.css` qua ALB vẫn trả 2 header `Cache-Control` và `immutable` | Rebuild image web. Phase 2 (CI/CD) sẽ tự làm |
-| `ForwardLimit = 1` chưa đặt tường minh trong `Program.cs` | Giá trị default đã là 1 nên hành vi hiện tại đúng | Quan trọng hơn tưởng: `drop_invalid_header_fields` **không** chặn giả mạo `X-Forwarded-*` (ALB *append* chứ không thay thế), nên `ForwardLimit` là lớp duy nhất chặn. Đặt tường minh khi rebuild image |
-| `ADD --checksum` cho RDS CA bundle | Cần rebuild image | Gộp với lần rebuild tiếp theo |
-| Test module `ecs` không chạy được offline | Module đọc data source SSM để lấy AMI ECS-optimized, nên `terraform test` cần credential AWS | Thêm `override_data` trong file test. Module `alb` thì đã chạy được offline (không đọc data source nào) |
+| Test module `ecs` và `cicd` cần credential AWS | Cả hai đọc data source thật (`aws_ssm_parameter` lấy AMI ECS-optimized; `aws_caller_identity` dựng ARN) | Thêm `override_data` trong file test nếu muốn chạy hoàn toàn offline. Trên CI thì không phải vấn đề — `ci.yml` assume role plan rồi mới chạy test |
+| `seeder_image_tag` còn ghim tay trong tfvars | Image seeder trên ECR hiện chỉ tồn tại ở một SHA khác `image_tag`; bỏ ghim ngay sẽ trỏ task seeder vào tag không tồn tại và lỗi chỉ hiện lúc `run-task` | Xoá dòng đó sau lần chạy CI đầu tiên thành công — lúc đó cả 4 image đã cùng một SHA và biến tự lấy giá trị của `image_tag` |
 | IAM user `athena232` vẫn tồn tại | Quyết định giữ nguyên (2026-08-19) | `AdministratorAccess` gắn trực tiếp, có console password, **không MFA**, không có access key. Dùng đúng một lần lúc setup (2026-08-18T01:27:21Z) rồi không dùng lại. Đây là một đường admin đứng sẵn nằm **ngoài** SSO, tức nó ngược với tuyên bố "danh tính là IAM Identity Center" trong spec. Root đã có MFA nên đã đủ làm break-glass. Nếu đổi ý: bật MFA cho user này, hoặc xoá nó (`delete-login-profile` → `detach-user-policy` → `delete-user`) |
 | 4 package NuGet có CVE | Đã quyết định để sau khi xong hạ tầng | `AutoMapper` 16.0.0→16.1.1, `Microsoft.OpenApi` 2.4.1→2.7.5, `System.Security.Cryptography.Xml` 9.0.0→9.0.18 và 10.0.0→10.0.10. Cả 4 là DoS qua đệ quy không kiểm soát, CVSS 7.5, đánh giá là không tới được trong codebase này |
 
