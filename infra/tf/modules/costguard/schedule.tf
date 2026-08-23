@@ -34,21 +34,37 @@ data "aws_iam_policy_document" "scheduler_assume" {
       identifiers = ["scheduler.amazonaws.com"]
     }
 
-    # Chống confused deputy. Không có hai condition này thì role tin bất kỳ
-    # schedule nào của EventBridge Scheduler — kể cả schedule ở account khác —
-    # miễn nó biết ARN của role. SourceAccount chặn ở mức account, SourceArn
-    # ghim tiếp vào ĐÚNG schedule này.
+    # Chống confused deputy: không có condition này thì role tin BẤT KỲ schedule
+    # nào của EventBridge Scheduler — kể cả schedule ở account của người khác —
+    # miễn nó biết ARN của role.
     condition {
       test     = "StringEquals"
       variable = "aws:SourceAccount"
       values   = [local.account_id]
     }
 
-    condition {
-      test     = "ArnEquals"
-      variable = "aws:SourceArn"
-      values   = [local.schedule_arn]
-    }
+    # ─── VÌ SAO KHÔNG CÓ aws:SourceArn Ở ĐÂY ────────────────────────────────
+    # Chỗ này ĐÃ THỬ siết thêm bằng `ArnEquals` trên
+    # arn:aws:scheduler:<region>:<account>:schedule/default/hushstore-nightly-stop
+    # và AWS TỪ CHỐI, hai lần liên tiếp, không phải do eventual consistency:
+    #
+    #   ValidationException: The execution role you provide must allow AWS
+    #   EventBridge Scheduler to assume the role.
+    #
+    # Nguyên nhân: `CreateSchedule` xác thực role bằng một phép assume-role thử,
+    # và lúc đó schedule CHƯA TỒN TẠI — nên không có `aws:SourceArn` nào để so.
+    # Một condition không thể thoả trong bước xác thực làm cả bước đó fail. Bỏ
+    # đúng condition này ra thì apply thành công ngay ở lần chạy kế tiếp, cùng
+    # mọi thứ khác giữ nguyên; đó là phép thử phân biệt, không phải phỏng đoán.
+    #
+    # Phần bị mất là nhỏ và đã được bù ở chỗ khác. SourceAccount đóng HOÀN TOÀN
+    # đường cross-account — thứ mà confused deputy thật sự nói tới. Cái còn lại
+    # là "một schedule KHÁC trong cùng account này assume được role", mà làm vậy
+    # cũng chỉ được đúng một quyền: `lambda:InvokeFunction` trên đúng function
+    # cost guard. Gọi thêm cost guard là vô hại — nó idempotent và chỉ TẮT được
+    # thứ đang bật. Nói cách khác, policy quyền đã hẹp tới mức làm việc siết
+    # trust policy thêm gần như không còn tác dụng.
+
   }
 }
 

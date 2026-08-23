@@ -479,13 +479,23 @@ run "scheduler_role_chi_goi_duoc_dung_lambda_nay_va_khong_gi_khac" {
     error_message = "Trust policy phải chỉ tin service principal scheduler.amazonaws.com. Đây KHÔNG phải role của Lambda: nếu ở đây là lambda.amazonaws.com thì Lambda tự gọi được chính nó."
   }
 
+  # Chỉ canh `aws:SourceAccount`, KHÔNG canh `aws:SourceArn` — và đó là kết quả
+  # của một phép đo, không phải một sự lơi lỏng. Thêm `ArnEquals` trên ARN của
+  # schedule làm `CreateSchedule` fail với "The execution role you provide must
+  # allow AWS EventBridge Scheduler to assume the role", vì lúc xác thực role thì
+  # schedule chưa tồn tại nên không có SourceArn nào để so. Xem comment đầy đủ
+  # trong schedule.tf.
+  #
+  # Nếu có ngày ai đó thêm lại `aws:SourceArn` cho "chặt hơn": apply sẽ chết, và
+  # test này KHÔNG bắt được (nó chỉ đòi SourceAccount). Đó là giới hạn có ý thức
+  # — một `terraform test` chạy ở mức plan không thể biết AWS sẽ từ chối gì lúc
+  # create. Chỗ ghi lại kiến thức đó là comment ở schedule.tf.
   assert {
     condition = alltrue([
       for s in jsondecode(data.aws_iam_policy_document.scheduler_assume.json).Statement :
-      try(s.Condition.StringEquals["aws:SourceAccount"], null) != null &&
-      try(s.Condition.ArnEquals["aws:SourceArn"], null) != null
+      try(s.Condition.StringEquals["aws:SourceAccount"], null) != null
     ])
-    error_message = "Trust policy của role Scheduler phải có cả aws:SourceAccount và aws:SourceArn (chống confused deputy). Thiếu chúng thì một schedule ở account khác assume được role này chỉ cần biết ARN của nó."
+    error_message = "Trust policy của role Scheduler phải có aws:SourceAccount — thiếu nó thì một schedule ở ACCOUNT KHÁC assume được role này chỉ cần biết ARN của nó (confused deputy)."
   }
 }
 

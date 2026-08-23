@@ -1,0 +1,101 @@
+PHASE 3 — Lambda cost guard: kiem chung thuc te
+==============================================================================
+
+BOI CANH CHI PHI
+Account AWS nay tru tien THAT vao the. Credit tra truoc het han khi account
+duoc dua vao Organization de dung SSO. Nen moi phep kiem duoi day duoc chon
+sao cho KHONG ton them dong nao: chi goi Lambda (free tier 1 trieu request/
+thang, vinh vien) va cac lenh describe (mien phi). KHONG bat ha tang.
+
+VI SAO LAMBDA NAY TON TAI — CO MOT NGAY CU THE
+AWS tu START mot RDS da stopped sau 7 ngay. Su kien "DB instance stopped" gan
+nhat: 2026-08-20T01:44 UTC, nen moc tu bat la khoang 2026-08-27T01:44 UTC.
+O $0.098/gio tren the that do la $2.35/ngay, va email Budgets chi ban khi da
+tieu toi 25% cua nguong $20 — tuc cham hon hai ngay.
+
+Ngay chay   : 2026-08-23T08:45:11Z UTC
+
+==============================================================================
+PHEP THU 1 — trang thai truoc khi goi (moi thu dang TAT)
+==============================================================================
+NAT Gateway    : 0
+ALB            : 0
+ECS service    : 0
+ASG desired    : 0
+RDS            : stopped
+
+==============================================================================
+PHEP THU 2 — goi Lambda: phai THANH CONG va IM LANG
+==============================================================================
+$ aws lambda invoke --function-name hushstore-cost-guard --log-type Tail
+
+START RequestId: 3b70408a-c572-4723-b60d-cd19f82a594e Version: $LATEST
+{"actions": [], "notes": ["ECS service arn:aws:ecs:ap-southeast-1:667836586836:service/hushstore/hushstore-web không tồn tại (MISSING) — bình thường khi enable_alb = false.", "ECS service arn:aws:ecs:ap-southeast-1:667836586836:service/hushstore/hushstore-api không tồn tại (MISSING) — bình thường khi enable_alb = false.", "ASG hushstore-asg đã ở desired = 0.", "RDS hushstore-db-tf đang ở trạng thái 'stopped' — không gọi StopDBInstance (chỉ trạng thái 'available' mới stop được)."], "findings": [], "errors": []}
+END RequestId: 3b70408a-c572-4723-b60d-cd19f82a594e
+REPORT RequestId: 3b70408a-c572-4723-b60d-cd19f82a594e	Duration: 795.95 ms	Billed Duration: 796 ms	Memory Size: 256 MB	Max Memory Used: 123 MB	
+
+Doc ra ba dieu:
+
+  1. "actions": []  — Lambda KHONG doi gi ca. Do la dung: khong co gi dang bat.
+     Mot cost guard phai idempotent, vi no chay moi dem va hau het cac dem la
+     dem khong co gi de tat.
+
+  2. "errors": []   — "da tat roi" KHONG phai loi. Goi StopDBInstance tren mot
+     instance dang 'stopped' se tra InvalidDBInstanceState; ma nay doc trang
+     thai TRUOC khi goi nen no khong tao ra loi gia.
+
+  3. KHONG co SNS nao duoc gui. Code chi publish khi `actions or findings or
+     errors` — xem src/cost_guard.py. Mot canh bao ban moi dem la mot canh bao
+     bi bo qua, nen dem binh thuong phai hoan toan im lang.
+
+==============================================================================
+PHEP THU 3 — cau hinh dang chay tren AWS
+==============================================================================
+$ aws scheduler get-schedule --name hushstore-nightly-stop
+{
+    "state": "ENABLED",
+    "cron": "cron(0 0 * * ? *)",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "retry": {
+        "MaximumEventAgeInSeconds": 3600,
+        "MaximumRetryAttempts": 2
+    }
+}
+
+Timezone la Asia/Ho_Chi_Minh, KHONG phai UTC. Neu de UTC thi cron(0 0) se
+chay luc 7 gio SANG gio Viet Nam — tuc tat ha tang giua ngay lam viec.
+LUU Y khi doc log CloudWatch: log ghi theo UTC, nen 00:00 ICT hien ra la
+17:00 UTC cua NGAY HOM TRUOC.
+
+$ aws lambda get-function-configuration --function-name hushstore-cost-guard
+{
+    "runtime": "python3.13",
+    "arch": [
+        "arm64"
+    ],
+    "timeout": 120,
+    "memory": 256,
+    "reserved_concurrency": null
+}
+
+reserved_concurrency = null, KHONG phai 1 nhu plan viet. Da do thuc te:
+  aws lambda get-account-settings -> ConcurrentExecutions: 10
+AWS luon giu toi thieu 10 unreserved concurrency, nen dat reserved = 1 lam
+apply chet voi InvalidParameterValueException. Bu o tang ma: doc trang thai
+truoc khi ghi, va bat rieng InvalidDBInstanceState.
+
+==============================================================================
+PHEP THU 4 — Lambda co the BAT duoc gi khong? (phai la KHONG)
+==============================================================================
+  rds:StartDBInstance                        implicitDeny
+  rds:CreateDBInstance                       implicitDeny
+  ec2:RunInstances                           implicitDeny
+  autoscaling:UpdateAutoScalingGroup         implicitDeny
+  elasticloadbalancing:CreateLoadBalancer    implicitDeny
+  ecs:CreateService                          implicitDeny
+  ec2:CreateNatGateway                       implicitDeny
+
+Bay duong bat ha tang, bay lan implicitDeny. Day la tinh chat thiet ke cot loi:
+mot cost guard co quyen BAT la mot cost guard co the gay ra dung thu no ton tai
+de chan. Policy khong he co ho action rds:Start* — duoc canh boi mot assert
+theo TIEN TO trong tests/costguard.tftest.hcl, khong chi theo ten day du.
