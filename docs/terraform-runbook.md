@@ -109,6 +109,99 @@ Log của mọi lần apply/destroy nằm ở `infra/tf/.local/logs/` (gitignore
 Phần dưới là các lệnh tay tương ứng, giữ lại vì chúng giải thích **vì sao** thứ
 tự phải như vậy. Script chỉ là bản tự động của đúng những bước này.
 
+## Tự tắt hằng đêm
+
+Ba script ở trên là đường **chủ động** — ai đó phải nhớ chạy `down.sh`. Có một
+lưới an toàn **bị động** chạy song song: Lambda `hushstore-cost-guard` (Python
+3.13, arm64), đánh thức mỗi đêm lúc `00:00 Asia/Ho_Chi_Minh` bởi EventBridge
+Scheduler `hushstore-nightly-stop` (`cron(0 0 * * ? *)`, retry 2 lần). Đã
+deploy và kiểm chứng bằng lệnh thật, không phải `terraform test` — output đầy
+đủ ở [docs/evidence/kb13-costguard-lambda.txt](evidence/kb13-costguard-lambda.txt).
+
+Bốn điều cần biết trước khi tin vào nó:
+
+### 1. Nó KHÔNG đưa chi phí về $0
+
+Gọi nó là "cost guard" dễ khiến người đọc tưởng nó xử lý hết. Không:
+
+| Khoản | Lambda tắt được? | Còn lại |
+|---|---|---|
+| RDS instance $0.098/h | có (`StopDBInstance`) | $0.004/h — storage 20GB, tính cả khi stopped |
+| EC2 container instance $0.0132/h | có (ASG desired = 0; EBS root xoá cùng instance) | $0 |
+| ECS service | có (desired = 0) | $0 |
+| **NAT Gateway $0.0590/h** | **KHÔNG** — Terraform quản lý | **vẫn chạy** |
+| **ALB $0.0252/h** | **KHÔNG** — Terraform quản lý | **vẫn chạy** |
+
+Một đêm bị bỏ quên bật đủ stack: Lambda đưa chi phí giờ từ **$0.1954** xuống
+**$0.0882** — giảm 55%, không phải 100%. Lý do không cho Lambda xoá NAT/ALB:
+hai resource đó nằm trong Terraform state; xoá bằng API (không qua `terraform
+apply`) làm state lệch với thực tế trên AWS, và lần `apply` kế tiếp hành xử
+sai — nhẹ thì cố tạo lại, nặng thì lỗi giữa chừng để hạ tầng nửa vời. Đây là
+đúng lý do `up.sh`/`down.sh` dùng toggle + apply thay vì xoá thẳng bằng CLI
+(xem mục "Bật/tắt bằng script"), và Lambda đi theo cùng nguyên tắc đó thay vì
+phá nó.
+
+Nên khi phát hiện NAT hoặc ALB còn sống, Lambda **báo** thay vì **làm**: gửi
+SNS kèm đúng câu lệnh cần chạy tay:
+
+```bash
+bash infra/tf/scripts/down.sh
+```
+
+Con người đóng vòng lặp.
+
+### 2. Nó bịt một rủi ro có ngày cụ thể: RDS tự bật lại sau 7 ngày
+
+AWS tự `start` một RDS đã `stopped` sau đúng **7 ngày** — không có tuỳ chọn
+tắt hành vi này. Sự kiện `DB instance stopped` gần nhất đo được:
+**2026-08-20T01:44 UTC**, nên nếu không có gì can thiệp thì mốc tự bật kế tiếp
+là khoảng **2026-08-27T01:44 UTC**. Ở $0.098/giờ trên **thẻ thật** (credit trả
+trước đã hết hạn — xem mục "Chi phí") đó là **$2.35/ngày**, và AWS Budgets chỉ
+gửi email khi đã tiêu tới 25% ngưỡng $20 — tức hơn hai ngày sau khi RDS đã âm
+thầm chạy.
+
+Lambda chạy mỗi đêm đưa cửa sổ rủi ro này từ **7 ngày** xuống **tối đa 24
+giờ**: RDS có tự bật lúc nào cũng bị Lambda tắt lại vào lần chạy kế tiếp.
+`status.sh` in đồng hồ đếm ngược tới mốc tự bật này cạnh trạng thái thật đọc
+từ AWS API.
+
+### 3. Im lặng là bình thường — và đó cũng là mặt xấu của nó
+
+Lambda chỉ gửi SNS khi (a) nó thực sự tắt được cái gì, (b) phát hiện NAT/ALB
+còn sống, hoặc (c) có lỗi. Trường hợp phổ biến nhất — mặc định
+`instance_count = 0`, NAT/ALB tắt — là một đêm hoàn toàn im lặng: không email,
+`"actions": []`. Đó là hành vi đúng: một cảnh báo bắn mỗi đêm là một cảnh báo
+bị bỏ qua.
+
+Mặt xấu: nếu email SNS còn ở `PendingConfirmation`, hoặc Lambda chết hẳn
+(throttle, lỗi runtime, Scheduler bị tắt nhầm), triệu chứng bên ngoài **giống
+hệt** — vẫn im lặng, vẫn không nhận được gì. Không phân biệt được hai trường
+hợp bằng cách chờ xem có email không. Kiểm chủ động thay vì tin vào im lặng:
+
+```bash
+aws logs tail /aws/lambda/hushstore-cost-guard --since 24h --profile hushstore
+```
+
+hoặc xem metric `Invocations` / `Errors` của function trên CloudWatch — có
+Invocations mỗi đêm và Errors = 0 mới là bằng chứng Lambda đang sống, còn im
+lặng thì không.
+
+### 4. Múi giờ: log CloudWatch không tính theo giờ Việt Nam
+
+Scheduler chạy `00:00 Asia/Ho_Chi_Minh`, tức **17:00 UTC của ngày hôm
+trước**. CloudWatch Logs ghi mốc thời gian theo UTC và không tự đổi múi giờ,
+nên ai lọc log quanh `00:00` để tìm "lần chạy lúc nửa đêm" sẽ tìm sai ngày —
+phải lọc quanh `17:00 UTC` của ngày hôm trước.
+
+### Bật / tắt lưới an toàn này
+
+`var.enable_auto_stop` (mặc định `true`) gate đúng EventBridge Scheduler. Đặt
+`false` xoá lịch chạy nhưng giữ nguyên Lambda, IAM role và log group (cả ba
+đều $0 khi không chạy, và giữ lại cho phép gọi tay bằng `aws lambda invoke`
+trong lúc lưới tự động đang tắt). **Đặt `false` nghĩa là không còn lưới an
+toàn nào cho rủi ro RDS tự bật lại ở mục 2** — chỉ dùng khi cố ý để hệ thống
+chạy qua đêm (demo, debug kéo dài), và nhớ trả về `true` ngay sau đó.
+
 ## Bật hệ thống — THỨ TỰ LÀ RÀNG BUỘC, KHÔNG PHẢI KHUYẾN NGHỊ
 
 ```bash
@@ -553,6 +646,8 @@ order tham chiếu tới product thì `DELETE` sẽ vướng khoá ngoại.
 | Browser timeout với MỌI URL, nhưng `status.sh` báo tất cả healthy | `enable_deny_demo = true` — NACL rule 50 đang chặn `my_ip` ở tầng mạng | `status.sh` in cảnh báo này ở đầu bảng. Đặt `enable_deny_demo = false` rồi apply. `down.sh` tự reset |
 | Browser không mở được ngay sau `up.sh`, curl trả `000` | Record `alb` ở Cloudflare còn trỏ vào ALB của cửa sổ trước — tên DNS của ALB đổi mỗi lần tạo lại | `up.sh` đã so sánh và in giá trị mới cần dán. Sửa đúng một record `alb`, chờ ~1-2 phút |
 | Deploy có downtime ~20–40s | Static host port + 1 instance, đúng như thiết kế | Xem mục đánh đổi trong spec |
+| Không nhận được cảnh báo nào từ Lambda cost-guard qua email | `aws_sns_topic_subscription` (protocol email) đứng ở `PendingConfirmation` cho tới khi có người bấm link xác nhận — bình thường ngay sau khi tạo, không phải lỗi apply | Mở hộp thư `dacvinh2322006@gmail.com`, tìm mail xác nhận từ AWS SNS, bấm link. Chưa xác nhận thì mọi cảnh báo sau này đều rơi vào khoảng không |
+| Lambda cost-guard chạy xong (log/SNS xác nhận có tắt gì đó) mà `status.sh` vẫn thấy NAT hoặc ALB đang bật | Đúng thiết kế, không phải lỗi — Lambda chỉ báo, không xoá resource do Terraform quản lý (xem mục "Tự tắt hằng đêm") | Chạy `bash infra/tf/scripts/down.sh` |
 
 ## Kiểm thử bảo mật — lệnh đã dùng, kết quả đã đo
 
@@ -698,7 +793,9 @@ aws rds describe-events --source-identifier hushstore-db-tf --source-type db-ins
   | jq -r '[.Events[] | select(.Message | test("^DB instance (started|stopped)$"))] | last'
 ```
 
-Đây là lý do Lambda cost-guard (Phase 3) không còn là việc "nên có".
+Lambda cost-guard (Phase 3, đã deploy) chạy mỗi đêm và chặn đúng rủi ro này:
+cửa sổ còn lại tối đa là 24 giờ ($2.35), không phải 7 ngày ($16.5) — xem mục
+["Tự tắt hằng đêm"](#tự-tắt-hằng-đêm).
 
 ### Đơn giá — dùng giá ap-southeast-1, không phải us-east-1
 
@@ -726,8 +823,10 @@ us-east-1. Giá APS1 lấy từ Pricing API (miễn phí, khác Cost Explorer $0
 
 Với $200 credit và nhịp ~3h/ngày thì còn khoảng **8 tháng**. Rủi ro lớn nhất
 không phải đơn giá mà là **để quên bật**: AWS tự start lại RDS sau 7 ngày stop,
-và ở $0.098/giờ thì một tuần không ai để ý là **$16.5** bay âm thầm. Đó là lý do
-Lambda cost-guard của Phase 3 là bắt buộc, không phải tuỳ chọn.
+và ở $0.098/giờ thì một tuần không ai để ý là **$16.5** bay âm thầm. Lambda
+cost-guard của Phase 3 (đã deploy) chạy mỗi đêm nên cửa sổ còn lại tối đa là
+24 giờ ($2.35), không phải 7 ngày — xem mục
+["Tự tắt hằng đêm"](#tự-tắt-hằng-đêm).
 
 Bài học từ lần trước, đáng nhắc: tôi từng để RDS chạy qua đêm vì nghĩ "free tier
 nên không sao", trong khi vẫn cẩn thận tắt NAT. Kết quả thật là **RDS 9.71

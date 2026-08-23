@@ -103,6 +103,16 @@ Thư mục **[infra/legacy-cli/](infra/legacy-cli/)** chứa bộ script bash + 
 của kỳ trước, giữ lại làm spec tham chiếu. **Đừng chạy lại chúng** — chúng tạo
 resource nằm ngoài Terraform state, và chúng mở port 22 kèm SSH key pair.
 
+**Một Lambda tắt hạ tầng mỗi đêm, có chủ ý.** `hushstore-cost-guard` chạy lúc
+00:00 giờ Việt Nam, tắt được RDS + EC2 container instance + ECS service nếu bị
+bỏ quên bật — nhưng **không** tắt được NAT Gateway và ALB, vì hai resource đó
+do Terraform quản lý và xoá bằng API sẽ làm lệch state. Sau khi Lambda chạy,
+hoá đơn giảm 55% (còn ~$0.0882/giờ), không phải về $0. Nó cũng là thứ chặn rủi
+ro AWS tự bật lại một RDS đã `stopped` sau 7 ngày. Gate bằng
+`var.enable_auto_stop` (mặc định `true`) — tắt biến này là bỏ luôn lưới an
+toàn đó. Chi tiết ở mục "Tự tắt hằng đêm" trong
+[docs/terraform-runbook.md](docs/terraform-runbook.md).
+
 ---
 
 ## CI/CD
