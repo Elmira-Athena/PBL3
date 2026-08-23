@@ -1,0 +1,116 @@
+KỊCH BẢN 11 — Giả mạo OIDC assume-role
+══════════════════════════════════════════════════════════════════════════════
+
+MỤC TIÊU
+Chứng minh: biết ARN của role deploy KHÔNG đủ để assume nó.
+
+Điều này đáng chứng minh vì ARN đó được cố tình lưu dưới dạng repository
+VARIABLE trên GitHub, không phải secret — tức nó công khai với bất kỳ ai đọc
+được log của Actions. Thứ bảo vệ hệ thống là trust policy, không phải sự bí mật
+của ARN. Nếu lập luận đó sai thì cả thiết kế "OIDC thay credential dài hạn" sụp.
+
+Ba phép thử đi từ token thô sơ tới token bịa công phu nhất mà một kẻ tấn công
+làm được, để thấy AWS chặn ở đâu và vì sao.
+
+Ngày chạy   : 2026-08-23T02:20:11Z UTC
+Máy tấn công: laptop của nhóm
+ROLE_ARN    : arn:aws:iam::667836586836:role/hushstore-github-actions-deploy-role
+
+══════════════════════════════════════════════════════════════════════════════
+PHÉP THỬ 1 — token là một chuỗi bất kỳ
+══════════════════════════════════════════════════════════════════════════════
+$ aws sts assume-role-with-web-identity --role-arn $ROLE_ARN \
+    --role-session-name gia-mao --web-identity-token 'token-bia-dat'
+
+
+aws: [ERROR]: An error occurred (InvalidIdentityToken) when calling the AssumeRoleWithWebIdentity operation: The ID Token provided is not a valid JWT. (You may see this error if you sent an Access Token)
+
+-> Chặn ở tầng ĐỊNH DẠNG. Chưa nói được gì về bảo mật, chỉ là chưa đúng JWT.
+
+══════════════════════════════════════════════════════════════════════════════
+PHÉP THỬ 2 — JWT tự ký, ĐỦ MỌI CLAIM mà trust policy đòi
+══════════════════════════════════════════════════════════════════════════════
+Payload (chưa mã hoá) — chép đúng những gì trust policy yêu cầu:
+  iss = https://token.actions.githubusercontent.com
+  aud = sts.amazonaws.com                                  <- khớp điều kiện aud
+  sub = repo:Elmira-Athena/PBL3:ref:refs/heads/main         <- khớp điều kiện sub
+  iat/nbf/exp = còn hiệu lực (đặt theo giờ hiện tại)
+Thiếu duy nhất MỘT thứ: chữ ký của GitHub. Header khai kid = 'bia-dat'.
+
+$ aws sts assume-role-with-web-identity --role-arn $ROLE_ARN \
+    --role-session-name gia-mao-du-claim --web-identity-token <JWT tự ký>
+
+
+aws: [ERROR]: An error occurred (InvalidIdentityToken) when calling the AssumeRoleWithWebIdentity operation: Couldn't retrieve verification key from your identity provider,  please reference AssumeRoleWithWebIdentity documentation for requirements
+
+-> ĐÂY là kết quả có ý nghĩa. AWS đã đọc được JWT, đã thấy iss trỏ về GitHub, rồi
+   ĐI TỚI JWKS endpoint của GitHub để lấy public key ứng với kid = 'bia-dat'.
+   Không có key đó, nên không xác thực được chữ ký, nên từ chối.
+
+   Chú ý thứ tự: AWS từ chối ở bước XÁC THỰC CHỮ KÝ, TRƯỚC cả khi xét trust
+   policy. Nên lỗi là InvalidIdentityToken chứ không phải AccessDenied — và đó
+   là kết quả mạnh hơn AccessDenied, vì nó nghĩa là claim `sub` trong token
+   không hề được tin: giả mạo `sub` là vô nghĩa khi không giả mạo được chữ ký.
+
+   Để qua được bước này, kẻ tấn công phải có private key của GitHub.
+
+══════════════════════════════════════════════════════════════════════════════
+PHÉP THỬ 3 — đọc thẳng trust policy thật trên AWS
+══════════════════════════════════════════════════════════════════════════════
+$ aws iam get-role --role-name hushstore-github-actions-deploy-role \
+    --query 'Role.AssumeRolePolicyDocument'
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "GitHubOidcMainBranchOnly",
+            "Effect": "Allow",
+            "Principal": {
+                "Federated": "arn:aws:iam::667836586836:oidc-provider/token.actions.githubusercontent.com"
+            },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+                "StringEquals": {
+                    "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                    "token.actions.githubusercontent.com:sub": "repo:Elmira-Athena/PBL3:ref:refs/heads/main"
+                }
+            }
+        }
+    ]
+}
+
+Ba điều cần đọc ra từ đây:
+
+  1. StringEquals, KHÔNG phải StringLike. Với StringLike thì một giá trị như
+     `repo:Elmira-Athena/PBL3:*` sẽ khớp cả `pull_request` và mọi nhánh, mọi tag
+     — tức mở role deploy cho bất kỳ ai mở được PR vào repo. Đây là lỗi cấu hình
+     OIDC phổ biến nhất và nó không có triệu chứng nào cho tới lúc bị lợi dụng.
+     Một test trong modules/cicd/tests/cicd.tftest.hcl canh đúng điều này.
+
+  2. Có điều kiện trên `aud`. Thiếu nó, một token GitHub ký cho MỘT audience khác
+     (ví dụ để đăng nhập một cloud provider khác) vẫn thoả trust policy này.
+
+  3. Giá trị `sub` ghim đúng MỘT nhánh: refs/heads/main. Một PR nhận claim
+     `sub = repo:Elmira-Athena/PBL3:pull_request`, không khớp — nên kể cả một PR
+     do chính chủ repo mở cũng KHÔNG assume được role deploy.
+
+── Trust policy của role plan (để so sánh) ──
+$ aws iam get-role --role-name hushstore-github-actions-plan-role \
+    --query 'Role.AssumeRolePolicyDocument.Statement[0].Condition'
+
+{
+    "StringEquals": {
+        "token.actions.githubusercontent.com:sub": "repo:Elmira-Athena/PBL3:pull_request",
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+    }
+}
+
+-> Hai role khớp HAI giá trị sub khác nhau, và đó là toàn bộ lý do có hai role.
+   Giao nhau bằng rỗng: một push vào main không assume được role plan, một PR
+   không assume được role deploy.
+
+KẾT LUẬN
+Biết ARN không đủ. Giả mạo claim không đủ. Điều kiện thực sự là có chữ ký của
+GitHub cho đúng repo và đúng nhánh — thứ mà chỉ GitHub tạo được, và chỉ tạo cho
+workflow đang chạy trong repo này.

@@ -5,9 +5,9 @@ nguyên tắc tối thiểu và **đã thực sự ngăn được tấn công**.
 
 | | |
 |---|---|
-| Ngày kiểm thử | 2026-08-20 (00:15 – 01:10 UTC) |
+| Ngày kiểm thử | Kịch bản 1-10: 2026-08-20 (00:15 – 01:10 UTC) · Kịch bản 11: 2026-08-23, sau khi Phase 2 dựng xong hai IAM role của pipeline |
 | Máy tấn công | Laptop macOS, IP công khai `42.1.89.156` |
-| Công cụ | `nmap 7.991`, `curl`, `nc`, `openssl`, `python3 socket`, `aws iam simulate-principal-policy` |
+| Công cụ | `nmap 7.991`, `curl`, `nc`, `openssl`, `python3 socket`, `aws iam simulate-principal-policy`, `aws sts assume-role-with-web-identity` |
 | Mục tiêu | ALB `hushstore-alb-395664435.ap-southeast-1.elb.amazonaws.com` (`54.251.216.176`, `54.254.121.95`) · EC2 `10.20.11.22` · RDS `10.20.21.81` |
 | Hạ tầng | Terraform, commit tại thời điểm test — xem `git log` |
 | Output thô | [`docs/evidence/`](evidence/) — mọi số trong báo cáo này lấy từ đó, không có số nào viết tay |
@@ -30,12 +30,15 @@ Kiểm thử thực hiện trên hạ tầng **do chính nhóm sở hữu**, tro
 | 8 | NACL DENY theo IP | chặn đúng 1 IP | ✅ **A/B từ cùng một máy**: đường trực tiếp timeout, đường qua Cloudflare 200 | `nacl-public` rule 50 | `kb08-nacl-deny-theo-ip.txt` |
 | 9 | VPC Flow Logs `REJECT` | có bản ghi khớp | ✅ khớp cả 3 nhóm: máy tấn công, egress EC2, scanner ngoài | Flow Logs `REJECT`, gom 600s | `kb09-flowlog-reject.txt` |
 | 10 | Bán kính ảnh hưởng của IAM role | mỗi role chỉ thấy phần của mình | ✅ ma trận 12 phép thử, host bị **explicitDeny** | 5 role tách biệt | `kb10-blast-radius-iam.txt` |
-| 11 | Giả mạo OIDC assume-role | AccessDenied | ⏳ **chưa chạy** — module `cicd` đã có trong code, nhưng `terraform apply` chưa chạy nên hai IAM role (`hushstore-github-actions-deploy-role`, `hushstore-github-actions-plan-role`) chưa tồn tại trên AWS | `hushstore-github-actions-deploy-role` trust condition | — |
+| 11 | Giả mạo OIDC assume-role | từ chối | ✅ JWT tự ký **đủ mọi claim** trust policy đòi (`aud`, `sub`, `iat`/`exp` hợp lệ) vẫn bị `InvalidIdentityToken` — AWS chặn ở bước **xác thực chữ ký**, trước cả khi xét trust policy | trust condition `StringEquals` trên `aud` + `sub` | `kb11-gia-mao-oidc.txt` |
 
-**10/11 kịch bản đã có bằng chứng.** Kịch bản 11 vẫn chưa chạy được: điều
-kiện tiên quyết (module `cicd`) đã xong ở Phase 2, nhưng role chỉ tồn tại
-trên AWS sau khi `terraform apply`. Xem mục "Kịch bản 11 — lệnh sẽ dùng khi
-`apply` xong" ở cuối tài liệu này.
+**11/11 kịch bản đã có bằng chứng.** Kịch bản 11 chạy được sau khi Phase 2
+`apply` xong hai IAM role. Kết quả đáng chú ý: lỗi trả về là
+`InvalidIdentityToken`, **không phải** `AccessDenied` — và đó là kết quả mạnh
+hơn. `AccessDenied` nghĩa là "token của bạn thật, nhưng quyền không đủ";
+`InvalidIdentityToken` ở đây nghĩa là AWS không tin token ngay từ đầu, nên
+claim `sub` trong đó không hề được xét. Giả mạo `sub` là vô nghĩa khi không
+giả mạo được chữ ký của GitHub. Xem mục 6.
 
 ---
 
@@ -276,11 +279,34 @@ nguyên văn output. Không có số nào trong báo cáo này được viết t
 
 ---
 
-## 6. Kịch bản 11 — lệnh sẽ dùng khi `apply` xong
+## 6. Kịch bản 11 — giả mạo OIDC assume-role
 
-Chưa chạy được: `terraform apply` chưa thực thi cho module `cicd` nên hai
-role dưới đây chưa tồn tại trên AWS. Ghi sẵn lệnh ở đây để lần sau chỉ việc
-chạy và dán kết quả thật vào bảng ở mục 1 — không đoán trước kết quả.
+Đã chạy. Nguyên văn output ở [evidence/kb11-gia-mao-oidc.txt](evidence/kb11-gia-mao-oidc.txt).
+
+Kịch bản này đáng làm vì ARN của role deploy được **cố tình** lưu dưới dạng
+repository *variable* trên GitHub, không phải *secret* — tức nó công khai với
+bất kỳ ai đọc được log của Actions. Nếu sự an toàn phụ thuộc vào việc giữ kín
+ARN thì cả thiết kế "OIDC thay credential dài hạn" đã sai từ đầu. Ba phép thử
+đi từ token thô sơ tới token bịa công phu nhất mà một kẻ tấn công làm được:
+
+| Phép thử | Token gửi lên | Kết quả |
+|---|---|---|
+| 1 | chuỗi bất kỳ (`token-bia-dat`) | `InvalidIdentityToken` — chặn ở tầng định dạng, chưa nói gì về bảo mật |
+| 2 | JWT tự ký, `iss`/`aud`/`sub`/`iat`/`exp` **đều khớp** trust policy | `InvalidIdentityToken: Couldn't retrieve verification key from your identity provider` |
+| 3 | — (đọc thẳng trust policy bằng `iam get-role`) | `StringEquals` trên cả `aud` và `sub`; `sub` ghim đúng `refs/heads/main`, không chứa `*` |
+
+Phép thử 2 là phép thử có ý nghĩa. Token của nó chép đúng mọi giá trị trust
+policy đòi; thiếu duy nhất chữ ký của GitHub. AWS đọc được JWT, thấy `iss` trỏ
+về GitHub, **đi tới JWKS endpoint của GitHub** để lấy public key ứng với `kid`
+mà token khai, không tìm thấy, và từ chối. Nghĩa là điều kiện thực sự để assume
+role không phải "biết ARN" cũng không phải "khai đúng claim", mà là "có chữ ký
+của GitHub cho đúng repo và đúng nhánh".
+
+Trên đường tới đó, AWS còn từ chối hai lần vì lý do khác — thiếu claim `iat`,
+rồi `iat` quá cũ — nên phép thử này phải làm ba lần mới cô lập được đúng nguyên
+nhân là chữ ký. Cả ba lần đều nằm trong file bằng chứng.
+
+### Lệnh để chạy lại
 
 ```bash
 # Tên role: hushstore-github-actions-deploy-role
