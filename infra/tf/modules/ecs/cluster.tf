@@ -34,6 +34,25 @@ resource "aws_launch_template" "this" {
 
   vpc_security_group_ids = [var.web_sg_id]
 
+  # cpu_credits = "standard" — KHÔNG phải mặc định của t3.
+  #
+  # t3 mặc định chạy chế độ "unlimited": khi CPU vượt baseline 10% và đã cạn
+  # CPU credit, AWS vẫn cho vượt và tính thêm một dòng usage riêng
+  # (APS1-CPUCredits:t3, $0.05/vCPU-giờ) — một khoản phát sinh không có trần,
+  # không hiện trong bảng giá instance, và chỉ lộ ra khi đọc hoá đơn theo
+  # usage type. RDS db.t3 của dự án này ĐÃ bị đúng như vậy: $0.9208 surplus
+  # so với $0.4237 tiền instance, tức surplus đắt hơn gấp đôi chính con máy.
+  #
+  # "standard" bỏ hẳn cơ chế đó: hết credit thì instance bị throttle xuống
+  # baseline chứ không sinh phí. Với hạ tầng chỉ chạy vài giờ mỗi ngày, một
+  # nhịp chậm khi build là đánh đổi đúng để lấy một trần chi phí chắc chắn.
+  #
+  # Lưu ý bất đối xứng đáng ghi vào báo cáo: RDS db.t3 KHÔNG có tham số này
+  # (chỉ tồn tại chế độ unlimited), nên phía DB không thể bịt bằng cấu hình.
+  credit_specification {
+    cpu_credits = "standard"
+  }
+
   # Instance nằm ở app subnet (map_public_ip_on_launch = false) nên không có
   # public IP. Egress đi qua NAT Gateway.
   metadata_options {

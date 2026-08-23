@@ -64,6 +64,20 @@ run "launch_template_khong_gan_ssh_key_va_bat_imdsv2" {
   }
 }
 
+run "launch_template_chan_cpu_surplus_bang_che_do_standard" {
+  command = plan
+
+  assert {
+    condition     = length(aws_launch_template.this.credit_specification) == 1
+    error_message = "Launch template PHẢI khai báo credit_specification. Thiếu khối này thì t3 mặc định về unlimited và CPU surplus tính tiền không trần."
+  }
+
+  assert {
+    condition     = aws_launch_template.this.credit_specification[0].cpu_credits == "standard"
+    error_message = "cpu_credits phải = standard. unlimited sinh dòng usage APS1-CPUCredits:t3 riêng — chính khoản đã làm RDS db.t3 tốn $0.9208 surplus so với $0.4237 tiền instance."
+  }
+}
+
 run "launch_template_nam_trong_sg_web_va_dung_instance_profile" {
   command = plan
 

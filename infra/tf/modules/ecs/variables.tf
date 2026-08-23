@@ -45,13 +45,13 @@ variable "instance_count" {
 }
 
 variable "instance_type" {
-  description = "Instance type. t3.micro nằm trong free tier nhưng chỉ 1GB RAM (đã bù bằng 2GB swap)"
+  description = "Instance type. t3.micro chỉ 1GB RAM (đã bù bằng 2GB swap). Account này KHÔNG có free tier 12 tháng nên giờ instance trả bằng credit/thẻ — xem credit_specification ở cluster.tf"
   type        = string
   default     = "t3.micro"
 }
 
 variable "root_volume_size" {
-  description = "Dung lượng EBS root (GB). 30GB là mức free tier"
+  description = "Dung lượng EBS root (GB). 30GB là mức free tier CŨ (12 tháng) — account hiện tại không có, EBS tính tiền từ GB đầu tiên"
   type        = number
   default     = 30
 }
