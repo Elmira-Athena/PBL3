@@ -92,12 +92,28 @@ hs_head() {
 
 # ── Thời gian ───────────────────────────────────────────────────
 # hs_hms 3725 -> "1h 02m". Dưới 60 giây in ra giây để lúc chờ thấy nó nhích.
+#
+# Từ 24 giờ trở lên thì in ra NGÀY: đồng hồ ngược 7 ngày của RDS (mốc AWS tự
+# start lại) từng render thành "150h 23m", và không ai đọc "150h" ra được "còn
+# hơn 6 ngày" mà không phải chia trong đầu. Đó là con số duy nhất trên bảng mà
+# người đọc phải ra quyết định từ nó, nên nó phải đọc được ngay.
 hs_hms() {
   s=${1:-0}
   [ "$s" -lt 0 ] && s=0
   if [ "$s" -lt 60 ]; then printf '%ds' "$s"
-  else printf '%dh %02dm' $((s / 3600)) $(((s % 3600) / 60))
+  elif [ "$s" -lt 86400 ]; then printf '%dh %02dm' $((s / 3600)) $(((s % 3600) / 60))
+  else printf '%dd %02dh' $((s / 86400)) $(((s % 86400) / 3600))
   fi
+}
+
+# hs_age_ms <epoch millis> -> số giây tính tới hiện tại. Rỗng/không phải số -> rỗng.
+# CloudWatch Logs trả timestamp theo MILLI giây (lastEventTimestamp), khác mọi
+# API khác trong script này vốn trả ISO8601 cho hs_age. Chia 1000 ở đây thay vì
+# ở chỗ gọi để không ai phải nhớ API nào dùng đơn vị nào.
+hs_age_ms() {
+  ts="${1:-}"
+  case "$ts" in ''|None|null|*[!0-9]*) echo ""; return 0 ;; esac
+  echo $(( $(date +%s) - ts / 1000 ))
 }
 
 # hs_age <ISO8601> -> số giây tính tới hiện tại. Rỗng/None -> rỗng.

@@ -199,8 +199,8 @@ run "lambda_khong_the_bat_va_khong_the_xoa_bat_cu_thu_gi" {
 run "lambda_chi_dung_resource_sao_o_dung_bon_action_chi_doc" {
   command = plan
 
-  # Bốn Sid dưới đây là những chỗ AWS KHÔNG hỗ trợ resource-level authorization,
-  # và cả bốn đều CHỈ ĐỌC. Mọi Resource = "*" mới xuất hiện phải đi qua đây —
+  # Năm Sid dưới đây là những chỗ AWS KHÔNG hỗ trợ resource-level authorization,
+  # và cả năm đều CHỈ ĐỌC. Mọi Resource = "*" mới xuất hiện phải đi qua đây —
   # kể cả khi người thêm nó quên viết lý do vào lambda.tf.
   assert {
     condition = alltrue([
@@ -211,12 +211,13 @@ run "lambda_chi_dung_resource_sao_o_dung_bon_action_chi_doc" {
         "RdsDescribeNoResourceLevelSupport",
         "Ec2DescribeNatGatewaysNoResourceLevelSupport",
         "ElbDescribeLoadBalancersNoResourceLevelSupport",
+        "Ec2DescribeAddressesNoResourceLevelSupport",
       ], s.Sid)
     ])
-    error_message = "Statement có Resource = \"*\" phải nằm trong danh sách bốn Sid mà AWS không hỗ trợ resource-level (cả bốn đều chỉ đọc). Thêm statement rộng mới thì phải sửa cả danh sách này VÀ giải thích trong lambda.tf vì sao AWS không cho hẹp hơn."
+    error_message = "Statement có Resource = \"*\" phải nằm trong danh sách năm Sid mà AWS không hỗ trợ resource-level (cả năm đều chỉ đọc). Thêm statement rộng mới thì phải sửa cả danh sách này VÀ giải thích trong lambda.tf vì sao AWS không cho hẹp hơn."
   }
 
-  # Và cả bốn ngoại lệ đó phải thật sự chỉ đọc: một action ghi trốn vào một
+  # Và cả năm ngoại lệ đó phải thật sự chỉ đọc: một action ghi trốn vào một
   # statement Resource = "*" là cách thầm lặng nhất để nới quyền ra cả account.
   assert {
     condition = alltrue([
@@ -318,14 +319,18 @@ run "lambda_chi_ghi_duoc_log_group_cua_chinh_no_va_log_co_retention" {
       for s in jsondecode(data.aws_iam_policy_document.cost_guard.json).Statement :
       !contains(flatten([s.Action]), "logs:CreateLogGroup")
     ])
-    error_message = "KHÔNG cấp logs:CreateLogGroup. Log group đã do Terraform tạo với retention 3 ngày; cấp quyền tạo nghĩa là nếu group bị xoá tay thì Lambda tự tạo lại một group KHÔNG retention (giữ log vĩnh viễn, trả tiền vĩnh viễn) mà terraform plan vẫn xanh."
+    error_message = "KHÔNG cấp logs:CreateLogGroup. Log group đã do Terraform tạo với retention 30 ngày; cấp quyền tạo nghĩa là nếu group bị xoá tay thì Lambda tự tạo lại một group KHÔNG retention (giữ log vĩnh viễn, trả tiền vĩnh viễn) mà terraform plan vẫn xanh."
   }
 
-  # retention khác 0 là điều kiện thật: 0 trong provider AWS nghĩa là "Never
-  # expire", tức đúng cái đang muốn tránh.
+  # Assert này TỪNG là `retention_in_days > 0`, và phép so đó không canh đúng
+  # thứ nó nói: 3 → 30 → 365 đều xanh, nên con số thật muốn giữ không được canh
+  # ở đâu cả. `== 30` là con số có lý do, không phải con số tuỳ ý — xem comment
+  # dài ở aws_cloudwatch_log_group trong lambda.tf. Ngắn hơn thì câu "tuần trước
+  # guard có chạy không" không trả lời được, mà đây là bản ghi DUY NHẤT trả lời
+  # được nó (Lambda im lặng khi khoẻ, và không có CloudWatch alarm nào).
   assert {
-    condition     = aws_cloudwatch_log_group.cost_guard.retention_in_days > 0
-    error_message = "Log group phải có retention > 0. Giá trị 0 nghĩa là \"Never expire\" — log giữ vĩnh viễn và trả tiền storage vĩnh viễn, cùng lỗi mà việc tạo log group bằng Terraform tồn tại để tránh."
+    condition     = aws_cloudwatch_log_group.cost_guard.retention_in_days == 30
+    error_message = "Log group phải có retention đúng 30 ngày. 0 nghĩa là \"Never expire\" (trả tiền storage vĩnh viễn). Ngắn hơn 30 — ví dụ 3 ngày bê từ quy ước log ứng dụng của Phase 1 — thì mất bản ghi DUY NHẤT về việc lưới an toàn có chạy hay không: guard im lặng khi khoẻ, nên dòng JSON mỗi đêm là bằng chứng duy nhất tồn tại, và ở ~1KB/đêm thì 30 ngày tốn ~30KB tức bằng không. Đồng hồ 'guard chạy lần cuối' trong status.sh cũng đọc log stream này."
   }
 }
 
@@ -348,6 +353,7 @@ run "lambda_cap_du_quyen_cho_moi_api_ma_cost_guard_py_goi" {
         "rds:StopDBInstance",                         # _stop_rds
         "ec2:DescribeNatGateways",                    # _detect_terraform_owned_leftovers
         "elasticloadbalancing:DescribeLoadBalancers", # _detect_terraform_owned_leftovers
+        "ec2:DescribeAddresses",                      # _detect_terraform_owned_leftovers: EIP rảnh
         "sns:Publish",                                # lambda_handler
         "logs:CreateLogStream",                       # runtime Lambda
         "logs:PutLogEvents",                          # runtime Lambda + print()
@@ -443,6 +449,18 @@ run "scheduler_chay_theo_gio_viet_nam_khong_phai_utc" {
     ])
     error_message = "retry_policy: 2 lần thử lại và event age tối đa 1 giờ. Mặc định event age là 24 giờ — một lần chạy được giao thành công 20 giờ sau giờ hẹn sẽ hạ ECS và stop RDS vào giữa buổi chiều làm việc."
   }
+
+  # Marker trong input là thứ làm log phân biệt được lần chạy theo hẹn với lần
+  # chạy do người gọi tay. Không có nó thì cả hai đều là `{}` trong log, và lập
+  # luận cho việc không đặt reserved_concurrent_executions (lambda.tf) mãi mãi
+  # không kiểm chứng được từ dữ liệu.
+  assert {
+    condition = try(
+      jsondecode(aws_scheduler_schedule.nightly_stop[0].target[0].input).invoked_by,
+      null
+    ) == "eventbridge-scheduler"
+    error_message = "target.input phải là JSON chứa invoked_by = \"eventbridge-scheduler\". Mã Python in `event` ra dòng JSON summary; thiếu marker này thì một lần chạy theo hẹn và một lần `aws lambda invoke` bằng tay hiện ra giống hệt nhau trong CloudWatch, và không có cách nào kiểm chứng lập luận về concurrency ở lambda.tf."
+  }
 }
 
 run "scheduler_role_chi_goi_duoc_dung_lambda_nay_va_khong_gi_khac" {
@@ -490,12 +508,23 @@ run "scheduler_role_chi_goi_duoc_dung_lambda_nay_va_khong_gi_khac" {
   # test này KHÔNG bắt được (nó chỉ đòi SourceAccount). Đó là giới hạn có ý thức
   # — một `terraform test` chạy ở mức plan không thể biết AWS sẽ từ chối gì lúc
   # create. Chỗ ghi lại kiến thức đó là comment ở schedule.tf.
+  # So GIÁ TRỊ, không chỉ kiểm SỰ CÓ MẶT. Một assert `!= null` vẫn xanh khi giá
+  # trị là account id của người khác — tức là confused deputy vẫn mở, chỉ mở
+  # cho đúng một account thay vì mọi account. Đó chính là lớp lỗi mà assert của
+  # SNS topic policy phía trên đã tránh bằng cách so với
+  # data.aws_caller_identity.current.account_id, và ở đây phải làm y như vậy.
+  # `length == 1` giữ luôn phần kiểm sự có mặt: một list rỗng làm vòng alltrue
+  # bên trong xanh rỗng.
   assert {
     condition = alltrue([
       for s in jsondecode(data.aws_iam_policy_document.scheduler_assume.json).Statement :
-      try(s.Condition.StringEquals["aws:SourceAccount"], null) != null
+      length(flatten([try(s.Condition.StringEquals["aws:SourceAccount"], [])])) == 1 &&
+      alltrue([
+        for v in flatten([try(s.Condition.StringEquals["aws:SourceAccount"], [])]) :
+        v == data.aws_caller_identity.current.account_id
+      ])
     ])
-    error_message = "Trust policy của role Scheduler phải có aws:SourceAccount — thiếu nó thì một schedule ở ACCOUNT KHÁC assume được role này chỉ cần biết ARN của nó (confused deputy)."
+    error_message = "Trust policy của role Scheduler phải có aws:SourceAccount, và giá trị phải là account id của CHÍNH account này. Thiếu nó thì một schedule ở account khác assume được role chỉ cần biết ARN của nó; điền sai account id thì cửa đó vẫn mở, chỉ hẹp hơn — và một assert chỉ kiểm sự có mặt sẽ xanh trong cả hai ca."
   }
 }
 
@@ -514,13 +543,21 @@ run "tat_enable_auto_stop_thi_khong_con_schedule_nhung_lambda_van_con" {
   # Lambda, role và log group KHÔNG bị gate: cả ba đều $0 khi không chạy, và giữ
   # chúng lại nghĩa là vẫn gọi tay được (`aws lambda invoke`) trong lúc lưới tự
   # động đang tắt. Gate luôn cả Lambda thì lúc cần nhất lại không có gì để gọi.
+  #
+  # Assert này TỪNG là `function_name != ""` cho cả ba, và ba phép so đó không
+  # canh được gì: cả ba resource đều không dùng `count`, nên không có đường nào
+  # để tên của chúng thành rỗng — test xanh dù có chuyện gì xảy ra. Thứ đáng
+  # canh ở đây là TÊN ĐÚNG, vì ba cái tên phải khớp nhau chính xác: log group
+  # phải là /aws/lambda/<function_name> (nếu lệch, Lambda ghi vào một group khác
+  # rồi tự tạo group không retention), và cả ba tên đều dẫn xuất từ var.project
+  # nên một lần sửa quy ước đặt tên ở một chỗ sẽ đỏ ở đây.
   assert {
     condition = alltrue([
-      aws_lambda_function.cost_guard.function_name != "",
-      aws_iam_role.cost_guard.name != "",
-      aws_cloudwatch_log_group.cost_guard.name != "",
+      aws_lambda_function.cost_guard.function_name == "${var.project}-cost-guard",
+      aws_iam_role.cost_guard.name == "${var.project}-cost-guard-role",
+      aws_cloudwatch_log_group.cost_guard.name == "/aws/lambda/${var.project}-cost-guard",
     ])
-    error_message = "Lambda, IAM role và log group KHÔNG được gate theo enable_auto_stop: cả ba đều $0 khi không chạy, và giữ chúng lại cho phép gọi tay bằng `aws lambda invoke` trong lúc lưới tự động đang tắt."
+    error_message = "Lambda, IAM role và log group KHÔNG được gate theo enable_auto_stop (cả ba đều $0 khi không chạy, và giữ chúng lại cho phép gọi tay bằng `aws lambda invoke` trong lúc lưới tự động đang tắt), và cả ba tên phải dẫn xuất từ var.project theo đúng quy ước: <project>-cost-guard, <project>-cost-guard-role, /aws/lambda/<project>-cost-guard. Tên log group lệch khỏi /aws/lambda/<function_name> nghĩa là Lambda ghi vào một group khác và tự tạo lại một group KHÔNG retention."
   }
 }
 
@@ -558,6 +595,42 @@ run "rds_identifier_chua_dau_sao_bi_variable_validation_tu_choi" {
   }
 
   expect_failures = [var.rds_identifier]
+}
+
+# Chiều ngược lại của dấu `*`, và nó im lặng y như vậy: truyền một ARN đầy đủ
+# vào chỗ mong đợi TÊN. Kết quả là một ARN méo (arn:aws:rds:...:db:arn:aws:rds:
+# ...) khớp không resource nào cả — Lambda mất quyền stop, `apply` vẫn xanh, và
+# triệu chứng duy nhất là một AccessDenied lúc 0 giờ sáng trong một log không ai
+# đọc. Account id trong ARN dưới đây là số 0 có chủ ý: không cần account thật để
+# chứng minh dấu `:` bị từ chối.
+run "arn_day_du_truyen_vao_cho_mong_doi_ten_bi_tu_choi" {
+  command = plan
+
+  variables {
+    rds_identifier = "arn:aws:rds:ap-southeast-1:000000000000:db:hushstore-db-tf"
+  }
+
+  expect_failures = [var.rds_identifier]
+}
+
+run "ten_service_chua_dau_gach_cheo_bi_tu_choi" {
+  command = plan
+
+  variables {
+    service_names = ["hushstore/hushstore-web"]
+  }
+
+  expect_failures = [var.service_names]
+}
+
+run "ten_asg_chua_khoang_trang_bi_tu_choi" {
+  command = plan
+
+  variables {
+    asg_name = "hushstore asg"
+  }
+
+  expect_failures = [var.asg_name]
 }
 
 run "stop_cron_dang_rate_bi_variable_validation_tu_choi" {

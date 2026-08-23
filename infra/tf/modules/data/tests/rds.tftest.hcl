@@ -70,6 +70,43 @@ run "rds_dung_cau_hinh_sql_server_express" {
   }
 }
 
+# ─────────────────────────────────────────────────────────────────
+# Đây là run block canh một RÀNG BUỘC LIÊN MODULE mà Terraform không nối được:
+# cost guard (modules/costguard) chạy 00:00 ICT = 17:00 UTC và chỉ stop được RDS
+# khi status là `available`. Nếu backup hay maintenance window chồng giờ đó thì
+# instance ở `backing-up`/`modifying`, AWS từ chối StopDBInstance, và guard trả
+# về THÀNH CÔNG trong lúc DB tính $2,35/ngày — mỗi đêm, không phải ngẫu nhiên
+# một đêm. Không có gì khác trong dự án canh chỗ này: fmt, validate và plan đều
+# xanh với một cửa sổ 17:00 UTC.
+# ─────────────────────────────────────────────────────────────────
+run "cua_so_backup_va_maintenance_khong_cham_gio_chay_cua_cost_guard" {
+  command = plan
+
+  # Để trống hai field này KHÔNG phải là "mặc định an toàn": AWS tự bốc ngẫu
+  # nhiên trong khối 14:00-22:00 UTC của ap-southeast-1, và bốc lại mỗi lần
+  # instance được tạo lại.
+  assert {
+    condition = alltrue([
+      length(aws_db_instance.this.backup_window) > 0,
+      length(aws_db_instance.this.maintenance_window) > 0,
+    ])
+    error_message = "backup_window và maintenance_window phải khai TƯỜNG MINH. Để trống thì AWS tự gán ngẫu nhiên trong khối 14:00-22:00 UTC của ap-southeast-1 — khối đó chứa 17:00 UTC, tức giờ cost guard chạy, và mỗi lần instance được tạo lại là một lần bốc thăm mới."
+  }
+
+  # Dải chặn là 16, 17, 18 giờ UTC chứ không chỉ đúng 17: cửa sổ backup tối
+  # thiểu 30 phút nên một cửa sổ bắt đầu 16:45 vẫn trùm qua 17:00, và Scheduler
+  # được phép giao muộn tới 3600 giây (maximum_event_age_in_seconds).
+  assert {
+    condition     = !can(regex("^1[678]:", aws_db_instance.this.backup_window))
+    error_message = "backup_window KHÔNG được bắt đầu trong khoảng 16:00-18:59 UTC — đó là dải bao quanh 17:00 UTC, giờ cost guard chạy (00:00 ICT). Trong lúc RDS ở 'backing-up' thì StopDBInstance trả InvalidDBInstanceState nhưng instance vẫn tính đủ $0,098/giờ, nên một cửa sổ trùng giờ làm guard mất tác dụng mỗi đêm. Nếu bạn vừa đổi stop_cron của module costguard: đổi cả giá trị này và cả maintenance_window."
+  }
+
+  assert {
+    condition     = !can(regex("^[a-z]{3}:1[678]:", aws_db_instance.this.maintenance_window))
+    error_message = "maintenance_window KHÔNG được bắt đầu trong khoảng 16:00-18:59 UTC — cùng lý do như backup_window. Maintenance đưa instance vào 'modifying'/'upgrading', và ở hai trạng thái đó guard cũng không stop được trong khi tiền vẫn chạy."
+  }
+}
+
 run "rds_co_the_destroy_duoc_de_phuc_vu_nuke_sh" {
   command = plan
 

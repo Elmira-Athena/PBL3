@@ -99,3 +99,39 @@ Bay duong bat ha tang, bay lan implicitDeny. Day la tinh chat thiet ke cot loi:
 mot cost guard co quyen BAT la mot cost guard co the gay ra dung thu no ton tai
 de chan. Policy khong he co ho action rds:Start* — duoc canh boi mot assert
 theo TIEN TO trong tests/costguard.tftest.hcl, khong chi theo ten day du.
+
+==============================================================================
+BỔ CHÍNH SAU REVIEW VÒNG 1 — PHẦN NÀO Ở TRÊN ĐÃ HẾT ĐÚNG
+==============================================================================
+Ngày bổ chính: 2026-08-23, sau khi sửa các finding của review vòng 1.
+
+Mọi output ghi ở trên là ĐO THẬT và giữ nguyên, không sửa — đó là bản ghi của
+mã TRƯỚC khi sửa. Nhưng ba chỗ trong đó không còn mô tả đúng mã hiện tại, và
+phải đo lại sau lần apply tới:
+
+1. HÌNH DẠNG DÒNG JSON ĐÃ ĐỔI (Phép thử 2).
+   Dòng summary giờ có thêm ba khoá: "event" (payload Scheduler gắn marker
+   invoked_by = "eventbridge-scheduler", nên một lần `aws lambda invoke` không
+   payload để lại {}), "request_id", và "sns" (khong-can-gui / da-gui / loi).
+   Và nó được in SAU khi biết kết quả publish, không phải trước — trước đây một
+   lần publish thất bại vẫn để lại dòng log ghi "errors": [].
+
+2. TRẠNG THÁI RDS KHÔNG PHẢI `available` KHÔNG CÒN VÀO `notes` HẾT.
+   Chỉ `stopped` và `stopping` vào `notes` (im lặng). Mọi trạng thái khác —
+   backing-up, modifying, upgrading, rebooting, storage-optimization, starting —
+   vào `findings`, tức CÓ email: ở những trạng thái đó instance tính đủ
+   $0,098/giờ nhưng AWS từ chối StopDBInstance, nên bản ghi cũ "guard thành
+   công, im lặng" là một lời khẳng định sai trong đúng ca tốn tiền nhất.
+   Dòng notes của trạng thái `stopped` cũng đã đổi văn bản.
+
+3. PHÉP THỬ 4 VẪN ĐÚNG NHƯNG DANH SÁCH QUYỀN ĐÃ DÀI THÊM MỘT DÒNG ĐỌC.
+   Policy có thêm `ec2:DescribeAddresses` (Resource = "*", vì họ ec2:Describe*
+   không hỗ trợ resource-level) để phát hiện Elastic IP không còn gắn vào gì —
+   IPv4 công cộng tính $0,005/giờ dù gắn hay không. Đây là quyền ĐỌC. Không có
+   quyền release, không có quyền bật nào được thêm; bảy dòng implicitDeny ở
+   Phép thử 4 vẫn giữ nguyên giá trị.
+
+Ngoài ra: retention của log group đổi từ 3 lên 30 ngày (log này ~1KB mỗi đêm và
+là bản ghi DUY NHẤT về việc lưới an toàn có chạy hay không), và
+`status.sh` giờ in nhịp tim của guard — thời điểm event cuối trong log group,
+kèm trạng thái schedule.

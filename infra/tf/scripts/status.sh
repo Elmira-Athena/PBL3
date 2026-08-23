@@ -63,6 +63,27 @@ collect() {
   aws ec2 describe-flow-logs --filter "Name=tag:Project,Values=${HS_PROJECT}" \
     "${AWSQ[@]}" >"$TMP/flow.json" 2>/dev/null || echo '{}' >"$TMP/flow.json" &
 
+  # ── NHỊP TIM CỦA COST GUARD ─────────────────────────────────────
+  # Cost guard im lặng khi khoẻ: không email, không CloudWatch alarm (alarm tốn
+  # $0.10/tháng và credit đã hết). Hệ quả là "guard đang chạy mỗi đêm" và "guard
+  # đã chết từ tuần trước" giống nhau từng byte từ bên ngoài — kể cả khi nó chết
+  # ở init vì thiếu một biến môi trường, kể cả khi schedule bị xoá, kể cả khi
+  # đường Scheduler→Lambda chưa từng chạy lần nào. `raise` trong mã Python làm
+  # lần chạy đỏ trong CloudWatch, nhưng không ai canh CloudWatch.
+  #
+  # Hai lệnh đọc dưới đây là MIỄN PHÍ và trả lời đúng hai nửa của câu hỏi: log
+  # stream mới nhất nói guard CHẠY lần cuối bao giờ, còn get-schedule nói lưới
+  # an toàn có còn được HẸN hay không. Thiếu nửa sau thì một dòng đỏ "guard chưa
+  # chạy 5 ngày" không nói được là guard hỏng hay là có người cố ý tắt lưới bằng
+  # enable_auto_stop = false.
+  aws logs describe-log-streams \
+    --log-group-name "/aws/lambda/${HS_PROJECT}-cost-guard" \
+    --order-by LastEventTime --descending --max-items 1 \
+    "${AWSQ[@]}" >"$TMP/guard.json" 2>/dev/null || echo '{}' >"$TMP/guard.json" &
+
+  aws scheduler get-schedule --name "${HS_PROJECT}-nightly-stop" \
+    "${AWSQ[@]}" >"$TMP/guardsch.json" 2>/dev/null || echo '{}' >"$TMP/guardsch.json" &
+
   # Container instance: phải list rồi describe, nên gộp vào một subshell.
   (
     arns="$(aws ecs list-container-instances --cluster "$HS_CLUSTER" \
@@ -259,6 +280,14 @@ render() {
           else
             note="${note} — AWS tự bật lại sau $(hs_hms "$left")"
           fi
+        else
+          # `age` rỗng nghĩa là describe-events không có sự kiện start/stop nào
+          # trong 14 ngày lookback (--duration 20160). Cửa sổ tự-start của AWS là
+          # 7 ngày, nên KHÔNG có mốc trong 14 ngày là ca ĐÁNG LO NHẤT chứ không
+          # phải ca bình thường: nó nghĩa là mốc đã trôi khỏi tầm nhìn và mọi
+          # thứ đang tới hạn hoặc đã quá hạn. Cho cả khối này biến mất khi không
+          # có mốc là để bảng im lặng đúng lúc cần nó nhất.
+          note="${note} — ${C_YELLOW}không rõ mốc stop cuối${C_RESET}: không có sự kiện start/stop nào trong 14 ngày, nên đồng hồ 7 ngày không tính được. Tự kiểm bằng: aws rds describe-events --source-identifier ${HS_DB} --source-type db-instance --duration 43200 --profile ${HS_PROFILE} --region ${HS_REGION}"
         fi
         ;;
       *)         tally transit; note="" ;;
@@ -266,6 +295,42 @@ render() {
     row RDS "$st" "$tstr" "$rate" "$rcost" "$note"
   else
     row RDS "?" "-" "-" "-" "không đọc được — kiểm tra SSO session"
+  fi
+
+  # ── COST GUARD — nhịp tim của lưới an toàn ───────────────────
+  # Đặt ngay cạnh đồng hồ ngược của RDS vì hai dòng này nói về cùng một rủi ro:
+  # đồng hồ kia nói AWS sẽ tự bật RDS lúc nào, dòng này nói còn ai canh việc đó
+  # hay không. Đọc riêng một dòng thì cả hai đều thiếu nửa còn lại.
+  #
+  # KHÔNG gọi tally: guard không phải hạ tầng bật/tắt, và tính nó vào UP/DOWN sẽ
+  # làm exit code (và câu "ĐANG BẬT — mở browser được") nói về một thứ khác hẳn.
+  sch_state="$(jq -r '.State // ""' "$TMP/guardsch.json")"
+  case "$sch_state" in
+    ENABLED)  sch_note="schedule ENABLED $(jq -r '.ScheduleExpression // "?"' "$TMP/guardsch.json")" ;;
+    DISABLED) sch_note="${C_RED}schedule DISABLED — lưới an toàn đang TẮT${C_RESET}" ;;
+    *)        sch_note="${C_RED}không thấy schedule ${HS_PROJECT}-nightly-stop${C_RESET} (enable_auto_stop = false, hoặc chưa apply)" ;;
+  esac
+
+  gage="$(hs_age_ms "$(jq -r '.logStreams[0].lastEventTimestamp // ""' "$TMP/guard.json")")"
+  if [ -n "$gage" ]; then
+    # Ngưỡng theo chu kỳ chạy: guard chạy mỗi 24 giờ, nên quá 24 giờ là đã trượt
+    # một đêm và quá 48 giờ là trượt hai đêm liền — mức đó không còn là trùng
+    # hợp, nó nghĩa là lưới an toàn không còn hoạt động.
+    if [ "$gage" -le 86400 ]; then
+      row "cost guard" "$(hs_hms "$gage") trước" "-" "-" "-" "${C_GREEN}✓${C_RESET} ${sch_note}"
+    elif [ "$gage" -le 172800 ]; then
+      row "cost guard" "$(hs_hms "$gage") trước" "-" "-" "-" "${C_YELLOW}trượt 1 đêm${C_RESET} · ${sch_note}"
+    else
+      row "cost guard" "$(hs_hms "$gage") trước" "-" "-" "-" "${C_RED}TRƯỢT TỪ 2 ĐÊM — LƯỚI AN TOÀN KHÔNG CÒN${C_RESET} · ${sch_note}"
+    fi
+  else
+    # Chưa có log stream nào. Hai nguyên nhân, cùng một hệ quả: guard chưa từng
+    # chạy (đường Scheduler→Lambda chưa được chứng minh lần nào), hoặc log group
+    # chưa tồn tại. Cả hai đều nghĩa là không có lưới an toàn nào đã được kiểm
+    # chứng, nên đây là ĐỎ chứ không phải "chưa có dữ liệu".
+    row "cost guard" "CHƯA CHẠY LẦN NÀO" "-" "-" "-" "${C_RED}không có log stream nào${C_RESET} · ${sch_note}"
+    echo "    ${C_DIM}Gọi tay một lần để chứng minh cả đường đi (miễn phí, và guard chỉ TẮT được thứ đang bật):${C_RESET}"
+    echo "    ${C_DIM}aws lambda invoke --function-name ${HS_PROJECT}-cost-guard --log-type Tail --profile ${HS_PROFILE} --region ${HS_REGION} /dev/stdout${C_RESET}"
   fi
 
   # ── Flow Logs ────────────────────────────────────────────────

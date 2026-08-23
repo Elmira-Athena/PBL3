@@ -56,17 +56,29 @@ variable "shared_notifications" {
 
 # ─── PHASE 3: LAMBDA COST GUARD ──────────────────────────────────
 # Bốn biến dưới đây nhận TÊN resource, không nhận ARN, và cả bốn đi thẳng vào
-# Resource của IAM policy. Vì thế mỗi biến có một validation chặn dấu `*`: một
-# dấu `*` lọt vào đây không làm `apply` lỗi, không làm `plan` khác đi, nó chỉ
-# âm thầm nới quyền của Lambda ra mọi resource cùng loại trong account.
+# Resource của IAM policy. Vì thế mỗi biến có một validation ALLOWLIST
+# `^[A-Za-z0-9_-]+$`, và cách viết đó có lý do:
+#
+#   • `*` là ca đã biết: một dấu * lọt vào đây không làm `apply` lỗi, không làm
+#     `plan` khác đi, nó chỉ âm thầm nới quyền của Lambda ra mọi resource cùng
+#     loại trong account.
+#   • `:` và `/` là ca ngược lại và cũng im lặng y như vậy: truyền một ARN đầy
+#     đủ vào chỗ mong đợi TÊN sẽ cho một ARN méo (arn:aws:rds:...:db:arn:aws:
+#     rds:...) khớp không resource nào cả. Lambda mất quyền, `apply` xanh, và
+#     triệu chứng duy nhất là một AccessDenied lúc 0 giờ sáng.
+#   • Khoảng trắng cùng lớp với `:` và `/`, chỉ khó thấy hơn khi đọc diff.
+#
+# Allowlist chặn cả ba nhóm cùng lúc thay vì đuổi theo từng ký tự. Nó KHÔNG hẹp
+# hơn thực tế: tên ECS cluster/service, tên ASG và DB identifier của AWS đều chỉ
+# nhận chữ, số, gạch ngang và gạch dưới.
 
 variable "cluster_name" {
   description = "Tên ECS cluster. Dùng để dựng ARN service (dạng .../service/<cluster>/<service>) — Lambda chỉ UpdateService được trong đúng cluster này"
   type        = string
 
   validation {
-    condition     = length(var.cluster_name) > 0 && !strcontains(var.cluster_name, "*")
-    error_message = "cluster_name phải khác rỗng và không được chứa dấu * — giá trị này đi thẳng vào Resource của IAM policy."
+    condition     = can(regex("^[A-Za-z0-9_-]+$", var.cluster_name))
+    error_message = "cluster_name chỉ được chứa chữ, số, `-` và `_`, và phải khác rỗng — giá trị này đi thẳng vào Resource của IAM policy. Truyền TÊN cluster, đừng truyền ARN: một ARN ở đây tạo ra một ARN méo không khớp resource nào và Lambda mất quyền mà apply vẫn xanh."
   }
 }
 
@@ -75,8 +87,8 @@ variable "asg_name" {
   type        = string
 
   validation {
-    condition     = length(var.asg_name) > 0 && !strcontains(var.asg_name, "*")
-    error_message = "asg_name phải khác rỗng và không được chứa dấu * — một dấu * ở đây cho Lambda hạ capacity của MỌI ASG trong account."
+    condition     = can(regex("^[A-Za-z0-9_-]+$", var.asg_name))
+    error_message = "asg_name chỉ được chứa chữ, số, `-` và `_`, và phải khác rỗng. Một dấu * ở đây cho Lambda hạ capacity của MỌI ASG trong account; một dấu `:` hay `/` (dấu hiệu của một ARN bị truyền vào chỗ mong đợi tên) thì ngược lại — Lambda mất quyền và chỉ lộ ra ở lần chạy đêm."
   }
 }
 
@@ -85,8 +97,8 @@ variable "rds_identifier" {
   type        = string
 
   validation {
-    condition     = length(var.rds_identifier) > 0 && !strcontains(var.rds_identifier, "*")
-    error_message = "rds_identifier phải khác rỗng và không được chứa dấu * — một dấu * ở đây cho Lambda stop MỌI database trong account."
+    condition     = can(regex("^[A-Za-z0-9_-]+$", var.rds_identifier))
+    error_message = "rds_identifier chỉ được chứa chữ, số, `-` và `_`, và phải khác rỗng. Một dấu * ở đây cho Lambda stop MỌI database trong account; một ARN đầy đủ (có `:`) thì làm Lambda không stop được database nào và không có gì đỏ để báo."
   }
 }
 
@@ -101,9 +113,9 @@ variable "service_names" {
 
   validation {
     condition = alltrue([
-      for name in var.service_names : length(name) > 0 && !strcontains(name, "*")
+      for name in var.service_names : can(regex("^[A-Za-z0-9_-]+$", name))
     ])
-    error_message = "Tên service phải khác rỗng và không được chứa dấu * — giá trị này nối vào Resource của IAM policy, một dấu * cho Lambda tắt mọi service trong cluster."
+    error_message = "Tên service chỉ được chứa chữ, số, `-` và `_`, và phải khác rỗng — giá trị này nối vào Resource của IAM policy. Một dấu * cho Lambda tắt mọi service trong cluster; một `/` hay `:` (dấu hiệu của một ARN service bị truyền vào chỗ mong đợi tên) làm ARN méo và Lambda không tắt được service nào."
   }
 }
 

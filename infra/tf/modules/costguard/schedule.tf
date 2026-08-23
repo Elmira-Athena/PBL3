@@ -10,7 +10,6 @@
 
 locals {
   schedule_name = "${var.project}-nightly-stop"
-  schedule_arn  = "arn:aws:scheduler:${local.region}:${local.account_id}:schedule/default/${local.schedule_name}"
 }
 
 # ─── ROLE RIÊNG CỦA SCHEDULER ────────────────────────────────────
@@ -64,6 +63,13 @@ data "aws_iam_policy_document" "scheduler_assume" {
     # cost guard. Gọi thêm cost guard là vô hại — nó idempotent và chỉ TẮT được
     # thứ đang bật. Nói cách khác, policy quyền đã hẹp tới mức làm việc siết
     # trust policy thêm gần như không còn tác dụng.
+    #
+    # `locals` phía trên TỪNG có một `schedule_arn` dựng sẵn, dùng cho đúng
+    # condition đã bị bỏ ở đây. Nó đã được xoá cùng lúc với dòng này được viết:
+    # để một ARN schedule dựng sẵn nằm trong locals mà không ai dùng chính là
+    # mời người sửa sau này nối nó vào một `ArnEquals` — tức tái phát đúng lỗi
+    # mà cả đoạn comment trên tồn tại để cảnh báo. Cần lại ARN đó thì dựng lại
+    # tại chỗ, và đọc đoạn trên trước.
 
   }
 }
@@ -125,6 +131,19 @@ resource "aws_scheduler_schedule" "nightly_stop" {
   target {
     arn      = aws_lambda_function.cost_guard.arn
     role_arn = aws_iam_role.scheduler.arn
+
+    # Marker để LOG phân biệt được lần chạy theo hẹn với lần chạy do người gọi
+    # tay. Mã Python in `event` ra dòng JSON summary; không có marker thì cả hai
+    # loại đều là `{}` và không phân biệt được. Điều đó quan trọng vì lập luận
+    # cho việc KHÔNG đặt reserved_concurrent_executions (xem lambda.tf) là "hai
+    # lần chạy song song chỉ xảy ra nếu có người invoke tay lúc nửa đêm" — một
+    # khẳng định về thực tế, và log phải xác nhận hay phủ định được nó chứ không
+    # để nó mãi là suy đoán. Lambda KHÔNG đọc nội dung này để phân nhánh: nó chỉ
+    # được in ra, nên một payload sai không đổi hành vi của lần chạy nào.
+    input = jsonencode({
+      invoked_by = "eventbridge-scheduler"
+      schedule   = local.schedule_name
+    })
 
     retry_policy {
       # 2 lần thử lại. Lỗi đáng retry ở đây là lỗi thoáng qua (throttle của một

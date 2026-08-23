@@ -21,16 +21,23 @@ data "archive_file" "cost_guard" {
 # storage vĩnh viễn, cho một Lambda in ra JSON mỗi đêm. Đây đúng là lập luận đã
 # dùng cho 4 log group của ECS ở Phase 1 (modules/ecs/cluster.tf).
 #
-# 3 ngày: dữ liệu này chỉ có giá trị để trả lời "đêm qua nó làm gì" khi thấy một
-# email lạ hoặc một khoản chi lạ. Sau ba ngày thì câu hỏi đó đã có câu trả lời
-# hoặc đã không còn ai hỏi.
+# 30 NGÀY, KHÔNG PHẢI 3 — và log này khác hẳn 4 log group của ECS ở Phase 1.
+# Quy ước 3 ngày bên đó tồn tại vì log ứng dụng có VOLUME LỚN: mỗi request một
+# dòng, và tiền ingest + storage tăng theo lưu lượng. Log của cost guard đi
+# ngược lại trên cả hai chiều. Về lượng: đúng một dòng JSON ~1KB mỗi đêm, nên 30
+# ngày là ~30KB, tức bằng không. Về giá trị: đây là bản ghi DUY NHẤT về việc lưới
+# an toàn có chạy hay không — Lambda im lặng khi khoẻ (không email, không alarm,
+# xem src/cost_guard.py), nên dòng JSON này là bằng chứng duy nhất tồn tại. Với
+# retention 3 ngày thì câu hỏi "tuần trước guard có chạy đêm nào không" KHÔNG
+# TRẢ LỜI ĐƯỢC, và nó đúng là câu hỏi người ta hỏi khi thấy một khoản chi lạ.
+# Đồng hồ "guard chạy lần cuối bao giờ" trong status.sh cũng đọc log stream này.
 #
 # Hệ quả về thứ tự: Lambda phải phụ thuộc log group. Nếu Lambda chạy trước khi
 # log group tồn tại thì nó tự tạo group (không retention) và Terraform sau đó
 # apply sẽ vướng ResourceAlreadyExistsException.
 resource "aws_cloudwatch_log_group" "cost_guard" {
   name              = local.lambda_log_group_name
-  retention_in_days = 3
+  retention_in_days = 30
 
   tags = { Name = local.lambda_log_group_name }
 }
@@ -65,7 +72,7 @@ resource "aws_iam_role" "cost_guard" {
 
 # ─── POLICY: ĐÚNG NHỮNG QUYỀN CẦN, KHÔNG HƠN ─────────────────────
 #
-# BỐN CHỖ BUỘC PHẢI DÙNG Resource = "*", và vì sao AWS không cho hẹp hơn:
+# NĂM CHỖ BUỘC PHẢI DÙNG Resource = "*", và vì sao AWS không cho hẹp hơn:
 #
 #   1. autoscaling:DescribeAutoScalingGroups — mọi action Describe* của EC2 Auto
 #      Scaling đều không hỗ trợ resource-level authorization; tên group đi trong
@@ -75,10 +82,14 @@ resource "aws_iam_role" "cost_guard" {
 #   3. ec2:DescribeNatGateways — toàn bộ họ ec2:Describe* không hỗ trợ
 #      resource-level; đây là giới hạn của EC2 API, không phải lựa chọn ở đây.
 #   4. elasticloadbalancing:DescribeLoadBalancers — không hỗ trợ resource-level.
+#   5. ec2:DescribeAddresses — cùng lý do như (3). Cần để phát hiện Elastic IP
+#      không còn gắn vào gì: IPv4 công cộng tính $0,005/giờ dù gắn hay không, và
+#      một NAT Gateway bị xoá ngoài Terraform để lại đúng cái đó — $0,12/ngày
+#      chạy vô thời hạn mà không resource nào còn để status.sh đếm giờ.
 #
-# Cả bốn đều CHỈ ĐỌC. Bán kính thiệt hại nếu role này bị chiếm: đọc được danh
-# sách ASG / DB instance / NAT / load balancer của account. Không action nào
-# trong bốn cái đó sửa, xoá hay bật được gì.
+# Cả năm đều CHỈ ĐỌC. Bán kính thiệt hại nếu role này bị chiếm: đọc được danh
+# sách ASG / DB instance / NAT / load balancer / Elastic IP của account. Không
+# action nào trong năm cái đó sửa, xoá hay bật được gì.
 #
 # BA CHỖ GHI, cả ba ghim theo ARN cụ thể:
 #   ecs:UpdateService            → đúng các service trong var.service_names
@@ -112,10 +123,28 @@ resource "aws_iam_role" "cost_guard" {
 #
 # Bù bằng hai lớp thật:
 #   • Không cấp autoscaling:UpdateAutoScalingGroup, nên Lambda KHÔNG nới được
-#     max_size. max_size = 1 do Terraform đặt (modules/ecs/cluster.tf), nên
-#     trần thiệt hại tuyệt đối nếu ai đó sửa mã thành SetDesiredCapacity(N) là
-#     1 instance t3.micro = $0,0132/giờ.
+#     max_size. max_size = 1 do Terraform đặt trên
+#     aws_autoscaling_group.this trong modules/ecs/cluster.tf, nên trần thiệt
+#     hại tuyệt đối nếu ai đó sửa mã thành SetDesiredCapacity(N) là 1 instance
+#     t3.micro = $0,0132/giờ.
 #   • Mã Python chỉ truyền DesiredCapacity=0, và không có nhánh nào truyền khác.
+#
+# TRẦN $0,0132/GIỜ ĐANG DỰA VÀO MỘT THỨ Ở MODULE KHÁC — ĐỌC TRƯỚC KHI BẬT
+# MANAGED SCALING:
+# Lý do trần đó đứng vững KHÔNG phải là "muốn nâng capacity thì phải gọi
+# SetDesiredCapacity, mà action đó bị ghim vào đúng một ASG". Lý do thật là
+# `managed_scaling { status = "DISABLED" }` trong
+# aws_ecs_capacity_provider.this ở modules/ecs/cluster.tf. (Hai chỗ trên cố ý
+# dẫn theo TÊN RESOURCE chứ không theo số dòng: số dòng của file đó đã trôi một
+# lần ngay trong lúc viết đoạn này.)
+# Nếu có ai bật managed scaling lên thì ECS tự quản capacity của ASG, và lúc đó
+# `ecs:UpdateService` với desiredCount > 0 MỘT MÌNH đủ để ECS nâng capacity —
+# không cần SetDesiredCapacity, không cần UpdateAutoScalingGroup, tức đi vòng
+# qua cả hai lớp bù phía trên. Trần vẫn còn nhờ max_size = 1, nhưng lập luận
+# "Lambda không tự nâng được capacity" thì hết đúng.
+# Đây là phụ thuộc chéo module và nó không hiện ra ở phía này: bật managed
+# scaling là một dòng trong modules/ecs, `terraform plan` ở đó xanh, và không có
+# test nào của module costguard đỏ. Ai sửa modules/ecs phải đọc lại chỗ này.
 data "aws_iam_policy_document" "cost_guard" {
 
   # ── BƯỚC 1: ECS service về 0 ───────────────────────────────────
@@ -173,6 +202,16 @@ data "aws_iam_policy_document" "cost_guard" {
     sid       = "ElbDescribeLoadBalancersNoResourceLevelSupport"
     effect    = "Allow"
     actions   = ["elasticloadbalancing:DescribeLoadBalancers"]
+    resources = ["*"]
+  }
+
+  # DescribeAddresses, không phải ReleaseAddress. Lambda BÁO một EIP rảnh chứ
+  # tuyệt đối không release nó: aws_eip.nat nằm trong Terraform state, và
+  # release bằng API là state drift đúng kiểu đã cấm ở đầu file này.
+  statement {
+    sid       = "Ec2DescribeAddressesNoResourceLevelSupport"
+    effect    = "Allow"
+    actions   = ["ec2:DescribeAddresses"]
     resources = ["*"]
   }
 

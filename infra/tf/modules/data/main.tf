@@ -56,6 +56,38 @@ resource "aws_db_instance" "this" {
   backup_retention_period    = var.backup_retention_days
   auto_minor_version_upgrade = true
 
+  # ─── HAI CỬA SỔ NÀY PHẢI TRÁNH GIỜ CHẠY CỦA COST GUARD ───────────
+  # Cost guard (modules/costguard) chạy 00:00 giờ Việt Nam = 17:00 UTC và chỉ
+  # gọi StopDBInstance khi status là `available`. Trong lúc RDS đang
+  # `backing-up`, `modifying` hay `upgrading` thì AWS TỪ CHỐI lệnh stop bằng
+  # InvalidDBInstanceState — nhưng instance vẫn tính đủ $0,098/giờ, tức
+  # $2,35/ngày. Nghĩa là một cửa sổ trùng 17:00 UTC làm guard mất tác dụng
+  # ĐÚNG mỗi đêm, không phải ngẫu nhiên một đêm.
+  #
+  # Vì sao phải khai tường minh: khi hai field này để trống, AWS tự gán ngẫu
+  # nhiên trong khối mặc định 8 giờ của ap-southeast-1 (14:00-22:00 UTC) và
+  # gán LẠI mỗi lần instance được tạo lại. 17:00 UTC nằm trong khối đó, nên
+  # xác suất bốc phải một cửa sổ chồng giờ guard là cỡ 1/16 mỗi lần dựng —
+  # một cái bẫy không ai chọn và không ai thấy, vì triệu chứng duy nhất là
+  # hoá đơn.
+  #
+  # 06:00-06:30 UTC = 13:00-13:30 ICT (giờ nghỉ trưa, cách giờ guard 11 tiếng
+  # theo cả hai chiều) và maintenance Chủ nhật 07:00-08:00 UTC = 14:00-15:00
+  # ICT. Biên đó lớn hơn tổng của mọi thứ có thể trượt: timeout của Lambda là
+  # 120 giây và maximum_event_age_in_seconds của Scheduler là 3600.
+  #
+  # RÀNG BUỘC CỦA AWS khi sửa hai giá trị này: định dạng bắt buộc là
+  # hh24:mi-hh24:mi (UTC) cho backup và ddd:hh24:mi-ddd:hh24:mi cho
+  # maintenance, tối thiểu 30 phút mỗi cửa sổ, và HAI CỬA SỔ KHÔNG ĐƯỢC CHỒNG
+  # NHAU — chồng nhau thì apply chết ngay, không âm thầm.
+  #
+  # NẾU ĐỔI stop_cron của costguard: phải đổi cả hai giá trị dưới đây. Terraform
+  # không nối được hai module này (data không biết gì về costguard), nên thứ canh
+  # ràng buộc đó là assert trong tests/rds.tftest.hcl — nó chặn mọi cửa sổ bắt
+  # đầu trong khoảng 16:00-18:59 UTC.
+  backup_window      = "06:00-06:30"
+  maintenance_window = "sun:07:00-sun:08:00"
+
   # Phải false để nuke.sh / terraform destroy chạy được.
   deletion_protection = false
   skip_final_snapshot = var.skip_final_snapshot
