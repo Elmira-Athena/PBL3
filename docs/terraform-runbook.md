@@ -740,15 +740,38 @@ cần sửa lại con số trong đầu: mỗi giờ bật là **$0.166**, khôn
 **CẬP NHẬT 2026-08-23 — credit đã HẾT HẠN, giờ là tiền thẻ thật.**
 
 Mọi con số ở mục này được đo trong giai đoạn còn credit bù, nên lúc đó net phải
-trả là $0. Điều đó **không còn đúng**. Account được đưa vào một Organization để
-dùng IAM Identity Center (SSO), và việc đó chuyển account sang chế độ trả phí —
-credit trả trước hết hạn theo.
+trả là $0. Điều đó **không còn đúng**.
 
-Nên đọc lại toàn bộ mục "Chi phí" dưới giả định mới: **mỗi con số là tiền ra
-khỏi thẻ.** $0.1954/giờ khi bật đủ stack là $0.1954 thật. Không có đệm.
+Nguyên nhân, **AWS Support xác nhận** (không phải suy luận của nhóm): dùng IAM
+Identity Center (SSO) thì **buộc phải tham gia AWS Organization**; và khi một
+account tham gia Organization, AWS **tự chuyển nó sang paid plan**, credit cũ hết
+hạn theo. Chuỗi đó không có chỗ nào tránh được nếu vẫn muốn dùng SSO.
 
-Không sửa được (hạ tầng đã dựng theo SSO), nên đòn bẩy duy nhất còn lại vẫn là
-**uptime** — và giờ nó là đòn bẩy duy nhất theo nghĩa chặt chẽ hơn trước.
+Đây là cái giá của một quyết định kiến trúc mà spec ghi ở dòng 15: chọn SSO thay
+vì IAM user + access key, để "không còn credential dài hạn nào trên máy". Quyết
+định đó vẫn đúng về mặt bảo mật; nó chỉ có một cái giá mà lúc chọn chưa ai biết.
+
+Đọc lại toàn bộ mục "Chi phí" dưới giả định mới: **mỗi con số là tiền ra khỏi
+thẻ.** $0.1954/giờ khi bật đủ stack là $0.1954 thật, không có đệm. Đòn bẩy duy
+nhất còn lại là **uptime**.
+
+> **Nếu sau này dựng lại trên một account khác còn credit:** đừng tạo
+> Organization, đừng bật Identity Center — dùng IAM user. Đổi lại thì có access
+> key dài hạn trên máy, tức tuyên bố ở spec dòng 15 phải sửa. Nhưng chính dòng đó
+> đã ghi rằng điểm least-privilege được chấm nằm ở **4 role workload**, không nằm
+> ở role vận hành — nên đây là việc sửa tài liệu, không phải hạ cấp thiết kế.
+
+Kiểm chứng đã đo được, bằng lệnh miễn phí:
+
+```bash
+# Chỉ trả về nhóm "Always Free" — KHÔNG có dòng "12 Months Free" nào,
+# tức account này không có free tier 12 tháng.
+aws freetier get-free-tier-usage --region us-east-1 --profile hushstore \
+  --max-results 100 --output json | jq -r '.freeTierUsages[].freeTierType' | sort -u
+```
+
+Số dư credit và loại plan **không có API** — chỉ xem được ở console
+**Billing → Credits** và **Billing → Account plan**.
 
 ### Account này KHÔNG có free tier
 
