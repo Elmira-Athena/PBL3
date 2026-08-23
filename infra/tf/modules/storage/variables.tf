@@ -21,7 +21,7 @@ variable "alb_logs_retention" {
 }
 
 variable "artifacts_retention" {
-  description = "Số ngày giữ file trong bucket artifacts"
+  description = "Số ngày giữ file trong bucket artifacts. 365 vì migrations/migrate-<sha>.sql là bản ghi câu SQL đã chạy lên production và phải sống lâu hơn một học kỳ — xem comment ở aws_s3_bucket_lifecycle_configuration.artifacts"
   type        = number
-  default     = 30
+  default     = 365
 }

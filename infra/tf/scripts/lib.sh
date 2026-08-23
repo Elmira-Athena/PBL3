@@ -134,7 +134,13 @@ hs_tfvar_set() {
   grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$HS_TFVARS" \
     || hs_die "không thấy biến '${key}' trong ${HS_TFVARS}"
   sed -i '' -E "s|^[[:space:]]*${key}[[:space:]]*=.*|${key} = ${val}|" "$HS_TFVARS"
-  cur="$(hs_tfvar_get "$key")"
+  # `|| true` cùng lý do như trong hs_image_tag_check: hs_tfvar_get là một
+  # pipeline mở đầu bằng grep, và file này bật `set -euo pipefail`. Nhánh này chỉ
+  # tới được khi sed vừa rồi không khớp gì (key biến mất giữa hai lệnh, hoặc
+  # tfvars bị ghi đè song song) — đúng cái ca mà hs_die bên dưới tồn tại để báo,
+  # nhưng không có `|| true` thì -e giết script NGAY TẠI DÒNG GÁN và người dùng
+  # không nhận được câu thông báo nào.
+  cur="$(hs_tfvar_get "$key" || true)"
   [ "$cur" = "$val" ] || hs_die "đặt ${key} = ${val} không có tác dụng (đang là '${cur}')"
 }
 
@@ -221,6 +227,52 @@ hs_image_tag_check() {
     hs_warn "  Nếu muốn chạy bản mới nhất thì sửa tfvars TRƯỚC khi bật tiếp:"
     hs_warn "    sed -i '' 's|^image_tag = .*|image_tag = \"${newest}\"|' infra/tf/envs/prod/terraform.tfvars"
   fi
+}
+
+# ─── CẢNH BÁO REVISION ĐANG CHẠY LỆCH TFVARS ─────────────────────────────────
+# hs_image_tag_check ở trên im lặng đúng ở ca gây nhầm lẫn nhất: stack ĐANG BẬT,
+# người ta sửa image_tag thành SHA mới nhất trên ECR rồi chạy lại up.sh. Hai giá
+# trị khớp nhau nên phép so kia không nói gì; `apply` ĐĂNG KÝ một revision mới;
+# rồi `ignore_changes = [task_definition]` trên aws_ecs_service giữ service ở
+# revision CŨ. Kết quả: tfvars nói một đằng, container đang phục vụ một nẻo, và
+# không có dòng nào trên màn hình nói ra điều đó.
+#
+# Nên khi service tồn tại thì phải so image của REVISION ĐANG CHẠY với tfvars,
+# không phải so tag mới nhất của ECR với tfvars. Toàn bộ hàm chỉ đọc
+# (DescribeServices + DescribeTaskDefinition) và chạy bằng credential SSO của
+# người dùng, nên không cần đổi IAM.
+hs_running_image_check() {
+  local want svc td img running
+  want="$(hs_tfvar_get image_tag || true)"
+  [ -n "$want" ] || return 0
+
+  for svc in "$HS_SVC_API" "$HS_SVC_WEB"; do
+    # Lọc status == ACTIVE: describe-services CÒN trả về service đã xoá với
+    # status INACTIVE một khoảng thời gian sau đó, và revision của một service
+    # INACTIVE không nói gì về cái đang chạy.
+    td="$(aws ecs describe-services --cluster "$HS_CLUSTER" --services "$svc" \
+            --query 'services[?status==`ACTIVE`].taskDefinition | [0]' \
+            "${AWSQT[@]}" 2>/dev/null || true)"
+    case "$td" in ''|None|null) continue ;; esac
+
+    img="$(aws ecs describe-task-definition --task-definition "$td" \
+             --query 'taskDefinition.containerDefinitions[0].image' \
+             "${AWSQT[@]}" 2>/dev/null || true)"
+    case "$img" in ''|None|null) continue ;; esac
+
+    # Tag là phần sau dấu ':' CUỐI CÙNG, nên dùng `##*:`. URL của ECR chứa nhiều
+    # dấu ':' nếu có port, và `#*:` sẽ cắt sai chỗ.
+    running="${img##*:}"
+    [ "$running" != "$want" ] || continue
+
+    hs_warn "${svc} đang chạy image tag khác tfvars:"
+    hs_warn "    revision đang chạy: ${running}   (${td##*/})"
+    hs_warn "    tfvars image_tag  : ${want}"
+    hs_warn "  apply sẽ ĐĂNG KÝ revision mới nhưng KHÔNG trỏ service sang —"
+    hs_warn "  ignore_changes = [task_definition] là cố ý (nếu thiếu, mỗi apply là"
+    hs_warn "  một lần rollback ngầm bản do CI deploy). Muốn đổi thật thì trỏ tay:"
+    hs_warn "    aws ecs update-service --cluster ${HS_CLUSTER} --service ${svc} --task-definition ${svc} --profile ${HS_PROFILE}"
+  done
 }
 
 # ── Chờ có tiến độ nhìn thấy được ───────────────────────────────

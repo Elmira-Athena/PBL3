@@ -4,10 +4,12 @@ provider "aws" {
 }
 
 variables {
-  project             = "hushstore"
-  region              = "ap-southeast-1"
-  alb_logs_retention  = 7
-  artifacts_retention = 30
+  project            = "hushstore"
+  region             = "ap-southeast-1"
+  alb_logs_retention = 7
+  # artifacts_retention CỐ TÌNH không set: để assert dưới đây kiểm chính GIÁ TRỊ
+  # MẶC ĐỊNH của module — đó là giá trị prod đang dùng (envs/prod không truyền
+  # biến này). Set nó ở đây thì test chỉ còn kiểm lại chính đầu vào của mình.
 }
 
 run "co_dung_4_ecr_repository_va_deu_immutable" {
@@ -73,8 +75,8 @@ run "co_lifecycle_don_du_lieu_cu" {
   }
 
   assert {
-    condition     = aws_s3_bucket_lifecycle_configuration.artifacts.rule[0].expiration[0].days == 30
-    error_message = "Artifacts phải hết hạn sau 30 ngày."
+    condition     = aws_s3_bucket_lifecycle_configuration.artifacts.rule[0].expiration[0].days >= 365
+    error_message = "Bucket artifacts phải giữ file ÍT NHẤT 365 ngày. Trong đó có migrations/migrate-<sha>.sql — bản ghi duy nhất còn lại về câu SQL nào đã chạy lên production ở commit nào (bản kia là artifact của Actions, hết hạn sau 14 ngày). Cả hai con số 14 và 30 ngày đều ngắn hơn một học kỳ. Và đừng \"sửa\" bằng cách thêm một rule riêng cho prefix migrations/: S3 áp mọi rule khớp object và không có luật rule cụ thể hơn thì thắng, nên rule 30 ngày bắt tất vẫn xoá trước."
   }
 
   assert {

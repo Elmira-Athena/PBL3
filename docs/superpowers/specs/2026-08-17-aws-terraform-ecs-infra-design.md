@@ -399,6 +399,8 @@ Bước `ensure-capacity` cần thiết vì task migrator là `bridge` trên EC2
 
 **`.github/workflows/infra.yml`** — mới. Trên PR có thay đổi `infra/tf/**`: `terraform fmt -check` → `validate` → `plan` với một **role OIDC read-only riêng** (`ReadOnlyAccess` + `s3:GetObject` state bucket), rồi comment kết quả plan vào PR. Không `apply` tự động — apply vẫn chạy tay để giữ kiểm soát trên hạ tầng tốn phí.
 
+> **Superseded by Phase 2 plan §2** (`docs/superpowers/plans/2026-08-22-aws-terraform-phase2-cicd.md`). File tên `ci.yml`, và nó **không chạy `plan`**: `plan` phải đọc tfstate, mà tfstate chứa master password của RDS ở dạng plaintext (`random_password` luôn nằm trong state). Vì thế role plan bị **Deny tường minh `s3:GetObject`** thay vì được cấp — ngược hẳn với dòng trên. Thay cho `plan`, CI chạy `terraform test`.
+
 ### Sửa app code — 4 điểm
 
 > Số dòng dưới đây tính theo commit `ae1180f` và sẽ dịch sau khi áp dụng từng thay đổi — dùng tên symbol để định vị thay vì tin vào số dòng.
@@ -446,7 +448,9 @@ src/Client/Dockerfile               # NEW: sdk publish WASM → nginx:alpine
 src/Client/nginx.conf               # NEW: listen 80, SPA fallback, cache header
 src/Infrastructure/Dockerfile.migrator  # NEW: dotnet ef migrations bundle → runtime:10.0
 .github/workflows/deploy.yml        # REWRITE: OIDC → ECR ×3 → snapshot → migrate gate → ECS → rollback
-.github/workflows/infra.yml         # NEW: fmt + validate + plan trên PR, comment vào PR
+.github/workflows/ci.yml            # NEW: fmt + validate + terraform test. KHÔNG plan
+                                    #      (superseded by Phase 2 plan §2 — role plan bị
+                                    #       Deny s3:GetObject nên không đọc được tfstate)
 docs/
 ├── terraform-runbook.md            # cách chạy, chi phí, bật/tắt, seed DB, rollback
 └── security-validation-report.md   # kết quả tấn công — "Đầu ra" của đề bài
@@ -501,6 +505,8 @@ aws ecs describe-services --cluster hushstore --services hushstore-web hushstore
 - **Không còn secret dài hạn**: `gh secret list` chỉ còn `AWS_ROLE_ARN` (không phải credential), không còn `EC2_SSH_KEY` / `EC2_HOST` / GHCR token.
 - **`infra.yml`**: mở PR sửa một dòng trong `modules/network` → bot comment plan vào PR, không apply.
 
+> **Superseded by Phase 2 plan §2.** Hai dòng trên đã bị thay: không có một `AWS_ROLE_ARN` duy nhất mà **hai repository variable** (`AWS_DEPLOY_ROLE_ARN`, `AWS_PLAN_ROLE_ARN`) cho hai role tách biệt — và chúng là *variable* chứ không phải *secret*, vì ARN của role không phải bí mật (xem kịch bản 11 trong `docs/security-validation-report.md`). Và `ci.yml` không comment plan vào PR: nó chạy `terraform test`.
+
 ### Kiểm thử bảo mật — từ laptop (`var.my_ip`)
 
 | # | Kịch bản | Kết quả mong đợi | Rule chịu trách nhiệm |
@@ -551,4 +557,4 @@ NAT Gateway là khoản đắt nhất và không có bậc free tier — nên `d
 - **RDS stopped vẫn tính phí storage** — 20GB nằm trong free tier; hết free tier ~$2.3/mo. AWS tự start lại RDS sau 7 ngày stop, Lambda cost-guard sẽ stop lại ở lần chạy kế tiếp.
 - **ACM validation CNAME phải thêm tay vào Cloudflare một lần** — đã cân nhắc Cloudflare provider để tự động, nhưng phải quản thêm API token; `terraform output` in sẵn record là đủ.
 - **`import` bucket ảnh sản phẩm** là ngoại lệ duy nhất trong stack greenfield. Nếu bỏ qua, toàn bộ URL ảnh sản phẩm hiện có sẽ chết.
-- **`infra.yml` chỉ `plan`, không `apply`** — cố ý. Hạ tầng có NAT GW và ALB tốn phí theo giờ, không nên để một merge vô tình dựng lên.
+- **`infra.yml` chỉ `plan`, không `apply`** — cố ý. Hạ tầng có NAT GW và ALB tốn phí theo giờ, không nên để một merge vô tình dựng lên. *(**Superseded by Phase 2 plan §2**: `ci.yml` không chạy cả `plan`. Ràng buộc "không tự dựng hạ tầng tốn phí" giữ nguyên nhưng được canh ở tầng IAM — role deploy không có `autoscaling:SetDesiredCapacity` và không có `rds:StartDBInstance`, có `terraform test` assert điều đó.)*

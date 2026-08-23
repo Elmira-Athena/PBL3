@@ -37,6 +37,11 @@ hs_sso_check
 # tfvars thì nói ra ngay, lúc còn sửa được mà chưa tốn đồng nào.
 hs_image_tag_check
 
+# Và ca ngược lại: tfvars đã khớp tag mới nhất trên ECR, nhưng service đang chạy
+# revision cũ vì `ignore_changes = [task_definition]`. Chỉ in gì khi service tồn
+# tại, nên lúc stack đang tắt hàm này im lặng.
+hs_running_image_check
+
 rds_status() {
   aws rds describe-db-instances --db-instance-identifier "$HS_DB" \
     --query 'DBInstances[0].DBInstanceStatus' --output text \

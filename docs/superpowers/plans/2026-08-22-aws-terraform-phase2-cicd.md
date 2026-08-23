@@ -47,7 +47,9 @@ Spec gốc muốn `infra.yml` chạy `plan` rồi comment vào PR. Bỏ phần `
 
 Lý do: `plan` cần đọc `terraform.tfstate`, và state **chứa master password của RDS** ở dạng plaintext (`random_password` luôn nằm trong state — đây là bản chất của Terraform, không sửa được). Một role đọc được state là một role đọc được mật khẩu DB. Với trigger `pull_request`, claim `sub` của OIDC token là `repo:Elmira-Athena/PBL3:pull_request` — **không phân biệt được PR từ fork**. Đánh đổi sai chiều.
 
-PR chạy `fmt -check` → `validate` → **`terraform test`** (16 test file, chính là chỗ canh các assertion bảo mật về NACL/SG/IAM). Đó là kiểm tra có giá trị nhất trong repo này, và không cần state.
+PR chạy `fmt -check` → `validate` → **`terraform test`** (11 file test trên 7 module, chính là chỗ canh các assertion bảo mật về NACL/SG/IAM). Đó là kiểm tra có giá trị nhất trong repo này, và không cần state.
+
+> **Sửa sau review vòng cuối (2026-08-23):** trigger không chỉ là PR. Dự án commit thẳng lên `main`, nên `ci.yml` cũng chạy trên `push: main` và có `workflow_dispatch`; trust policy của role plan nhận hai giá trị `sub` (`pull_request` và `ref:refs/heads/main`), cả hai bằng `StringEquals`. Chỉ có `pull_request` thì file này không bao giờ chạy.
 
 Đường nâng cấp nếu sau này muốn `plan` trên PR: dùng GitHub **environment** có required reviewer, khi đó `sub` thành `repo:.../environment:<name>` và fork không lấy được token mà không có người bấm duyệt. Là cấu hình trên GitHub, không phải Terraform.
 
@@ -154,8 +156,15 @@ và `.api`, kèm comment nói rõ vì sao (CI đăng ký revision; thiếu dòng
 rollback ngầm).
 
 `variable "seeder_image_tag"` nhận `default = ""`; taskdef seeder dùng
-`var.seeder_image_tag != "" ? var.seeder_image_tag : var.image_tag`. Xoá dòng
-`seeder_image_tag` khỏi `terraform.tfvars` để nó đi theo `image_tag`.
+`var.seeder_image_tag != "" ? var.seeder_image_tag : var.image_tag`.
+
+> **Sửa sau review (Ruling A1, 2026-08-22):** kế hoạch ban đầu viết ở đây là *"xoá
+> dòng `seeder_image_tag` khỏi `terraform.tfvars` để nó đi theo `image_tag`"*.
+> **ĐỪNG LÀM.** Image seeder trên ECR chỉ tồn tại ở SHA `334cf58`, khác
+> `image_tag` (`e114353`). Bỏ ghim là trỏ task seeder vào một tag không tồn tại,
+> và lỗi đó KHÔNG hiện lúc `apply` — nó hiện lúc `run-task`, dưới dạng
+> `CannotPullContainerError`, tức đúng lúc cần seed dữ liệu. Cơ chế `default = ""`
+> vẫn được cài để tương lai gộp được; dòng ghim trong tfvars thì GIỮ.
 
 ### Task 4 — Trả 3 món nợ image
 
@@ -174,19 +183,46 @@ upload S3.
 
 Job `preflight`: đọc RDS state, container instance, 2 service → output `ready`.
 
-Job `deploy` (`if: needs.preflight.outputs.ready == 'true'`): snapshot →
-`run-task` migrator → **gate exit code** (khác 0 → in log CloudWatch, fail,
-không deploy) → register 2 taskdef revision → `update-service` ×2 →
-`wait services-stable` → health check `curl` → rollback về revision trước nếu fail.
+Job `deploy` (`if: needs.preflight.outputs.ready == 'true'`): register 3 taskdef
+revision (migrator, api, web) trỏ vào `$GITHUB_SHA` → snapshot → `run-task`
+migrator **bằng ARN có revision** → **gate exit code** (khác 0 → in log
+CloudWatch, fail, không deploy) → `update-service` ×2 → `wait services-stable` →
+health check `curl` → rollback về revision trước nếu fail.
+
+> **Sửa sau review vòng cuối (2026-08-23):** thứ tự ban đầu viết là *"snapshot →
+> run-task migrator → gate → register 2 revision"*. Sai ở chỗ chí tử: `run-task`
+> với tên family resolve về revision ACTIVE mới nhất, tức revision của Terraform
+> dựng từ `image_tag` ghim tay — nên gate chạy efbundle CŨ, exit 0, và deploy code
+> mới lên schema thiếu migration mà không có tín hiệu nào. Register phải đứng
+> TRƯỚC gate, và `run-task` phải nhận ARN có revision. Register không phải deploy:
+> service chỉ đổi ở bước `update-service`, vẫn nằm sau gate.
 
 Job `summary`: luôn chạy, in rõ đã deploy hay chỉ build.
 
 ### Task 6 — `ci.yml`
 
-`pull_request` + `push` nhánh khác `main`: `fmt -check -recursive` →
-`init -backend=false && validate` (envs/prod + 8 module) → `terraform test`
-mỗi module. Shim `~/.aws/config` với `credential_source = Environment` để 16
-test file giữ nguyên `profile = "hushstore"`.
+`pull_request` + `push` vào `main` + `workflow_dispatch`: `fmt -check -recursive`
+→ `init -backend=false && validate` (envs/prod + 8 module) → `terraform test` ở 7
+module có thư mục `tests/` (11 file test).
+
+> **Sửa sau review (Ruling A2 + review vòng cuối):** hai chỗ trong đoạn trên từng
+> viết sai.
+>
+> 1. Trigger ban đầu viết *"`push` nhánh khác `main`"*. Dự án commit thẳng lên
+>    `main`, nên dạng đó làm cả file không bao giờ chạy. Đúng là `push: main` +
+>    `workflow_dispatch`, và trust policy role plan phải nhận thêm giá trị `sub`
+>    của push-main.
+> 2. Cách nạp credential ban đầu viết *"shim `~/.aws/config` với
+>    `credential_source = Environment`"*. **Không chạy được:** tham số đó của AWS
+>    CLI chỉ hợp lệ khi ĐI KÈM `role_arn` — nó trả lời câu "lấy credential ở đâu
+>    để assume role kia", nên một profile chỉ có `credential_source` bị CLI từ
+>    chối. Dạng đúng đã dùng là `aws configure set --profile hushstore
+>    aws_access_key_id/...` từ biến môi trường mà `configure-aws-credentials` vừa
+>    export.
+>
+> Số lượng cũng sai: 11 file test trên 7 module (`alb, cicd, data, ecs×4,
+> network×2, security, storage`), không phải 16 file. `validate` thì chạy trên cả
+> 8 module vì `costguard` không có test.
 
 ### Task 7 — `up.sh` cảnh báo tag lệch
 
@@ -219,4 +255,4 @@ terraform -chdir=infra/tf/envs/prod plan     # chỉ IAM + OIDC, $0, không tạ
 - Push một commit nhỏ vào `main` **khi stack đang tắt** → Actions xanh, 4 image mới trên ECR, summary nói rõ "chưa deploy".
 - Bật stack rồi push lại → deploy thật, `describe-task-definition` cho revision mới trỏ `:<sha>`.
 - Gate migration: push một migration lỗi → job fail ở `run-task`, service **không** đổi.
-- KB-11: `aws sts assume-role-with-web-identity` với token bịa → `AccessDenied`.
+- KB-11: `aws sts assume-role-with-web-identity` với token bịa → **`InvalidIdentityToken`**, không phải `AccessDenied`. Kỳ vọng ban đầu viết trong plan là `AccessDenied`; kết quả đo được là `InvalidIdentityToken` và đó là kết quả MẠNH HƠN — AWS từ chối ở bước xác thực chữ ký, trước cả khi xét trust policy, nên claim `sub` trong token bịa không hề được đem ra so. Xem `docs/security-validation-report.md` §6.

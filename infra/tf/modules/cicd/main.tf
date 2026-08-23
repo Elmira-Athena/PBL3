@@ -23,12 +23,21 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.region
 
-  # Claim `sub` của GitHub OIDC token. Hai giá trị khác nhau và đó là toàn bộ
-  # lý do có hai role:
+  # Claim `sub` của GitHub OIDC token. GitHub đặt nó theo TRIGGER, không theo
+  # người:
   #   • push vào nhánh main  -> repo:owner/repo:ref:refs/heads/main
   #   • pull_request         -> repo:owner/repo:pull_request
-  # Một PR KHÔNG BAO GIỜ lấy được token khớp giá trị thứ nhất, nên một PR không
-  # bao giờ assume được role deploy — kể cả PR do chính chủ repo mở.
+  #
+  # Tính chất phải giữ, và là lý do có hai role: role DEPLOY (role ghi được) chỉ
+  # nhận giá trị thứ nhất. Một PR KHÔNG BAO GIỜ lấy được token khớp nó, nên một
+  # PR không bao giờ assume được role deploy — kể cả PR do chính chủ repo mở.
+  #
+  # Chiều ngược lại thì KHÔNG đối xứng, có chủ ý: role plan nhận CẢ HAI giá trị
+  # (xem data.aws_iam_policy_document.assume_plan). Quy ước của dự án này là
+  # commit thẳng lên main, nên nếu role plan chỉ nhận `pull_request` thì
+  # `terraform test` — nơi chứa các assertion bảo mật — không bao giờ chạy trong
+  # CI. Đặc quyền chỉ chảy một chiều: plan là ReadOnlyAccess + 5 nhóm Deny,
+  # deploy mới là role sửa được hạ tầng.
   sub_deploy = "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${var.deploy_branch}"
   sub_plan   = "repo:${var.github_owner}/${var.github_repo}:pull_request"
 
@@ -64,6 +73,10 @@ locals {
 # — tức mở role deploy cho bất kỳ ai mở được PR. Đây là lỗi cấu hình OIDC phổ
 # biến nhất và nó không có triệu chứng nào cho tới lúc bị lợi dụng.
 #
+# Liệt kê NHIỀU giá trị trong `values` thì khác hẳn: `StringEquals` vẫn là so
+# khớp chính xác từng chuỗi, chỉ là khớp một trong một danh sách đóng. Role plan
+# dùng cách đó; role deploy thì cố tình chỉ có MỘT giá trị.
+#
 # Điều kiện `aud` cũng bắt buộc. Thiếu nó, một token do GitHub ký cho MỘT
 # audience khác (ví dụ một cloud provider khác) vẫn thoả trust policy này.
 data "aws_iam_policy_document" "assume_deploy" {
@@ -91,9 +104,25 @@ data "aws_iam_policy_document" "assume_deploy" {
   }
 }
 
+# Role plan nhận HAI giá trị sub, và cả hai là so khớp CHÍNH XÁC — `StringEquals`
+# với danh sách nghĩa là "khớp một trong các giá trị này", không phải wildcard.
+# Vì sao cần giá trị thứ hai: dự án commit thẳng lên `main`, nên nếu chỉ nhận
+# `pull_request` thì job `terraform-test` trong ci.yml không có đường nào chạy, và
+# các assertion bảo mật (NACL stateless, SG không mở 22, IAM least privilege) chỉ
+# tồn tại trên máy cá nhân.
+#
+# Điều này KHÔNG mở rộng bán kính thiệt hại: tập người lấy được token push-main
+# và tập người lấy được token pull_request là cùng một tập — cộng tác viên có
+# quyền ghi vào repo. Ai push được lên main thì cũng push được một nhánh rồi mở
+# PR, tức đã tới được role plan từ trước. Cái mất đi là một tính chất kiểm toán:
+# từ nay một session của role plan không còn CHỨNG MINH được rằng lần chạy đó là
+# một PR. Bù bằng `role-session-name` trong workflow (gha-tf-test).
+#
+# Điều tuyệt đối KHÔNG được làm là chiều ngược lại: thêm `pull_request` vào
+# assume_deploy. Xem assert trong tests/cicd.tftest.hcl.
 data "aws_iam_policy_document" "assume_plan" {
   statement {
-    sid     = "GitHubOidcPullRequestOnly"
+    sid     = "GitHubOidcPullRequestOrMainBranch"
     effect  = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
 
@@ -111,7 +140,7 @@ data "aws_iam_policy_document" "assume_plan" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [local.sub_plan]
+      values   = [local.sub_plan, local.sub_deploy]
     }
   }
 }
@@ -141,15 +170,16 @@ resource "aws_iam_role_policy" "deploy" {
   policy = data.aws_iam_policy_document.deploy.json
 }
 
-# ─── ROLE 2: PLAN / KIỂM TRA TRÊN PR ─────────────────────────────
-# Role này chỉ dùng cho `terraform fmt/validate/test` trên PR. Nó KHÔNG chạy
+# ─── ROLE 2: PLAN / KIỂM TRA TRONG CI ────────────────────────────
+# Role này chỉ dùng cho `terraform fmt/validate/test`, trên PR và trên push vào
+# `main` (xem assume_plan: hai giá trị sub, cả hai khớp chính xác). Nó KHÔNG chạy
 # `terraform plan`, và đó là quyết định có chủ ý — xem docs/superpowers/plans/
 # 2026-08-22-aws-terraform-phase2-cicd.md mục "Quyết định thiết kế" số 2:
 # `plan` phải đọc tfstate, mà tfstate chứa master password của RDS ở dạng
 # plaintext (random_password luôn nằm trong state — bản chất của Terraform).
 resource "aws_iam_role" "plan" {
   name        = "${var.project}-github-actions-plan-role"
-  description = "GitHub Actions PR: fmt/validate/test. KHONG doc duoc tfstate va khong giai ma duoc secret"
+  description = "GitHub Actions CI (PR va push main): fmt/validate/test. KHONG doc duoc tfstate va khong giai ma duoc secret"
 
   assume_role_policy = data.aws_iam_policy_document.assume_plan.json
 

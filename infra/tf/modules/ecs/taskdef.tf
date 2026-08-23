@@ -185,9 +185,16 @@ resource "aws_ecs_task_definition" "migrator" {
       # KHÔNG map port: đây là one-off task, chạy rồi thoát.
       portMappings = []
 
-      # Cả HAI secret đều bắt buộc. efbundle chạy lại entry point của API để
-      # dựng DbContext, và Program.cs throw nếu JwtSettings:SecretKey chưa đặt
-      # — dòng đó nằm trước builder.Build(). Task 10 Step 3 đã chứng minh.
+      # Dùng CHUNG local.app_secrets với task api, có chủ ý. efbundle chạy lại
+      # entry point của API để dựng DbContext, nên nó đọc cấu hình theo đúng cơ
+      # chế của app — cấu hình lệch giữa hai task là cách để migration chạy được
+      # ở đây mà app lại không khởi động được.
+      #
+      # Chỉ ConnectionStrings__DefaultConnection là thật sự BẮT BUỘC.
+      # JwtSettings__SecretKey thì không: Program.cs:110 có `?? throw` trên
+      # `JwtSettings:SecretKey`, nhưng `??` chỉ bắn khi null, mà appsettings.json
+      # khai `"SecretKey": ""` — chuỗi RỖNG. Giữ nó vì hai lẽ: cấu hình khớp với
+      # task api, và nó vẫn đúng vào ngày dòng rỗng kia bị xoá.
       secrets = local.app_secrets
 
       logConfiguration = local.log_config.migrator

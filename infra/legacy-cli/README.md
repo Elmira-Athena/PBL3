@@ -21,6 +21,18 @@ chiếu.
 | `config.example.json` | Config đầu vào | `infra/tf/envs/prod/terraform.tfvars` |
 | `hushstore.conf` | nginx trên host: SSL + serve WASM + proxy API | `src/Client/nginx.conf` (nằm trong image) + ALB |
 | `deploy.sh` | Deploy tay trên EC2 | `.github/workflows/deploy.yml` (Phase 2) |
+| `deploy-guide.md` | Quy trình deploy bằng SSH + rsync (trước ở `docs/deploy-guide.md`) | `docs/terraform-runbook.md` mục "Deploy phiên bản mới" |
+| `docker-compose.yml` | Compose file production trên host EC2, image từ GHCR (trước ở gốc repo) | `infra/tf/modules/ecs/taskdef.tf` + ECR |
+
+Hai dòng cuối bảng là **tài liệu và cấu hình**, không phải script — chúng được
+chuyển vào đây trong Phase 2 vì vị trí cũ khiến người ta gặp chúng trước bản
+đang dùng: `docs/deploy-guide.md` nằm ngay cạnh runbook thật, còn một
+`docker-compose.yml` ở gốc repo là thứ người ta chạy trước khi đọc. Nội dung của
+`deploy-guide.md` nguy hiểm hơn một tài liệu lỗi thời bình thường: nó chứa IP
+công khai và đường SSH của account cũ.
+
+**Compose file cho dev local KHÔNG nằm ở đây** — SQL Server local vẫn là
+`Infrastructure/db/docker-compose.yml`, xem `README.md` ở gốc repo.
 
 ## Đừng chạy lại
 

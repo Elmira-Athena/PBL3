@@ -1,0 +1,78 @@
+### KB-12: ban kinh anh huong (blast radius) cua role deploy cua GitHub Actions
+Ngay do: 2026-08-23. Account 667836586836, region ap-southeast-1.
+Role: arn:aws:iam::667836586836:role/hushstore-github-actions-deploy-role
+
+KB-11 chung minh KHONG AI assume duoc role nay (JWT tu ky bi InvalidIdentityToken).
+KB-12 tra loi cau con lai: gia su co ai do assume duoc — no lam duoc gi, va khong
+lam duoc gi. Dung iam simulate-principal-policy, danh gia tren policy that dang gan.
+
+Lenh dung cho tung dong:
+
+  aws iam simulate-principal-policy \
+    --policy-source-arn arn:aws:iam::667836586836:role/hushstore-github-actions-deploy-role \
+    --action-names <action> --resource-arns <arn> \
+    --query 'EvaluationResults[0].EvalDecision' \
+    --profile hushstore --no-cli-pager --output text
+
+Voi ecs:RunTask them:
+
+    --context-entries "ContextKeyName=ecs:cluster,ContextKeyType=string,ContextKeyValues=arn:aws:ecs:ap-southeast-1:667836586836:cluster/hushstore"
+
+--- output nguyen van ------------------------------------------------------------
+── PHẢI ĐƯỢC PHÉP ──
+rds:CreateDBSnapshot   (snapshot:pre-migrate-test)              allowed
+ecs:UpdateService      (service/hushstore/hushstore-api)        allowed
+ecr:PutImage           (repository/hushstore-api)               allowed
+ecs:RunTask            (task-definition/hushstore-migrator:1)   allowed
+                       + context ecs:cluster = .../cluster/hushstore
+
+── PHẢI BỊ TỪ CHỐI ──
+autoscaling:SetDesiredCapacity (autoScalingGroupName/hushstore-asg)  implicitDeny
+rds:StartDBInstance            (db:hushstore-db-tf)                  implicitDeny
+s3:GetObject                   (tfstate/prod/terraform.tfstate)      implicitDeny
+ecs:RunTask                    (task-definition/hushstore-api:1)     implicitDeny
+ssm:GetParameter               (parameter/hushstore/prod/db-password) implicitDeny
+iam:PassRole                   (task-execution-seeder-role)          implicitDeny
+elasticloadbalancing:CreateLoadBalancer                              implicitDeny
+
+── điều kiện ecs:cluster không phải trang trí ──
+ecs:RunTask trên migrator + context cluster = hushstore       -> allowed
+ecs:RunTask trên migrator + context cluster = cluster-khac    -> implicitDeny
+ecs:RunTask trên migrator + KHÔNG truyền context ecs:cluster  -> implicitDeny
+---------------------------------------------------------------------------------
+
+LUU Y VE PHUONG PHAP — mot phep simulate thieu context cho ket qua "an toan" GIA:
+dong cuoi cung cho thay ecs:RunTask tren dung task definition migrator cung tra ve
+implicitDeny khi KHONG truyen context key ecs:cluster. Ly do la statement
+EcsRunOnlyMigratorTask co Condition ArnEquals tren ecs:cluster, va simulator coi
+mot condition key khong duoc cung cap la khong thoa. Nghia la ai do do "role nay co
+chay duoc task khong" ma quen --context-entries se ket luan sai rang no khong chay
+duoc gi ca — tuc bo qua chinh duong ma pipeline dung hang ngay.
+
+Nguyen van JSON cua mot phep thu (de doi chieu rang --query o tren khong an mat
+thong tin nao): xem EvalDecision, MatchedStatements va MissingContextValues.
+{
+    "EvaluationResults": [
+        {
+            "EvalActionName": "ecs:RunTask",
+            "EvalResourceName": "arn:aws:ecs:ap-southeast-1:667836586836:task-definition/hushstore-migrator:1",
+            "EvalDecision": "implicitDeny",
+            "MatchedStatements": [],
+            "MissingContextValues": [
+                "ecs:cluster",
+                "iam:PassedToService"
+            ],
+            "EvalDecisionDetails": {},
+            "ResourceSpecificResults": [
+                {
+                    "EvalResourceName": "arn:aws:ecs:ap-southeast-1:667836586836:task-definition/hushstore-migrator:1",
+                    "EvalResourceDecision": "implicitDeny",
+                    "MissingContextValues": [
+                        "ecs:cluster",
+                        "iam:PassedToService"
+                    ]
+                }
+            ]
+        }
+    ]
+}

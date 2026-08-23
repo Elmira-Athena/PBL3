@@ -281,13 +281,15 @@ push main
         │
         ├── hạ tầng TẮT  -> dừng ở đây, job VẪN XANH, summary nói rõ
         │
-        └── hạ tầng BẬT  -> snapshot -> migrate -> GATE exit code
+        └── hạ tầng BẬT  -> register 3 revision (migrator, api, web) ở tag <sha>
+                            -> snapshot
+                            -> migrate BẰNG ARN revision migrator vừa register
+                            -> GATE exit code
                               │
                               ├── exit ≠ 0 -> in log CloudWatch, fail,
                               │               KHÔNG deploy, bản cũ vẫn phục vụ
                               │
-                              └── exit = 0 -> register 2 revision
-                                              -> update-service ×2
+                              └── exit = 0 -> update-service ×2
                                               -> wait services-stable
                                               -> (rollback nếu fail)
 ```
@@ -312,6 +314,25 @@ tfvars.
 job dừng, log của task in thẳng vào output của Actions, và service **không** được
 cập nhật — bản cũ tiếp tục phục vụ.
 
+Và gate chỉ có nghĩa vì nó chạy **image của đúng commit vừa push**: job `deploy`
+đăng ký revision migrator mới TRƯỚC, rồi `run-task` bằng ARN có revision đó.
+Gọi `run-task --task-definition hushstore-migrator` (chỉ tên family) thì ECS
+resolve về revision ACTIVE mới nhất — revision do `terraform apply` đăng ký, mang
+image `image_tag` ghim tay trong tfvars. Khi đó `efbundle` cũ không chứa migration
+mới, nó exit 0, gate PASS, và code mới được deploy lên schema thiếu migration mà
+không có tín hiệu nào (`/health/ready` chỉ kiểm kết nối, không kiểm schema).
+Kiểm nhanh xem revision mới nhất đang trỏ image nào:
+
+```bash
+aws ecs describe-task-definition --task-definition hushstore-migrator \
+  --query 'taskDefinition.containerDefinitions[0].image' --profile hushstore
+```
+
+Đăng ký revision **không phải** deploy: một revision chỉ chạy khi có
+`update-service` trỏ vào nó, và bước đó nằm sau gate. Nên khi migration fail sẽ
+còn lại 2 revision api/web không ai dùng — task definition không tính tiền, và
+`skip_destroy = true` vốn đã giữ mọi revision cũ.
+
 ### Việc tay một lần: cấu hình GitHub
 
 ```bash
@@ -328,10 +349,23 @@ thì biết ARN cũng vô dụng.
 Rồi **xoá** ba secret của pipeline cũ: `EC2_SSH_KEY`, `EC2_HOST`, và GHCR token
 nếu còn. Sau bước này trong toàn hệ thống không còn credential dài hạn nào.
 
+### Quy trình deploy CŨ (SSH) — đã ngừng dùng
+
+Bộ tài liệu và cấu hình của pipeline trước Phase 2 nằm ở `infra/legacy-cli/`:
+`deploy-guide.md` (trước ở `docs/deploy-guide.md`) và `docker-compose.yml` (trước
+ở gốc repo), cùng với các script CLI. **Đừng làm theo chúng** — chúng dùng SSH
+port 22 và IP của account cũ đã bị xoá; xem `infra/legacy-cli/README.md`.
+
 ### Deploy tay (đường dự phòng)
 
 Vẫn giữ vì có lúc cần: CI đang lỗi, hoặc muốn deploy một commit không nằm trên
 `main`.
+
+**Thứ tự dưới đây quan trọng, vì lý do đã nói ở trên:** `terraform apply` phải
+chạy TRƯỚC `run-task`. Chính apply là thứ đăng ký revision migrator trỏ vào
+`$SHA`; chạy `run-task --task-definition hushstore-migrator` trước apply là chạy
+efbundle của tag cũ. Service không bị apply kéo theo (`ignore_changes =
+[task_definition]`), nên vẫn phải `update-service` bằng tay sau khi gate pass.
 
 
 ```bash
@@ -352,8 +386,20 @@ for img in api web migrator; do
   docker push "${REG}/hushstore-${img}:${SHA}"
 done
 
-# Migration TRƯỚC, và chỉ deploy khi exit code = 0
-TASK=$(aws ecs run-task --cluster hushstore --task-definition hushstore-migrator \
+# Đăng ký revision mới cho cả 3 family ở tag $SHA. Service KHÔNG đổi ở bước này
+# (ignore_changes = [task_definition]), nên đây chưa phải deploy.
+sed -i '' "s|^image_tag = .*|image_tag = \"$SHA\"|" infra/tf/envs/prod/terraform.tfvars
+terraform -chdir=infra/tf/envs/prod apply
+
+# Migration TRƯỚC, và chỉ deploy khi exit code = 0. Không truyền tên family:
+# lấy ARN của revision ACTIVE mới nhất — sau apply ở trên nó là revision trỏ $SHA.
+TD=$(aws ecs describe-task-definition --task-definition hushstore-migrator \
+  --query 'taskDefinition.taskDefinitionArn' --output text --profile hushstore --no-cli-pager)
+aws ecs describe-task-definition --task-definition "$TD" \
+  --query 'taskDefinition.containerDefinitions[0].image' --output text --profile hushstore
+# ^ phải in ra ...hushstore-migrator:$SHA. Nếu không, apply ở trên chưa chạy.
+
+TASK=$(aws ecs run-task --cluster hushstore --task-definition "$TD" \
   --capacity-provider-strategy capacityProvider=hushstore-cp,weight=1 \
   --query 'tasks[0].taskArn' --output text --profile hushstore --no-cli-pager)
 aws ecs wait tasks-stopped --cluster hushstore --tasks "$TASK" --profile hushstore
@@ -361,9 +407,13 @@ aws ecs describe-tasks --cluster hushstore --tasks "$TASK" \
   --query 'tasks[0].containers[0].exitCode' --output text --profile hushstore
 # exit code khác 0 -> DỪNG. App cũ vẫn đang phục vụ.
 
-# Chỉ khi migration pass:
-sed -i '' "s|^image_tag = .*|image_tag = \"$SHA\"|" infra/tf/envs/prod/terraform.tfvars
-cd infra/tf/envs/prod && terraform apply
+# Chỉ khi migration pass: trỏ 2 service sang revision mới nhất của chúng.
+for pair in api:hushstore-api web:hushstore-web; do
+  aws ecs update-service --cluster hushstore --service "${pair#*:}" \
+    --task-definition "hushstore-${pair%%:*}" --profile hushstore --no-cli-pager >/dev/null
+done
+aws ecs wait services-stable --cluster hushstore \
+  --services hushstore-api hushstore-web --profile hushstore
 ```
 
 ECR bật **IMMUTABLE tag**, nên không bao giờ ghi đè được một SHA đã push. Đó là
@@ -394,10 +444,14 @@ Nên hai lệnh trên chỉ cần khi muốn rollback một bản đã deploy TH
 lộ ra muộn hơn).
 
 Rollback code KHÔNG rollback migration. DB là **forward-only**: không dùng
-down-migration. Điểm quay về cho dữ liệu là snapshot `pre-migrate-<sha8>-<run>`
-mà pipeline tạo trước mỗi lần migrate; nó giữ 3 cái mới nhất và tự xoá cái cũ
-hơn (quyền xoá bị ghim theo ARN pattern `snapshot:pre-migrate-*` nên pipeline
-không chạm được snapshot người tạo tay).
+down-migration. Điểm quay về cho dữ liệu là snapshot
+`pre-migrate-<sha8>-<run>-<attempt>` mà pipeline tạo trước mỗi lần migrate; nó
+giữ 3 cái mới nhất và tự xoá cái cũ hơn (quyền xoá bị ghim theo ARN pattern
+`snapshot:pre-migrate-*` nên pipeline không chạm được snapshot người tạo tay).
+Có `<attempt>` trong tên vì "Re-run failed jobs" giữ NGUYÊN cả `<sha8>` và
+`<run>` — chỉ `GITHUB_RUN_ATTEMPT` tăng. Thiếu nó thì mọi lần chạy lại chết ở
+`DBSnapshotAlreadyExists`, trước cả khi migrate, với một lỗi RDS không liên quan
+gì tới thứ thật sự đã fail.
 
 Hệ quả bắt buộc của forward-only: migration phải viết theo hướng **tương thích
 ngược** — thêm column nullable trước, backfill, siết constraint ở lần sau — để

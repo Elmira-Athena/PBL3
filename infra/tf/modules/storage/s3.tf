@@ -104,6 +104,23 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
   }
 }
 
+# MỘT rule cho cả bucket, và con số của nó do `migrations/` quyết định.
+#
+# `migrations/migrate-<sha>.sql` là bản ghi CHÍNH XÁC câu SQL nào đã chạy lên
+# production ở commit nào — thứ duy nhất trả lời được "schema đổi vì đâu" sau khi
+# sự việc đã xong. Bản thứ hai của cùng file là artifact của GitHub Actions và nó
+# hết hạn sau 14 ngày. Cả 14 lẫn 30 ngày đều NGẮN HƠN MỘT HỌC KỲ, nên tới lúc cần
+# tra thì cả hai bản đều đã biến mất. File SQL cỡ vài trăm KB mỗi commit, nên giữ
+# lâu là quyết định có chủ ý chứ không phải mặc định thừa hưởng.
+#
+# VÌ SAO KHÔNG TÁCH MỘT RULE RIÊNG CHO PREFIX `migrations/`: S3 áp MỌI rule khớp
+# object và KHÔNG có luật "rule cụ thể hơn thì thắng". Một rule `filter {}` 30
+# ngày đứng cạnh một rule `prefix = "migrations/"` 365 ngày thì object vẫn bị xoá
+# ở ngày thứ 30 — sau đó chẳng còn gì cho rule 365 ngày giữ. Mà `filter` của S3
+# không diễn tả được "mọi thứ TRỪ prefix này". Nên cách duy nhất thật sự giữ được
+# `migrations/` là nâng chính con số của rule bắt tất; tách rule chỉ tạo cảm giác
+# an toàn. Bucket này còn có `seed/` và `scripts/`, cả hai cũng cần sống qua học
+# kỳ, nên nâng chung là đúng chứ không phải tác dụng phụ phải chịu.
 resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
   bucket = aws_s3_bucket.artifacts.id
 

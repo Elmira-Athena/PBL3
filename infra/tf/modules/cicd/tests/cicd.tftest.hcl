@@ -66,12 +66,44 @@ run "trust_policy_khong_duoc_dung_wildcard_tren_claim_sub" {
     error_message = "Trust policy phải có điều kiện trên claim aud = sts.amazonaws.com."
   }
 
-  # Hai role phải nhận HAI giá trị sub khác nhau. Nếu trùng nhau thì role plan
-  # (được gắn ReadOnlyAccess) cũng assume được từ push main, và ngược lại một PR
-  # assume được role deploy.
+  # Assert này TỪNG canh "hai role khớp hai giá trị sub khác nhau". Điều kiện đó
+  # hết đúng khi role plan được cho nhận thêm push-main, để `terraform test` chạy
+  # được trong CI dưới quy ước commit thẳng lên main. Hai tập sub vì thế GIAO
+  # NHAU ở giá trị push-main — và điều cần canh không phải là "giao nhau hay
+  # không", mà là CHIỀU của phần giao.
+  #
+  # Đặc quyền chảy một chiều: role plan là ReadOnlyAccess cộng 5 nhóm Deny (đọc
+  # object S3, kms:Decrypt, ssm:GetParameter* trên /hushstore/*, đọc log,
+  # sts:AssumeRole), còn role deploy mới là role push được image và sửa được
+  # service. Nên "push-main tới được role plan" là chiều vô hại — người push
+  # được lên main cũng push được một nhánh rồi mở PR, tức đã tới được role plan
+  # từ trước.
+  #
+  # Chiều nguy hiểm là chiều ngược lại: một token của `pull_request` chạm được
+  # role deploy. Nó biến "ai mở được PR" thành "ai deploy được", và đó là điều mà
+  # một dấu `*` hoặc một lần copy-paste giữa hai data source sẽ mở ra mà không có
+  # triệu chứng nào. Đó là chiều assert này canh.
   assert {
-    condition     = jsondecode(data.aws_iam_policy_document.assume_deploy.json).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] != jsondecode(data.aws_iam_policy_document.assume_plan.json).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"]
-    error_message = "Role deploy và role plan phải khớp hai giá trị sub KHÁC nhau (ref:refs/heads/main vs pull_request)."
+    condition = alltrue([
+      for v in flatten([
+        for s in jsondecode(data.aws_iam_policy_document.assume_deploy.json).Statement :
+        [s.Condition.StringEquals["token.actions.githubusercontent.com:sub"]]
+      ]) : !endswith(v, ":pull_request")
+    ])
+    error_message = "Trust policy của role DEPLOY không được nhận claim sub của một pull_request. Role plan nhận cả pull_request và push-main là có chủ ý (nó chỉ đọc); role deploy thì phải đúng một giá trị ref:refs/heads/<deploy_branch>, nếu không thì bất kỳ ai mở được PR cũng deploy được."
+  }
+
+  # Mặt còn lại của cùng một quyết định: nếu có người "sửa" chuyện gì bằng cách
+  # bỏ pull_request khỏi role plan thì `terraform test` trên PR chết im lặng —
+  # job đỏ ở bước assume-role, và không ai đọc nó như một lỗ hổng cấu hình.
+  assert {
+    condition = anytrue([
+      for v in flatten([
+        for s in jsondecode(data.aws_iam_policy_document.assume_plan.json).Statement :
+        [s.Condition.StringEquals["token.actions.githubusercontent.com:sub"]]
+      ]) : endswith(v, ":pull_request")
+    ])
+    error_message = "Trust policy của role PLAN phải còn nhận claim sub của pull_request — thiếu nó thì CI trên PR không assume được role nào và terraform test không chạy."
   }
 }
 

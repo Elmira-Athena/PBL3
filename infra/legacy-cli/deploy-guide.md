@@ -1,8 +1,30 @@
-# HushStore — Quy trình Deploy & CI/CD
+# LEGACY — Quy trình deploy cũ bằng SSH (ĐÃ NGỪNG DÙNG)
 
-> **Hạ tầng:** EC2 t3.micro (Singapore) + RDS SQL Server Express
+> **ĐỪNG LÀM THEO FILE NÀY.** Quy trình deploy hiện tại là
+> `.github/workflows/deploy.yml` (push vào `main`), và tài liệu vận hành là
+> [`docs/terraform-runbook.md`](../../docs/terraform-runbook.md).
+>
+> File này từng nằm ở `docs/deploy-guide.md`, tức người đi tìm quy trình CI/CD
+> gặp nó TRƯỚC — nên nó đã được chuyển vào đây cùng bộ script CLI cũ.
+>
+> Vì sao không chỉ là một tài liệu lỗi thời:
+>
+> - Nó hướng dẫn `ssh -i ~/.ssh/hushstore-key.pem ubuntu@47.130.131.199`. Hệ
+>   thống hiện tại **không có key pair nào** và **không có SG rule nào mở port
+>   22** ở bất kỳ đâu; admin access đi qua SSM Session Manager và ECS Exec. IP và
+>   đường SSH trong đây thuộc account cũ `408194747451`, đã bị xoá.
+> - Nó `docker compose build/up` trên host và `rsync` bundle WASM. Hai container
+>   giờ chạy trên ECS từ image trên ECR, tag là git SHA.
+> - Nó chạy migration lúc app khởi động. Migration giờ là một ECS task riêng và
+>   là **gate** của pipeline: exit code khác 0 thì không deploy.
+>
+> Giữ lại làm tham chiếu lịch sử, giống các script trong cùng thư mục.
+
+---
+
+> **Hạ tầng (cũ):** EC2 t3.micro (Singapore) + RDS SQL Server Express
 > **Domain:** `hushstore.io.vn` (Frontend) · `api.hushstore.io.vn` (API)
-> **SSH key:** `~/.ssh/hushstore-key.pem`
+> **SSH key (cũ, không còn tồn tại):** `~/.ssh/hushstore-key.pem`
 
 ---
 

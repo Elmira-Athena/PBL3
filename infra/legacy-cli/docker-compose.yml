@@ -1,0 +1,30 @@
+# LEGACY — compose file của pipeline cũ. ĐỪNG CHẠY LẠI.
+#
+# File này từng nằm ở gốc repo và được `infra/legacy-cli/deploy.sh` gọi trên host
+# EC2 (`docker compose -f "$REPO_DIR/docker-compose.yml" up -d api`). Nó KHÔNG
+# phải compose file cho dev local — SQL Server local nằm ở
+# `Infrastructure/db/docker-compose.yml`, xem README.md.
+#
+# Vì sao không giữ ở gốc repo: tag `image:` dưới đây trỏ vào GHCR, mà pipeline
+# hiện tại KHÔNG còn push lên GHCR — 4 image đi lên ECR với tag là git SHA
+# (`.github/workflows/deploy.yml`). Nên `:latest` ở đây là một tag đã đóng băng,
+# và một compose file ở gốc repo là thứ người ta chạy trước khi đọc.
+services:
+  api:
+    # ĐÃ CHẾT: không còn ai push lên tag này. Bản chạy thật lấy từ
+    # <account>.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api:<git-sha>.
+    image: ghcr.io/elmira-athena/hushstore-api:latest
+    container_name: hushstore_api
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

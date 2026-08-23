@@ -1,4 +1,13 @@
-# Kiểm tra trên PR và trên các nhánh không phải main.
+# Kiểm tra trên PR, trên push vào `main`, và khi bấm chạy tay.
+# Nhánh feature được phủ qua PR của nó, không qua event `push`.
+#
+# ─── VÌ SAO TRIGGER PHẢI GỒM CẢ `push: main` ─────────────────────────────────
+# Quy ước làm việc của dự án này là commit THẲNG lên `main` (Phase 1 làm 17 task
+# như vậy, Phase 2 cũng vậy). Bản đầu của file này trigger `pull_request` +
+# `push: branches-ignore: [main]`, nên dưới đúng quy ước đó nó KHÔNG BAO GIỜ
+# chạy: không có PR nào, và nhánh duy nhất có commit thì bị loại tường minh. Một
+# cửa kiểm không bao giờ mở thì không phải cửa kiểm.
+# `workflow_dispatch` có ở đây để còn chạy thử được bằng tay từ tab Actions.
 #
 # ─── VÌ SAO KHÔNG CÓ `terraform plan` Ở ĐÂY ──────────────────────────────────
 # Kế hoạch ban đầu là chạy `plan` rồi comment kết quả vào PR. Bỏ, có chủ ý.
@@ -25,13 +34,19 @@
 # Thứ CÓ ở đây và có giá trị hơn plan: `terraform test`. 11 file test đang canh
 # các assertion bảo mật (NACL stateless, SG không mở 22, IAM least privilege).
 # Chúng chạy được mà không cần state.
+#
+# `terraform test` chạy được trên push main vì trust policy của role plan nhận
+# HAI giá trị `sub` (pull_request và ref:refs/heads/main), cả hai đều là
+# `StringEquals` — so khớp chính xác, không wildcard. Xem
+# infra/tf/modules/cicd/main.tf, data "assume_plan".
 
 name: CI
 
 on:
   pull_request:
   push:
-    branches-ignore: [main]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -91,26 +106,32 @@ jobs:
     name: Terraform test
     runs-on: ubuntu-latest
 
-    # CHỈ chạy trên `pull_request` của chính repo này. Hai điều kiện, hai lý do
-    # khác nhau, và cả hai đều là "job đỏ vì thiếu quyền theo thiết kế là tín
-    # hiệu nhiễu — nó che mất những job đỏ thật":
+    # Gate này lọc đúng những lần chạy KHÔNG có role nào để assume. Một job đỏ
+    # vì thiếu quyền theo thiết kế là tín hiệu nhiễu — nó che mất những job đỏ
+    # thật.
     #
-    #   • `event_name == 'pull_request'`: trust policy của role plan chỉ nhận
-    #     `sub = repo:Elmira-Athena/PBL3:pull_request` (modules/cicd/main.tf,
-    #     local.sub_plan). Claim sub của một `push` event là
-    #     `repo:Elmira-Athena/PBL3:ref:refs/heads/<nhánh>` — không khớp role
-    #     nào, nên push nhánh feature sẽ AccessDenied ngay ở
-    #     sts:AssumeRoleWithWebIdentity. Với nhánh đang có PR mở thì cùng một
-    #     commit cho một run xanh (PR) và một run đỏ (push).
-    #     KHÔNG nới trust policy sang `ref:refs/heads/*` để "sửa" chuyện này:
-    #     làm vậy là cấp ReadOnlyAccess cho mọi nhánh.
+    #   • push (chỉ có thể là push vào `main`, theo trigger ở đầu file): claim
+    #     sub là `repo:Elmira-Athena/PBL3:ref:refs/heads/main`, và role
+    #     plan nhận đúng giá trị đó — xem local.sub_deploy trong danh sách
+    #     `values` của assume_plan (modules/cicd/main.tf). Push một nhánh khác
+    #     thì sub là `...:ref:refs/heads/<nhánh>`, không khớp role nào; trigger
+    #     `push` đã giới hạn ở `main` nên trường hợp đó không tới được đây.
+    #     KHÔNG nới trust policy sang `ref:refs/heads/*` để phủ nhánh feature:
+    #     làm vậy là cấp ReadOnlyAccess cho mọi nhánh, kể cả nhánh do người khác
+    #     đẩy lên. Nhánh feature được phủ khi nó mở PR.
     #   • `head.repo.full_name == github.repository`: PR từ fork không được
     #     GitHub cấp `id-token: write`, nên không có OIDC token nào để đổi.
     #
-    # Hai job kia (fmt/validate và dotnet build) không cần credential nên vẫn
-    # chạy cho cả push nhánh feature và PR từ fork — đó là lý do trigger của
-    # workflow vẫn giữ cả `push`.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    # Điều kiện viết ở dạng "chỉ LOẠI fork PR" chứ không phải "chỉ NHẬN push và
+    # PR": nếu viết dạng liệt kê thì `workflow_dispatch` rơi ra ngoài và bị skip,
+    # tức mất đúng cái mà workflow_dispatch được thêm vào để làm — chạy thử
+    # `terraform test` bằng tay. Dispatch từ `main` thì sub khớp role plan và
+    # chạy được; dispatch từ ref khác sẽ đỏ ở bước assume-role, và với một lần
+    # chạy do người bấm thì đỏ tường minh tốt hơn là bị bỏ qua im lặng.
+    #
+    # Hai job kia (fmt/validate và dotnet build) không cần credential nên chạy
+    # cho mọi lần trigger, gồm cả PR từ fork.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - uses: actions/checkout@v4

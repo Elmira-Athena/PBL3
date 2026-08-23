@@ -5,7 +5,7 @@ nguyên tắc tối thiểu và **đã thực sự ngăn được tấn công**.
 
 | | |
 |---|---|
-| Ngày kiểm thử | Kịch bản 1-10: 2026-08-20 (00:15 – 01:10 UTC) · Kịch bản 11: 2026-08-23, sau khi Phase 2 dựng xong hai IAM role của pipeline |
+| Ngày kiểm thử | Kịch bản 1-10: 2026-08-20 (00:15 – 01:10 UTC) · Kịch bản 11 và 12: 2026-08-23, sau khi Phase 2 dựng xong hai IAM role của pipeline |
 | Máy tấn công | Laptop macOS, IP công khai `42.1.89.156` |
 | Công cụ | `nmap 7.991`, `curl`, `nc`, `openssl`, `python3 socket`, `aws iam simulate-principal-policy`, `aws sts assume-role-with-web-identity` |
 | Mục tiêu | ALB `hushstore-alb-395664435.ap-southeast-1.elb.amazonaws.com` (`54.251.216.176`, `54.254.121.95`) · EC2 `10.20.11.22` · RDS `10.20.21.81` |
@@ -29,16 +29,23 @@ Kiểm thử thực hiện trên hạ tầng **do chính nhóm sở hữu**, tro
 | 7 | Host header lạ | không lọt sang backend | ✅ `evil.com` → 403, `www` → 403, tên DNS thô của ALB → 403 | ALB listener rule + default `fixed-response` | `kb07-host-allowlist.txt` |
 | 8 | NACL DENY theo IP | chặn đúng 1 IP | ✅ **A/B từ cùng một máy**: đường trực tiếp timeout, đường qua Cloudflare 200 | `nacl-public` rule 50 | `kb08-nacl-deny-theo-ip.txt` |
 | 9 | VPC Flow Logs `REJECT` | có bản ghi khớp | ✅ khớp cả 3 nhóm: máy tấn công, egress EC2, scanner ngoài | Flow Logs `REJECT`, gom 600s | `kb09-flowlog-reject.txt` |
-| 10 | Bán kính ảnh hưởng của IAM role | mỗi role chỉ thấy phần của mình | ✅ ma trận 12 phép thử, host bị **explicitDeny** | 5 role tách biệt | `kb10-blast-radius-iam.txt` |
+| 10 | Bán kính ảnh hưởng của IAM role | mỗi role chỉ thấy phần của mình | ✅ ma trận 12 phép thử, host bị **explicitDeny** | 7 role tách biệt | `kb10-blast-radius-iam.txt` |
 | 11 | Giả mạo OIDC assume-role | từ chối | ✅ JWT tự ký **đủ mọi claim** trust policy đòi (`aud`, `sub`, `iat`/`exp` hợp lệ) vẫn bị `InvalidIdentityToken` — AWS chặn ở bước **xác thực chữ ký**, trước cả khi xét trust policy | trust condition `StringEquals` trên `aud` + `sub` | `kb11-gia-mao-oidc.txt` |
+| 12 | Bán kính thiệt hại của role deploy | làm được đúng 4 việc của pipeline, không hơn | ✅ 4 phép thử `allowed`, 7 phép thử `implicitDeny` — gồm cả `autoscaling:SetDesiredCapacity`, `rds:StartDBInstance`, `s3:GetObject` trên tfstate | policy inline của role deploy, ghim theo ARN + condition | `kb12-blast-radius-deploy-role.txt` |
 
-**11/11 kịch bản đã có bằng chứng.** Kịch bản 11 chạy được sau khi Phase 2
+**12/12 kịch bản đã có bằng chứng.** Kịch bản 11 chạy được sau khi Phase 2
 `apply` xong hai IAM role. Kết quả đáng chú ý: lỗi trả về là
 `InvalidIdentityToken`, **không phải** `AccessDenied` — và đó là kết quả mạnh
 hơn. `AccessDenied` nghĩa là "token của bạn thật, nhưng quyền không đủ";
 `InvalidIdentityToken` ở đây nghĩa là AWS không tin token ngay từ đầu, nên
 claim `sub` trong đó không hề được xét. Giả mạo `sub` là vô nghĩa khi không
 giả mạo được chữ ký của GitHub. Xem mục 6.
+
+Kịch bản 12 trả lời câu mà kịch bản 11 để lại. Kịch bản 11 chứng minh **không ai
+assume được** role deploy; nó không nói gì về việc nếu assume được thì làm được
+gì. Với tiêu chí "least privilege, và đã thực sự ngăn được tấn công" thì hai nửa
+đó là hai câu hỏi khác nhau, và câu thứ hai mới là câu về bán kính thiệt hại. Xem
+mục 7.
 
 ---
 
@@ -116,6 +123,12 @@ Ba điểm quan trọng:
 3. **Không role nào chạm được RDS qua API.** Kể cả `rds:DescribeDBInstances`.
    Container chỉ nói chuyện với database bằng **TCP 1433**, không bằng
    AWS API — nên không cần quyền RDS nào cả.
+
+Bảng trên là 4 trong 5 role của tầng chạy ứng dụng (role thứ năm là
+`task-migrator`). Phase 2 thêm 2 role nữa cho CI/CD —
+`github-actions-deploy-role` và `github-actions-plan-role` — thành **7 role tách
+biệt**. Bán kính của role deploy đo riêng ở **mục 7 (kịch bản 12)**, vì nó là role
+duy nhất SỬA được hạ tầng.
 
 ---
 
@@ -324,4 +337,96 @@ aws iam get-role --role-name hushstore-github-actions-deploy-role \
   --query 'Role.AssumeRolePolicyDocument' --profile hushstore --no-cli-pager
 # Kỳ vọng: Condition dùng StringEquals (KHÔNG phải StringLike) trên cả aud và sub,
 # và giá trị sub không chứa ký tự *
+```
+
+---
+
+## 7. Kịch bản 12 — bán kính thiệt hại của role deploy
+
+Đã chạy. Nguyên văn output ở
+[evidence/kb12-blast-radius-deploy-role.txt](evidence/kb12-blast-radius-deploy-role.txt).
+
+Kịch bản 11 chứng minh **không ai assume được** role deploy. Đó là nửa thứ nhất.
+Nửa thứ hai là câu hỏi ngược lại, và nó độc lập: *giả sử* có người assume được —
+GitHub bị chiếm, hoặc một workflow trên `main` bị sửa — thì role đó làm được
+những gì? Một role tối thiểu đúng nghĩa phải có câu trả lời hẹp, và phải đo được
+chứ không phải suy luận từ việc đọc policy bằng mắt.
+
+Đo bằng `iam simulate-principal-policy` trên policy THẬT đang gắn:
+
+    ── PHẢI ĐƯỢC PHÉP ──
+    rds:CreateDBSnapshot   (snapshot:pre-migrate-test)              allowed
+    ecs:UpdateService      (service/hushstore/hushstore-api)        allowed
+    ecr:PutImage           (repository/hushstore-api)               allowed
+    ecs:RunTask            (task-definition/hushstore-migrator:1)   allowed
+                           + context ecs:cluster = .../cluster/hushstore
+
+    ── PHẢI BỊ TỪ CHỐI ──
+    autoscaling:SetDesiredCapacity (autoScalingGroupName/hushstore-asg)  implicitDeny
+    rds:StartDBInstance            (db:hushstore-db-tf)                  implicitDeny
+    s3:GetObject                   (tfstate/prod/terraform.tfstate)      implicitDeny
+    ecs:RunTask                    (task-definition/hushstore-api:1)     implicitDeny
+    ssm:GetParameter               (parameter/hushstore/prod/db-password) implicitDeny
+    iam:PassRole                   (task-execution-seeder-role)          implicitDeny
+    elasticloadbalancing:CreateLoadBalancer                              implicitDeny
+
+    ── điều kiện ecs:cluster không phải trang trí ──
+    ecs:RunTask trên migrator + context cluster = hushstore       -> allowed
+    ecs:RunTask trên migrator + context cluster = cluster-khac    -> implicitDeny
+
+Bốn dòng `implicitDeny` đầu là bốn ràng buộc thiết kế của Phase 2, và ở đây chúng
+đứng ở tầng quyền chứ không chỉ ở comment trong workflow:
+
+- **Không tự bật hạ tầng tốn phí.** `autoscaling:SetDesiredCapacity` và
+  `rds:StartDBInstance` là hai đường duy nhất để một pipeline tự làm phát sinh
+  $0.1954/giờ. Không có chúng thì "pipeline không tự bật hạ tầng" là một sự thật
+  về quyền, không phải một lời hứa. `modules/cicd/tests/cicd.tftest.hcl` có
+  assert canh cả danh sách này.
+- **Không đọc được tfstate.** State chứa master password của RDS ở dạng
+  plaintext (`random_password` luôn nằm trong state — bản chất của Terraform).
+- **Chỉ chạy được task migrator, không chạy được task api.** `ecs:RunTask` bị
+  ghim theo ARN `task-definition/hushstore-migrator:*`. Nếu ghim rộng hơn, một
+  pipeline bị chiếm có thể chạy một task api với biến môi trường tuỳ ý.
+- **Không pass được execution role của seeder.** Đó là role DUY NHẤT đọc được
+  `db-password` (xem mục 2.3), nên đây chính là ranh giới giữ cho mật khẩu DB
+  ngoài tầm với của pipeline.
+
+`iam:PassRole` được cấp cho ba role của ECS task và **chỉ** ba role đó, kèm
+condition `iam:PassedToService = ecs-tasks.amazonaws.com` — thiếu condition đó
+thì role đi được vào EC2 hoặc Lambda, không chỉ vào ECS task.
+
+### Một quan sát về phương pháp: thiếu context key thì kết quả "an toàn" là GIẢ
+
+Dòng cuối bảng trên đáng đọc kỹ: cùng một `ecs:RunTask` trên cùng một task
+definition, đổi context `ecs:cluster` sang một cluster khác thì thành
+`implicitDeny`. Nghĩa là condition trên `ecs:cluster` có tác dụng thật.
+
+Nhưng có một cái bẫy: **nếu không truyền `--context-entries` thì simulator trả
+`implicitDeny` cho cả trường hợp hợp lệ.** Nguyên văn JSON trong file bằng chứng
+cho thấy lý do — `MissingContextValues: ["ecs:cluster", "iam:PassedToService"]`,
+và simulator coi một condition key không được cung cấp là không thoả. Hệ quả cho
+người kiểm sau: một phép thử simulate thiếu context sẽ báo "role này không chạy
+được task nào cả" và nghe như một kết quả tốt, trong khi thực tế nó vừa bỏ qua
+đúng con đường pipeline dùng mỗi ngày. Kết quả `implicitDeny` chỉ có nghĩa khi
+biết chắc đã cung cấp đủ mọi context key mà policy đòi.
+
+### Lệnh để chạy lại
+
+```bash
+ROLE=$(terraform -chdir=infra/tf/envs/prod output -raw github_deploy_role_arn)
+CL=arn:aws:ecs:ap-southeast-1:<account>:cluster/hushstore
+
+# Phải allowed:
+aws iam simulate-principal-policy --policy-source-arn "$ROLE" \
+  --action-names ecs:RunTask \
+  --resource-arns arn:aws:ecs:ap-southeast-1:<account>:task-definition/hushstore-migrator:1 \
+  --context-entries "ContextKeyName=ecs:cluster,ContextKeyType=string,ContextKeyValues=$CL" \
+  --query 'EvaluationResults[0].EvalDecision' --profile hushstore --no-cli-pager
+
+# Phải implicitDeny (đổi migrator thành api, giữ nguyên mọi thứ khác):
+aws iam simulate-principal-policy --policy-source-arn "$ROLE" \
+  --action-names ecs:RunTask \
+  --resource-arns arn:aws:ecs:ap-southeast-1:<account>:task-definition/hushstore-api:1 \
+  --context-entries "ContextKeyName=ecs:cluster,ContextKeyType=string,ContextKeyValues=$CL" \
+  --query 'EvaluationResults[0].EvalDecision' --profile hushstore --no-cli-pager
 ```

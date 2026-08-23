@@ -13,6 +13,19 @@
 # không ghi đè được), và migration là một ECS task riêng mà exit code của nó
 # quyết định có deploy hay không.
 #
+# ─── GATE MIGRATION CHẠY IMAGE NÀO ───────────────────────────────────────────
+# Nó chạy `hushstore-migrator` ở ĐÚNG tag `$GITHUB_SHA` của lần push này, và điều
+# đó chỉ đúng vì job `deploy` ĐĂNG KÝ một revision migrator mới trước khi
+# `run-task`. Gọi `run-task --task-definition hushstore-migrator` (chỉ family)
+# thì ECS resolve về revision ACTIVE mới nhất — tức revision do `terraform apply`
+# đăng ký, mà image của revision đó là `image_tag` ghim tay trong
+# terraform.tfvars, KHÔNG phải commit vừa push. Hệ quả nếu làm vậy: efbundle cũ
+# không chứa migration mới, nó exit 0, gate PASS, rồi api/web ở SHA mới được
+# deploy lên một schema thiếu migration — và không có tín hiệu nào ở đâu cả, vì
+# /health/ready chỉ kiểm kết nối chứ không kiểm schema.
+# Nên: register TRƯỚC, rồi run-task bằng ARN có revision. Xem bước
+# "Đăng ký 3 revision" và "Chạy task migrator" bên dưới.
+#
 # ─── VÌ SAO NÓ KHÔNG TỰ BẬT HẠ TẦNG ──────────────────────────────────────────
 # `enable_alb`, `enable_nat`, `instance_count` mặc định TẮT, và mỗi giờ bật tốn
 # $0.1954 (đo thật — xem docs/terraform-runbook.md). Một pipeline tự bật hạ tầng
@@ -56,7 +69,10 @@ env:
   AWS_REGION: ap-southeast-1
   CLUSTER: hushstore
   RDS_ID: hushstore-db-tf
-  MIGRATOR_FAMILY: hushstore-migrator
+  # Không có MIGRATOR_FAMILY ở đây, có chủ ý: từ khi gate register revision
+  # trước khi chạy, bước migrate nhận ARN ĐẦY ĐỦ CÓ REVISION (`$TD_MIGRATOR`) chứ
+  # không nhận tên family. Một biến `MIGRATOR_FAMILY` còn sót lại sẽ là cái núm
+  # không nối vào đâu: sửa nó không đổi gì, mà người sửa lại tin là có.
   MIGRATOR_LOG_GROUP: /ecs/hushstore-migrator
   CAPACITY_PROVIDER: hushstore-cp
   SERVICE_WEB: hushstore-web
@@ -189,10 +205,19 @@ jobs:
         # được trên một DB đang ở BẤT KỲ version nào — kể cả DB đã áp một phần.
         #
         # Hai biến môi trường dưới đây là GIẢ và chỉ tồn tại trong runner:
-        # `dotnet ef` dựng DbContext bằng cách chạy lại entry point của API, mà
-        # Program.cs throw nếu thiếu JwtSettings__SecretKey (dòng đó nằm trước
-        # builder.Build()). Sinh script KHÔNG kết nối DB — connection string chỉ
-        # cần phân tích được cú pháp, không cần tới được server.
+        # `dotnet ef` dựng DbContext bằng cách chạy lại entry point của API, nên
+        # nó đọc cấu hình theo đúng cơ chế của app.
+        #
+        # Chúng đặt ở đây để TƯỜNG MINH HOÁ cấu hình design-time, KHÔNG phải để
+        # tránh một exception. `src/API/Program.cs:110` đúng là có
+        # `?? throw` trên `JwtSettings:SecretKey`, nhưng `??` chỉ bắn khi giá trị
+        # là null, mà `src/API/appsettings.json` khai `"SecretKey": ""` — chuỗi
+        # RỖNG. Nên bỏ biến này đi thì `dotnet ef` vẫn chạy. Giữ vì hai lẽ: nó
+        # nói ra rằng bước này cố tình chạy với secret giả, và nó vẫn đúng vào
+        # ngày ai đó xoá dòng rỗng kia khỏi appsettings.json.
+        #
+        # Sinh script KHÔNG kết nối DB — connection string chỉ cần phân tích được
+        # cú pháp, không cần tới được server.
         env:
           JwtSettings__SecretKey: design-time-only-placeholder-not-a-real-secret-32b
           ConnectionStrings__DefaultConnection: "Server=localhost;Database=design_time;User Id=sa;Password=placeholder;TrustServerCertificate=True"
@@ -313,6 +338,71 @@ jobs:
             echo "$svc đang chạy $prev"
           done
 
+      # ─── VÌ SAO REGISTER TRƯỚC KHI MIGRATE ───────────────────────
+      # Gate migration chỉ có nghĩa nếu nó chạy efbundle của ĐÚNG commit này.
+      # `run-task --task-definition hushstore-migrator` (chỉ family) resolve về
+      # revision ACTIVE mới nhất — revision của Terraform, dựng từ `image_tag`
+      # ghim tay — nên nó chạy efbundle CŨ, exit 0, và gate PASS trên một schema
+      # thiếu đúng migration vừa thêm. Vì thế cả ba revision đăng ký ở đây,
+      # TRƯỚC gate.
+      #
+      # Đăng ký KHÔNG phải deploy: một revision mới không chạy ở đâu cả cho tới
+      # khi có `update-service` trỏ vào nó, và bước đó nằm SAU gate. Nên đăng ký
+      # sớm cho api/web là vô hại; giá phải trả là khi migration fail thì để lại
+      # 2 revision không ai dùng — task definition không tính tiền, và
+      # `skip_destroy = true` vốn đã giữ mọi revision cũ để rollback được.
+      #
+      # Vòng lặp gộp cả ba vì phần thân giống hệt nhau: describe → jq đổi field
+      # image → guard theo tên container → register. Tách thành hai bản sao thì
+      # ngày ai đó thêm một field read-only mới vào `del(...)` ở một bản, bản kia
+      # trả ValidationException ở đúng nửa không được sửa. `update-service` KHÔNG
+      # nằm trong vòng này — migrator không có service nào — nó là bước riêng
+      # sau gate.
+      - name: Đăng ký 3 revision trỏ vào image vừa build
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          REGISTRY="${ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+          for key in migrator api web; do
+            # Lấy revision ACTIVE mới nhất của family làm khuôn, rồi đổi ĐÚNG
+            # field image. Nghĩa là mọi thay đổi hình dạng do Terraform apply
+            # (RAM, secret, log) được kế thừa tự nhiên, và pipeline không cần
+            # biết gì về hình dạng đó.
+            aws ecs describe-task-definition --task-definition "hushstore-${key}" \
+              --query 'taskDefinition' --no-cli-pager > "td-${key}.json"
+
+            # Các field bị `del` là READ-ONLY do AWS sinh ra; gửi lại chúng vào
+            # register-task-definition là lỗi ValidationException.
+            # Chọn container THEO TÊN, không theo chỉ số [0]. Hôm nay mỗi task
+            # definition chỉ có một container nên hai cách tương đương, nhưng
+            # nếu mai có người thêm một sidecar thì [0] sẽ đổi image của sai
+            # container mà pipeline vẫn xanh.
+            jq --arg img "${REGISTRY}/hushstore-${key}:${GITHUB_SHA}" --arg name "$key" \
+               '.containerDefinitions |= map(if .name == $name then .image = $img else . end)
+                | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                      .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)' \
+               "td-${key}.json" > "new-td-${key}.json"
+
+            # Nếu tên container không khớp thì jq ở trên là no-op và revision mới
+            # mang đúng image CŨ — im lặng và rất khó phát hiện. Với migrator, đó
+            # chính là lỗi mà cả bước này tồn tại để chặn. Chặn ngay ở đây.
+            grep -q "hushstore-${key}:${GITHUB_SHA}" "new-td-${key}.json" || {
+              echo "::error title=Không đổi được image::Không tìm thấy container tên '${key}' trong task definition hushstore-${key}. Kiểm tra modules/ecs/taskdef.tf."
+              exit 1
+            }
+
+            NEW=$(aws ecs register-task-definition --cli-input-json "file://new-td-${key}.json" \
+                    --query 'taskDefinition.taskDefinitionArn' --output text --no-cli-pager)
+
+            # Ghi qua $GITHUB_ENV vì mỗi `run:` là một shell RIÊNG — biến shell
+            # của bước này không tồn tại ở bước sau. Bước migrate đọc
+            # $TD_MIGRATOR, bước update-service đọc $TD_API và $TD_WEB. Cùng cơ
+            # chế đã dùng cho PREV_* và SNAP.
+            echo "TD_$(echo "$key" | tr '[:lower:]' '[:upper:]')=${NEW}" >> "$GITHUB_ENV"
+            echo "$key -> $NEW"
+          done
+
       # Snapshot = điểm quay về cho DỮ LIỆU. Chính sách migration là
       # forward-only (không dùng down-migration), nên đây là đường rollback duy
       # nhất nếu một migration làm hỏng dữ liệu chứ không chỉ hỏng schema.
@@ -324,7 +414,15 @@ jobs:
       - name: Snapshot trước khi migrate
         run: |
           set -euo pipefail
-          SNAP="pre-migrate-${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}"
+          # $GITHUB_RUN_ATTEMPT là phần BẮT BUỘC của tên, không phải trang trí:
+          # "Re-run failed jobs" giữ NGUYÊN cả GITHUB_SHA và GITHUB_RUN_NUMBER —
+          # chỉ RUN_ATTEMPT tăng. Thiếu nó, mọi lần chạy lại gặp
+          # DBSnapshotAlreadyExists, `set -euo pipefail` giết bước này, và job
+          # chết TRƯỚC khi migrate với một lỗi RDS không liên quan gì tới thứ
+          # thật sự đã fail lần trước.
+          # Giới hạn tên snapshot của RDS là 255 ký tự, chữ/số/dấu gạch:
+          # "pre-migrate-" + 8 + "-" + số + "-" + số còn cách xa giới hạn đó.
+          SNAP="pre-migrate-${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           echo "SNAP=$SNAP" >> "$GITHUB_ENV"
           aws rds create-db-snapshot \
             --db-instance-identifier "$RDS_ID" \
@@ -337,14 +435,30 @@ jobs:
         run: |
           set -uo pipefail
 
-          TASK=$(aws ecs run-task \
+          # ARN CÓ REVISION, không phải tên family. $TD_MIGRATOR do bước "Đăng ký
+          # 3 revision" ghi ra và nó trỏ vào hushstore-migrator:$GITHUB_SHA.
+          # Truyền tên family ở đây là chạy revision của Terraform, tức efbundle
+          # dựng từ `image_tag` cũ — xem "GATE MIGRATION CHẠY IMAGE NÀO" ở đầu file.
+          #
+          # Hứng CẢ response thay vì `--query tasks[0].taskArn`: khi ECS không xếp
+          # được task thì `tasks` rỗng và nguyên nhân THẬT nằm trong `failures[]`
+          # (`RESOURCE:MEMORY` = host không còn RAM, `AGENT` = ecs-agent không kết
+          # nối, `ATTRIBUTE` = không host nào thoả requiresAttributes). Ba nguyên
+          # nhân đó dẫn tới ba việc phải làm khác nhau hoàn toàn, nên in ra cái
+          # ECS nói còn hơn đoán một cái nghe hợp lý.
+          RESP=$(aws ecs run-task \
                    --cluster "$CLUSTER" \
-                   --task-definition "$MIGRATOR_FAMILY" \
+                   --task-definition "$TD_MIGRATOR" \
                    --capacity-provider-strategy "capacityProvider=${CAPACITY_PROVIDER},weight=1" \
-                   --query 'tasks[0].taskArn' --output text --no-cli-pager)
+                   --output json --no-cli-pager)
 
-          if [ -z "$TASK" ] || [ "$TASK" = "None" ]; then
-            echo "::error title=Không khởi được task migrator::run-task không trả về taskArn. Thường là do không còn container instance nào nhận được task (RAM không đủ), hoặc capacity provider sai tên."
+          TASK=$(printf '%s' "$RESP" | jq -r '.tasks[0].taskArn // empty')
+
+          if [ -z "$TASK" ]; then
+            echo "::error title=Không khởi được task migrator::run-task không trả về taskArn. Nguyên nhân do ECS trả về nằm ngay dưới đây."
+            printf '%s' "$RESP" | jq -r '.failures // [] | if length == 0
+              then "  (ECS không trả failures[] nào — kiểm tra tên cluster và capacity provider)"
+              else (.[] | "  arn=\(.arn // "-")  reason=\(.reason // "-")  detail=\(.detail // "-")") end'
             exit 1
           fi
           echo "task=$TASK" >> "$GITHUB_OUTPUT"
@@ -428,48 +542,25 @@ jobs:
             echo "::warning title=Snapshot có vấn đề::$SNAP đang ở trạng thái '$st'. Migration ĐÃ chạy, nhưng điểm quay về cho dữ liệu không đáng tin. Kiểm tra thủ công."
           fi
 
-      - name: Đăng ký task definition mới và trỏ service sang
+      # Đây là bước ĐẦU TIÊN chạm vào thứ đang phục vụ khách. Mọi thứ trước nó
+      # (register revision, snapshot, migrate) đều có thể fail mà production
+      # không hề đổi. Revision đã đăng ký từ trước gate, nên ở đây chỉ còn việc
+      # trỏ service sang — không có `describe`/`jq`/`register` nào giữa gate và
+      # lúc service đổi.
+      - name: Trỏ hai service sang revision mới
         run: |
           set -euo pipefail
-          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-          REGISTRY="${ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          # Hai lệnh thẳng, không gói "key:service" vào chuỗi rồi cắt như các
+          # bước khác: ARN của task definition tự nó CHỨA dấu ':'
+          # (…:task-definition/hushstore-api:42), nên một lần dùng sai `%%:*` là
+          # ra rác mà không ai thấy.
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE_API" \
+            --task-definition "$TD_API" --no-cli-pager >/dev/null
+          echo "$SERVICE_API -> $TD_API"
 
-          for pair in "api:$SERVICE_API" "web:$SERVICE_WEB"; do
-            key=${pair%%:*}; svc=${pair#*:}
-
-            # Lấy revision ACTIVE mới nhất của family làm khuôn, rồi đổi ĐÚNG
-            # field image. Nghĩa là mọi thay đổi hình dạng do Terraform apply
-            # (RAM, secret, log) được kế thừa tự nhiên, và pipeline không cần
-            # biết gì về hình dạng đó.
-            aws ecs describe-task-definition --task-definition "hushstore-${key}" \
-              --query 'taskDefinition' --no-cli-pager > td.json
-
-            # Các field dưới đây là READ-ONLY do AWS sinh ra; gửi lại chúng vào
-            # register-task-definition là lỗi ValidationException.
-            # Chọn container THEO TÊN, không theo chỉ số [0]. Hôm nay mỗi task
-            # definition chỉ có một container nên hai cách tương đương, nhưng
-            # nếu mai có người thêm một sidecar thì [0] sẽ đổi image của sai
-            # container mà pipeline vẫn xanh.
-            jq --arg img "${REGISTRY}/hushstore-${key}:${GITHUB_SHA}" --arg name "$key" \
-               '.containerDefinitions |= map(if .name == $name then .image = $img else . end)
-                | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
-                      .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)' \
-               td.json > new-td.json
-
-            # Nếu tên container không khớp thì jq ở trên là no-op và ta sẽ deploy
-            # lại đúng image cũ — im lặng và rất khó phát hiện. Chặn ngay ở đây.
-            grep -q "hushstore-${key}:${GITHUB_SHA}" new-td.json || {
-              echo "::error title=Không đổi được image::Không tìm thấy container tên '${key}' trong task definition hushstore-${key}. Kiểm tra modules/ecs/taskdef.tf."
-              exit 1
-            }
-
-            NEW=$(aws ecs register-task-definition --cli-input-json file://new-td.json \
-                    --query 'taskDefinition.taskDefinitionArn' --output text --no-cli-pager)
-            echo "$key -> $NEW"
-
-            aws ecs update-service --cluster "$CLUSTER" --service "$svc" \
-              --task-definition "$NEW" --no-cli-pager >/dev/null
-          done
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE_WEB" \
+            --task-definition "$TD_WEB" --no-cli-pager >/dev/null
+          echo "$SERVICE_WEB -> $TD_WEB"
 
       # `wait services-stable` là GATE THẬT của deploy, không phải curl ở dưới.
       # Service chỉ được coi là stable khi deployment hoàn tất, mà điều đó đòi
@@ -600,7 +691,25 @@ jobs:
             echo
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$READY" = "true" ]; then
+          # Rẽ theo KẾT QUẢ của preflight TRƯỚC, rồi mới theo nội dung của nó.
+          # `ready` chỉ có giá trị khi job preflight chạy xong: nếu nó fail
+          # (AccessDenied, throttling, thiếu repository variable) thì cả `ready`
+          # lẫn `reason` đều là chuỗi RỖNG. Rẽ thẳng theo `READY = 'true'` sẽ đẩy
+          # mọi thất bại đó vào nhánh "hạ tầng đang tắt" — in "đây là trạng thái
+          # bình thường, không phải lỗi" kèm một blockquote trống, trong khi bảng
+          # ngay phía trên nói `| Preflight | failure |`. Một summary tự mâu thuẫn
+          # còn tệ hơn không có summary.
+          if [ "$R_PREFLIGHT" != "success" ]; then
+            {
+              echo "### CHƯA BIẾT TRẠNG THÁI HẠ TẦNG — preflight không chạy xong"
+              echo
+              echo "Job \`preflight\` kết thúc ở \`$R_PREFLIGHT\`, nên **không** kết luận được là hạ tầng đang bật hay đang tắt, và job \`deploy\` bị bỏ qua."
+              echo
+              echo "4 image vẫn nằm trên ECR ở tag \`${GITHUB_SHA}\` nếu job \`build\` xanh (\`$R_BUILD\`)."
+              echo
+              echo "Chỗ cần xem: log job \`preflight\`. Ba nguyên nhân thường gặp là thiếu repository variable \`AWS_DEPLOY_ROLE_ARN\`, OIDC không đổi được token, và AWS trả lỗi tạm cho một trong ba lệnh describe."
+            } >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$READY" = "true" ]; then
             if [ "$R_DEPLOY" = "success" ]; then
               echo "**Đã deploy.** Hai service đang chạy image tag \`${GITHUB_SHA}\`." >> "$GITHUB_STEP_SUMMARY"
             else

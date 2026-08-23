@@ -71,6 +71,12 @@ RUN chmod +x ./efbundle
 
 # efbundle chạy lại entry point của API để dựng DbContext, nên nó đọc cấu hình
 # theo đúng cơ chế của app: biến môi trường ConnectionStrings__DefaultConnection.
-# LƯU Ý: Program.cs throw nếu JwtSettings__SecretKey chưa đặt (dòng đó nằm
-# trước builder.Build()), nên task definition PHẢI inject cả hai biến.
+# LƯU Ý về JwtSettings__SecretKey: task definition inject nó cùng connection
+# string, nhưng KHÔNG phải để tránh một exception. Program.cs:110 có
+# `?? throw` trên `JwtSettings:SecretKey`, mà `??` chỉ bắn khi null — và
+# appsettings.json khai `"SecretKey": ""`, chuỗi RỖNG. Nên efbundle vẫn chạy
+# nếu thiếu biến đó. Nó được inject để cấu hình của task migrator KHỚP với task
+# api (cùng `local.app_secrets`), và để vẫn đúng vào ngày dòng rỗng kia bị xoá
+# khỏi appsettings.json. Đừng ghi ở đây rằng nó bắt buộc — ai kiểm lại sẽ thấy
+# không đúng rồi bỏ luôn cả hai đầu.
 ENTRYPOINT ["./efbundle", "--verbose"]
