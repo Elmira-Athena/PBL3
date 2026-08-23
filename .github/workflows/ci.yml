@@ -2,12 +2,26 @@
 # Nhánh feature được phủ qua PR của nó, không qua event `push`.
 #
 # ─── VÌ SAO TRIGGER PHẢI GỒM CẢ `push: main` ─────────────────────────────────
-# Quy ước làm việc của dự án này là commit THẲNG lên `main` (Phase 1 làm 17 task
-# như vậy, Phase 2 cũng vậy). Bản đầu của file này trigger `pull_request` +
-# `push: branches-ignore: [main]`, nên dưới đúng quy ước đó nó KHÔNG BAO GIỜ
-# chạy: không có PR nào, và nhánh duy nhất có commit thì bị loại tường minh. Một
-# cửa kiểm không bao giờ mở thì không phải cửa kiểm.
-# `workflow_dispatch` có ở đây để còn chạy thử được bằng tay từ tab Actions.
+# Bản đầu của file này trigger `pull_request` + `push: branches-ignore: [main]`,
+# tức nó CỐ Ý bỏ qua `main`. Sai ở hai chiều:
+#
+#   • Nhánh tính năng đã được phủ bởi PR của chính nó, nên `push` trên nhánh
+#     tính năng là một lần chạy TRÙNG — và tệ hơn, claim `sub` của một push
+#     nhánh tính năng (`ref:refs/heads/<nhánh>`) không khớp role nào, nên nó
+#     luôn đỏ ở bước assume-role. Đỏ vì thiếu quyền theo thiết kế là tín hiệu
+#     nhiễu, nó che mất những lần đỏ thật.
+#   • Còn `main` — nhánh duy nhất mà code thật sự được deploy từ đó — thì lại
+#     bị loại tường minh. Một cửa kiểm bỏ qua đúng nhánh đáng kiểm nhất thì
+#     không phải cửa kiểm.
+#
+# Nên: PR kiểm trước khi merge, `push: main` kiểm lại sau khi merge, và
+# `workflow_dispatch` để còn chạy thử được bằng tay từ tab Actions.
+#
+# GHI CHÚ VỀ LUỒNG NHÁNH THẬT: công việc hạ tầng này nằm trên nhánh
+# `feature/aws-terraform-ecs-infra`, và `main` là nhánh phát triển ứng dụng.
+# Nghĩa là `deploy.yml` (chỉ trigger `push: main`) NGỦ ĐÔNG cho tới khi nhánh
+# này được merge — đó là hành vi đúng, không phải lỗi, nhưng đừng đọc "Actions
+# không chạy gì" thành "pipeline hỏng".
 #
 # ─── VÌ SAO KHÔNG CÓ `terraform plan` Ở ĐÂY ──────────────────────────────────
 # Kế hoạch ban đầu là chạy `plan` rồi comment kết quả vào PR. Bỏ, có chủ ý.

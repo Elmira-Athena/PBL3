@@ -49,7 +49,11 @@ Lý do: `plan` cần đọc `terraform.tfstate`, và state **chứa master passw
 
 PR chạy `fmt -check` → `validate` → **`terraform test`** (11 file test trên 7 module, chính là chỗ canh các assertion bảo mật về NACL/SG/IAM). Đó là kiểm tra có giá trị nhất trong repo này, và không cần state.
 
-> **Sửa sau review vòng cuối (2026-08-23):** trigger không chỉ là PR. Dự án commit thẳng lên `main`, nên `ci.yml` cũng chạy trên `push: main` và có `workflow_dispatch`; trust policy của role plan nhận hai giá trị `sub` (`pull_request` và `ref:refs/heads/main`), cả hai bằng `StringEquals`. Chỉ có `pull_request` thì file này không bao giờ chạy.
+> **Sửa sau review vòng cuối (2026-08-23):** trigger không chỉ là PR. `ci.yml` chạy trên `pull_request` + `push: main` + `workflow_dispatch`; trust policy của role plan nhận hai giá trị `sub` (`pull_request` và `ref:refs/heads/main`), cả hai bằng `StringEquals`. Lý do cần cả hai: PR kiểm trước khi merge, `push: main` kiểm lại sau khi merge.
+
+> **ĐÍNH CHÍNH (2026-08-23, muộn hơn):** lập luận ban đầu cho thay đổi trên là *"dự án commit thẳng lên `main`"*. **Điều đó SAI.** Toàn bộ công việc hạ tầng nằm trên nhánh `feature/aws-terraform-ecs-infra`; `main` là nhánh phát triển ứng dụng và tại thời điểm viết dòng này nó còn ở `ae1180f`, sau HEAD 65 commit. Tiền đề sai đó do controller lấy từ một ảnh chụp `git status` cũ ở đầu phiên và không kiểm lại, rồi truyền cho reviewer — nên finding "Important 2" của vòng review cuối được lập luận trên một cơ sở sai.
+>
+> Bản sửa vẫn đúng và vẫn cần, chỉ là vì lý do khác: nhánh tính năng đã được PR phủ, còn `main` — nhánh duy nhất `deploy.yml` deploy từ đó — thì đang bị loại tường minh. Hệ quả thật cần biết: **`deploy.yml` ngủ đông cho tới khi nhánh này được merge vào `main`.**
 
 Đường nâng cấp nếu sau này muốn `plan` trên PR: dùng GitHub **environment** có required reviewer, khi đó `sub` thành `repo:.../environment:<name>` và fork không lấy được token mà không có người bấm duyệt. Là cấu hình trên GitHub, không phải Terraform.
 
@@ -208,10 +212,14 @@ module có thư mục `tests/` (11 file test).
 > **Sửa sau review (Ruling A2 + review vòng cuối):** hai chỗ trong đoạn trên từng
 > viết sai.
 >
-> 1. Trigger ban đầu viết *"`push` nhánh khác `main`"*. Dự án commit thẳng lên
->    `main`, nên dạng đó làm cả file không bao giờ chạy. Đúng là `push: main` +
->    `workflow_dispatch`, và trust policy role plan phải nhận thêm giá trị `sub`
->    của push-main.
+> 1. Trigger ban đầu viết *"`push` nhánh khác `main`"*, tức cố ý bỏ qua `main` —
+>    nhánh DUY NHẤT mà `deploy.yml` deploy từ đó. Nhánh tính năng thì đã được PR
+>    của nó phủ, nên `push` trên nhánh tính năng chỉ là lần chạy trùng và còn
+>    luôn đỏ ở bước assume-role (claim `sub` của nó không khớp role nào). Đúng là
+>    `pull_request` + `push: main` + `workflow_dispatch`, và trust policy role
+>    plan phải nhận thêm giá trị `sub` của push-main.
+>    (Lập luận ĐẦU TIÊN cho mục này — *"dự án commit thẳng lên main"* — là sai;
+>    xem đính chính ở mục "Quyết định thiết kế" số 2.)
 > 2. Cách nạp credential ban đầu viết *"shim `~/.aws/config` với
 >    `credential_source = Environment`"*. **Không chạy được:** tham số đó của AWS
 >    CLI chỉ hợp lệ khi ĐI KÈM `role_arn` — nó trả lời câu "lấy credential ở đâu

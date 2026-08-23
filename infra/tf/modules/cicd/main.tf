@@ -33,11 +33,13 @@ locals {
   # PR không bao giờ assume được role deploy — kể cả PR do chính chủ repo mở.
   #
   # Chiều ngược lại thì KHÔNG đối xứng, có chủ ý: role plan nhận CẢ HAI giá trị
-  # (xem data.aws_iam_policy_document.assume_plan). Quy ước của dự án này là
-  # commit thẳng lên main, nên nếu role plan chỉ nhận `pull_request` thì
-  # `terraform test` — nơi chứa các assertion bảo mật — không bao giờ chạy trong
-  # CI. Đặc quyền chỉ chảy một chiều: plan là ReadOnlyAccess + 5 nhóm Deny,
-  # deploy mới là role sửa được hạ tầng.
+  # (xem data.aws_iam_policy_document.assume_plan). Lý do là hai đường đều cần
+  # `terraform test` — nơi chứa các assertion bảo mật — chạy được:
+  #   • `pull_request`: khi mở PR từ nhánh tính năng vào main;
+  #   • `ref:refs/heads/main`: sau khi PR đã merge, để lần push vào main cũng
+  #     được kiểm chứ không chỉ tin vào lần kiểm trước merge.
+  # Đặc quyền chỉ chảy một chiều: plan là ReadOnlyAccess + 5 nhóm Deny, deploy
+  # mới là role sửa được hạ tầng.
   sub_deploy = "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${var.deploy_branch}"
   sub_plan   = "repo:${var.github_owner}/${var.github_repo}:pull_request"
 
@@ -106,10 +108,11 @@ data "aws_iam_policy_document" "assume_deploy" {
 
 # Role plan nhận HAI giá trị sub, và cả hai là so khớp CHÍNH XÁC — `StringEquals`
 # với danh sách nghĩa là "khớp một trong các giá trị này", không phải wildcard.
-# Vì sao cần giá trị thứ hai: dự án commit thẳng lên `main`, nên nếu chỉ nhận
-# `pull_request` thì job `terraform-test` trong ci.yml không có đường nào chạy, và
-# các assertion bảo mật (NACL stateless, SG không mở 22, IAM least privilege) chỉ
-# tồn tại trên máy cá nhân.
+# Vì sao cần giá trị thứ hai: `terraform test` phải chạy được ở CẢ HAI thời điểm —
+# lúc mở PR (giá trị `pull_request`) và lúc code đã vào `main`
+# (`ref:refs/heads/main`). Chỉ nhận `pull_request` thì sau merge không còn lần
+# kiểm nào, và các assertion bảo mật (NACL stateless, SG không mở 22, IAM least
+# privilege) chỉ còn tồn tại trên máy cá nhân.
 #
 # Điều này KHÔNG mở rộng bán kính thiệt hại: tập người lấy được token push-main
 # và tập người lấy được token pull_request là cùng một tập — cộng tác viên có
