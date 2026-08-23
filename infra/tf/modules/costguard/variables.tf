@@ -53,3 +53,73 @@ variable "shared_notifications" {
     error_message = "Mỗi ngưỡng phải có ít nhất một email — một notification không có subscriber là vô nghĩa và AWS sẽ từ chối."
   }
 }
+
+# ─── PHASE 3: LAMBDA COST GUARD ──────────────────────────────────
+# Bốn biến dưới đây nhận TÊN resource, không nhận ARN, và cả bốn đi thẳng vào
+# Resource của IAM policy. Vì thế mỗi biến có một validation chặn dấu `*`: một
+# dấu `*` lọt vào đây không làm `apply` lỗi, không làm `plan` khác đi, nó chỉ
+# âm thầm nới quyền của Lambda ra mọi resource cùng loại trong account.
+
+variable "cluster_name" {
+  description = "Tên ECS cluster. Dùng để dựng ARN service (dạng .../service/<cluster>/<service>) — Lambda chỉ UpdateService được trong đúng cluster này"
+  type        = string
+
+  validation {
+    condition     = length(var.cluster_name) > 0 && !strcontains(var.cluster_name, "*")
+    error_message = "cluster_name phải khác rỗng và không được chứa dấu * — giá trị này đi thẳng vào Resource của IAM policy."
+  }
+}
+
+variable "asg_name" {
+  description = "Tên Auto Scaling Group mà Lambda được hạ desired về 0. Đúng một group"
+  type        = string
+
+  validation {
+    condition     = length(var.asg_name) > 0 && !strcontains(var.asg_name, "*")
+    error_message = "asg_name phải khác rỗng và không được chứa dấu * — một dấu * ở đây cho Lambda hạ capacity của MỌI ASG trong account."
+  }
+}
+
+variable "rds_identifier" {
+  description = "DB instance identifier mà Lambda được StopDBInstance. Lambda KHÔNG có quyền start lại — xem lambda.tf"
+  type        = string
+
+  validation {
+    condition     = length(var.rds_identifier) > 0 && !strcontains(var.rds_identifier, "*")
+    error_message = "rds_identifier phải khác rỗng và không được chứa dấu * — một dấu * ở đây cho Lambda stop MỌI database trong account."
+  }
+}
+
+variable "service_names" {
+  description = "Tên các ECS service được phép UpdateService về 0. Truyền TÊN chứ không truyền ARN của resource: service chỉ tồn tại khi enable_alb = true, nên tham chiếu aws_ecs_service[0].arn sẽ làm policy đổi nội dung mỗi lần bật/tắt stack"
+  type        = list(string)
+
+  validation {
+    condition     = length(var.service_names) > 0
+    error_message = "Phải truyền ít nhất một tên service — một cost guard không tắt được service nào thì không hạ được ASG an toàn."
+  }
+
+  validation {
+    condition = alltrue([
+      for name in var.service_names : length(name) > 0 && !strcontains(name, "*")
+    ])
+    error_message = "Tên service phải khác rỗng và không được chứa dấu * — giá trị này nối vào Resource của IAM policy, một dấu * cho Lambda tắt mọi service trong cluster."
+  }
+}
+
+variable "enable_auto_stop" {
+  description = "Tạo EventBridge Scheduler chạy Lambda mỗi đêm. Đặt false khi CỐ TÌNH để stack chạy qua đêm — lúc đó KHÔNG còn lưới an toàn nào và rủi ro RDS tự khởi động lại sau 7 ngày quay về nguyên trạng. Lambda và IAM role vẫn tồn tại (đều $0), chỉ mất cái đồng hồ"
+  type        = bool
+  default     = true
+}
+
+variable "stop_cron" {
+  description = "Biểu thức cron của EventBridge Scheduler, tính theo giờ Việt Nam (Asia/Ho_Chi_Minh được hardcode trong schedule.tf). Cú pháp 6 trường của Scheduler: phút giờ ngày tháng thứ năm"
+  type        = string
+  default     = "cron(0 0 * * ? *)"
+
+  validation {
+    condition     = can(regex("^cron\\(.+\\)$", var.stop_cron))
+    error_message = "stop_cron phải là biểu thức cron(...). KHÔNG dùng rate(...): rate đếm từ lúc schedule được tạo nên mỗi lần apply lại đẩy giờ chạy đi một chỗ khác, và không ai biết đêm nay Lambda chạy lúc mấy giờ."
+  }
+}

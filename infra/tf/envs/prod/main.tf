@@ -104,9 +104,9 @@ module "alb" {
   enable_alb        = var.enable_alb
 }
 
-# Dựng sớm hơn thứ tự plan (Phase 3) theo yêu cầu: bịt rủi ro "quên tắt NAT
-# Gateway / ALB" ngay từ bây giờ thay vì đợi tới cuối. Phase 3 sẽ mở rộng module
-# này thêm Lambda cost-guard + EventBridge Scheduler.
+# Budgets dựng sớm hơn thứ tự plan (Phase 3) theo yêu cầu: bịt rủi ro "quên tắt
+# NAT Gateway / ALB" ngay từ đầu thay vì đợi tới cuối. Phase 3 bổ sung phần còn
+# lại của module: Lambda cost guard + EventBridge Scheduler + SNS.
 module "costguard" {
   source = "../../modules/costguard"
 
@@ -117,6 +117,23 @@ module "costguard" {
   # Ngưỡng của người dùng chung account. Giá trị nằm trong terraform.tfvars
   # (gitignore) vì đó là email của người khác. Xem modules/costguard/main.tf.
   shared_notifications = var.shared_notifications
+
+  # ─── PHASE 3 ─────────────────────────────────────────────────
+  # Ba giá trị đầu lấy từ output của module (một nguồn sự thật cho tên resource,
+  # thay vì lặp lại literal ở hai chỗ rồi lệch nhau khi ai đó đổi một bên).
+  cluster_name   = module.ecs.cluster_name
+  asg_name       = module.ecs.asg_name
+  rds_identifier = module.data.rds_identifier
+
+  # Tên service truyền dạng CHUỖI, KHÔNG dùng module.ecs.service_*_name — đúng
+  # cùng lý do đã ghi ở module cicd bên dưới: service bị enable_alb gate nên nó
+  # biến mất mỗi lần tắt stack, và IAM policy của Lambda thì phải đứng yên. Dùng
+  # output kia sẽ khiến policy đổi nội dung theo trạng thái bật/tắt, tức mỗi lần
+  # up.sh/down.sh lại là một diff trong plan.
+  service_names = ["${local.name}-web", "${local.name}-api"]
+
+  enable_auto_stop = var.enable_auto_stop
+  stop_cron        = var.stop_cron
 }
 
 # ─── PHASE 2 ─────────────────────────────────────────────────────

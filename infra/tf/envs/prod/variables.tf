@@ -147,3 +147,17 @@ variable "shared_notifications" {
 
   default = []
 }
+
+# ─── PHASE 3: LAMBDA COST GUARD ──────────────────────────────────
+
+variable "enable_auto_stop" {
+  description = "Bật EventBridge Scheduler chạy Lambda cost guard 00:00 giờ Việt Nam mỗi đêm. MIỄN PHÍ (Scheduler free 14 triệu lượt/tháng, Lambda 30 lượt/tháng nằm trong free tier). Chỉ đặt false khi CỐ TÌNH để stack chạy qua đêm — lúc đó không còn lưới an toàn nào cho việc RDS tự khởi động lại sau 7 ngày"
+  type        = bool
+  default     = true
+}
+
+variable "stop_cron" {
+  description = "Giờ chạy cost guard, theo giờ Việt Nam (timezone Asia/Ho_Chi_Minh hardcode trong module). Mặc định 00:00 hằng đêm"
+  type        = string
+  default     = "cron(0 0 * * ? *)"
+}

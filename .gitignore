@@ -124,3 +124,12 @@ terraform.rc
 
 # Runtime cua bo script up/down/status: log apply va moc thoi gian cua so
 infra/tf/.local/
+
+# Artifact zip cua Lambda cost guard: sinh ra boi data "archive_file" moi lan
+# plan/apply, noi dung phu thuoc mtime cua file nen commit no chi tao diff nhieu
+# ma khong mang thong tin. Ma nguon that nam o src/cost_guard.py.
+infra/tf/modules/costguard/.build/
+
+# __pycache__ do `python3 -m py_compile` sinh ra ngay trong src/ khi kiem ma
+# Lambda. Da bi loai khoi zip bang `excludes` trong lambda.tf.
+__pycache__/

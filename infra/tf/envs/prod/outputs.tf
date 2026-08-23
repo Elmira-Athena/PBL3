@@ -96,3 +96,18 @@ output "github_plan_role_arn" {
   description = "Đặt vào repository variable AWS_PLAN_ROLE_ARN trên GitHub"
   value       = module.cicd.plan_role_arn
 }
+
+output "costguard_lambda_name" {
+  description = "Tên Lambda cost guard. Kiểm tay bằng: aws lambda invoke --function-name <tên> /dev/stdout"
+  value       = module.costguard.lambda_name
+}
+
+output "costguard_sns_topic_arn" {
+  description = "Topic nhận cảnh báo trạng thái hạ tầng của Lambda cost guard (độc lập với email của Budgets — hai đường cảnh báo nói hai chuyện khác nhau)"
+  value       = module.costguard.sns_topic_arn
+}
+
+output "costguard_schedule_name" {
+  description = "Tên schedule chạy hằng đêm. RỖNG nghĩa là enable_auto_stop = false, tức đang KHÔNG có lưới an toàn nào"
+  value       = module.costguard.schedule_name
+}

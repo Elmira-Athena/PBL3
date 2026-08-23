@@ -19,5 +19,12 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+
+    # Phase 3: module costguard zip src/ thành artifact của Lambda cost guard.
+    # Provider chạy cục bộ, không gọi API AWS và không cần credential.
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 }
