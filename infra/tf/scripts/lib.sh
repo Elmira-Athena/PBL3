@@ -178,6 +178,37 @@ hs_sso_check() {
 
 # hs_apply "<nhãn>" — chạy terraform apply, in tiến độ trực tiếp, trả exit code
 # THẬT của terraform. Không pipe. Log đầy đủ nằm ở $HS_LAST_LOG.
+# Có thay đổi nào đang chờ trên module.data (tức RDS) không?
+#
+# Cần biết vì apply chạm RDS sẽ gọi ModifyDBInstance, mà AWS từ chối lệnh đó
+# khi instance đang `starting` hoặc `stopping` (InvalidDBInstanceState). up.sh
+# cố tình apply NAT + ALB TRONG LÚC RDS đang lên để tiết kiệm ~4 phút; phép
+# chồng việc đó an toàn với ECS (instance_count = 0 nên không có gì crash-loop)
+# nhưng KHÔNG an toàn nếu chính lệnh apply lại đi sửa RDS.
+#
+# `-detailed-exitcode`: 0 = không có gì thay đổi, 2 = có, 1 = lỗi. Chỉ trả về
+# "có" khi đúng mã 2 — lỗi (mã 1) không được im lặng thành "không có thay đổi",
+# vì như vậy sẽ mở lại đúng cái bẫy hàm này tồn tại để đóng.
+#
+# ĐÂY LÀ HÀM VỊ TỪ: nó báo kết quả bằng exit code, nên PHẢI gọi trong một điều
+# kiện (`if ...`, `&&`, `||`). Mọi script ở đây chạy `set -euo pipefail`, và gọi
+# trực tiếp ngoài điều kiện thì lần trả về "không có thay đổi" (mã 1) sẽ giết
+# luôn script — cùng lớp lỗi im lặng với mấy pipeline `hs_tfvar_get` đã phải vá
+# bằng `|| true`. Trong `if` thì bash treo errexit nên trả 1 là an toàn.
+hs_data_has_pending() {
+  set +e
+  terraform -chdir="$HS_TF_DIR" plan -input=false -lock-timeout=5m -no-color \
+    -detailed-exitcode -target=module.data >/dev/null 2>&1
+  rc=$?
+  set -e
+  case "$rc" in
+    2) return 0 ;;
+    0) return 1 ;;
+    *) hs_warn "không kiểm được thay đổi chờ trên module.data (terraform plan mã ${rc}) — coi như CÓ để đi đường an toàn"
+       return 0 ;;
+  esac
+}
+
 hs_apply() {
   label="$1"
   mkdir -p "$HS_LOCAL_DIR/logs"

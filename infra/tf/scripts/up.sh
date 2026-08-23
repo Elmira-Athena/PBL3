@@ -87,6 +87,22 @@ case "$st" in
   *) hs_die "RDS ở trạng thái không xử lý được: ${st}" ;;
 esac
 
+# Phép chồng việc ở BƯỚC 2 chỉ an toàn khi apply KHÔNG chạm RDS. Nếu có thay
+# đổi đang chờ trên module.data thì apply sẽ gọi ModifyDBInstance, và AWS từ
+# chối lệnh đó khi instance chưa `available` (InvalidDBInstanceState) → script
+# chết giữa BƯỚC 2. Khi đó promote cửa chặn của BƯỚC 3 lên trước.
+#
+# Trạng thái bình thường là không có thay đổi chờ, nên nhánh này gần như không
+# bao giờ chạy và ~4 phút tiết kiệm vẫn còn nguyên. Chỉ trả phí khi thật sự có
+# thay đổi RDS chờ apply — đúng lúc đáng trả.
+if [ "$(rds_status)" != "available" ] && hs_data_has_pending; then
+  hs_warn "có thay đổi chờ trên module.data → phải chờ RDS available TRƯỚC khi apply"
+  hs_info "mất phần chồng việc ~4m của bước này, đổi lấy việc apply không chết giữa đường"
+  hs_wait_until "RDS available (chờ sớm vì có thay đổi RDS chờ apply)" 1200 "5-10m" \
+    rds_is available \
+    || hs_die "RDS không lên. Kiểm tra: aws rds describe-events --source-identifier ${HS_DB} --source-type db-instance --duration 60 --profile ${HS_PROFILE}"
+fi
+
 if [ "$WANT_ALB" = true ]; then STEP2="NAT Gateway + ALB"; else STEP2="NAT Gateway"; fi
 hs_head "BƯỚC 2/6 — ${STEP2}"
 hs_window_open
