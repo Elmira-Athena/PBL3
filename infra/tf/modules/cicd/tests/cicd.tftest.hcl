@@ -178,6 +178,71 @@ run "deploy_role_khong_the_tu_bat_ha_tang_ton_phi" {
     ])
     error_message = "Role deploy không được tự tạo hay nới IAM — thay đổi quyền phải đi qua terraform apply do người chạy."
   }
+
+  # Hai assert trên MÙ VỚI WILDCARD, và đó là lỗ đủ to để vô hiệu hoá cả hai:
+  # `"autoscaling:*"` không khớp chuỗi chính xác nào trong denylist và cũng
+  # không startswith("iam:Create"), nhưng nó cấp đúng autoscaling:SetDesiredCapacity
+  # — tức cấp đúng thứ mà denylist tồn tại để cấm. `"rds:*"` và `"*"` trần cũng
+  # vậy. Nên chốt bằng một điều kiện không có kẽ: policy này không có action nào
+  # chứa dấu *.
+  assert {
+    condition = alltrue([
+      for s in jsondecode(data.aws_iam_policy_document.deploy.json).Statement :
+      alltrue([for a in flatten([s.Action]) : !strcontains(a, "*")])
+    ])
+    error_message = "Action của role deploy phải là tên ĐẦY ĐỦ, không được chứa dấu *. Một wildcard theo service làm hai assert denylist phía trên vô hiệu. Nếu sau này thật sự cần một nhóm action mà AWS chỉ cấp được dạng wildcard (ví dụ ssmmessages:* cho ECS Exec): trước hết thử liệt kê tường minh các action con; chỉ khi AWS không cho liệt kê thì mới nới assert này thành allowlist ĐÚNG tiền tố đó (và không bao giờ gồm autoscaling, rds hay ec2), kèm một đoạn trong policy.tf nói vì sao service đó là ngoại lệ. Đừng xoá assert."
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# Ba run block trên chỉ assert điều PHỦ ĐỊNH — "không được có quyền X". Chúng
+# không bắt được lỗi ngược chiều: một lần trim quyền quá tay. Lỗi đó không hiện
+# ra ở fmt, validate hay plan; nó hiện ra ở lần deploy đầu tiên sau apply, dưới
+# dạng AccessDenied giữa lúc migration đã chạy xong. Run block này là chỗ duy
+# nhất canh việc policy cấp ĐỦ.
+#
+# Danh sách dưới đây là hợp của mọi lệnh `aws` trong .github/workflows/deploy.yml.
+# Hai action CỐ TÌNH không có trong danh sách: ecr:BatchGetImage và
+# ecr:GetDownloadUrlForLayer — policy vẫn cấp chúng vì chúng nằm trong policy
+# push chuẩn của AWS, nhưng chưa có bằng chứng runtime rằng docker push gọi tới,
+# nên chúng là ứng viên để xoá chứ không phải điều kiện bắt buộc.
+# ─────────────────────────────────────────────────────────────────
+run "deploy_role_cap_du_quyen_cho_moi_lenh_pipeline_goi" {
+  command = plan
+
+  assert {
+    condition = length(setsubtract(
+      [
+        "ecr:GetAuthorizationToken",       # amazon-ecr-login
+        "ecr:BatchCheckLayerAvailability", # docker push
+        "ecr:InitiateLayerUpload",         # docker push
+        "ecr:UploadLayerPart",             # docker push
+        "ecr:CompleteLayerUpload",         # docker push
+        "ecr:PutImage",                    # docker push
+        "ecr:DescribeImages",              # bước "Image đã tồn tại chưa" (tag IMMUTABLE)
+        "ecs:DescribeServices",            # preflight, và ghi lại revision cũ để rollback
+        "ecs:ListContainerInstances",      # preflight
+        "ecs:DescribeTaskDefinition",      # lấy revision hiện tại làm khuôn
+        "ecs:RegisterTaskDefinition",      # revision mới chỉ đổi field image
+        "ecs:UpdateService",               # trỏ 2 service sang revision mới, và rollback
+        "ecs:RunTask",                     # task migrator
+        "ecs:DescribeTasks",               # vòng poll lấy lastStatus + exitCode
+        "iam:PassRole",                    # RegisterTaskDefinition tham chiếu 3 role
+        "logs:GetLogEvents",               # in nguyên nhân khi migration fail
+        "logs:DescribeLogStreams",         # nhánh dự phòng khi tên stream đoán sai
+        "rds:DescribeDBInstances",         # preflight
+        "rds:CreateDBSnapshot",            # điểm quay về cho dữ liệu
+        "rds:DescribeDBSnapshots",         # kiểm chứng snapshot, và liệt kê để dọn
+        "rds:DeleteDBSnapshot",            # dọn, giữ 3 cái mới nhất
+        "s3:PutObject",                    # migrate-<sha>.sql
+      ],
+      flatten([
+        for s in jsondecode(data.aws_iam_policy_document.deploy.json).Statement :
+        flatten([s.Action])
+      ])
+    )) == 0
+    error_message = "Policy role deploy THIẾU action mà deploy.yml gọi tới. Policy hiện cấp: ${join(", ", sort(flatten([for s in jsondecode(data.aws_iam_policy_document.deploy.json).Statement : flatten([s.Action])])))}. So với danh sách trong assert này để tìm cái thiếu. Nếu bạn vừa xoá một action vì cho là không dùng: nó CÓ được gọi — sửa deploy.yml trước, rồi mới sửa danh sách này."
+  }
 }
 
 # ─────────────────────────────────────────────────────────────────

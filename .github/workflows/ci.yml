@@ -22,7 +22,7 @@
 # `repo:.../environment:<tên>` và fork không lấy được token mà không có người
 # bấm duyệt. Đó là cấu hình trên GitHub, không phải Terraform.
 #
-# Thứ CÓ ở đây và có giá trị hơn plan: `terraform test`. 17 file test đang canh
+# Thứ CÓ ở đây và có giá trị hơn plan: `terraform test`. 11 file test đang canh
 # các assertion bảo mật (NACL stateless, SG không mở 22, IAM least privilege).
 # Chúng chạy được mà không cần state.
 
@@ -72,7 +72,12 @@ jobs:
           fail=0
           for dir in infra/tf/envs/prod infra/tf/modules/*/; do
             echo "── $dir"
-            terraform -chdir="$dir" init -backend=false -input=false -no-color >/dev/null
+            # `init` cũng phải `|| continue`, không chỉ `validate`. Dưới `set -e`
+            # một init lỗi sẽ giết cả bước và bỏ qua toàn bộ module còn lại —
+            # phá đúng thiết kế "gom hết lỗi rồi exit $fail một lần". Init lỗi
+            # thì validate của cùng thư mục đó cũng vô nghĩa, nên `continue`.
+            terraform -chdir="$dir" init -backend=false -input=false -no-color >/dev/null \
+              || { echo "::error::init thất bại ở $dir"; fail=1; continue; }
             terraform -chdir="$dir" validate -no-color || fail=1
           done
           exit $fail
@@ -86,12 +91,26 @@ jobs:
     name: Terraform test
     runs-on: ubuntu-latest
 
-    # PR từ fork: GitHub KHÔNG cấp `id-token: write`, nên không có OIDC token và
-    # bước assume role sẽ đỏ. Bỏ qua job một cách tường minh thay vì để nó fail
-    # — job đỏ vì thiếu quyền theo thiết kế là tín hiệu nhiễu, và nó che mất
-    # những job đỏ thật. Hai job kia (fmt/validate và dotnet build) không cần
-    # credential nên vẫn chạy cho fork.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # CHỈ chạy trên `pull_request` của chính repo này. Hai điều kiện, hai lý do
+    # khác nhau, và cả hai đều là "job đỏ vì thiếu quyền theo thiết kế là tín
+    # hiệu nhiễu — nó che mất những job đỏ thật":
+    #
+    #   • `event_name == 'pull_request'`: trust policy của role plan chỉ nhận
+    #     `sub = repo:Elmira-Athena/PBL3:pull_request` (modules/cicd/main.tf,
+    #     local.sub_plan). Claim sub của một `push` event là
+    #     `repo:Elmira-Athena/PBL3:ref:refs/heads/<nhánh>` — không khớp role
+    #     nào, nên push nhánh feature sẽ AccessDenied ngay ở
+    #     sts:AssumeRoleWithWebIdentity. Với nhánh đang có PR mở thì cùng một
+    #     commit cho một run xanh (PR) và một run đỏ (push).
+    #     KHÔNG nới trust policy sang `ref:refs/heads/*` để "sửa" chuyện này:
+    #     làm vậy là cấp ReadOnlyAccess cho mọi nhánh.
+    #   • `head.repo.full_name == github.repository`: PR từ fork không được
+    #     GitHub cấp `id-token: write`, nên không có OIDC token nào để đổi.
+    #
+    # Hai job kia (fmt/validate và dotnet build) không cần credential nên vẫn
+    # chạy cho cả push nhánh feature và PR từ fork — đó là lý do trigger của
+    # workflow vẫn giữ cả `push`.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - uses: actions/checkout@v4
@@ -108,16 +127,25 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-tf-test
 
-      # 17 file test đều khai báo `provider "aws" { profile = "hushstore" }` —
-      # đó là profile SSO trên máy của người phát triển. Trên runner không có
-      # profile nào, nên tạo một profile CÙNG TÊN trỏ vào credential tạm mà
+      # 10 trong 11 file test khai báo `provider "aws" { profile = "hushstore" }`
+      # — đó là profile SSO trên máy của người phát triển. (File thứ 11,
+      # modules/alb/tests/alb.tftest.hcl, dùng `mock_provider` có chủ ý để chạy
+      # offline, nên nó không cần profile nào.) Trên runner không có profile
+      # nào, nên tạo một profile CÙNG TÊN trỏ vào credential tạm mà
       # configure-aws-credentials vừa export ra biến môi trường. Cách này giữ
-      # 17 file test nguyên vẹn, thay vì sửa provider block ở cả 17 chỗ rồi làm
+      # 10 file test nguyên vẹn, thay vì sửa provider block ở cả 10 chỗ rồi làm
       # hỏng cách chạy test trên máy cá nhân.
       #
-      # Credential ghi ra file ở đây là credential TẠM, hạn 1 giờ, trên một
-      # runner dùng một lần rồi hủy. Nó cũng bị Deny tường minh s3:GetObject và
-      # kms:Decrypt, nên kể cả bị lộ thì không đọc được state hay secret nào.
+      # `aws configure set` GHI RA ĐĨA: nó tạo/ghi `~/.aws/credentials` của
+      # runner, không chỉ đặt biến môi trường. Chấp nhận được vì đây là
+      # credential TẠM, hạn 1 giờ, trên một runner dùng một lần rồi hủy. Nó
+      # cũng bị Deny tường minh s3:GetObject và kms:Decrypt, nên kể cả file đó
+      # bị đọc thì cũng không mở được state hay secret nào.
+      #
+      # Không dùng `credential_source = Environment` trong `~/.aws/config`:
+      # tham số đó của AWS CLI chỉ hợp lệ khi ĐI KÈM `role_arn` — nó trả lời
+      # câu "lấy credential ở đâu để assume role kia". Một profile chỉ có
+      # `credential_source` mà không có `role_arn` bị CLI từ chối.
       - name: Tạo profile hushstore từ credential OIDC
         run: |
           aws configure set --profile hushstore region        "$AWS_REGION"

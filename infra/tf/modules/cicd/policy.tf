@@ -30,6 +30,11 @@ data "aws_iam_policy_document" "deploy" {
     sid    = "EcrPushPullOnlyOurFourRepos"
     effect = "Allow"
 
+    # BatchGetImage và GetDownloadUrlForLayer: giữ vì chúng là 2 trong 8 action
+    # của policy push chuẩn mà AWS tự công bố, và `docker push` có thể gọi chúng
+    # để resolve manifest của layer đã có (cache-from). Chưa có bằng chứng
+    # runtime để loại — khi pipeline đã chạy thật và CloudTrail không thấy hai
+    # action này thì xoá được.
     actions = [
       "ecr:BatchCheckLayerAvailability",
       "ecr:InitiateLayerUpload",
@@ -39,7 +44,6 @@ data "aws_iam_policy_document" "deploy" {
       "ecr:BatchGetImage",
       "ecr:GetDownloadUrlForLayer",
       "ecr:DescribeImages",
-      "ecr:ListImages",
     ]
 
     resources = var.ecr_repository_arns
@@ -57,10 +61,13 @@ data "aws_iam_policy_document" "deploy" {
     resources = local.service_arns
   }
 
+  # Preflight đếm container instance ACTIVE: migration là task bridge trên EC2
+  # launch type nên không có host đăng ký vào cluster thì run-task nằm ở
+  # PROVISIONING mãi rồi timeout.
   statement {
     sid       = "EcsListContainerInstancesOfOurCluster"
     effect    = "Allow"
-    actions   = ["ecs:ListContainerInstances", "ecs:ListServices"]
+    actions   = ["ecs:ListContainerInstances"]
     resources = [var.cluster_arn]
   }
 
@@ -75,17 +82,16 @@ data "aws_iam_policy_document" "deploy" {
     resources = ["*"]
   }
 
-  # ListTasks / DescribeTasks / DescribeContainerInstances không nhận ARN
-  # cluster làm Resource, nên siết bằng condition ecs:cluster. Kết quả tương
-  # đương: role không nhìn được task của cluster nào khác.
+  # DescribeTasks không nhận ARN cluster làm Resource, nên siết bằng condition
+  # ecs:cluster. Kết quả tương đương: role không nhìn được task của cluster nào
+  # khác. Đây là action mà vòng poll của bước migrate gọi mỗi 10 giây để lấy
+  # lastStatus và exitCode.
   statement {
     sid    = "EcsReadTasksInOurClusterOnly"
     effect = "Allow"
 
     actions = [
-      "ecs:ListTasks",
       "ecs:DescribeTasks",
-      "ecs:DescribeContainerInstances",
     ]
 
     resources = ["*"]

@@ -124,7 +124,3 @@ terraform.rc
 
 # Runtime cua bo script up/down/status: log apply va moc thoi gian cua so
 infra/tf/.local/
-
-# Workspace tạm của skill subagent-driven-development (ledger, brief, report,
-# review package). Là scratch, không phải lịch sử — git log mới là bản ghi.
-.superpowers/

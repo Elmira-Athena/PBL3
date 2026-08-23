@@ -127,7 +127,11 @@ hs_wait_until "cả tg-api và tg-web healthy" 600 "1-3m sau khi task lên" tg_h
 # một record trung gian `alb` để chỉ phải sửa MỘT chỗ thay vì hai.
 hs_head "DNS"
 ALB_DNS="$(hs_tf_out alb_dns_name)"
-WEB_DOMAIN="$(hs_tfvar_get web_domain)"; WEB_DOMAIN="${WEB_DOMAIN:-hushstore.io.vn}"
+# `|| true` cùng lý do như trong hs_image_tag_check: hs_tfvar_get là pipeline mở
+# đầu bằng grep, và web_domain KHÔNG có trong terraform.tfvars (nó chỉ có default
+# trong variables.tf). Thiếu `|| true` thì pipefail + -e giết up.sh ngay ở đây,
+# và fallback `:-hushstore.io.vn` ở ngay bên phải không bao giờ được dùng tới.
+WEB_DOMAIN="$(hs_tfvar_get web_domain || true)"; WEB_DOMAIN="${WEB_DOMAIN:-hushstore.io.vn}"
 CUR="$(dig +short CNAME "alb.${WEB_DOMAIN}" 2>/dev/null | sed 's/\.$//' | head -1)"
 
 echo "  ALB hiện tại      : ${ALB_DNS}"

@@ -61,6 +61,12 @@ env:
   CAPACITY_PROVIDER: hushstore-cp
   SERVICE_WEB: hushstore-web
   SERVICE_API: hushstore-api
+  # TRÙNG LẶP BẮT BUỘC: giá trị này còn xuất hiện lần thứ hai ở
+  # `build_args` của matrix image `web` bên dưới. `strategy.matrix` được
+  # GitHub đánh giá TRƯỚC khi context `env` của workflow tồn tại, nên không
+  # tham chiếu được `${{ env.API_BASE_URL }}` ở đó. SỬA THÌ PHẢI SỬA CẢ HAI:
+  # nếu lệch, health check ở cuối job gọi một URL còn bundle Blazor gọi một
+  # URL khác, và build-arg không dùng chỉ là warning nên Docker không báo gì.
   API_BASE_URL: https://api.hushstore.io.vn
 
 jobs:
@@ -87,6 +93,10 @@ jobs:
             # ApiBaseUrl bị BAKE vào bundle lúc build — đó là bản chất của
             # Blazor WASM standalone, nó không đọc được biến môi trường lúc
             # runtime. Nên URL phải là build-arg, không phải env của container.
+            #
+            # Đây là BẢN SAO của `env.API_BASE_URL` ở đầu file, viết cứng vì
+            # matrix không đọc được context `env`. Sửa một chỗ mà quên chỗ kia
+            # là lỗi im lặng — xem comment ở env.API_BASE_URL.
             build_args: API_BASE_URL=https://api.hushstore.io.vn
           - image: migrator
             dockerfile: src/Infrastructure/Dockerfile.migrator
@@ -257,10 +267,13 @@ jobs:
 
           echo "RDS=$rds  container_instance=$hosts  service_ACTIVE=$svcs"
 
+          # `${reason:+$reason }` chèn dấu cách CHỈ KHI reason đã có nội dung.
+          # Nối thẳng "$reason ..." vào chuỗi rỗng sẽ để lại một dấu cách đầu,
+          # và chuỗi này hiện nguyên văn trong blockquote của summary.
           reason=""
-          [ "$rds" = "available" ] || reason="$reason RDS đang ở trạng thái '$rds' (cần 'available')."
-          [ "$hosts" -ge 1 ]      || reason="$reason Không có container instance nào ACTIVE (instance_count = 0)."
-          [ "$svcs" -eq 2 ]       || reason="$reason Chỉ có $svcs/2 ECS service ACTIVE (enable_alb = false)."
+          [ "$rds" = "available" ] || reason="${reason:+$reason }RDS đang ở trạng thái '$rds' (cần 'available')."
+          [ "$hosts" -ge 1 ]      || reason="${reason:+$reason }Không có container instance nào ACTIVE (instance_count = 0)."
+          [ "$svcs" -eq 2 ]       || reason="${reason:+$reason }Chỉ có $svcs/2 ECS service ACTIVE (enable_alb = false)."
 
           if [ -z "$reason" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
@@ -360,13 +373,43 @@ jobs:
           if [ "$exitcode" != "0" ]; then
             echo "::error title=Migration THẤT BẠI (exit $exitcode)::KHÔNG deploy. Bản đang chạy vẫn phục vụ bình thường. stoppedReason: $reason"
             echo "── log của task migrator ─────────────────────────────"
-            # Stream name của awslogs driver: <prefix>/<container>/<task-id>
+            # Stream name của awslogs driver: <prefix>/<container>/<task-id>.
+            # Tên này được SUY RA, không được AWS đảm bảo: nó phụ thuộc
+            # awslogs-stream-prefix trong modules/ecs/taskdef.tf. Nếu prefix đó
+            # đổi thì đoán sai, và bước này im lặng không in được log ở đúng
+            # lúc người ta cần log nhất — nên có nhánh dự phòng bên dưới.
             TASK_ID="${TASK##*/}"
-            aws logs get-log-events \
-              --log-group-name "$MIGRATOR_LOG_GROUP" \
-              --log-stream-name "migrator/migrator/${TASK_ID}" \
-              --query 'events[].message' --output text --no-cli-pager \
-              || echo "(không đọc được log — kiểm tra trên CloudWatch: $MIGRATOR_LOG_GROUP)"
+            LOGS=$(aws logs get-log-events \
+                     --log-group-name "$MIGRATOR_LOG_GROUP" \
+                     --log-stream-name "migrator/migrator/${TASK_ID}" \
+                     --query 'events[].message' --output text --no-cli-pager 2>/dev/null || true)
+
+            if [ -n "$LOGS" ] && [ "$LOGS" != "None" ]; then
+              echo "$LOGS"
+            else
+              echo "(không đọc được stream đoán tên 'migrator/migrator/${TASK_ID}' — dò stream thật)"
+              # Sắp theo LastEventTime giảm dần: stream của task vừa chết là
+              # stream có event mới nhất.
+              STREAMS=$(aws logs describe-log-streams \
+                          --log-group-name "$MIGRATOR_LOG_GROUP" \
+                          --order-by LastEventTime --descending --max-items 5 \
+                          --query 'logStreams[].logStreamName' \
+                          --output text --no-cli-pager 2>/dev/null || true)
+              echo "Các stream đang có trong $MIGRATOR_LOG_GROUP:"
+              for s in $STREAMS; do echo "  - $s"; done
+
+              NEWEST=$(printf '%s\n' $STREAMS | head -1)
+              if [ -n "$NEWEST" ] && [ "$NEWEST" != "None" ]; then
+                echo "── thử stream mới nhất: $NEWEST"
+                aws logs get-log-events \
+                  --log-group-name "$MIGRATOR_LOG_GROUP" \
+                  --log-stream-name "$NEWEST" \
+                  --query 'events[].message' --output text --no-cli-pager 2>/dev/null \
+                  || echo "(vẫn không đọc được — kiểm tra trên CloudWatch: $MIGRATOR_LOG_GROUP)"
+              else
+                echo "(log group rỗng hoặc không đọc được — kiểm tra trên CloudWatch: $MIGRATOR_LOG_GROUP)"
+              fi
+            fi
             exit 1
           fi
 
@@ -476,7 +519,11 @@ jobs:
           aws ecs wait services-stable --cluster "$CLUSTER" \
             --services "$SERVICE_WEB" "$SERVICE_API" || true
           echo "Đã trỏ về: api=$PREV_API  web=$PREV_WEB"
-          echo "LƯU Ý: migration KHÔNG được rollback. Snapshot dữ liệu: $SNAP"
+          # `${SNAP:-...}` vì bước này chạy dưới `set -u` và SNAP chỉ tồn tại
+          # sau khi bước snapshot đã ghi nó vào $GITHUB_ENV. Cửa sổ hẹp, nhưng
+          # một lần fail đúng trong cửa sổ đó sẽ cho "SNAP: unbound variable"
+          # ĐÈ LÊN lỗi thật — đúng lúc đang rollback.
+          echo "LƯU Ý: migration KHÔNG được rollback. Snapshot dữ liệu: ${SNAP:-(chưa tạo)}"
 
       - name: Dọn snapshot cũ, giữ 3 cái mới nhất
         if: always()
@@ -486,13 +533,36 @@ jobs:
           # policy, nên bước này KHÔNG thể chạm tới snapshot người tạo tay hay
           # final snapshot lúc destroy — ranh giới an toàn nằm ở IAM, không nằm
           # ở logic của đoạn script này.
-          aws rds describe-db-snapshots --snapshot-type manual \
-            --query "reverse(sort_by(DBSnapshots[?starts_with(DBSnapshotIdentifier, 'pre-migrate-')], &SnapshotCreateTime))[3:].DBSnapshotIdentifier" \
-            --output text --no-cli-pager | tr '\t' '\n' | while read -r old; do
-              [ -n "$old" ] || continue
-              echo "Xoá snapshot cũ: $old"
-              aws rds delete-db-snapshot --db-snapshot-identifier "$old" --no-cli-pager >/dev/null || true
-            done
+          #
+          # `|| true` trên lệnh describe là BẮT BUỘC, không phải cho chắc: shell
+          # mặc định của Actions là `bash -e {0}`, nên `-e` đang bật và
+          # `set -uo pipefail` không tắt nó. Một lỗi ở đây (JMESPath vấp kiểu
+          # null, hoặc RDS trả lỗi tạm) sẽ làm bước này đỏ → job `deploy` đỏ →
+          # job `summary` in "Deploy KHÔNG thành công" cho một lần deploy đã
+          # hoàn tất trọn vẹn, rồi mời người ta rollback một bản tốt. Dọn rác
+          # thất bại không được phép đổi kết luận về deploy.
+          #
+          # Lọc `Status == 'available'` trước khi sort vì hai lẽ: chỉ snapshot
+          # đã hoàn tất mới có SnapshotCreateTime đáng tin (cái mà chính run này
+          # vừa tạo còn đang `creating`, và sort_by trên một field null là lỗi),
+          # và ta cũng không muốn xoá một snapshot đang tạo. Hệ quả của phép lọc
+          # là tập ứng viên NHỎ HƠN, nên nó chỉ có thể xoá ÍT hơn chứ không bao
+          # giờ nhiều hơn: "giữ 3 available mới nhất" cộng snapshot đang tạo.
+          #
+          # Hứng ra biến rồi mới lặp, thay vì `describe | while`: `||` có độ ưu
+          # tiên THẤP hơn `|`, nên `describe ... || true | tr | while` sẽ được
+          # bash phân tích thành `describe || (true | tr | while ...)` — tức
+          # đúng lúc describe THÀNH CÔNG thì vòng lặp không nhận được gì.
+          olds=$(aws rds describe-db-snapshots --snapshot-type manual \
+                   --query "reverse(sort_by(DBSnapshots[?starts_with(DBSnapshotIdentifier, 'pre-migrate-') && Status == 'available'], &SnapshotCreateTime))[3:].DBSnapshotIdentifier" \
+                   --output text --no-cli-pager 2>/dev/null || true)
+
+          for old in $olds; do
+            # `--output text` in "None" khi query không khớp gì.
+            if [ "$old" = "None" ]; then continue; fi
+            echo "Xoá snapshot cũ: $old"
+            aws rds delete-db-snapshot --db-snapshot-identifier "$old" --no-cli-pager >/dev/null || true
+          done
 
   # ───────────────────────────────────────────────────────────────
   # SUMMARY — luôn chạy. Đây là thứ trả lời câu "vừa rồi có deploy không".

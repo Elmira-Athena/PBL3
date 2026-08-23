@@ -199,7 +199,12 @@ hs_tf_out() { terraform -chdir="$HS_TF_DIR" output -raw "$1" 2>/dev/null || true
 # stack, rồi bug vẫn còn.
 hs_image_tag_check() {
   local want newest
-  want="$(hs_tfvar_get image_tag)"
+  # `|| true` là thứ làm guard bên dưới TỚI ĐƯỢC. hs_tfvar_get là một pipeline
+  # mở đầu bằng grep, và file này bật `set -euo pipefail`: nếu tfvars không có
+  # image_tag thì grep exit 1, pipefail lan ra, và -e giết up.sh NGAY TẠI DÒNG
+  # GÁN — trước khi chạy tới `[ -n "$want" ]`. Tức là ý định "thiếu image_tag
+  # thì bỏ qua cảnh báo" biến thành "up.sh chết không rõ lý do".
+  want="$(hs_tfvar_get image_tag || true)"
   [ -n "$want" ] || return 0
 
   # Tag mới nhất theo thời điểm push, không theo thứ tự chữ cái — git SHA không
