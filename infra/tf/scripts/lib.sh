@@ -54,13 +54,14 @@ HS_DB="${HS_PROJECT}-db-tf"
 # cộng lại. RDS T3 không có cách tắt unlimited mode: khác EC2, cả
 # create-db-instance lẫn modify-db-instance đều không có tham số credit nào.
 #
-# Cho tới khi free tier / credit hết thì thực trả vẫn là $0. Các số dưới đây là
-# giá niêm yết, tức cái sẽ phải trả khi credit hết.
-# KHÔNG có free tier nào trên account này. Account tạo 2026-08-18, thuộc mô hình
-# free plan mới (credit trả trước) chứ không phải free tier 12 tháng. Bằng chứng:
+# KHÔNG có free tier trên account này, VÀ credit cũng đã hết hạn (2026-08-23):
+# account được đưa vào một Organization để dùng SSO, và việc đó chuyển nó sang
+# chế độ trả phí. Nên mọi con số dưới đây là TIỀN RA KHỎI THẺ, không phải giá
+# niêm yết được credit bù.
+#
+# Bằng chứng cho phần "không free tier", đo hồi còn đọc được Cost Explorer:
 # APS1-InstanceUsage:db.t3.micro nằm ở RECORD_TYPE = Usage với đúng $0.031/giờ
-# giá niêm yết. Nếu còn 750h free tier thì dòng đó phải là $0. Mọi thứ trừ vào
-# credit, nên EC2 cũng phải tính tiền.
+# giá niêm yết — nếu còn 750h free tier thì dòng đó phải là $0.
 HS_RATE_ALB=0.0252        # APS1, không phải $0.0225 của us-east-1
 HS_RATE_NAT=0.0590        # APS1, không phải $0.045 của us-east-1
 HS_RATE_EIP_IDLE=0.005

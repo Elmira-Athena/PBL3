@@ -240,7 +240,27 @@ render() {
         ;;
       starting)  tally transit; note="thường 5-10m — đây là bước lâu nhất" ;;
       stopping)  tally transit; note="thường ~5m" ;;
-      stopped)   tally down;    note="chỉ còn phí storage 20GB" ;;
+      stopped)
+        tally down
+        # AWS TỰ START lại một RDS đã stopped sau 7 ngày. Không có thông báo nào
+        # ngoài email Budgets, mà email đó chỉ bắn khi đã tiêu tới 25% ngưỡng —
+        # tức hơn hai ngày sau khi nó tự bật. Ở $0.098/giờ trên thẻ thật đó là
+        # $2.35/ngày. Nên đồng hồ ngược này là thông tin phải thấy mà không phải
+        # nhớ lệnh, chứ không phải thông tin đi tìm khi đã muộn.
+        note="chỉ còn phí storage 20GB"
+        if [ -n "$age" ]; then
+          left=$((604800 - age))
+          if [ "$left" -le 0 ]; then
+            note="${note} — ${C_RED}ĐÃ QUÁ MỐC 7 NGÀY${C_RESET}: AWS có thể tự bật lại bất cứ lúc nào"
+          elif [ "$left" -le 86400 ]; then
+            note="${note} — ${C_RED}AWS tự bật lại trong $(hs_hms "$left")${C_RESET}"
+          elif [ "$left" -le 259200 ]; then
+            note="${note} — ${C_YELLOW}AWS tự bật lại sau $(hs_hms "$left")${C_RESET}"
+          else
+            note="${note} — AWS tự bật lại sau $(hs_hms "$left")"
+          fi
+        fi
+        ;;
       *)         tally transit; note="" ;;
     esac
     row RDS "$st" "$tstr" "$rate" "$rcost" "$note"
@@ -273,7 +293,7 @@ render() {
     echo "  Cửa sổ    : $(hs_hms "$w") tính từ lần up.sh gần nhất"
   fi
   echo "  Chi phí   : ${C_B}\$${TOTAL_SPENT}${C_RESET} ${C_DIM}giá niêm yết — ALB + NAT + RDS, tính từ lúc mỗi cái được tạo/start${C_RESET}"
-  echo "              ${C_DIM}Account này KHÔNG có free tier — mọi thứ trừ vào credit trả trước.${C_RESET}"
+  echo "              ${C_YELLOW}Không free tier, và credit đã HẾT HẠN — đây là tiền ra khỏi thẻ.${C_RESET}"
 
   if [ "$code" = "0" ]; then
     echo
