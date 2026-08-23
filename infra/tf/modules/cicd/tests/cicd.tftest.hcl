@@ -38,23 +38,48 @@ run "trust_policy_khong_duoc_dung_wildcard_tren_claim_sub" {
   # StringLike + wildcard là lỗi cấu hình OIDC phổ biến nhất: `repo:owner/repo:*`
   # khớp cả pull_request, cả mọi nhánh, cả mọi tag — tức mở role deploy cho bất
   # kỳ ai mở được PR vào repo này.
+  # Kiểm CẢ HAI trust policy, không chỉ role deploy. Từ khi role plan nhận hai
+  # giá trị `sub` thì nó là policy PHỨC TẠP HƠN trong hai cái — mà chính chỗ
+  # phức tạp hơn mới là chỗ một dấu `*` dễ lọt vào. Bỏ nó ra ngoài phạm vi kiểm
+  # là bỏ đúng chỗ đáng kiểm.
   assert {
     condition = alltrue([
-      for s in jsondecode(data.aws_iam_policy_document.assume_deploy.json).Statement :
-      !can(s.Condition.StringLike)
+      for doc in [
+        data.aws_iam_policy_document.assume_deploy.json,
+        data.aws_iam_policy_document.assume_plan.json,
+      ] :
+      alltrue([for s in jsondecode(doc).Statement : !can(s.Condition.StringLike)])
     ])
-    error_message = "Trust policy của role deploy KHÔNG được dùng StringLike — chỉ StringEquals trên giá trị sub đầy đủ. StringLike với wildcard sẽ khớp cả pull_request và mọi nhánh."
+    error_message = "KHÔNG trust policy nào được dùng StringLike — chỉ StringEquals trên giá trị sub đầy đủ. StringLike với wildcard sẽ khớp cả pull_request và mọi nhánh."
   }
 
   assert {
     condition = alltrue([
-      for s in jsondecode(data.aws_iam_policy_document.assume_deploy.json).Statement :
+      for doc in [
+        data.aws_iam_policy_document.assume_deploy.json,
+        data.aws_iam_policy_document.assume_plan.json,
+      ] :
       alltrue([
-        for v in flatten([s.Condition.StringEquals["token.actions.githubusercontent.com:sub"]]) :
-        !strcontains(v, "*")
+        for s in jsondecode(doc).Statement :
+        alltrue([
+          for v in flatten([s.Condition.StringEquals["token.actions.githubusercontent.com:sub"]]) :
+          !strcontains(v, "*")
+        ])
       ])
     ])
-    error_message = "Giá trị của claim sub không được chứa dấu * — nó phải là một nhánh cụ thể."
+    error_message = "Giá trị của claim sub không được chứa dấu * ở BẤT KỲ trust policy nào — mỗi giá trị phải là một trigger cụ thể. Danh sách nhiều giá trị thì được (StringEquals vẫn so khớp chính xác); wildcard thì không."
+  }
+
+  # Role DEPLOY phải chỉ nhận ĐÚNG MỘT giá trị sub. Đây là tính chất bất đối
+  # xứng cốt lõi: role plan nhận cả push-main và pull_request (nó chỉ đọc), còn
+  # role deploy — role sửa được hạ tầng — không bao giờ được với tới từ một PR.
+  # Thêm `pull_request` vào role deploy là biến "mở được PR" thành "deploy được".
+  assert {
+    condition = length(flatten([
+      for s in jsondecode(data.aws_iam_policy_document.assume_deploy.json).Statement :
+      flatten([s.Condition.StringEquals["token.actions.githubusercontent.com:sub"]])
+    ])) == 1
+    error_message = "Trust policy của role deploy phải nhận ĐÚNG MỘT giá trị sub. Nhiều giá trị nghĩa là có thêm một trigger assume được role ghi — và nếu giá trị thêm là pull_request thì bất kỳ ai mở được PR cũng deploy được."
   }
 
   # Thiếu điều kiện aud thì một token GitHub ký cho audience khác vẫn thoả.

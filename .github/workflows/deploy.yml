@@ -435,6 +435,33 @@ jobs:
         run: |
           set -uo pipefail
 
+          # ─── CHỐT CUỐI CHO LỖI IM LẶNG DUY NHẤT CỦA PHASE NÀY ────────────────
+          # Trước khi chạy, ĐỌC LẠI từ AWS xem task definition này thật sự mang
+          # image tag nào. Không tin biến, không tin comment — hỏi AWS.
+          #
+          # Vì sao cần: nếu có ngày ai đó đổi `--task-definition "$TD_MIGRATOR"`
+          # về `"$MIGRATOR_FAMILY"`, hoặc bước register bị bỏ, thì migration chạy
+          # efbundle CŨ, exit 0, gate PASS, và code mới deploy lên schema thiếu
+          # migration — job vẫn XANH. Đó là lỗi im lặng duy nhất còn lại trong
+          # Phase này, và 67 test Terraform không canh được nó vì nó nằm trong
+          # YAML chứ không nằm trong HCL.
+          #
+          # Khẳng định ở runtime thì bền hơn bất kỳ cách so khớp văn bản nào: nó
+          # đúng bất kể tương lai người ta chọn task definition bằng cách gì.
+          # `ecs:DescribeTaskDefinition` đã được cấp sẵn nên không cần đổi IAM.
+          IMG=$(aws ecs describe-task-definition --task-definition "$TD_MIGRATOR" \
+                  --query 'taskDefinition.containerDefinitions[?name==`migrator`].image | [0]' \
+                  --output text --no-cli-pager)
+          echo "Task definition sắp chạy: $TD_MIGRATOR"
+          echo "  image: $IMG"
+          case "$IMG" in
+            *":${GITHUB_SHA}")
+              echo "  -> đúng commit của lần push này." ;;
+            *)
+              echo "::error title=Migrator KHÔNG mang image của commit này::Task definition $TD_MIGRATOR có image '$IMG', không kết thúc bằng ':${GITHUB_SHA}'. Chạy nó nghĩa là gate migration kiểm một efbundle CŨ rồi báo PASS. DỪNG. Kiểm tra bước 'Đăng ký 3 revision' và giá trị \$TD_MIGRATOR."
+              exit 1 ;;
+          esac
+
           # ARN CÓ REVISION, không phải tên family. $TD_MIGRATOR do bước "Đăng ký
           # 3 revision" ghi ra và nó trỏ vào hushstore-migrator:$GITHUB_SHA.
           # Truyền tên family ở đây là chạy revision của Terraform, tức efbundle

@@ -131,7 +131,15 @@ jobs:
     #
     # Hai job kia (fmt/validate và dotnet build) không cần credential nên chạy
     # cho mọi lần trigger, gồm cả PR từ fork.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Viết dạng LIỆT KÊ TƯỜNG MINH các trigger được phép, không phải dạng
+    # "loại pull_request". Dạng loại-trừ ngắn hơn nhưng FAIL-OPEN với trigger
+    # mới: ngày ai đó thêm `pull_request_target`, `event_name != 'pull_request'`
+    # là true nên phép loại fork bị bỏ qua, và job chạy với `id-token: write`
+    # của repo gốc trên code do fork viết. Dạng liệt kê thì fail-closed —
+    # trigger mới bị skip cho tới khi có người thêm nó vào đây một cách có ý
+    # thức. `workflow_dispatch` phải nằm trong danh sách, nếu không nó bị skip
+    # và mất đúng cái nó được thêm vào để làm.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - uses: actions/checkout@v4

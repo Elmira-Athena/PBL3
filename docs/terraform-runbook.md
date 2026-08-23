@@ -435,6 +435,20 @@ aws ecs update-service --cluster hushstore --service hushstore-api \
   --task-definition hushstore-api:<revision-1> --profile hushstore --no-cli-pager
 ```
 
+**Đừng lấy `<revision-1>` một cách máy móc.** "Revision ngay trước revision hiện
+tại" KHÔNG còn chắc là "bản trước đó đang phục vụ". Có hai đường sinh ra revision
+chưa từng được deploy: `terraform apply` đăng ký revision từ `image_tag` bất cứ
+lúc nào, và pipeline đăng ký cả ba revision **trước** cửa gate migration — nên
+mỗi lần migration fail là để lại hai revision api/web mồ côi mang code mới cho
+những migration chưa hề chạy. Trỏ service vào một revision mồ côi là tự tay tạo
+lại đúng lỗi "code mới trên schema cũ".
+
+Lấy đúng revision từ output của lần chạy đã fail: job `deploy` in nó ở bước
+**"Ghi lại revision đang chạy"**, dòng `hushstore-api đang chạy <arn>`. Đó là
+revision thật sự đang phục vụ trước khi deploy bắt đầu. Không có output đó thì
+`aws ecs describe-services --query 'services[0].deployments'` cho thấy revision
+nào từng ở trạng thái `PRIMARY`.
+
 Pipeline **tự rollback** khi có bước nào trong job `deploy` fail sau khi nó đã
 ghi lại revision đang chạy — không chỉ riêng `wait services-stable`. Nếu fail
 xảy ra ngay ở bước migrate, rollback vẫn chạy nhưng là no-op vì service chưa
