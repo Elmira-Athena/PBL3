@@ -642,12 +642,18 @@ tier — tổng ra xấp xỉ bằng. Đường duy nhất thoát hẳn là bỏ
 Kết luận: đòn bẩy duy nhất là **uptime**, tức đúng việc `down.sh` đang làm. Chỉ
 cần sửa lại con số trong đầu: mỗi giờ bật là **$0.166**, không phải $0.0675.
 
-**Trừ vào credit, không phải free tier.** Toàn bộ $1.5102 usage của account bị
-credit bù đúng bằng $1.5102, net còn $0.0000000015 — nhưng đó là **credit trả
-trước hữu hạn** (số dư $200 tính tới 2026-08-20), không phải free tier 12 tháng.
-Không có API công khai nào đọc được số dư nên không tự cảnh báo được; theo dõi
-bằng AWS Budgets (đã có, ngưỡng $20) và xem số dư ở console
-**Billing → Credits**.
+**CẬP NHẬT 2026-08-23 — credit đã HẾT HẠN, giờ là tiền thẻ thật.**
+
+Mọi con số ở mục này được đo trong giai đoạn còn credit bù, nên lúc đó net phải
+trả là $0. Điều đó **không còn đúng**. Account được đưa vào một Organization để
+dùng IAM Identity Center (SSO), và việc đó chuyển account sang chế độ trả phí —
+credit trả trước hết hạn theo.
+
+Nên đọc lại toàn bộ mục "Chi phí" dưới giả định mới: **mỗi con số là tiền ra
+khỏi thẻ.** $0.1954/giờ khi bật đủ stack là $0.1954 thật. Không có đệm.
+
+Không sửa được (hạ tầng đã dựng theo SSO), nên đòn bẩy duy nhất còn lại vẫn là
+**uptime** — và giờ nó là đòn bẩy duy nhất theo nghĩa chặt chẽ hơn trước.
 
 ### Account này KHÔNG có free tier
 
@@ -656,8 +662,43 @@ không phải free tier 12 tháng. Bằng chứng đo được, không phải su
 `APS1-InstanceUsage:db.t3.micro` nằm ở `RECORD_TYPE = Usage` với đúng $0.031/giờ
 giá niêm yết — nếu còn 750h free tier thì dòng đó phải là $0.
 
-Hệ quả: **EC2 và RDS cũng tính tiền**, và mọi thứ trừ vào credit. Mọi chỗ nào
-trong tài liệu này còn nói "free tier" đều là sai và đã được sửa.
+Hệ quả: **EC2 và RDS cũng tính tiền**. Trước 2026-08-23 chúng trừ vào credit;
+từ đó trở đi trừ vào thẻ. Mọi chỗ nào trong tài liệu này còn nói "free tier" đều
+là sai và đã được sửa.
+
+### Chi phí khi TẮT HẾT — đo ngày 2026-08-23
+
+Đây là sàn: số tiền chảy ra kể cả khi không ai chạm vào gì.
+
+| Khoản | Lượng | $/tháng |
+|---|---|---|
+| RDS storage gp2 (tính cả khi `stopped`) | 20 GB | **~$2.30** |
+| ECR — 12 image trên 4 repo | 0.56 GB | ~$0.06 |
+| S3 (assets + artifacts + alb-logs) + CloudWatch Logs | vài trăm MB | ~$0.10 |
+| **Sàn** | | **~$2.45/tháng** |
+
+20 GB là **mức tối thiểu** của gp2 cho `sqlserver-ex` — không hạ được. Đường duy
+nhất xuống thấp hơn là xoá RDS và giữ snapshot (snapshot chỉ tính dung lượng dữ
+liệu thật, vài trăm MB), nhưng đổi lấy rủi ro vận hành trên một deliverable đang
+được chấm. Không đáng.
+
+### Rủi ro AWS tự bật lại RDS — có ngày cụ thể
+
+AWS tự `start` một RDS đã `stopped` sau **7 ngày**. Sự kiện `DB instance stopped`
+gần nhất: **2026-08-20T01:44 UTC**, nên mốc tự bật là khoảng
+**2026-08-27T01:44 UTC**.
+
+Ở $0.098/giờ đó là **$2.35/ngày** trên thẻ thật, và không có thông báo nào ngoài
+email Budgets — mà email đó chỉ bắn khi đã tiêu tới 25% ngưỡng $20, tức sau hơn
+hai ngày. Kiểm mốc hiện tại bất cứ lúc nào (miễn phí):
+
+```bash
+aws rds describe-events --source-identifier hushstore-db-tf --source-type db-instance \
+  --duration 20160 --profile hushstore --no-cli-pager --output json \
+  | jq -r '[.Events[] | select(.Message | test("^DB instance (started|stopped)$"))] | last'
+```
+
+Đây là lý do Lambda cost-guard (Phase 3) không còn là việc "nên có".
 
 ### Đơn giá — dùng giá ap-southeast-1, không phải us-east-1
 
