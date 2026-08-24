@@ -632,7 +632,7 @@ với nhau.
 
 **Resource:** bật `enable_flow_logs` và `enable_deny_demo` tạm thời.
 
-11 kịch bản tấn công từ laptop. Với mỗi kịch bản: lưu **nguyên lệnh và nguyên
+12 kịch bản tấn công từ laptop (kịch bản 11 và 12 chạy sau, khi Phase 2 đã dựng xong hai IAM role của pipeline). Với mỗi kịch bản: lưu **nguyên lệnh và nguyên
 output** vào một file bằng chứng, rồi báo cáo **chỉ trích số từ đó** — không viết
 tay số nào.
 

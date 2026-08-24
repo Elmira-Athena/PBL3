@@ -45,7 +45,7 @@ inject từ SSM Parameter Store.
 
 ## Tài liệu cho người mới
 
-Hai tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
+Ba tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
 
 1. **[thiet-ke-he-thong-aws.md](docs/thiet-ke-he-thong-aws.md)** — *cái gì* và
    *vì sao thiết kế vậy*. Có phần kiến thức nền về mạng máy tính và AWS ở đầu,
@@ -56,6 +56,11 @@ Hai tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
 2. **[nhat-ky-trien-khai.md](docs/nhat-ky-trien-khai.md)** — *làm thế nào*. Cách
    doanh nghiệp triển khai hạ tầng và vì sao, nhật ký 10 giai đoạn với bảng cấu
    hình cụ thể từng resource, và 12 issue chính đã gặp kèm bài học.
+3. **[bao-mat-he-thong.md](docs/bao-mat-he-thong.md)** — *vì sao nó chặn được*.
+   Bảy lớp phòng thủ và điều mỗi lớp làm được mà lớp khác không làm được, bảng
+   12 tấn công → lớp chặn → lớp dự phòng, danh sách thẳng thắn những gì hệ thống
+   **không** chặn được, và mục **câu hỏi phản biện** kèm câu trả lời. Đọc mục này
+   trước khi bảo vệ.
 
 Chưa từng dùng AWS: bắt đầu ở **Phần VI — Lộ trình học** của tài liệu số 1. Nó
 gắn từng thành phần trong hệ thống với workshop tiếng Việt tương ứng trên

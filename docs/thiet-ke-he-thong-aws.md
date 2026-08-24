@@ -846,9 +846,10 @@ Server Express **không tải** vẫn ngồi ở ~36% CPU. Nên riêng phần v�
 | **Network ACL** | 3 cái, mỗi tier một cái, có rule DENY và thứ tự có ý nghĩa |
 | **Application Load Balancer** | ALB + ACM + 2 target group + allowlist Host |
 | EC2 Instance chạy website | 1 `t3.micro` chạy container nginx + .NET |
-| Máy tấn công verify rule | Laptop (`my_ip`), 11 kịch bản, bằng chứng lưu trong `docs/evidence/` |
+| Máy tấn công verify rule | Laptop (`my_ip`), **12 kịch bản**, bằng chứng lưu trong `docs/evidence/` |
 | Rule mở theo nguyên tắc tối thiểu | Xem bảng dưới |
 | Rule đã ngăn được tấn công | [security-validation-report.md](security-validation-report.md) |
+| Giải thích **vì sao** rule chặn được | [bao-mat-he-thong.md](bao-mat-he-thong.md) — bảy lớp phòng thủ, và mục câu hỏi phản biện |
 
 **Nguyên tắc tối thiểu — chứng minh cụ thể, không phải khẩu hiệu:**
 
