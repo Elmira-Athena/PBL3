@@ -1,6 +1,6 @@
 output "budget_name" {
-  description = "Tên budget theo dõi chi phí tháng"
-  value       = aws_budgets_budget.monthly.name
+  description = "Tên budget theo dõi chi phí tháng. RỖNG khi enable_budget = false — lúc đó không còn lớp backstop nào ngoài Lambda cost guard"
+  value       = var.enable_budget ? aws_budgets_budget.monthly[0].name : ""
 }
 
 output "lambda_name" {

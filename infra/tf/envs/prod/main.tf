@@ -112,6 +112,7 @@ module "costguard" {
 
   project            = local.name
   alert_email        = var.alert_email
+  enable_budget      = var.enable_budget
   monthly_budget_usd = var.monthly_budget_usd
 
   # Ngưỡng của người dùng chung account. Giá trị nằm trong terraform.tfvars

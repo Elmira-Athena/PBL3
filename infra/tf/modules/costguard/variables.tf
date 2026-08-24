@@ -19,6 +19,12 @@ variable "monthly_budget_usd" {
   default     = 20
 }
 
+variable "enable_budget" {
+  description = "Tạo AWS Budget cho dự án. Tắt khi 2 slot budget miễn phí của account đã bị dùng hết — cái thứ 3 tốn $0.02/ngày. Tắt = mất lớp backstop, chỉ còn Lambda cost guard"
+  type        = bool
+  default     = true
+}
+
 variable "shared_notifications" {
   description = "Các ngưỡng cảnh báo KHÔNG thuộc dự án này, do người khác dùng chung account tự thêm. Khai ở đây để terraform apply không xoá chúng — xem comment trong main.tf. Để rỗng nếu account chỉ có mình dự án này dùng"
 

@@ -1,11 +1,22 @@
 # AWS Budgets: 2 budget đầu tiên mỗi account là MIỄN PHÍ, từ cái thứ 3 mới tính
-# $0.02/ngày. Ở đây chỉ dùng 1.
+# $0.02/ngày (~$0.60/tháng).
 #
 # Vì sao dựng bằng Terraform thay vì gọi `aws budgets create-budget`: resource tạo
 # ngoài Terraform sẽ gây drift, và lần `apply` sau sẽ xử lý sai. Đây cũng là lý do
 # Lambda cost-guard ở Phase 3 chỉ được gọi API stop/scale chứ không được xoá
 # ALB hay NAT Gateway.
+#
+# enable_budget TẮT ĐƯỢC vì hai slot miễn phí không phải lúc nào cũng còn. Trên
+# account 551897327153 (Phase 4) cả hai đã bị hai budget của người dùng chung
+# chiếm, nên budget của dự án sẽ là cái thứ 3 và có phí. User chọn tắt.
+#
+# TẮT NÓ LÀ MỘT ĐÁNH ĐỔI THẬT, ghi rõ ở đây để người sau không tưởng là mặc định
+# an toàn: khi tắt, lớp backstop duy nhất còn lại là Lambda cost guard, mà chế độ
+# chết của Lambda là IM LẶNG TUYỆT ĐỐI (xem Important 2 của review Phase 3).
+# Bù lại bằng `status.sh` — nó in nhịp tim của guard, đỏ khi >48h không chạy.
 resource "aws_budgets_budget" "monthly" {
+  count = var.enable_budget ? 1 : 0
+
   name         = "${var.project}-monthly-spend"
   budget_type  = "COST"
   limit_amount = tostring(var.monthly_budget_usd)

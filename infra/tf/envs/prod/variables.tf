@@ -95,6 +95,12 @@ variable "alert_email" {
   type        = string
 }
 
+variable "enable_budget" {
+  description = "Tạo AWS Budget cho dự án. AWS chỉ cho 2 budget miễn phí mỗi account; cái thứ 3 tốn $0.02/ngày (~$0.60/tháng). Đặt false khi 2 slot đã bị người dùng chung account chiếm. TẮT = mất lớp backstop, chỉ còn Lambda cost guard, mà chế độ chết của Lambda là im lặng tuyệt đối"
+  type        = bool
+  default     = true
+}
+
 variable "monthly_budget_usd" {
   description = "Ngưỡng ngân sách tháng (USD). Cảnh báo ở 25%, 50%, 100% thực tế và 100% dự báo"
   type        = number

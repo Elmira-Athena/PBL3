@@ -642,3 +642,40 @@ run "stop_cron_dang_rate_bi_variable_validation_tu_choi" {
 
   expect_failures = [var.stop_cron]
 }
+
+# ─── enable_budget ────────────────────────────────────────────────
+# AWS chỉ cho 2 budget miễn phí mỗi account. Khi hai slot đã bị người dùng chung
+# account chiếm, budget của dự án là cái thứ 3 và tốn $0.02/ngày — nên nó phải
+# tắt được. Hai run dưới canh CẢ HAI chiều của công tắc, vì một công tắc chỉ
+# được kiểm một chiều thì chiều kia là chỗ lỗi trốn vào: `count = 0` cứng vẫn
+# xanh nếu chỉ có run "false", và `count = 1` cứng vẫn xanh nếu chỉ có run "true".
+run "enable_budget_false_thi_khong_tao_budget_nao" {
+  command = plan
+
+  variables {
+    enable_budget = false
+  }
+
+  assert {
+    condition     = length(aws_budgets_budget.monthly) == 0
+    error_message = "enable_budget = false PHẢI không tạo budget nào — nếu vẫn tạo thì đây là budget thứ 3 của account và tốn $0.02/ngày."
+  }
+}
+
+run "enable_budget_true_thi_tao_dung_mot_budget" {
+  command = plan
+
+  variables {
+    enable_budget = true
+  }
+
+  assert {
+    condition     = length(aws_budgets_budget.monthly) == 1
+    error_message = "enable_budget = true phải tạo đúng 1 budget."
+  }
+
+  assert {
+    condition     = aws_budgets_budget.monthly[0].limit_unit == "USD"
+    error_message = "Budget phải tính bằng USD."
+  }
+}
