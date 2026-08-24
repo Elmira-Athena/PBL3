@@ -156,10 +156,40 @@ Phác thảo các bước (chi tiết hoá khi viết plan):
 Credit là **$100 chứ không phải $200**: mô hình mới cho $100 sẵn + tối đa $100
 nữa do làm activity, và hiện đã lấy 5 activity.
 
-**Chưa xác minh:** các credit này có bị giới hạn theo service hay không. Mỗi
-khoản đều có link "See complete list of services" trong console và **không có
-API** để đọc. Nếu bị giới hạn thì bài toán chi phí đổi hình — ví dụ credit
-"Launch an instance using EC2" mà chỉ áp cho EC2 thì tiền RDS không được bù.
+### Credit có bị giới hạn theo service không — ĐÃ XÁC MINH: không ảnh hưởng ta
+
+Mỗi khoản credit có link "See complete list of services" trong console, nên câu
+hỏi là thật. Danh sách đó (đọc từ console 2026-08-24) có ~250 service, và đối
+chiếu với **16 service mà stack này thực sự bị tính tiền vào** thì **0 cái nằm
+ngoài**:
+
+| Service bị tính tiền | Khoản nào của ta rơi vào đó |
+|---|---|
+| Amazon Elastic Compute Cloud | EC2 instance-hours, EBS, **CPU surplus t3**, public IPv4 |
+| Amazon Relational Database Service | RDS instance-hours, storage 20GB, **CPU surplus db.t3** |
+| Elastic Load Balancing | ALB giờ + LCU |
+| Amazon Virtual Private Cloud | **NAT Gateway** giờ + data processing |
+| Amazon EC2 Container Registry (ECR) | storage image |
+| Amazon Elastic Container Service | ECS |
+| Amazon Simple Storage Service | 3 bucket + tfstate |
+| AWS Lambda | cost guard |
+| AmazonCloudWatch | log group `/ecs/*` và `/aws/lambda/*` |
+| CloudWatch Events | EventBridge Scheduler |
+| Amazon Simple Notification Service | SNS cảnh báo |
+| AWS Key Management Service | mã hoá SSM SecureString + EBS |
+| AWS Systems Manager | Parameter Store + Session Manager |
+| AWS Certificate Manager | cert cho ALB |
+| AWS Data Transfer | data transfer out |
+| AWS Budgets | budget (đang tắt) |
+
+Điểm đáng chú ý nhất: **CPU surplus được credit bù**, vì nó không phải một service
+riêng — nó là một dòng usage (`APS1-CPUCredits:db.t3`) nằm dưới chính
+`Amazon Relational Database Service`. Điều này khớp với phép đo trên account cũ:
+$0.9208 surplus đã được credit bù hết, net $0.
+
+Và **NAT Gateway** — khoản đắt nhất của thiết kế, $0.059/giờ, không có bậc miễn
+phí nào ở bất kỳ account nào — bill dưới `Amazon Virtual Private Cloud`, cũng
+được bù.
 
 ## Bẫy đã gặp: profile bị SSO che khuất
 
