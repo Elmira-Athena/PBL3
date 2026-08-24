@@ -34,6 +34,20 @@ resource "aws_ecs_service" "web" {
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
 
+  # Circuit breaker: ECS tự phát hiện deploy hỏng và tự lăn về revision trước.
+  #
+  # Không có nó, một task không bao giờ healthy sẽ để service ở "IN_PROGRESS"
+  # hơn 30 phút rồi mới bỏ cuộc — trong lúc đó không ai biết deploy đã chết.
+  # deploy.yml CÓ bước rollback thủ công, nhưng bước đó chỉ chạy khi job còn
+  # sống; nếu runner bị huỷ hoặc `wait services-stable` timeout thì không ai lăn
+  # về, và circuit breaker là lớp duy nhất còn lại.
+  #
+  # Miễn phí, và là cơ chế native của ECS chứ không phải logic ta tự viết.
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   load_balancer {
     target_group_arn = var.tg_web_arn
     container_name   = "web"
@@ -79,6 +93,20 @@ resource "aws_ecs_service" "api" {
 
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
+
+  # Circuit breaker: ECS tự phát hiện deploy hỏng và tự lăn về revision trước.
+  #
+  # Không có nó, một task không bao giờ healthy sẽ để service ở "IN_PROGRESS"
+  # hơn 30 phút rồi mới bỏ cuộc — trong lúc đó không ai biết deploy đã chết.
+  # deploy.yml CÓ bước rollback thủ công, nhưng bước đó chỉ chạy khi job còn
+  # sống; nếu runner bị huỷ hoặc `wait services-stable` timeout thì không ai lăn
+  # về, và circuit breaker là lớp duy nhất còn lại.
+  #
+  # Miễn phí, và là cơ chế native của ECS chứ không phải logic ta tự viết.
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
   load_balancer {
     target_group_arn = var.tg_api_arn

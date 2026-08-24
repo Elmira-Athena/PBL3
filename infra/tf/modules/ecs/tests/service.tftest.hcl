@@ -160,3 +160,20 @@ run "tat_alb_thi_khong_tao_service_nao" {
     error_message = "Cluster, capacity provider và task definition KHÔNG được gate theo enable_alb — chúng miễn phí và cần tồn tại để run-task migrator khi ALB đang tắt."
   }
 }
+
+# Circuit breaker là lớp cuối cùng khi deploy hỏng mà pipeline không kịp lăn về
+# (runner bị huỷ, `wait services-stable` timeout). Không có nó, service treo ở
+# IN_PROGRESS hơn 30 phút mà không ai biết.
+run "ca_hai_service_bat_circuit_breaker_va_rollback" {
+  command = plan
+
+  assert {
+    condition     = aws_ecs_service.web[0].deployment_circuit_breaker[0].enable && aws_ecs_service.web[0].deployment_circuit_breaker[0].rollback
+    error_message = "Service web phải bật circuit breaker VÀ rollback. Bật mà không rollback thì ECS chỉ dừng lại chứ không đưa về bản chạy được."
+  }
+
+  assert {
+    condition     = aws_ecs_service.api[0].deployment_circuit_breaker[0].enable && aws_ecs_service.api[0].deployment_circuit_breaker[0].rollback
+    error_message = "Service api phải bật circuit breaker VÀ rollback."
+  }
+}

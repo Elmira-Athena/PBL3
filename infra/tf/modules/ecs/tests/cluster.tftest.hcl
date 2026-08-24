@@ -64,6 +64,32 @@ run "launch_template_khong_gan_ssh_key_va_bat_imdsv2" {
   }
 }
 
+run "moi_container_dat_awslogs_mode_blocking" {
+  command = plan
+
+  # Mặc định của account này là `non-blocking` (đo bằng
+  # `aws ecs list-account-settings --name defaultLogDriverMode
+  # --effective-settings`), tức awslogs DROP log khi buffer đầy. Với dự án mà
+  # log CloudWatch là nền bằng chứng của báo cáo bảo mật, mất log im lặng là
+  # mất chính thứ đang được chấm. Đặt tường minh để không phụ thuộc vào một
+  # mặc định ở cấp account mà người khác đổi được.
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
+      try(c.logConfiguration.options["mode"], "") == "blocking"
+    ])
+    error_message = "Container của task def api phải đặt awslogs mode = blocking. Bỏ trống thì nó theo mặc định account (đang là non-blocking) và log bị drop âm thầm khi buffer đầy."
+  }
+
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.migrator.container_definitions) :
+      try(c.logConfiguration.options["mode"], "") == "blocking"
+    ])
+    error_message = "Task def migrator phải đặt awslogs mode = blocking — log của nó là bằng chứng DUY NHẤT cho việc migration chạy đúng hay sai."
+  }
+}
+
 run "asg_khai_tag_AmazonECSManaged_de_khong_co_diff_vinh_vien" {
   command = plan
 

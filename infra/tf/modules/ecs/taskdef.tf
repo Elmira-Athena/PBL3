@@ -16,6 +16,7 @@ locals {
         "awslogs-group"         = aws_cloudwatch_log_group.api.name
         "awslogs-region"        = local.aws_region
         "awslogs-stream-prefix" = "api"
+        "mode"                  = "blocking"
       }
     }
     web = {
@@ -24,6 +25,7 @@ locals {
         "awslogs-group"         = aws_cloudwatch_log_group.web.name
         "awslogs-region"        = local.aws_region
         "awslogs-stream-prefix" = "web"
+        "mode"                  = "blocking"
       }
     }
     migrator = {
@@ -32,6 +34,7 @@ locals {
         "awslogs-group"         = aws_cloudwatch_log_group.migrator.name
         "awslogs-region"        = local.aws_region
         "awslogs-stream-prefix" = "migrator"
+        "mode"                  = "blocking"
       }
     }
     seeder = {
@@ -40,6 +43,7 @@ locals {
         "awslogs-group"         = aws_cloudwatch_log_group.seeder.name
         "awslogs-region"        = local.aws_region
         "awslogs-stream-prefix" = "seeder"
+        "mode"                  = "blocking"
       }
     }
   }
