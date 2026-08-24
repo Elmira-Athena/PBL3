@@ -1,7 +1,9 @@
 # Phase 4 — Chuyển sang account mới và dọn sạch account cũ
 
-> Ghi chú phạm vi, chưa phải implementation plan. Plan chi tiết viết bằng
-> `writing-plans` khi bắt đầu Phase 4.
+> **TRẠNG THÁI 2026-08-24: ĐÃ THỰC HIỆN.** Account cũ dọn sạch 23/08 (biên bản:
+> [`cleanup-account-cu.md`](cleanup-account-cu.md)), stack dựng lại trên account
+> mới `551897327153` ngày 24/08. Phần dưới giữ nguyên làm bản ghi phạm vi và lý
+> do; mục "Đã thực hiện" ở cuối ghi kết quả thật và những chỗ lệch kế hoạch.
 
 ## Mục tiêu
 
@@ -135,3 +137,101 @@ Phác thảo các bước (chi tiết hoá khi viết plan):
 - Không dùng Cost Explorer (`aws ce`, $0.01/lần). Dùng `aws budgets describe-budget`.
 - **RDS trên account cũ tự bật lại ~2026-08-27T01:44 UTC** nếu chưa destroy
   trước đó ($2.35/ngày). Đây là deadline thật của việc dọn dẹp.
+
+
+---
+
+# Đã thực hiện — 2026-08-24
+
+## Account mới `551897327153`
+
+| Kiểm | Kết quả |
+|---|---|
+| Danh tính | `arn:aws:iam::551897327153:user/hushstore-ops` — **IAM user**, không phải SSO role |
+| `aws organizations describe-organization` | `AWSOrganizationsNotInUseException` ✅ |
+| `aws sso-admin list-instances` | `[]` ✅ |
+| Free tier | 4 dòng, **tất cả "Always Free"** — không có bậc 12 tháng, giống account cũ |
+| Credit | **$100** (5 khoản "Explore AWS" x $20), chưa dùng đồng nào, hết hạn 16/08/2027 |
+
+Credit là **$100 chứ không phải $200**: mô hình mới cho $100 sẵn + tối đa $100
+nữa do làm activity, và hiện đã lấy 5 activity.
+
+**Chưa xác minh:** các credit này có bị giới hạn theo service hay không. Mỗi
+khoản đều có link "See complete list of services" trong console và **không có
+API** để đọc. Nếu bị giới hạn thì bài toán chi phí đổi hình — ví dụ credit
+"Launch an instance using EC2" mà chỉ áp cho EC2 thì tiền RDS không được bù.
+
+## Bẫy đã gặp: profile bị SSO che khuất
+
+Key IAM mới nằm ở `[hushstore]` trong `~/.aws/credentials`, nhưng `~/.aws/config`
+vẫn còn `sso_session` ở cùng tên profile. **Profile có `sso_session` thì AWS CLI
+dùng SSO và bỏ qua static key cùng tên** — nên `hushstore` vẫn trỏ account cũ dù
+đã cấu hình key mới, và `sts get-caller-identity` là cách duy nhất phát hiện.
+
+Đã tách SSO sang profile riêng `old-sso` (vẫn vào được account cũ cho người dùng
+chung). Backup ở `~/.aws/config.bak-2026-08-24`.
+
+## Kết quả apply
+
+**126 resource**, `exit 0`. Một cái ít hơn 127 của account cũ vì `enable_budget = false`.
+
+Trạng thái sau apply — không có gì đang tính tiền ngoài storage RDS:
+
+```
+NAT Gateway  rỗng      EC2 instance  rỗng      ASG desired  0
+ALB          rỗng      EBS volume    rỗng      ECS service  rỗng
+EIP          rỗng      Budget        rỗng      RDS          stopped
+```
+
+Hạ tầng đã dựng, tất cả miễn phí: VPC `10.20.0.0/16`, **3 NACL**, **3 Security
+Group**, Lambda cost guard, schedule `ENABLED`, 4 ECR repo, OIDC provider.
+
+Đáng ghi vào báo cáo: ba deliverable trọng tâm của đề bài — VPC, **NACL**,
+**Security Group** — đều miễn phí vĩnh viễn. Phần bị chấm không tốn đồng nào.
+
+Lambda cost guard đã chạy thật trên account mới, trả về đúng: 4 `notes`, 0
+`findings`, 0 `errors`, `"sns": "khong-can-gui"`. Xác nhận luôn hai bản vá của
+fix wave Phase 3 hoạt động — `stopping` vào `notes` (im lặng, đúng), và
+NAT/ALB/EIP log cả khi đếm được 0.
+
+## Hai lỗi phát hiện nhờ lần dựng lại
+
+Cả hai đã tồn tại từ trước, chỉ lộ ra khi dựng từ số không:
+
+1. **Diff vĩnh viễn của ASG.** ECS tự thêm tag `AmazonECSManaged` khi ASG gắn vào
+   capacity provider; Terraform đòi xoá, ECS thêm lại. Plan không bao giờ sạch,
+   nên drift thật lẫn vào tiếng ồn — lớp lỗi làm mù một cảm biến, không phải làm
+   sai một giá trị. Sửa bằng cách khai tường minh tag. Sau sửa:
+   `plan -detailed-exitcode` = 0, "No changes".
+2. **`enable_budget` chưa tồn tại.** Account mới đã hết 2 slot budget miễn phí
+   nên budget dự án là cái thứ 3 và có phí. Giờ tắt được.
+
+## Còn phải làm
+
+- **Chạy lại 12 kịch bản KB trên account mới.** Số liệu hiện tại trong
+  `security-validation-report.md` đo trên account đã bị xoá — vẫn là phép đo
+  thật, nhưng không chạy lại được để đối chiếu. Xem cảnh báo ở đầu báo cáo đó.
+- **Cập nhật GitHub repository variables:**
+
+```
+AWS_DEPLOY_ROLE_ARN = arn:aws:iam::551897327153:role/hushstore-github-actions-deploy-role
+AWS_PLAN_ROLE_ARN   = arn:aws:iam::551897327153:role/hushstore-github-actions-plan-role
+```
+
+- **4 repo ECR đang rỗng.** CI phải build và push trước khi `up.sh` chạy được.
+- Merge vào `main` — chỉ sau khi hai variable trên đã đúng, vì merge là thứ kích
+  hoạt `deploy.yml`.
+
+## Chi phí
+
+Sàn hiện tại **~$2.30/tháng** = storage RDS 20GB (mức gp2 tối thiểu cho
+`sqlserver-ex`), trừ vào credit.
+
+Trên $100 và một năm, đó là **~28% credit chỉ để giữ một DB đang tắt**. Con số
+này đáng nhìn thẳng: nó lớn hơn mọi khoản khác của stack khi tắt, cộng lại.
+
+Đòn bẩy duy nhất còn lại là **destroy RDS giữa các lần demo**. Schema dựng từ 20
+EF migration, dữ liệu từ 2 file seed SQL — cả hai nằm trong repo, nên mất khoảng
+15 phút để có lại. Đánh đổi đáng cân nhắc nếu khoảng cách giữa các lần demo tính
+bằng tuần. Đổi engine sang PostgreSQL cũng giảm được (storage tối thiểu 20GB
+nhưng gp3 rẻ hơn, và hết luôn CPU surplus).
