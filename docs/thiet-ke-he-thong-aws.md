@@ -6,7 +6,8 @@
 > chọn như vậy*.
 >
 > Đọc theo thứ tự. Phần I và II là kiến thức nền — nếu đã biết thì nhảy sang
-> Phần III.
+> Phần III. Trong Phần III, mục **"Linux — hệ điều hành chạy bên dưới tất cả"**
+> trả lời gạch đầu dòng đầu tiên của đề bài và đọc được độc lập.
 
 ---
 
@@ -452,6 +453,284 @@ lúc deploy có downtime ~20–40 giây. Ở quy mô đồ án, đổi 30 giây 
 bề mặt tấn công nhỏ hơn hàng nghìn lần là hợp lý — và đây là một *lựa chọn có ý
 thức*, đáng nói khi báo cáo.
 
+## Linux — hệ điều hành chạy bên dưới tất cả
+
+Đề bài mở đầu bằng yêu cầu **tìm hiểu hệ điều hành Linux và xây dựng website
+trên hệ điều hành này**. Mục này trả lời đúng câu đó: Linux nằm ở đâu trong hệ
+thống, ta đã dùng những tính năng nào của nó, và chỗ nào nó đã thật sự làm hệ
+thống gãy.
+
+### Không phải một Linux, mà ba
+
+Một điểm hay bị bỏ qua: hệ thống này chạy **ba bản phân phối Linux khác nhau
+cùng lúc**, mỗi bản chọn có lý do.
+
+| Ở đâu | Bản phân phối | Vì sao chọn nó |
+|---|---|---|
+| **Máy EC2** (host) | Amazon Linux 2023, bản ECS-optimized | AWS đã cài sẵn `docker` và `ecs-agent`. Không phải cài gì → `user_data` gần như không phải làm gì |
+| **Container `web`** | Alpine (`nginx:alpine`) | Nhỏ nhất — image ~50MB. Chỉ cần serve file tĩnh nên không cần gì hơn |
+| **Container `api`** | Debian (`aspnet:10.0`) | Microsoft build image .NET trên Debian. Đây là lý do trong `Dockerfile` ta gõ `useradd` và `update-ca-certificates` — đó là lệnh của Debian, Alpine dùng `adduser` và cơ chế khác |
+| **Task `migrator` / `seeder`** | Debian (`runtime-deps:10.0`, `debian:12-slim`) | Chạy-một-lần-rồi-thoát. `seeder` cần `mssql-tools18`, mà Microsoft chỉ phát hành package apt cho Debian |
+
+Alpine dùng thư viện C tên **musl**, còn Debian và Amazon Linux dùng **glibc**.
+Đây là khác biệt sâu nhất giữa chúng, và là lý do một file thực thi build trên
+Debian không chắc chạy được trên Alpine. Ta không gặp vấn đề này vì mỗi container
+tự mang runtime của nó.
+
+Khác biệt đó dẫn tới một chuyện tinh vi hơn: **kiến trúc CPU**. Máy phát triển
+hiện tại là Intel (`uname -m` → `x86_64`) và `t3.micro` cũng Intel, nên mọi thứ
+vô tình khớp. Nhưng một máy Mac chip Apple Silicon hay một CI runner Graviton đều
+là `arm64` — và lúc đó **hai trong bốn** image sẽ gãy, mỗi cái vì một lý do khác:
+
+| Image | Phụ thuộc kiến trúc? | Vì sao |
+|---|---|---|
+| `web` | không | nginx + file tĩnh; base image tự chọn đúng kiến trúc |
+| `api` | không | .NET *framework-dependent* — `.dll` là bytecode IL, runtime kiến trúc nào cũng chạy |
+| `migrator` | **có** | build *self-contained* `-r linux-x64` → ra file thực thi máy, chỉ chạy trên x64 |
+| `seeder` | **có** | cài `mssql-tools18` từ apt repo của Microsoft, mà dòng repo ghi rõ `arch=amd64` — không có bản arm64 |
+
+Chỗ gãy của `migrator` là kiểu lỗi khó tìm nhất: stage 1 build binary x64, stage 2
+lấy base image theo kiến trúc **máy build**. Trên máy arm64 sẽ ra một image arm64
+chứa binary chỉ chạy được x64. Build **xanh**, push ECR **thành công**, và lỗi chỉ
+hiện ra lúc ECS *khởi động* container.
+
+Nên kiến trúc được ghim ngay trong `Dockerfile`, ở **mọi** stage — không phải chỉ
+trong lệnh build, để không phụ thuộc vào người gõ lệnh có nhớ hay không:
+
+```dockerfile
+FROM --platform=linux/amd64 mcr.microsoft.com/dotnet/sdk:10.0        AS build
+FROM --platform=linux/amd64 mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime
+```
+
+Đây là phòng ngừa, không phải sửa lỗi đang có: hiện tại nó đúng nhờ **may mắn**
+(máy build tình cờ là x86_64), ghim lại để nó đúng vì **thiết kế**.
+
+### Máy Linux khởi động như thế nào — và chỗ ta đã làm nó treo
+
+Đây là phần đáng học nhất, vì nó là **sự cố thật đã gặp hai lần**.
+
+Trình tự boot của Amazon Linux 2023:
+
+```
+kernel  →  systemd  →  cloud-init  →  cloud-final.service  →  user_data
+                                              ↓ (xong)
+                                        ecs.service khởi động
+```
+
+- **`systemd`** là tiến trình số 1, quản mọi dịch vụ. Mỗi dịch vụ là một *unit*
+  (`docker.service`, `ecs.service`), có thứ tự phụ thuộc khai báo bằng `After=`.
+- **`cloud-init`** là cơ chế chuẩn để một máy ảo tự cấu hình lúc boot đầu tiên.
+  Nó là chỗ AWS chạy đoạn `user_data` ta viết trong Launch Template.
+
+Bẫy nằm ở chỗ: `ecs.service` khai báo
+
+```
+After=docker.service cloud-final.service
+```
+
+mà `user_data` **chạy bên trong** `cloud-final`. Nên nếu trong `user_data` ta gọi:
+
+```bash
+systemctl enable --now ecs      # ❌ TUYỆT ĐỐI KHÔNG
+```
+
+thì thành **deadlock ba tầng**: `systemctl` chờ unit `ecs` active → unit `ecs`
+chờ `cloud-final` xong → `cloud-final` chờ `user_data` trả về → `user_data` đang
+chờ `systemctl`. Không bên nào nhường.
+
+Triệu chứng đo được lúc đó:
+
+```bash
+cloud-init status              # running — đứng mãi ở modules-final
+systemctl is-active ecs        # inactive (dead)
+ps -ef | grep systemctl        # `systemctl enable --now ecs` treo,
+                               # là tiến trình con của cloud-init modules --mode=final
+```
+
+Máy **chạy bình thường**, SSM vào được, nhưng không bao giờ đăng ký vào ECS
+cluster — nên `terraform apply` xanh mà không có container nào lên. Gỡ bằng cách
+`kill` tiến trình `systemctl` đang treo: agent lên ngay lập tức.
+
+Bản sửa là **xoá dòng đó đi**, không thay bằng gì cả — trên AMI ECS-optimized
+unit `ecs` đã được `enable` sẵn từ trước, nó tự lên sau khi cloud-init xong. Toàn
+bộ việc `user_data` cần làm chỉ là ghi một dòng cấu hình:
+
+```bash
+echo "ECS_CLUSTER=hushstore" >> /etc/ecs/ecs.config
+```
+
+Bài học Linux ở đây: **đừng gọi `systemctl start` từ trong cloud-init.** Và bài
+học kiểm thử: có một test tự động (`user_data_dung_thu_tu_va_khong_tu_khoi_dong_ecs_agent`)
+đọc `user_data`, bỏ dòng comment ra, rồi bắt lỗi nếu thấy `systemctl`,
+`service ecs`, hoặc `start ecs`. Sự cố đã trở thành một rào chắn vĩnh viễn.
+
+### Bộ nhớ ảo — vì sao phải tự tạo swap
+
+`t3.micro` chỉ có **1 GB RAM**. Cần chạy đồng thời:
+
+| Tiến trình | RAM xấp xỉ |
+|---|---|
+| `ecs-agent` | ~100 MB |
+| `nginx` (container web) | ~15 MB |
+| .NET API (container api) | ~250 MB |
+| Hệ điều hành + `docker` daemon | ~200 MB |
+
+Cộng lại đã chật, và lúc deploy còn có task `migrator` chạy chồng lên. Khi Linux
+hết RAM, **OOM killer** của kernel sẽ chọn một tiến trình và `SIGKILL` nó — trong
+container biểu hiện là **exit code 137**, task chết không rõ lý do.
+
+Nên `user_data` tự tạo 2 GB **swap**: một file trên đĩa được kernel dùng như RAM
+mở rộng, chậm hơn nhiều nhưng còn hơn bị giết.
+
+```bash
+dd if=/dev/zero of=/swapfile bs=1M count=2048   # cấp phát file 2GB toàn số 0
+chmod 600 /swapfile                             # CHỈ root đọc được
+mkswap /swapfile                                # định dạng thành vùng swap
+swapon /swapfile                                # bật ngay
+echo '/swapfile none swap sw 0 0' >> /etc/fstab # bật lại sau reboot
+sysctl -w vm.swappiness=60                      # mức độ chịu đẩy ra swap
+```
+
+Ba chi tiết Linux đáng giải thích:
+
+- **`chmod 600`** là bắt buộc, không phải cho gọn. Swap chứa nguyên xi nội dung
+  RAM — gồm mật khẩu database và JWT secret. `600` nghĩa là chỉ chủ sở hữu
+  (`root`) được đọc/ghi, mọi người khác **không có quyền nào**. Để mặc định
+  `644` là bất kỳ user nào trên máy cũng đọc được bí mật.
+- **`/etc/fstab`** là danh sách những gì cần mount lúc boot. `swapon` chỉ có tác
+  dụng cho phiên hiện tại; không ghi vào `fstab` thì reboot là mất swap.
+- **`vm.swappiness`** (0–100) là mức kernel *sẵn sàng* đẩy trang nhớ ra swap.
+  `60` là mặc định của Linux; giữ nguyên vì hạ xuống sẽ làm OOM killer ra tay
+  sớm hơn — đúng thứ ta đang tránh.
+
+Và vì swap phải sẵn sàng **trước khi** ECS agent lên, thứ tự trong `user_data` là
+swap trước, ghi `ecs.config` sau. Cũng có một test tự động khoá thứ tự này lại.
+
+### Container, nhìn từ phía Linux
+
+Container **không phải máy ảo**. Nó là một tiến trình Linux bình thường, bị kernel
+giới hạn tầm nhìn bằng hai tính năng có sẵn:
+
+- **namespace** — quyết định tiến trình *thấy* được gì. Nó có `/` riêng, danh
+  sách tiến trình riêng (`ps` trong container chỉ thấy chính nó), network riêng.
+  Nhờ network namespace, `web` nghe port 80 và `api` nghe port 8080 **trong không
+  gian mạng riêng của mỗi container** — hai bản của cùng một container cũng không
+  đụng nhau ở đó. Nhưng ta dùng `bridge` mode với **host port tĩnh**, nên port
+  còn bị map ra máy thật: và ở đó thì chỉ một tiến trình được giữ port 80. Đó
+  chính là chốt chặn scale ngang, ghi ở Phần V.
+- **cgroup** (control group) — quyết định tiến trình *dùng* được bao nhiêu. RAM,
+  CPU, I/O. Khi task definition ghi `memory = 512`, ECS đang đặt một giới hạn
+  cgroup; vượt là kernel `SIGKILL`.
+
+Vì cgroup là của **kernel trên máy ta quản**, ta mới đặt được:
+
+```hcl
+linuxParameters = {
+  initProcessEnabled = true
+  maxSwap            = 1024
+  swappiness         = 60
+}
+```
+
+`maxSwap` và `swappiness` **chỉ tồn tại với EC2 launch type**. Fargate không có
+— vì ở Fargate kernel không thuộc về ta. Đây là một lợi ích cụ thể, đo được của
+việc đề bài yêu cầu EC2 thật.
+
+`initProcessEnabled = true` chèn một tiến trình `init` nhỏ làm PID 1 trong
+container. Cần nó vì PID 1 trên Linux có nghĩa vụ đặc biệt: **thu dọn tiến trình
+con đã chết** (zombie). `dotnet` không làm việc đó, nên không có init thì mỗi
+phiên ECS Exec để lại một zombie.
+
+### Người dùng và quyền — container không chạy bằng root
+
+Mặc định container chạy bằng `root`. Nếu ai đó thoát được ra khỏi container
+(container escape), họ là `root` trên máy. Nên `Dockerfile` của API hạ quyền:
+
+```dockerfile
+RUN useradd -m appuser && chown -R appuser /app
+USER appuser
+```
+
+Thứ tự trong file rất quan trọng và có comment ghi rõ: phần cài **CA certificate
+của RDS** phải nằm **trước** `USER appuser`, vì `update-ca-certificates` ghi vào
+`/etc/ssl/certs` — chỉ `root` mới ghi được ở đó.
+
+Đó cũng là một điểm Linux đáng nói: **trust store**. Connection string dùng
+`Encrypt=True;TrustServerCertificate=False`, nghĩa là API *thật sự kiểm tra* chứng
+chỉ của RDS thay vì tin bừa. Muốn kiểm được thì trong container phải có CA của
+Amazon RDS, nên `Dockerfile` tải nó về `/usr/local/share/ca-certificates/` rồi
+gọi `update-ca-certificates` để nạp vào trust store hệ thống.
+
+Và vì trust store là thứ quyết định container tin ai, lệnh tải phải ghim nội dung:
+
+```dockerfile
+ADD --checksum=sha256:3c69...e979 https://truststore.pki.rds.amazonaws.com/...
+```
+
+Không có `--checksum`, ai kiểm soát được đường tải là ghi thêm được CA vào trust
+store — và từ đó giả mạo được database.
+
+### Không có SSH — và vì sao vẫn vào được máy
+
+Đề bài chấm nguyên tắc tối thiểu, nên **port 22 đóng hoàn toàn**: không SG rule
+nào, không key pair, không file `.pem`, `nacl-app` còn có rule DENY 22 tường minh.
+
+Nhưng vẫn cần vào máy để chẩn đoán. Đường vào là **SSM Session Manager**: trên
+Amazon Linux 2023 có sẵn daemon `amazon-ssm-agent`, nó **tự gọi ra** AWS
+(outbound qua NAT) và giữ một kênh mở. Ta bấm "connect" từ phía AWS, không có ai
+gọi *vào* máy cả.
+
+Khác biệt về bảo mật là bản chất, không phải hình thức:
+
+| | SSH | SSM Session Manager |
+|---|---|---|
+| Chiều kết nối | từ ngoài **vào** | từ máy **ra** |
+| Cần port mở | 22 | **không** |
+| Cần credential trên máy | khoá riêng `.pem` | **không** — dùng IAM |
+| Thu hồi quyền | phải xoá `authorized_keys` trên từng máy | sửa IAM policy, có hiệu lực ngay |
+| Nhật ký | phải tự cấu hình `sshd`, và log nằm **trên chính máy** bị chiếm | `ssm:StartSession` là management event nên hiện trong **CloudTrail Event History** (bật sẵn, miễn phí, giữ 90 ngày) — ở ngoài máy, không sửa được từ trong |
+
+> **Nói cho đúng:** dự án **chưa tạo CloudTrail trail** nào, nên chỉ có Event
+> History mặc định: 90 ngày, chỉ management event, không lưu ra S3 và không
+> query được bằng Athena. Đủ để trả lời "ai đã vào máy", không đủ làm bằng
+> chứng lâu dài. Đây là một trong các giới hạn ở Phần V.
+
+### Vài chi tiết Linux khác đã gặp thật
+
+- **`set -euxo pipefail`** ở đầu `user_data`. Bốn cờ bash: `e` dừng ngay khi có
+  lệnh lỗi, `u` báo lỗi nếu dùng biến chưa gán, `x` in mọi lệnh ra log (đọc được
+  trong `/var/log/cloud-init-output.log` — đây là chỗ đầu tiên phải xem khi máy
+  boot sai), `o pipefail` để lỗi giữa một pipeline không bị che bởi lệnh cuối.
+  Không có mấy cờ này, một lệnh gãy giữa `user_data` sẽ đi qua im lặng.
+- **Đồng hồ hệ thống.** `sg-web` egress chỉ mở `80`, `443`, `1433` — không có
+  `123` (NTP), nên về lý máy không đồng bộ được giờ. Thực tế vẫn đúng giờ vì
+  Amazon Linux dùng **Amazon Time Sync** ở `169.254.169.123`, một địa chỉ
+  *link-local*: nó không đi qua route table, không qua NAT, nên không cần rule
+  nào. Các bản ghi `REJECT` port 123 trong Flow Logs vì thế **không phải sự cố**.
+- **`gzip_static on`** trong nginx thay vì nén lúc chạy: `dotnet publish` đã sinh
+  sẵn `.gz` cạnh mỗi file, nginx chỉ việc gửi file có sẵn. Đổi CPU lấy đĩa — đúng
+  hướng trên máy 2 vCPU burstable. Bundle cũng có sẵn `.br` (Brotli) nhưng
+  `nginx:alpine` **không** biên dịch kèm module brotli, nên các file đó chỉ nằm
+  chiếm chỗ.
+
+### Bộ lệnh chẩn đoán tối thiểu
+
+Vào máy bằng `aws ssm start-session --target <instance-id>`, rồi:
+
+| Cần biết | Lệnh |
+|---|---|
+| cloud-init xong chưa, có lỗi gì | `cloud-init status`, `cat /var/log/cloud-init-output.log` |
+| ECS agent sống không | `systemctl status ecs`, `journalctl -u ecs -n 50` |
+| Container nào đang chạy | `docker ps` |
+| RAM và swap còn bao nhiêu | `free -h` |
+| Có ai bị OOM killer giết không | `dmesg -T \| grep -i "killed process"` |
+| Đĩa còn chỗ không | `df -h` |
+| Máy đang nghe port nào | `ss -tlnp` |
+| Cấu hình ECS đã ghi đúng chưa | `cat /etc/ecs/ecs.config` |
+
+`ss -tlnp` là lệnh đáng chạy nhất khi bảo vệ đồ án: nó liệt kê **mọi port máy
+đang nghe**, và trên máy này danh sách đó không có `22`.
+
 ## RDS — database do AWS quản
 
 SQL Server Express, `db.t3.micro`, 20GB, single-AZ, nằm trong db subnet.
@@ -555,10 +834,13 @@ Server Express **không tải** vẫn ngồi ở ~36% CPU. Nên riêng phần v�
 
 # Phần IV — Vì sao thiết kế này đáp ứng đề bài
 
-Đề bài đòi 5 thành phần và 2 kết quả. Đối chiếu:
+Đề bài đòi ba mảng kiến thức (Linux, AWS, Terraform), 5 thành phần hạ tầng và
+2 kết quả. Đối chiếu từng dòng:
 
 | Đề bài yêu cầu | Ở đâu trong hệ thống |
 |---|---|
+| **Tìm hiểu HĐH Linux + xây website trên đó** | Mục ["Linux — hệ điều hành chạy bên dưới tất cả"](#linux--hệ-điều-hành-chạy-bên-dưới-tất-cả): 3 bản phân phối, cloud-init/systemd, swap, namespace/cgroup, quyền file, không SSH |
+| **Tìm hiểu AWS Cloud + Terraform** | Phần II (khái niệm), và toàn bộ hạ tầng khai bằng Terraform: 8 module, 92 test tự động, không resource nào bấm tay |
 | VPC | `10.20.0.0/16`, 6 subnet, 3 tier, 2 AZ |
 | Security Group | 3 cái, rule tham chiếu SG, không có port 22 |
 | **Network ACL** | 3 cái, mỗi tier một cái, có rule DENY và thứ tự có ý nghĩa |
@@ -596,6 +878,9 @@ bảo vệ:
 | Không lọc egress theo tên miền | Cần AWS Network Firewall (~$300/tháng), không khả thi |
 | Chỉ 1 EC2, deploy có downtime 20–40s | Đổi lấy bề mặt SG nhỏ hơn hàng nghìn lần. Lựa chọn có ý thức |
 | Rate limiter đếm trong RAM | 2 instance sẽ thành 2× hạn mức. Cần Redis nếu scale thật |
+| **Không scale ngang được** dù đã có ASG + ALB | Bộ máy có đủ, nhưng bị ghim: `max_size = 1`, `managed_scaling = DISABLED`, và chốt cứng nhất là **host port tĩnh** 80/8080 — hai task không cùng bind một port trên một máy. Mở ra thì phải chọn `awsvpc` (nhiều ENI hơn `t3.micro` chịu nổi) hoặc dải ephemeral `32768–65535` trên `sg-web` — tức **đánh đổi trực tiếp với chiều đề bài đang chấm**. Đã chọn tối thiểu rule, chấp nhận một máy |
+| Không có CloudTrail trail | Chỉ có Event History mặc định: 90 ngày, chỉ management event, không lưu ra S3. Tạo trail tốn ~$0.03/tháng cho S3 — đã cân nhắc, hoãn vì mọi thao tác hạ tầng đều đi qua Terraform và Git đã là nhật ký |
+| Không có alarm nào | Lambda cost guard lỗi thì im lặng. Một CloudWatch alarm trên metric `Errors` là ~$0.10/tháng — đã cân nhắc, hoãn |
 | Không WAF | ALB có allowlist Host nhưng không lọc SQL injection ở tầng mạng. Phòng thủ nằm ở tầng ứng dụng (EF Core tham số hoá) |
 | Single-AZ RDS | SQL Server Express không hỗ trợ Multi-AZ |
 | Giữa hai phiên làm việc, domain không hoạt động | ALB chạy 24/7 tốn $18/tháng cho một đồ án |
