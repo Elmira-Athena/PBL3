@@ -55,15 +55,20 @@ không tạo snapshot cuối, và 2 snapshot tự động cũng đi theo instanc
 
 ### Đa region
 
-| Lượt | Kết quả |
-|---|---|
-| Trước destroy | 8 region (`us-east-1`, `us-west-2`, `ap-southeast-2`, `ap-northeast-1`, `eu-west-1`, `ap-south-1`, `us-east-2`, `eu-central-1`) — **sạch** |
-| Sau destroy | `ap-southeast-1` + 5 region đầu — **sạch** |
-| Sau destroy | 7 region còn lại — **CHƯA xác minh lại**, token SSO hết hạn giữa lượt quét |
+**12 region đã xác minh sau destroy, tất cả sạch** (`vpc-nondefault = 0`,
+`rds = 0`, và `lambda = 0` ở những region kiểm cả Lambda):
 
-Bảy region đó đã sạch ở lượt quét trước destroy, và destroy không tạo ra gì ở
-đâu cả, nên gần như chắc chắn vẫn sạch — nhưng đó là suy luận, không phải phép
-đo. Muốn đóng lại thì `aws sso login --profile hushstore` rồi quét lại.
+```
+ap-southeast-1   us-east-1        us-west-2        ap-southeast-2
+ap-northeast-1   eu-west-1        ap-south-1       us-east-2
+eu-central-1     ap-northeast-2   ca-central-1     eu-west-2
+```
+
+Và **S3 toàn account = 0 bucket** — S3 là global nên một phép đo là đủ cho
+mọi region.
+
+Lượt quét bị token SSO hết hạn ở giữa nên phải chia hai lần; lần sau khi
+đăng nhập lại đã phủ đủ 12 region, không còn chỗ nào là suy luận.
 
 ## Những thứ CỐ TÌNH không xoá
 
