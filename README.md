@@ -49,7 +49,10 @@ Hai tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
 
 1. **[thiet-ke-he-thong-aws.md](docs/thiet-ke-he-thong-aws.md)** — *cái gì* và
    *vì sao thiết kế vậy*. Có phần kiến thức nền về mạng máy tính và AWS ở đầu,
-   rồi giải thích từng thành phần, và đối chiếu với yêu cầu đề bài.
+   rồi giải thích từng thành phần, và đối chiếu với yêu cầu đề bài. Trong đó mục
+   **"Linux — hệ điều hành chạy bên dưới tất cả"** đọc được độc lập: ba bản phân
+   phối trong một hệ thống, thứ tự boot và deadlock đã gặp thật, swap,
+   namespace/cgroup, và vì sao không có port 22 mà vẫn vào được máy.
 2. **[nhat-ky-trien-khai.md](docs/nhat-ky-trien-khai.md)** — *làm thế nào*. Cách
    doanh nghiệp triển khai hạ tầng và vì sao, nhật ký 10 giai đoạn với bảng cấu
    hình cụ thể từng resource, và 12 issue chính đã gặp kèm bài học.
