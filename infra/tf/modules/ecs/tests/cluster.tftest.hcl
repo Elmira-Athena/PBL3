@@ -64,6 +64,17 @@ run "launch_template_khong_gan_ssh_key_va_bat_imdsv2" {
   }
 }
 
+run "asg_khai_tag_AmazonECSManaged_de_khong_co_diff_vinh_vien" {
+  command = plan
+
+  assert {
+    condition = anytrue([
+      for t in aws_autoscaling_group.this.tag : t.key == "AmazonECSManaged"
+    ])
+    error_message = "ASG phải khai tường minh tag AmazonECSManaged. ECS tự thêm tag này khi ASG gắn vào capacity provider; không khai thì mọi plan sau đều đòi xoá nó, ECS lại thêm lại — một diff VĨNH VIỄN làm plan không bao giờ sạch, và drift thật sẽ lẫn vào tiếng ồn đó."
+  }
+}
+
 run "launch_template_chan_cpu_surplus_bang_che_do_standard" {
   command = plan
 

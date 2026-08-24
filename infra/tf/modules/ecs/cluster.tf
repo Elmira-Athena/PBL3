@@ -130,6 +130,25 @@ resource "aws_autoscaling_group" "this" {
     propagate_at_launch = true
   }
 
+  # Tag NÀY do ECS tự thêm, không phải ta muốn nó cho đẹp.
+  #
+  # Khi ASG được gắn vào một ECS capacity provider, ECS tự đặt
+  # `AmazonECSManaged` lên ASG. Terraform không biết chuyện đó nên plan kế tiếp
+  # sẽ đòi XOÁ tag — rồi ECS thêm lại, rồi plan lại đòi xoá. Đó là một diff
+  # VĨNH VIỄN, và nó phá đúng tiêu chí kiểm chứng của dự án ("plan lần 2 sau
+  # apply phải ra No changes"). Tệ hơn: một plan luôn bẩn thì không ai còn đọc
+  # nó, nên drift THẬT — kể cả drift làm tốn tiền — sẽ lẫn vào tiếng ồn.
+  #
+  # Khai tường minh ở đây để Terraform sở hữu tag, thay vì
+  # `lifecycle { ignore_changes = [tag] }`. Cách kia cũng dẹp được tiếng ồn
+  # nhưng nó bịt mắt Terraform với MỌI thay đổi tag trên ASG, tức che luôn thứ
+  # ta thật sự muốn thấy. Bịt đúng một lỗ, không bịt cả cửa sổ.
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = ""
+    propagate_at_launch = true
+  }
+
   instance_refresh {
     strategy = "Rolling"
 
