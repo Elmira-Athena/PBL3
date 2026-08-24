@@ -40,4 +40,11 @@ image_tag = "0000000000000000000000000000000000000000"
 # để `terraform apply` không xoá chúng — Terraform coi mọi notification không
 # có trong config là thứ cần xoá, nên "để yên" thật ra là "xoá ở lần apply tới".
 # Để [] nếu account chỉ có mình dự án này dùng.
+# AWS chỉ cho 2 budget MIỄN PHÍ mỗi account; cái thứ 3 tốn $0.02/ngày
+# (~$0.60/tháng). Đặt false khi hai slot đã bị người dùng chung account chiếm.
+#
+# TẮT LÀ ĐÁNH ĐỔI THẬT: lớp backstop duy nhất còn lại là Lambda cost guard, mà
+# chế độ chết của nó là im lặng tuyệt đối. Kiểm nhịp tim guard bằng status.sh.
+enable_budget = true
+
 shared_notifications = []

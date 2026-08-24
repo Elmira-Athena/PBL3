@@ -26,15 +26,17 @@ data "aws_caller_identity" "current" {}
 resource "aws_s3_bucket" "tfstate" {
   bucket = "${var.project}-tfstate-${data.aws_caller_identity.current.account_id}"
 
-  # prevent_destroy đã được BỎ CÓ Ý THỨC ngày 2026-08-23 để dọn account cũ
-  # (667836586836) trong Phase 4. Lưới an toàn này đã làm đúng việc của nó:
-  # nó buộc việc xoá state bucket phải là một lần sửa code có chủ đích, không
-  # phải một lần destroy vô tình.
+  # State bucket không được xoá vô tình — phải bỏ khối này rồi apply mới destroy
+  # được.
   #
-  # KHI DỰNG LẠI TRÊN ACCOUNT MỚI: bật lại khối này ngay lần apply đầu.
-  # lifecycle {
-  #   prevent_destroy = true
-  # }
+  # Lịch sử: khối này đã bị bỏ có ý thức ngày 2026-08-23 để dọn account cũ
+  # 667836586836, và BẬT LẠI ngày 2026-08-24 ngay trước lần apply đầu trên
+  # account mới 551897327153 — đúng như ghi chú để lại lúc bỏ. Lưới an toàn này
+  # đã làm đúng việc của nó: nó buộc việc xoá state bucket phải là một lần sửa
+  # code có chủ đích, không phải một lần destroy vô tình.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_versioning" "tfstate" {

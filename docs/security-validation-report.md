@@ -16,6 +16,32 @@ Kiểm thử thực hiện trên hạ tầng **do chính nhóm sở hữu**, tro
 
 ---
 
+> ## ⚠️ Hiệu lực của số liệu trong báo cáo này
+>
+> Toàn bộ 12 kịch bản dưới đây được đo trên **account `667836586836`**, và
+> account đó **đã bị dọn sạch ngày 2026-08-23** (xem
+> [`cleanup-account-cu.md`](cleanup-account-cu.md)). Dự án đã dời sang account
+> `551897327153` ngày 2026-08-24.
+>
+> **Điều này KHÔNG làm số liệu sai.** Chúng là phép đo thật, trên hạ tầng thật,
+> vào thời điểm ghi trong bảng trên, và output thô còn nguyên trong
+> [`evidence/`](evidence/). Cái mất đi là khả năng **chạy lại** để đối chiếu.
+>
+> **Điều nó có làm:** các giá trị phụ thuộc account đã lỗi thời — account id
+> trong `kb11` và `kb13`, IP `42.1.89.156` của máy tấn công (nay là
+> `116.99.24.25`), DNS và IP của ALB, IP nội bộ của EC2 và RDS. Hạ tầng mới
+> dùng cùng CIDR `10.20.0.0/16` nên IP nội bộ sẽ tương tự nhưng không đảm bảo
+> trùng.
+>
+> **Việc phải làm trước khi nộp:** chạy lại cả 12 kịch bản trên account mới và
+> cập nhật báo cáo. Rule được kiểm ở đây nằm trong Terraform và **không đổi** khi
+> dời account — nên kỳ vọng là 12/12 vẫn đạt. Nhưng "kỳ vọng" không phải "đã đo",
+> và phần "Đầu ra" của đề bài đòi phép đo. Lần chạy lại cũng là dịp kiểm chứng
+> rằng hạ tầng dựng lại từ Terraform cho kết quả bảo mật y hệt — bản thân điều đó
+> là một luận điểm đáng có trong báo cáo.
+
+---
+
 ## 1. Tóm tắt kết quả
 
 | # | Kịch bản | Kỳ vọng | Kết quả | Rule chịu trách nhiệm | Bằng chứng |

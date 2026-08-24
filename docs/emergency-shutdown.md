@@ -190,7 +190,7 @@ Hai thứ sẽ chặn `destroy` một cách **có chủ ý**:
 
 - **Bucket ảnh sản phẩm** — `force_destroy = false`, nên `destroy` fail nếu còn
   object. Đó là lưới an toàn. Muốn xoá thật thì xoá object trước:
-  `aws s3 rm s3://hushstore-public-assets-667836586836 --recursive --profile hushstore`
+  `aws s3 rm s3://hushstore-public-assets-551897327153 --recursive --profile hushstore`
 - **State bucket** trong `infra/tf/bootstrap` — có `prevent_destroy = true`. Phải
   bỏ dòng đó rồi apply mới xoá được.
 

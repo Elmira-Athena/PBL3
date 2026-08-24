@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.10"
 
   backend "s3" {
-    bucket       = "hushstore-tfstate-667836586836"
+    bucket       = "hushstore-tfstate-551897327153"
     key          = "prod/terraform.tfstate"
     region       = "ap-southeast-1"
     profile      = "hushstore"
