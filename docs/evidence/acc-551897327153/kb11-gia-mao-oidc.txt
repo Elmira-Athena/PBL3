@@ -1,0 +1,62 @@
+KỊCH BẢN 11 — Giả mạo OIDC assume-role
+══════════════════════════════════════════════════════════════════════════════
+
+MỤC TIÊU
+Chứng minh: biết ARN của role deploy KHÔNG đủ để assume nó.
+
+ARN đó được cố tình lưu dạng repository VARIABLE trên GitHub (không phải
+secret) — tức công khai với bất kỳ ai đọc được log Actions. Thứ bảo vệ hệ
+thống là TRUST POLICY, không phải sự bí mật của ARN.
+
+Ngày chạy   : 2026-08-24T08:24:43Z
+Account     : 551897327153  (chạy lại sau khi dời account)
+ROLE_ARN    : arn:aws:iam::551897327153:role/hushstore-github-actions-deploy-role
+
+══════════════════════════════════════════════════════════════════════════════
+PHÉP THỬ 1 — token là một chuỗi bất kỳ
+══════════════════════════════════════════════════════════════════════════════
+$ aws sts assume-role-with-web-identity --role-arn $ROLE_ARN \
+    --role-session-name gia-mao --web-identity-token <chuỗi rác>
+
+
+aws: [ERROR]: An error occurred (InvalidIdentityToken) when calling the AssumeRoleWithWebIdentity operation: The ID Token provided is not a valid JWT. (You may see this error if you sent an Access Token)
+
+-> Chặn ở tầng ĐỊNH DẠNG. Chưa nói được gì về bảo mật.
+
+══════════════════════════════════════════════════════════════════════════════
+PHÉP THỬ 2 — JWT tự ký, ĐỦ MỌI CLAIM mà trust policy đòi
+══════════════════════════════════════════════════════════════════════════════
+Payload: iss=token.actions.githubusercontent.com · aud=sts.amazonaws.com
+         sub=repo:Elmira-Athena/PBL3:ref:refs/heads/main · iat/nbf/exp hợp lệ
+Thiếu duy nhất MỘT thứ: chữ ký của GitHub. Header khai kid='bia-dat'.
+
+$ aws sts assume-role-with-web-identity --role-arn $ROLE_ARN \
+    --role-session-name gia-mao-du-claim --web-identity-token <JWT tự ký>
+
+
+aws: [ERROR]: An error occurred (InvalidIdentityToken) when calling the AssumeRoleWithWebIdentity operation: Couldn't retrieve verification key from your identity provider,  please reference AssumeRoleWithWebIdentity documentation for requirements
+
+-> Chặn ở tầng XÁC THỰC CHỮ KÝ. AWS đi lấy khoá công khai của GitHub theo
+   'kid' và không tìm thấy — nên KHÔNG BAO GIỜ tới bước xét trust policy.
+
+══════════════════════════════════════════════════════════════════════════════
+PHÉP THỬ 3 — JWT tự ký, sub SAI repo (để thấy thứ tự kiểm)
+══════════════════════════════════════════════════════════════════════════════
+sub = repo:ke-tan-cong/repo-khac:ref:refs/heads/main
+
+$ aws sts assume-role-with-web-identity --role-arn $ROLE_ARN \
+    --role-session-name gia-mao-sai-sub --web-identity-token <JWT sub sai>
+
+
+aws: [ERROR]: An error occurred (InvalidIdentityToken) when calling the AssumeRoleWithWebIdentity operation: Couldn't retrieve verification key from your identity provider,  please reference AssumeRoleWithWebIdentity documentation for requirements
+
+-> Cùng một lỗi InvalidIdentityToken, KHÔNG phải AccessDenied. Đây là
+   bằng chứng về THỨ TỰ: chữ ký được kiểm TRƯỚC nội dung claim. Kẻ tấn công
+   không suy ra được trust policy đòi gì từ thông báo lỗi.
+
+══════════════════════════════════════════════════════════════════════════════
+KẾT LUẬN
+══════════════════════════════════════════════════════════════════════════════
+Không phép thử nào lấy được credential. Phòng thủ không nằm ở việc giữ kín
+ARN, mà ở chỗ chỉ GitHub ký được token mà AWS chấp nhận — và trust policy
+còn ghim thêm aud + sub theo đúng repo và branch.

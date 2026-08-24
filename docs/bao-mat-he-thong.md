@@ -439,7 +439,10 @@ Cột "lớp dự phòng" là chỗ thể hiện *defense in depth*: lớp đầ
 
 Mười hai dòng đầu là **12 kịch bản đã chạy thật** — số thứ tự khớp đúng với
 [security-validation-report.md](security-validation-report.md), tra bằng chứng
-theo số. Ba dòng cuối **chưa** được kiểm bằng máy tấn công, ghi rõ để không nhận
+theo số. Toàn bộ đã được **đo lại ngày 2026-08-24 trên account mới**
+`551897327153` và cho **kết quả y hệt** lần đo trước trên account đã bị xoá —
+tức tính chất bảo mật nằm trong mã Terraform, không nằm trong một lần cấu hình
+may mắn. Ba dòng cuối **chưa** được kiểm bằng máy tấn công, ghi rõ để không nhận
 công không có.
 
 | # | Tấn công | Lớp chặn đầu tiên | Lớp dự phòng |
@@ -482,6 +485,8 @@ Nói thẳng phần này khi bảo vệ sẽ được điểm cao hơn là vờ 
 | **Hành vi bất thường sau khi đã vào** | Không có GuardDuty, không có alarm nào. Không ai được thông báo |
 | **Điều tra sau sự cố quá 90 ngày** | Chưa tạo CloudTrail trail. Chỉ có Event History mặc định (90 ngày, chỉ management event) |
 | **Lỗ hổng trong thư viện phụ thuộc** | ECR có `scan_on_push`, nhưng CI **không** fail khi phát hiện. Còn 3 package mức High chưa vá |
+| **Instance launch không chỉ định SG sẽ rơi vào default SG** | AWS tạo một security group `default` cho **mỗi** VPC, không cho xoá, và mặc định nó cho phép mọi traffic từ chính nó — gồm port 22. Đo được: **0 ENI** đang dùng nó nên hiện không có bề mặt thật, nhưng dự án chưa đặt rule của nó về rỗng. Bịt bằng `aws_default_security_group` với ingress/egress trống, hoặc SCP |
+| **Danh tính vận hành yếu hơn danh tính workload** | IAM user `hushstore-ops` có `AdministratorAccess`, **không MFA**, và một access key dài hạn. Đây là đánh đổi có ý thức: bật SSO buộc vào Organization và làm hết hạn credit. Giảm nhẹ ngay được bằng cách **bật MFA** — không ảnh hưởng credit |
 
 Điểm chung của bảng này: các lớp đã có mạnh ở **phòng ngừa**, yếu ở **phát hiện**
 và **phản ứng**. Đó là hình dạng điển hình của một hệ thống làm đúng phần hạ tầng

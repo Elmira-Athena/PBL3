@@ -1,0 +1,49 @@
+### KB-08: NACL rule 50 DENY theo IP — dieu Security Group KHONG lam duoc
+### Account 551897327153 — 2026-08-24T09:38:39Z
+### IP may tan cong: 117.3.54.230    (tfvars my_ip phai khop /32 nay)
+
+Phuong phap A/B tu CUNG MOT MAY:
+  A = goi thang vao ALB  -> goi tin mang IP that cua toi  -> phai bi rule 50 chan
+  B = goi qua Cloudflare -> goi tin mang IP cua Cloudflare -> phai di qua binh thuong
+So sanh A voi B loai bo moi cach giai thich khac (mat mang, ALB chet, DNS sai).
+
+══ TRUOC KHI BAT RULE (enable_deny_demo = false) ══
+  [A] duong TRUC TIEP toi ALB (mang IP that 117.3.54.230):
+      HTTP 200  (tong 0.146228s)
+  [B] duong QUA CLOUDFLARE (IP nguon la cua Cloudflare, khong phai cua toi):
+      HTTP 200  (tong 0.251221s)
+
+══ SAU KHI BAT RULE (enable_deny_demo = true) ══
+Rule that dang co tren nacl-public:
+   [
+       {
+           "CidrBlock": "117.3.54.230/32",
+           "Egress": false,
+           "Protocol": "-1",
+           "RuleAction": "deny",
+           "RuleNumber": 50
+       }
+   ]
+
+  [A] duong TRUC TIEP toi ALB (mang IP that 117.3.54.230):
+      HTTP 000  (tong 25.005464s)
+      curl THAT BAI (exit 28) — TIMEOUT la ket qua DUNG
+  [B] duong QUA CLOUDFLARE (IP nguon la cua Cloudflare):
+      HTTP 200  (tong 0.735803s)
+
+══ KET LUAN ══
+                    TRUOC (rule tat)      SAU (rule bat)
+  [A] truc tiep     HTTP 200  0.15s       TIMEOUT exit 28, 25s
+  [B] qua Cloudflare HTTP 200  0.25s      HTTP 200  0.74s
+
+Bang nay do tu CUNG MOT MAY, trong vong vai phut, chi doi mot bien Terraform.
+Nen no loai bo moi cach giai thich khac: mat mang thi B cung chet; ALB chet thi
+B cung chet; DNS sai thi B cung chet. Chi co A chet.
+
+DAY LA DIEU SECURITY GROUP KHONG THE LAM. Security Group chi co danh sach
+CHO PHEP — khong co cu phap deny. Muon chan dung mot IP thi BUOC phai dung
+Network ACL. Do la cau tra loi gon nhat cho "da co SG roi thi NACL de lam gi".
+
+Luu y ky thuat: rule so 50 nho hon 100 va 110 (hai rule allow 80/443). NACL xet
+rule theo THU TU TANG DAN va dung o rule dau tien khop. Neu dat rule deny nay o
+so 150 thi no VO DUNG — goi tin da khop rule 100 va duoc cho qua tu truoc.

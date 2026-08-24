@@ -1,0 +1,45 @@
+### KB-02 + KB-03: EC2 IP rieng va RDS tu Internet
+### Account 551897327153 — 2026-08-24T09:06:46Z
+### May tan cong: 117.3.54.230
+
+══ KB-03: RDS tu Internet ══
+Endpoint CONG KHAI cua RDS: hushstore-db-tf.c50q0csm6p6z.ap-southeast-1.rds.amazonaws.com
+
+$ dig +short hushstore-db-tf.c50q0csm6p6z.ap-southeast-1.rds.amazonaws.com
+10.20.21.168
+
+-> Endpoint la ten DNS cong khai, nhung no phan giai ra mot IP RIENG
+   (dai 10.20.x.x). Do la he qua cua publicly_accessible = false:
+   ten ton tai, dia chi thi khong di duoc tu Internet.
+
+$ python3 socket connect_ex(('hushstore-db-tf.c50q0csm6p6z.ap-southeast-1.rds.amazonaws.com', 1433))   # settimeout(10) — LUU Y: thoi gian phan giai DNS khong bi timeout nay bao
+  TIMEOUT sau 10.1s  (rc=35 EAGAIN = ket noi khong bao gio hoan tat)
+     -> goi tin bi DROP IM LANG. KHONG phai 'refused': khong co ai tra loi.
+
+══ KB-02: EC2 IP rieng ══
+IP rieng cua container instance: 10.20.11.251
+
+$ python3 socket connect_ex(('10.20.11.251', 8080))   # settimeout(10) — LUU Y: thoi gian phan giai DNS khong bi timeout nay bao
+  TIMEOUT sau 10.0s  (rc=35 EAGAIN = ket noi khong bao gio hoan tat)
+     -> goi tin bi DROP IM LANG. KHONG phai 'refused': khong co ai tra loi.
+$ python3 socket connect_ex(('10.20.11.251', 22))   # settimeout(10) — LUU Y: thoi gian phan giai DNS khong bi timeout nay bao
+  TIMEOUT sau 10.0s  (rc=35 EAGAIN = ket noi khong bao gio hoan tat)
+     -> goi tin bi DROP IM LANG. KHONG phai 'refused': khong co ai tra loi.
+$ python3 socket connect_ex(('10.20.11.251', 80))   # settimeout(10) — LUU Y: thoi gian phan giai DNS khong bi timeout nay bao
+  TIMEOUT sau 10.0s  (rc=35 EAGAIN = ket noi khong bao gio hoan tat)
+     -> goi tin bi DROP IM LANG. KHONG phai 'refused': khong co ai tra loi.
+
+-> Ba port deu khong tiep can duoc. Khong phai vi rule chan, ma vi
+   KHONG CO DUONG DI: app subnet khong co route ra Internet Gateway,
+   va instance khong co IP public nao de goi.
+
+══ Bang chung phia cau hinh ══
+$ aws rds describe-db-instances --query PubliclyAccessible
+False
+$ aws ec2 describe-instances --query PublicIpAddress (cua container instance)
+[
+    {
+        "priv": "10.20.11.251",
+        "pub": null
+    }
+]

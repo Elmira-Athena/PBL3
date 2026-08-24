@@ -1,0 +1,27 @@
+### KB-12: ban kinh anh huong (blast radius) cua role deploy GitHub Actions
+### Account 551897327153 — chay lai sau khi doi account
+### 2026-08-24T08:22:32Z
+Role: arn:aws:iam::551897327153:role/hushstore-github-actions-deploy-role
+
+KB-11 chung minh KHONG AI assume duoc role nay. KB-12 tra loi cau con lai:
+gia su co ai do assume duoc — no lam duoc gi, va KHONG lam duoc gi.
+
+-- PHAI DUOC PHEP (4 viec cua pipeline) --
+rds:CreateDBSnapshot           snapshot:pre-migrate-test                     allowed
+ecs:UpdateService              service/hushstore/hushstore-api               allowed
+ecr:PutImage                   repository/hushstore-api                      allowed
+ecs:RunTask                    task-definition/hushstore-migrator:1          allowed
+
+-- PHAI BI TU CHOI (khong duoc bat ha tang ton tien, khong doc secret) --
+autoscaling:SetDesiredCapacity asg/hushstore-asg                             implicitDeny
+rds:StartDBInstance            db:hushstore-db-tf                            implicitDeny
+rds:StopDBInstance             db:hushstore-db-tf (StopDBInstance)           implicitDeny
+s3:GetObject                   tfstate/prod/terraform.tfstate                implicitDeny
+ecs:RunTask                    task-definition/hushstore-api:1               implicitDeny
+ssm:GetParameter               parameter/hushstore/prod/db-password          implicitDeny
+iam:PassRole                   task-execution-seeder-role                    implicitDeny
+iam:AttachRolePolicy           AdministratorAccess (thu leo thang)           implicitDeny
+
+Ghi chu: khong co autoscaling:SetDesiredCapacity va khong co rds:StartDBInstance
+nghia la CI KHONG THE bat ha tang tinh tien theo gio — do la mot rang buoc chi
+phi duoc cuong che bang IAM, khong phai bang loi hua trong tai lieu.

@@ -1,0 +1,78 @@
+### KB-05 (phan cau hinh): he thong KHONG CO be mat SSH nao
+### Account 551897327153 — 2026-08-24T09:13:11Z
+
+Phan do tu may tan cong nam trong kb04-05-port-ung-dung-va-ssh.txt.
+Phan nay do tu phia CAU HINH — tra loi 'co chac khong con duong nao?'
+
+== 1. So key pair EC2 trong ca region ==
+   so key pair: 0
+
+== 2. Launch template co gan key_name khong ==
+$ aws ec2 describe-launch-template-versions --launch-template-name hushstore-lt-a81c363d512602b4fb1d3e5902
+   KeyName    : None
+   (None = khong gan key nao -> khong the SSH du co mo port)
+
+== 3. Moi SG rule ingress trong region ==
+----------------------------------------------------------------------------------------
+|                              DescribeSecurityGroupRules                              |
++-----------+-------+--------+------------------------+------------------------+-------+
+|   cidr    | from  | proto  |          sg            |         srcSG          |  to   |
++-----------+-------+--------+------------------------+------------------------+-------+
+|  None     |  8080 |  tcp   |  sg-0677ed47526fd60e9  |  sg-0d80e7564f4936cb7  |  8080 |
+|  None     |  -1   |  -1    |  sg-0554e1f7ac63016d0  |  sg-0554e1f7ac63016d0  |  -1   |
+|  None     |  -1   |  -1    |  sg-0c963910a01aa5522  |  sg-0c963910a01aa5522  |  -1   |
+|  0.0.0.0/0|  80   |  tcp   |  sg-0d80e7564f4936cb7  |  None                  |  80   |
+|  None     |  1433 |  tcp   |  sg-0376a77e01eda88ff  |  sg-0677ed47526fd60e9  |  1433 |
+|  0.0.0.0/0|  443  |  tcp   |  sg-0d80e7564f4936cb7  |  None                  |  443  |
+|  None     |  80   |  tcp   |  sg-0677ed47526fd60e9  |  sg-0d80e7564f4936cb7  |  80   |
++-----------+-------+--------+------------------------+------------------------+-------+
+
+PHAN TICH TRUNG THUC — bang tren co HAI dong proto=-1 from=-1 to=-1.
+'-1' nghia la MOI protocol, MOI port, tuc CO BAO GOM 22. Khong duoc bo qua.
+Truy ra ca hai:
+   sg-0554e1f7ac63016d0 -> default	vpc-0b84a98c407cd4136
+   sg-0c963910a01aa5522 -> default	vpc-056b9396279627317
+
+   Ca hai la SECURITY GROUP 'default' — AWS tu tao mot cai cho MOI VPC va
+   KHONG cho xoa. Mac dinh cua no la 'cho phep moi traffic tu chinh no'.
+   Mot thuoc VPC cua ta (vpc-0b84a98c407cd4136), mot thuoc default VPC.
+   Terraform cua ta KHONG quan ly chung va KHONG gan gi vao chung.
+
+   Cau hoi dung phai hoi: co gi dang DUNG chung khong?
+$ aws ec2 describe-network-interfaces --filters group-id=<2 SG do>
+   so ENI dang dung: 0
+   -> 0. Khong resource nao nam trong chung, nen khong co be mat that.
+
+   RUI RO CON LAI (ghi ra thay vi bo qua): neu sau nay co ai launch mot
+   instance ma KHONG chi dinh security group, AWS se gan default SG cho no.
+   Luc do instance ay nam trong mot SG mo moi port tu chinh no. Cach chan
+   that la SCP hoac dat rule cua default SG ve rong bang Terraform —
+   du an nay chua lam, va day la mot gioi han co that.
+
+== 4. Ba SG cua ta: khong dong nao chua port 22 ==
+   sg-alb  : 0
+   sg-web  : 0
+   sg-rds  : 0
+   (0 = khong co rule ingress nao phu port 22)
+
+== 5. NACL app tier: rule 90 DENY 22 — lop thu hai, doc lap voi SG ==
+[
+    {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": false,
+        "PortRange": {
+            "From": 22,
+            "To": 22
+        },
+        "Protocol": "6",
+        "RuleAction": "deny",
+        "RuleNumber": 90
+    }
+]
+
+== 6. IMDSv2 bat buoc (chan SSRF doc credential tu metadata service) ==
+{
+    "HttpTokens": "required",
+    "HttpPutResponseHopLimit": 1,
+    "HttpEndpoint": "enabled"
+}

@@ -1,0 +1,16 @@
+### KB-07: allowlist Host header tren ALB
+### Account 551897327153 — 2026-08-24T09:36:20Z
+
+$ curl -k -s -o /dev/null -w '%{http_code}' -H 'Host: evil.com' https://13.251.164.95/
+Host: evil.com  ->  HTTP 403
+
+$ curl -k -s -o /dev/null -w '%{http_code}' -H 'Host: www.hushstore.io.vn' https://13.251.164.95/
+Host: www.hushstore.io.vn  ->  HTTP 403
+
+$ curl -k -s -o /dev/null -w '%{http_code}' -H 'Host: hushstore-alb-1075742626.ap-southeast-1.elb.amazonaws.com' https://13.251.164.95/
+Host: hushstore-alb-1075742626.ap-southeast-1.elb.amazonaws.com  ->  HTTP 403
+
+$ curl --resolve hushstore.io.vn:443:13.251.164.95 -s -o /dev/null -w '%{http_code}' https://hushstore.io.vn/
+hushstore.io.vn -> HTTP 200
+$ curl --resolve api.hushstore.io.vn:443:13.251.164.95 ... /health/ready
+api.hushstore.io.vn/health/ready -> HTTP 200

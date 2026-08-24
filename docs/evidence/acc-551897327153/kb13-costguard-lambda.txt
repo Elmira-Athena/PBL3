@@ -1,0 +1,46 @@
+PHASE 3 — Lambda cost guard: kiem chung tren account moi
+==============================================================================
+
+Ngay chay : 2026-08-24T08:26:11Z
+Account   : 551897327153
+Ha tang   : DANG TAT (NAT/ALB/EC2 off, RDS stopped) — day la trang thai
+            ma guard PHAI bao 'khong co gi de tat'.
+
+== 1. Goi Lambda that (free tier 1 trieu request/thang) ==
+$ aws lambda invoke --function-name hushstore-cost-guard /tmp/cg.json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+
+-- payload tra ve --
+{
+  "event": {},
+  "request_id": "bea06ffc-1fae-4647-907a-fceec79a0204",
+  "actions": [],
+  "notes": [
+    "ECS service arn:aws:ecs:ap-southeast-1:551897327153:service/hushstore/hushstore-web không tồn tại (MISSING) — bình thường khi enable_alb = false.",
+    "ECS service arn:aws:ecs:ap-southeast-1:551897327153:service/hushstore/hushstore-api không tồn tại (MISSING) — bình thường khi enable_alb = false.",
+    "ASG hushstore-asg đã ở desired = 0.",
+    "RDS hushstore-db-tf đang ở trạng thái 'stopped' — không gọi StopDBInstance, trạng thái đích đã đạt (chỉ còn $0,004/giờ tiền storage).",
+    "NAT: 0 gateway khớp tag Project=hushstore và state pending/available.",
+    "ALB: 0 trong 0 load balancer của region có tên bắt đầu bằng 'hushstore-'.",
+    "EIP: 0 địa chỉ khớp tag Project=hushstore, trong đó 0 không gắn vào gì."
+  ],
+  "findings": [],
+  "errors": [],
+  "sns": "khong-can-gui"
+}
+
+== 2. Xac minh guard KHONG co quyen xoa/bat gi ==
+$ aws iam get-role-policy (role cua Lambda)
+hushstore-cost-guard-policy
+
+== 3. Schedule co dang bat khong ==
+---------------------------------------
+|            ListSchedules            |
++-------------------------+-----------+
+|          name           |   state   |
++-------------------------+-----------+
+|  hushstore-nightly-stop |  ENABLED  |
++-------------------------+-----------+

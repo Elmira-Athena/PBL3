@@ -1,0 +1,29 @@
+### KB-06: rate limit tren /api/auth/login (mo phong brute-force)
+### Account 551897327153 — 2026-08-24T09:36:34Z
+### Cau hinh: PermitLimit = 5, Window = 1 phut (Program.cs)
+### Goi qua --resolve de khong phu thuoc DNS Cloudflare
+
+20 request lien tiep, mat khau sai:
+  req  1 -> HTTP 400
+  req  2 -> HTTP 400
+  req  3 -> HTTP 400
+  req  4 -> HTTP 400
+  req  5 -> HTTP 400
+  req  6 -> HTTP 429
+  req  7 -> HTTP 429
+  req  8 -> HTTP 429
+  req  9 -> HTTP 429
+  req 10 -> HTTP 429
+  req 11 -> HTTP 429
+  req 12 -> HTTP 429
+  req 13 -> HTTP 429
+  req 14 -> HTTP 429
+  req 15 -> HTTP 429
+  req 16 -> HTTP 429
+  req 17 -> HTTP 429
+  req 18 -> HTTP 429
+  req 19 -> HTTP 429
+  req 20 -> HTTP 429
+
+Ky vong: req 1-5 tra 400/401 (mat khau sai, da vao duoc handler),
+req 6-20 tra 429 (bi rate limiter chan truoc khi vao handler).

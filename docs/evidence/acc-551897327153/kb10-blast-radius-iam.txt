@@ -1,0 +1,33 @@
+### KB-10: ban kinh anh huong (blast radius) cua tung IAM role
+### Account 551897327153 — chay lai sau khi doi account
+### 2026-08-24T08:19:56Z
+Dung iam simulate-principal-policy — danh gia truc tiep tren policy that dang gan.
+
+ROLE                                     ACTION                       KET QUA
+---------------------------------------- ---------------------------- -------
+-- doc secret db-password (chi seeder duoc phep) --
+hushstore-container-instance-role        ssm:GetParameter             explicitDeny
+hushstore-task-app-role                  ssm:GetParameter             implicitDeny
+hushstore-task-execution-role            ssm:GetParameters            implicitDeny
+hushstore-task-execution-seeder-role     ssm:GetParameters            allowed
+-- ba action doc parameter con lai tren host: phai deu explicitDeny --
+hushstore-container-instance-role        ssm:GetParameters            explicitDeny
+hushstore-container-instance-role        ssm:GetParameterHistory      explicitDeny
+hushstore-container-instance-role        ssm:GetParametersByPath      explicitDeny
+-- doc connection-string (chi execution role cua app duoc phep) --
+hushstore-task-execution-role            ssm:GetParameters            allowed
+hushstore-task-execution-seeder-role     ssm:GetParameters            implicitDeny
+-- doc jwt-secret --
+hushstore-task-execution-role            ssm:GetParameters            allowed
+hushstore-container-instance-role        ssm:GetParameter             explicitDeny
+-- ghi anh len bucket assets (chi task role cua app) --
+hushstore-task-app-role                  s3:PutObject                 allowed
+hushstore-container-instance-role        s3:PutObject                 implicitDeny
+-- thao tac RDS: khong role nao duoc phep --
+hushstore-task-app-role                  rds:DescribeDBInstances      implicitDeny
+hushstore-task-app-role                  rds:DeleteDBInstance         implicitDeny
+hushstore-container-instance-role        rds:DeleteDBInstance         implicitDeny
+
+Ghi chu: explicitDeny = bi mot cau Deny tuong minh chan (manh nhat, khong the
+bi override). implicitDeny = khong co Allow nao cap (yeu hon: gan thêm policy
+la mat). Host nhan explicitDeny la co y — xem sid DenyReadingOurSecrets.

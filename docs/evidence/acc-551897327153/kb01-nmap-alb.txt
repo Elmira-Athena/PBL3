@@ -1,0 +1,35 @@
+### KB-01: quet port ALB tu may tan cong (laptop, 117.3.54.230)
+### Account 551897327153 — chay lai sau khi doi account
+### 2026-08-24T09:31:25Z
+
+$ nmap -Pn -T4 --top-ports 1000 13.251.164.95
+Starting Nmap 7.991 ( https://nmap.org ) at 2026-08-24 16:31 +0700
+Nmap scan report for ec2-13-251-164-95.ap-southeast-1.compute.amazonaws.com (13.251.164.95)
+Host is up (0.040s latency).
+Not shown: 998 filtered tcp ports (no-response)
+PORT    STATE SERVICE
+80/tcp  open  http
+443/tcp open  https
+
+Nmap done: 1 IP address (1 host up) scanned in 48.34 seconds
+
+$ nmap -Pn -T4 -p 22,1433,3306,5432,3389,8080,8443,9200,6379,27017,5000,5001 13.251.164.95
+Starting Nmap 7.991 ( https://nmap.org ) at 2026-08-24 16:32 +0700
+Nmap scan report for ec2-13-251-164-95.ap-southeast-1.compute.amazonaws.com (13.251.164.95)
+Host is up.
+
+PORT      STATE    SERVICE
+22/tcp    filtered ssh
+1433/tcp  filtered ms-sql-s
+3306/tcp  filtered mysql
+3389/tcp  filtered ms-wbt-server
+5000/tcp  filtered upnp
+5001/tcp  filtered commplex-link
+5432/tcp  filtered postgresql
+6379/tcp  filtered redis
+8080/tcp  filtered http-proxy
+8443/tcp  filtered https-alt
+9200/tcp  filtered wap-wsp
+27017/tcp filtered mongod
+
+Nmap done: 1 IP address (1 host up) scanned in 4.13 seconds

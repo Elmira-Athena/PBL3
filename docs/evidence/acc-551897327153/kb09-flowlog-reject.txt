@@ -1,0 +1,114 @@
+### KB-09: VPC Flow Logs ghi lai cac goi tin bi REJECT
+### Account 551897327153 — 2026-08-24T09:37:36Z
+### Log group /vpc/hushstore/flowlogs — filter REJECT, retention 1 ngay
+
+Tong so ban ghi trong 30 phut: 2264
+
+══ NHOM 1: may tan cong cua nhom (117.3.54.230) ══
+Day la dot nmap --top-ports 1000 o KB-01, nhin tu phia ha tang.
+   so ban ghi: 2022
+   dich den   : 10.20.1.163 
+   (10.20.1.x = ENI cua ALB trong public subnet)
+
+   Cac port bi tu choi — 25 port dau, sap theo so lan:
+      port 22      x7
+      port 8080    x5
+      port 9200    x4
+      port 8443    x4
+      port 5432    x4
+      port 5001    x4
+      port 5000    x4
+      port 3389    x4
+      port 3306    x4
+      port 1433    x4
+      port 9999    x2
+      port 9998    x2
+      port 999     x2
+      port 9968    x2
+      port 995     x2
+      port 9944    x2
+      port 9943    x2
+      port 993     x2
+      port 9929    x2
+      port 992     x2
+      port 9917    x2
+      port 9900    x2
+      port 990     x2
+      port 99      x2
+      port 9898    x2
+
+   Kiem 3 port dang chu y nhat co bi tu choi khong:
+      port 22    : 7 ban ghi REJECT
+      port 1433  : 4 ban ghi REJECT
+      port 8080  : 5 ban ghi REJECT
+
+   Mot ban ghi nguyen van (port 22):
+      2 551897327153 eni-04a96d80fb818314a 117.3.54.230 10.20.1.163 10610 22 6 1 64 1787563864 1787563894 REJECT OK
+   Truong: version account eni srcaddr dstaddr srcport dstport proto
+           packets bytes start end action status
+
+══ NHOM 2: may quet TU DONG tu Internet (khong phai cua nhom) ══
+Bang chung song: mo mot IP public ra Internet la bi do NGAY.
+      10.20.11.251       -> port 123     x8
+      165.22.18.23       -> port 23      x5
+      62.210.142.171     -> port 53      x3
+      85.217.140.31      -> port 13631   x2
+      43.166.238.128     -> port 0       x2
+      34.140.11.189      -> port 27017   x2
+      212.73.148.4       -> port 57452   x2
+      212.73.148.32      -> port 892     x2
+      212.73.148.18      -> port 50123   x2
+      185.73.23.133      -> port 53      x2
+      181.160.148.152    -> port 23      x2
+      181.160.148.152    -> port 22      x2
+
+   Cac port bi do nhieu nhat boi scanner ngoai:
+      port 23      x15
+      port 123     x8
+      port 0       x8
+      port 53      x6
+      port 22      x5
+      port 892     x2
+      port 808     x2
+      port 6002    x2
+
+══ NHOM 3: ban ghi SKIPDATA ══
+   so ban ghi: 37
+   SKIPDATA = AWS bo bot ban ghi khi luu luong vuot nang luc gom trong
+   cua so 600s. Khong phai loi cau hinh, va la ly do khong nen dung Flow
+   Logs lam nguon dem CHINH XAC — no la nguon DINH TINH.
+
+══ NHOM 4: EGRESS CUA CHINH EC2 BI CHAN — he qua CO Y cua egress toi thieu ══
+
+Trong nhom 2 co mot dong dang truy: 10.20.11.251 (chinh container instance cua
+ta) bi REJECT khi goi port 123 (NTP). Truy tiep dich den:
+
+   src=10.20.11.251    dst=52.207.222.50      dport=123
+   src=10.20.11.251    dst=54.81.127.33       dport=123
+   src=10.20.11.251    dst=54.197.201.248     dport=123
+   src=10.20.11.251    dst=54.90.191.9        dport=123
+   src=10.20.11.251    dst=3.94.91.31         dport=123
+   src=10.20.11.251    dst=3.86.4.106         dport=123
+
+Cac IP dich la cua AWS (dai 3.x / 13.x / 52.x / 54.x) — day la danh sach NTP
+CONG KHAI mac dinh trong cau hinh chrony cua Amazon Linux, KHONG phai dia chi
+Amazon Time Sync link-local.
+
+sg-web egress chi mo 3 port: 80, 443, 1433. Khong co 123. Nen moi lan chrony
+thu duong fallback cong khai la bi chan, va Flow Logs ghi lai.
+
+DAY KHONG PHAI SU CO. Dong ho he thong VAN DUNG, vi chrony dung duoc duong
+CHINH: Amazon Time Sync o 169.254.169.123 — dia chi link-local, khong di qua
+route table, khong qua NAT, nen khong can rule nao va khong xuat hien trong
+Flow Logs.
+
+Bang chung GIAN TIEP nhung chac chan rang dong ho dung:
+  1. Task migrator ket noi RDS voi Encrypt=True;TrustServerCertificate=False,
+     tuc co XAC THUC cert. Lech gio se lam cert bi coi la chua hieu luc /
+     het han -> that bai. No exit 0.
+  2. ECS agent pull duoc image tu ECR. Request tới AWS duoc ky SigV4 va bi
+     tu choi neu lech qua ~15 phut. Pull thanh cong.
+Hai dieu do khong the dung neu dong ho sai.
+
+Ghi lai o day de khong ai doc Flow Logs roi tuong port 123 la mot lo hong hay
+mot su co mang.

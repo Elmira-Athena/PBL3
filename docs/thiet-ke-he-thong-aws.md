@@ -703,10 +703,19 @@ Khác biệt về bảo mật là bản chất, không phải hình thức:
   boot sai), `o pipefail` để lỗi giữa một pipeline không bị che bởi lệnh cuối.
   Không có mấy cờ này, một lệnh gãy giữa `user_data` sẽ đi qua im lặng.
 - **Đồng hồ hệ thống.** `sg-web` egress chỉ mở `80`, `443`, `1433` — không có
-  `123` (NTP), nên về lý máy không đồng bộ được giờ. Thực tế vẫn đúng giờ vì
-  Amazon Linux dùng **Amazon Time Sync** ở `169.254.169.123`, một địa chỉ
+  `123` (NTP), nên về lý máy không đồng bộ được giờ. **Đã đo được 8 bản ghi
+  `REJECT`** đúng như vậy: `chrony` thử các NTP công khai của AWS và bị chặn.
+  Nhưng thực tế vẫn đúng giờ vì nó dùng được đường chính —
+  **Amazon Time Sync** ở `169.254.169.123`, một địa chỉ
   *link-local*: nó không đi qua route table, không qua NAT, nên không cần rule
-  nào. Các bản ghi `REJECT` port 123 trong Flow Logs vì thế **không phải sự cố**.
+  nào — và cũng vì thế **không xuất hiện** trong Flow Logs. Các bản ghi `REJECT`
+  port 123 vì thế **không phải sự cố**.
+
+  Chứng minh gián tiếp rằng đồng hồ đúng, không cần vào máy: (1) task migrator
+  nối RDS với `TrustServerCertificate=False`, tức **có xác thực** certificate —
+  lệch giờ thì cert bị coi là chưa hiệu lực hoặc đã hết hạn, và nó exit 0;
+  (2) ECS agent pull được image từ ECR, mà request tới AWS ký **SigV4** và bị từ
+  chối nếu lệch quá ~15 phút. Hai điều đó bất khả nếu đồng hồ sai.
 - **`gzip_static on`** trong nginx thay vì nén lúc chạy: `dotnet publish` đã sinh
   sẵn `.gz` cạnh mỗi file, nginx chỉ việc gửi file có sẵn. Đổi CPU lấy đĩa — đúng
   hướng trên máy 2 vCPU burstable. Bundle cũng có sẵn `.br` (Brotli) nhưng
@@ -880,6 +889,7 @@ bảo vệ:
 | Chỉ 1 EC2, deploy có downtime 20–40s | Đổi lấy bề mặt SG nhỏ hơn hàng nghìn lần. Lựa chọn có ý thức |
 | Rate limiter đếm trong RAM | 2 instance sẽ thành 2× hạn mức. Cần Redis nếu scale thật |
 | **Không scale ngang được** dù đã có ASG + ALB | Bộ máy có đủ, nhưng bị ghim: `max_size = 1`, `managed_scaling = DISABLED`, và chốt cứng nhất là **host port tĩnh** 80/8080 — hai task không cùng bind một port trên một máy. Mở ra thì phải chọn `awsvpc` (nhiều ENI hơn `t3.micro` chịu nổi) hoặc dải ephemeral `32768–65535` trên `sg-web` — tức **đánh đổi trực tiếp với chiều đề bài đang chấm**. Đã chọn tối thiểu rule, chấp nhận một máy |
+| **Default security group của VPC** mở mọi port từ chính nó | AWS tạo sẵn một cái cho mỗi VPC và không cho xoá. Đo được **0 ENI** dùng nó nên chưa có bề mặt thật, nhưng ai launch instance mà không chỉ định SG sẽ rơi vào nó. Bịt bằng `aws_default_security_group` rỗng — chưa làm |
 | Không có CloudTrail trail | Chỉ có Event History mặc định: 90 ngày, chỉ management event, không lưu ra S3. Tạo trail tốn ~$0.03/tháng cho S3 — đã cân nhắc, hoãn vì mọi thao tác hạ tầng đều đi qua Terraform và Git đã là nhật ký |
 | Không có alarm nào | Lambda cost guard lỗi thì im lặng. Một CloudWatch alarm trên metric `Errors` là ~$0.10/tháng — đã cân nhắc, hoãn |
 | Không WAF | ALB có allowlist Host nhưng không lọc SQL injection ở tầng mạng. Phòng thủ nằm ở tầng ứng dụng (EF Core tham số hoá) |

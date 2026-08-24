@@ -5,40 +5,50 @@ nguyên tắc tối thiểu và **đã thực sự ngăn được tấn công**.
 
 | | |
 |---|---|
-| Ngày kiểm thử | Kịch bản 1-10: 2026-08-20 (00:15 – 01:10 UTC) · Kịch bản 11 và 12: 2026-08-23, sau khi Phase 2 dựng xong hai IAM role của pipeline |
-| Máy tấn công | Laptop macOS, IP công khai `42.1.89.156` |
-| Công cụ | `nmap 7.991`, `curl`, `nc`, `openssl`, `python3 socket`, `aws iam simulate-principal-policy`, `aws sts assume-role-with-web-identity` |
-| Mục tiêu | ALB `hushstore-alb-395664435.ap-southeast-1.elb.amazonaws.com` (`54.251.216.176`, `54.254.121.95`) · EC2 `10.20.11.22` · RDS `10.20.21.81` |
-| Hạ tầng | Terraform, commit tại thời điểm test — xem `git log` |
-| Output thô | [`docs/evidence/`](evidence/) — mọi số trong báo cáo này lấy từ đó, không có số nào viết tay |
+| Ngày kiểm thử | **2026-08-24 (08:19 – 09:40 UTC)** — chạy lại toàn bộ 12 kịch bản trên account mới |
+| Account | **`551897327153`** |
+| Máy tấn công | Laptop macOS, IP công khai `117.3.54.230` |
+| Công cụ | `nmap 7.991`, `curl 8.7.1`, `nc`, `python3 socket`, `aws iam simulate-principal-policy`, `aws sts assume-role-with-web-identity`, `aws logs filter-log-events` |
+| Mục tiêu | ALB `hushstore-alb-1075742626.ap-southeast-1.elb.amazonaws.com` (`13.251.164.95`) · EC2 `10.20.11.251` · RDS `10.20.21.168` |
+| Hạ tầng | Terraform, commit `2941d31`. Cả 4 image ECR ở tag `2941d316…` |
+| Output thô | [`docs/evidence/acc-551897327153/`](evidence/acc-551897327153/) — mọi số trong báo cáo này lấy từ đó, không có số nào viết tay |
+| Lần đo trước | [`docs/evidence/`](evidence/) (account `667836586836`, đã bị xoá) — giữ lại để đối chiếu |
 
 Kiểm thử thực hiện trên hạ tầng **do chính nhóm sở hữu**, trong phạm vi đề bài.
 
 ---
 
-> ## ⚠️ Hiệu lực của số liệu trong báo cáo này
+> ## ✅ Đã chạy lại toàn bộ trên account mới — 2026-08-24
 >
-> Toàn bộ 12 kịch bản dưới đây được đo trên **account `667836586836`**, và
-> account đó **đã bị dọn sạch ngày 2026-08-23** (xem
-> [`cleanup-account-cu.md`](cleanup-account-cu.md)). Dự án đã dời sang account
-> `551897327153` ngày 2026-08-24.
+> Số liệu trong báo cáo này là **phép đo mới**, thực hiện trên account
+> `551897327153` sau khi dự án dời khỏi account cũ. Toàn bộ **12/12 kịch bản
+> đạt**, và bằng chứng thô nằm ở
+> [`evidence/acc-551897327153/`](evidence/acc-551897327153/).
 >
-> **Điều này KHÔNG làm số liệu sai.** Chúng là phép đo thật, trên hạ tầng thật,
-> vào thời điểm ghi trong bảng trên, và output thô còn nguyên trong
-> [`evidence/`](evidence/). Cái mất đi là khả năng **chạy lại** để đối chiếu.
+> **Vì sao lần chạy lại này tự nó là một kết quả.** Hạ tầng cũ đã bị destroy
+> hoàn toàn (132 resource, xem [`cleanup-account-cu.md`](cleanup-account-cu.md)).
+> Hạ tầng đo ở đây được **dựng lại từ đầu, từ chính mã Terraform đó, trên một
+> account trắng** — VPC mới, subnet mới, ALB mới, RDS trống. Rồi:
 >
-> **Điều nó có làm:** các giá trị phụ thuộc account đã lỗi thời — account id
-> trong `kb11` và `kb13`, IP `42.1.89.156` của máy tấn công (nay là
-> `116.99.24.25`), DNS và IP của ALB, IP nội bộ của EC2 và RDS. Hạ tầng mới
-> dùng cùng CIDR `10.20.0.0/16` nên IP nội bộ sẽ tương tự nhưng không đảm bảo
-> trùng.
+> - `terraform apply` dựng đủ hạ tầng, `plan` sau đó sạch;
+> - task migrator chạy 20 migration của EF Core → **exit 0**;
+> - task seeder nạp dữ liệu → **exit 0**, đếm lại được `AppRoles=3`,
+>   `Categories=18`, `Manufacturers=21`, `Products=49`, `ProductVariants=52`;
+> - cả hai target group của ALB → **healthy** (tức `/health/ready` chạm được DB);
+> - và **cả 12 kịch bản bảo mật cho kết quả y hệt lần trước**.
 >
-> **Việc phải làm trước khi nộp:** chạy lại cả 12 kịch bản trên account mới và
-> cập nhật báo cáo. Rule được kiểm ở đây nằm trong Terraform và **không đổi** khi
-> dời account — nên kỳ vọng là 12/12 vẫn đạt. Nhưng "kỳ vọng" không phải "đã đo",
-> và phần "Đầu ra" của đề bài đòi phép đo. Lần chạy lại cũng là dịp kiểm chứng
-> rằng hạ tầng dựng lại từ Terraform cho kết quả bảo mật y hệt — bản thân điều đó
-> là một luận điểm đáng có trong báo cáo.
+> Nghĩa là tính chất bảo mật của hệ thống nằm trong **mã**, không nằm trong một
+> lần cấu hình tay may mắn. Đó là điều một báo cáo chỉ đo một lần trên một
+> account không chứng minh được.
+>
+> **Bốn thứ lần này tìm ra mà lần trước không có** — xem [mục 8](#8-bốn-phát-hiện-mới-từ-lần-chạy-lại):
+> security group `default` của VPC, egress NTP bị chặn, máy quét thật từ Internet,
+> và ba phép thử IAM chặt hơn.
+>
+> Giá trị phụ thuộc account đã đổi và đã được cập nhật khắp báo cáo: IP máy tấn
+> công (`42.1.89.156` → `117.3.54.230`), DNS và IP của ALB, IP nội bộ của EC2
+> (`10.20.11.22` → `10.20.11.251`) và RDS (`10.20.21.81` → `10.20.21.168`).
+> CIDR `10.20.0.0/16` giữ nguyên nên IP nội bộ tương tự nhưng không trùng.
 
 ---
 
@@ -47,17 +57,17 @@ Kiểm thử thực hiện trên hạ tầng **do chính nhóm sở hữu**, tro
 | # | Kịch bản | Kỳ vọng | Kết quả | Rule chịu trách nhiệm | Bằng chứng |
 |---|---|---|---|---|---|
 | 1 | Quét port ALB | chỉ 80, 443 mở | ✅ 80 + 443 open, 998 port `filtered` | `sg-alb` ingress | `kb01-nmap-alb.txt` |
-| 2 | Kết nối IP riêng của EC2 | không có đường đi | ✅ timeout 10s, cả `:8080` và `:22` | không public IP + app subnet không route ra IGW | `kb03-rds-tu-internet.txt` |
-| 3 | Kết nối trực tiếp RDS | timeout | ✅ endpoint công khai phân giải ra **IP riêng** `10.20.21.81`, timeout | `publicly_accessible=false` + `sg-rds` + `nacl-db` | `kb03-rds-tu-internet.txt` |
+| 2 | Kết nối IP riêng của EC2 | không có đường đi | ✅ timeout 10s trên **cả ba** port `:8080`, `:22`, `:80`; `describe-instances` trả `PublicIpAddress: null` | không public IP + app subnet không route ra IGW | `kb03-rds-tu-internet.txt` |
+| 3 | Kết nối trực tiếp RDS | timeout | ✅ endpoint công khai phân giải ra **IP riêng** `10.20.21.168`; socket timeout (`EAGAIN`) — **drop im lặng**, không phải refused | `publicly_accessible=false` + `sg-rds` + `nacl-db` | `kb03-rds-tu-internet.txt` |
 | 4 | Gọi port ứng dụng `:8080` trên ALB | không kết nối được | ✅ timeout (exit 28), **không phải** refused | ALB chỉ có listener 80/443 | `kb04-05-port-ung-dung-va-ssh.txt` |
-| 5 | SSH vào mọi hướng | refused | ✅ `No route to host`; hệ thống có **0 key pair**, **0 SG rule port 22** | không có rule 22 + `nacl-app` rule 90 DENY | `kb04-05-port-ung-dung-va-ssh.txt` |
+| 5 | SSH vào mọi hướng | không kết nối được | ✅ `Operation timed out` cả ALB:22 và EC2:22; **0 key pair** toàn region; launch template `KeyName: None`; **0 rule ingress phủ port 22** trên cả 3 SG | không có rule 22 + `nacl-app` rule 90 DENY | `kb04-05-…txt`, `kb05-khong-co-ssh.txt` |
 | 6 | Brute-force `/api/auth/login` | 429 từ request 6 | ✅ req 1-5 → 400, **req 6-20 → 429** | rate limiter `LoginRateLimit` | `kb06-rate-limit-login.txt` |
 | 7 | Host header lạ | không lọt sang backend | ✅ `evil.com` → 403, `www` → 403, tên DNS thô của ALB → 403 | ALB listener rule + default `fixed-response` | `kb07-host-allowlist.txt` |
 | 8 | NACL DENY theo IP | chặn đúng 1 IP | ✅ **A/B từ cùng một máy**: đường trực tiếp timeout, đường qua Cloudflare 200 | `nacl-public` rule 50 | `kb08-nacl-deny-theo-ip.txt` |
-| 9 | VPC Flow Logs `REJECT` | có bản ghi khớp | ✅ khớp cả 3 nhóm: máy tấn công, egress EC2, scanner ngoài | Flow Logs `REJECT`, gom 600s | `kb09-flowlog-reject.txt` |
-| 10 | Bán kính ảnh hưởng của IAM role | mỗi role chỉ thấy phần của mình | ✅ ma trận 12 phép thử, host bị **explicitDeny** | 7 role tách biệt | `kb10-blast-radius-iam.txt` |
-| 11 | Giả mạo OIDC assume-role | từ chối | ✅ JWT tự ký **đủ mọi claim** trust policy đòi (`aud`, `sub`, `iat`/`exp` hợp lệ) vẫn bị `InvalidIdentityToken` — AWS chặn ở bước **xác thực chữ ký**, trước cả khi xét trust policy | trust condition `StringEquals` trên `aud` + `sub` | `kb11-gia-mao-oidc.txt` |
-| 12 | Bán kính thiệt hại của role deploy | làm được đúng 4 việc của pipeline, không hơn | ✅ 4 phép thử `allowed`, 7 phép thử `implicitDeny` — gồm cả `autoscaling:SetDesiredCapacity`, `rds:StartDBInstance`, `s3:GetObject` trên tfstate | policy inline của role deploy, ghim theo ARN + condition | `kb12-blast-radius-deploy-role.txt` |
+| 9 | VPC Flow Logs `REJECT` | có bản ghi khớp | ✅ **2264 bản ghi/30 phút**, trong đó **2022** là đợt nmap của nhóm — port 22 (7), 1433 (4), 8080 (5) đều có mặt. Khớp cả 4 nhóm | Flow Logs `REJECT`, gom 600s | `kb09-flowlog-reject.txt` |
+| 10 | Bán kính ảnh hưởng của IAM role | mỗi role chỉ thấy phần của mình | ✅ ma trận **18 phép thử**; host bị **explicitDeny trên CẢ BỐN** action đọc parameter | 7/10 role được đo | `kb10-blast-radius-iam.txt` |
+| 11 | Giả mạo OIDC assume-role | từ chối | ✅ **3/3** phép thử thất bại. JWT tự ký đủ mọi claim vẫn bị `InvalidIdentityToken`; và JWT với `sub` SAI repo nhận **cùng một lỗi** → chứng minh chữ ký được kiểm **trước** claim, nên lỗi không hé ra trust policy đòi gì | trust condition `StringEquals` trên `aud` + `sub` | `kb11-gia-mao-oidc.txt` |
+| 12 | Bán kính thiệt hại của role deploy | làm được đúng 4 việc của pipeline, không hơn | ✅ 4 phép thử `allowed`, **8** phép thử `implicitDeny` — gồm `autoscaling:SetDesiredCapacity`, `rds:StartDBInstance`, `rds:StopDBInstance`, `s3:GetObject` trên tfstate, và `iam:AttachRolePolicy` (thử leo thang đặc quyền) | policy inline của role deploy, ghim theo ARN + condition | `kb12-blast-radius-deploy-role.txt` |
 
 **12/12 kịch bản đã có bằng chứng.** Kịch bản 11 chạy được sau khi Phase 2
 `apply` xong hai IAM role. Kết quả đáng chú ý: lỗi trả về là
@@ -108,18 +118,26 @@ Group chỉ có allow-list: nó không có cách nào diễn đạt "chặn riê
 Network ACL có `Deny` và có thứ tự rule, nên làm được.
 
 Bật `enable_deny_demo = true` → `nacl-public` rule 50 = DENY all từ
-`42.1.89.156/32`. Rồi gọi cùng một website bằng **hai đường, từ cùng một máy**:
+`117.3.54.230/32`. Rồi gọi cùng một website bằng **hai đường, từ cùng một máy** —
+và quan trọng là đo **cả trước lẫn sau** khi bật rule:
 
-| Đường | IP nguồn AWS nhìn thấy | Kết quả |
-|---|---|---|
-| A. `curl https://alb.hushstore.io.vn/` (DNS only → thẳng vào ALB) | `42.1.89.156` | **timeout, exit 28** |
-| A. `curl --resolve hushstore.io.vn:443:54.251.216.176` | `42.1.89.156` | **timeout, exit 28** |
-| B. `curl https://hushstore.io.vn/` (qua Cloudflare proxy) | IP của Cloudflare | **HTTP 200**, 3589 bytes |
-| B. `curl https://api.hushstore.io.vn/health/ready` | IP của Cloudflare | **HTTP 200** |
+| Đường | IP nguồn AWS nhìn thấy | TRƯỚC khi bật | SAU khi bật |
+|---|---|---|---|
+| A. `curl --resolve hushstore.io.vn:443:13.251.164.95` | `117.3.54.230` | HTTP 200, 0,15s | **timeout, exit 28, 25s** |
+| B. `curl https://hushstore.io.vn/` (qua Cloudflare proxy) | IP của Cloudflare | HTTP 200, 0,25s | **HTTP 200, 0,74s** |
 
-Cùng một lệnh `curl`, cùng một laptop, cùng một domain. Khác biệt duy nhất là
-IP nguồn mà AWS nhìn thấy. Rule 50 chặn ở **tầng network**, trước khi gói tin
-kịp chạm tới ALB.
+Cột "TRƯỚC" là thứ làm bảng này thành bằng chứng chứ chỉ là quan sát. Không có
+nó thì một người phản biện đúng mực sẽ hỏi: *đường A có bao giờ hoạt động
+không?* Có — 200 trong 0,15 giây, vài phút trước đó, từ cùng máy đó.
+
+Và cột B loại trừ mọi cách giải thích khác: mất mạng thì B cũng chết; ALB chết
+thì B cũng chết; DNS sai thì B cũng chết. **Chỉ A chết.** Khác biệt duy nhất
+giữa A và B là IP nguồn mà AWS nhìn thấy.
+
+Chi tiết kỹ thuật đáng nói khi bảo vệ: rule DENY này ở **số 50**, nhỏ hơn hai
+rule allow 80/443 ở số 100 và 110. NACL xét rule theo **thứ tự tăng dần và dừng
+ở rule đầu tiên khớp** — nên nếu đặt cùng rule đó ở số 150 thì nó **vô dụng**:
+gói tin đã khớp rule 100 và được cho qua từ trước.
 
 *(Sau khi thu bằng chứng, `enable_deny_demo` đã tắt lại — mặc định là `false`.)*
 
@@ -128,12 +146,30 @@ kịp chạm tới ALB.
 Đo bằng `iam simulate-principal-policy` — chạy trên **policy thật đang gắn**,
 do chính bộ đánh giá của AWS phán quyết, không phải do người viết báo cáo suy luận:
 
-| Role | `db-password` | `connection-string` | `s3:PutObject` ảnh | `rds:DeleteDBInstance` |
-|---|---|---|---|---|
-| `container-instance` (EC2 host) | **explicitDeny** | — | implicitDeny | implicitDeny |
-| `task-app` (container API runtime) | implicitDeny | — | **allowed** | implicitDeny |
-| `task-execution` (api/web/migrator) | implicitDeny | **allowed** | — | — |
-| `task-execution-seeder` | **allowed** | implicitDeny | — | — |
+| Role | `db-password` | `connection-string` | `jwt-secret` | `s3:PutObject` ảnh | `rds:DeleteDBInstance` |
+|---|---|---|---|---|---|
+| `container-instance` (EC2 host) | **explicitDeny** | — | **explicitDeny** | implicitDeny | implicitDeny |
+| `task-app` (container API runtime) | implicitDeny | — | — | **allowed** | implicitDeny |
+| `task-execution` (api/web/migrator) | implicitDeny | **allowed** | **allowed** | — | — |
+| `task-execution-seeder` | **allowed** | implicitDeny | — | — | — |
+
+Lần chạy lại còn siết thêm một chỗ mà lần trước bỏ qua: **cả bốn** action đọc
+parameter trên host đều được đo riêng, không chỉ `ssm:GetParameter`.
+
+| Action trên host, resource `/hushstore/*` | Kết quả |
+|---|---|
+| `ssm:GetParameter` | **explicitDeny** |
+| `ssm:GetParameters` | **explicitDeny** |
+| `ssm:GetParameterHistory` | **explicitDeny** |
+| `ssm:GetParametersByPath` | **explicitDeny** |
+
+Điều này chứng minh trực tiếp lập luận trong `iam.tf`: statement `Deny` phải
+liệt kê **đủ bốn**, không phải ba. `GetParameterHistory` với
+`WithDecryption=true` trả về plaintext của các version cũ — thiếu nó là còn một
+đường đọc secret. Hiện managed policy không cấp action đó nên nó *sẽ* là
+implicitDeny; nhưng implicitDeny **bị override được** nếu sau này ai gắn thêm
+policy, còn explicitDeny thì không. Bảng trên là bằng chứng rằng cả bốn đang ở
+trạng thái mạnh.
 
 Ba điểm quan trọng:
 
@@ -166,14 +202,24 @@ lệnh đã chạy và nguyên văn kết quả.
 ### 3.2 / 3.3 — Tier private không tiếp cận được từ internet
 
 ```
-RDS qua tên DNS công khai    → 10.20.21.81:1433   TIMEOUT sau 10s (no route)
-RDS qua IP riêng trực tiếp   → 10.20.21.81:1433   TIMEOUT sau 10s (no route)
-EC2 container instance       → 10.20.11.22:8080   TIMEOUT sau 10s (no route)
-EC2 container instance :22   → 10.20.11.22:22     TIMEOUT sau 10s (no route)
+RDS qua tên DNS công khai    → 10.20.21.168:1433  TIMEOUT (EAGAIN, drop im lặng)
+EC2 container instance :8080 → 10.20.11.251:8080  TIMEOUT sau 10,0s
+EC2 container instance :22   → 10.20.11.251:22    TIMEOUT sau 10,0s
+EC2 container instance :80   → 10.20.11.251:80    TIMEOUT sau 10,0s
+
+aws rds describe-db-instances  --query PubliclyAccessible  → False
+aws ec2 describe-instances     --query PublicIpAddress     → null
 ```
 
+Hai dòng cuối là bằng chứng phía cấu hình, đặt cạnh phép đo phía tấn công: cái
+thứ nhất giải thích *vì sao* cái thứ hai timeout.
+
+Đáng phân biệt: kết quả là **timeout**, không phải `refused`. `refused` nghĩa là
+có thứ gì đó đã trả lời "không"; timeout nghĩa là gói tin **bị bỏ im lặng** và
+kẻ tấn công không học được gì — kể cả việc đích có tồn tại hay không.
+
 Điểm đáng ghi: endpoint RDS **là tên DNS công khai** — ai cũng phân giải được.
-Nhưng nó phân giải ra `10.20.21.81`, một địa chỉ riêng RFC1918 không định tuyến
+Nhưng nó phân giải ra `10.20.21.168`, một địa chỉ riêng RFC1918 không định tuyến
 trên internet. Đó là cách `publicly_accessible = false` hoạt động: không phải
 ẩn tên, mà là không có đường đi. Kể cả khi kẻ tấn công biết chính xác endpoint
 và mật khẩu, họ vẫn không tới được.
@@ -228,28 +274,36 @@ trả **503** thì mới là lỗi (không có target healthy).
 Bật `enable_flow_logs = true` (`TrafficType = REJECT`, gom mỗi 600 giây). Ba
 nhóm bản ghi, mỗi nhóm nói một điều khác nhau:
 
-**Nhóm A — gói tin từ máy tấn công bị chặn.** Đây là bằng chứng tầng network
-cho kịch bản 8, hoàn toàn độc lập với kết quả `curl`:
+**Nhóm A — đợt nmap của nhóm, nhìn từ phía hạ tầng.** `2022` bản ghi trong
+tổng `2264`, tất cả tới `10.20.1.163` (ENI của ALB trong subnet public):
 
 ```
-42.1.89.156 -> 10.20.0.135  dport=443   proto=6  REJECT
-42.1.89.156 -> 10.20.0.135  dport=80    proto=6  REJECT
-42.1.89.156 -> 10.20.1.38   dport=8080  proto=6  REJECT
-42.1.89.156 -> 10.20.1.38   dport=22    proto=6  REJECT
-42.1.89.156 -> 10.20.1.38   dport=1433  proto=6  REJECT
-42.1.89.156 -> 10.20.0.135  dport=3389  proto=6  REJECT
+117.3.54.230 -> 10.20.1.163  dport=22    proto=6  REJECT   (7 bản ghi)
+117.3.54.230 -> 10.20.1.163  dport=8080  proto=6  REJECT   (5 bản ghi)
+117.3.54.230 -> 10.20.1.163  dport=1433  proto=6  REJECT   (4 bản ghi)
+117.3.54.230 -> 10.20.1.163  dport=3306  proto=6  REJECT   (4 bản ghi)
+117.3.54.230 -> 10.20.1.163  dport=3389  proto=6  REJECT   (4 bản ghi)
+117.3.54.230 -> 10.20.1.163  dport=5432  proto=6  REJECT   (4 bản ghi)
+... (988 port còn lại của --top-ports 1000)
 ```
 
-Chú ý **port 80 và 443 cũng bị `REJECT`**. Bình thường hai port này được
-`ACCEPT` — chúng bị chặn ở đây chỉ vì rule 50 DENY theo IP nguồn. `10.20.0.135`
-và `10.20.1.38` là ENI của ALB trong hai subnet public.
+**Chú ý điều KHÔNG có trong danh sách: port 80 và 443.** Lần đo này thu Flow Logs
+khi `enable_deny_demo` đang **tắt**, nên hai port đó được `ACCEPT` và không xuất
+hiện trong log `REJECT`. Đó là một **xác nhận độc lập** cho kịch bản 1: log tầng
+network chứa đúng những port đóng, và không chứa hai port mở — khớp với kết quả
+`nmap` mà không dùng chung công cụ nào.
+
+*(Lần đo trên account cũ thu Flow Logs lúc rule 50 đang bật, nên ở đó 80 và 443
+**cũng** bị `REJECT`. Hai kết quả không mâu thuẫn — chúng đo hai trạng thái cấu
+hình khác nhau, và cùng cho thấy rule đang hoạt động đúng.)*
 
 **Nhóm B — egress của EC2 bị chặn.** `sg-web` egress chỉ cho `1433`, `80`, `443`:
 
 ```
-10.20.11.22 -> 52.207.222.50   dport=123  proto=17  REJECT
-10.20.11.22 -> 54.210.225.137  dport=123  proto=17  REJECT
-10.20.11.22 -> 3.86.4.106      dport=123  proto=17  REJECT
+10.20.11.251 -> 52.207.222.50   dport=123  REJECT
+10.20.11.251 -> 54.81.127.33    dport=123  REJECT
+10.20.11.251 -> 3.94.91.31      dport=123  REJECT
+...  (8 bản ghi)
 ```
 
 `proto 17` là UDP, `dport 123` là NTP. **Một phát hiện thật, không phải bài test
@@ -292,29 +346,55 @@ Một báo cáo chỉ liệt kê thành công thì không dùng được. Các g
 | **`drop_invalid_header_fields` KHÔNG chặn được giả mạo `X-Forwarded-*`** | ALB **thêm vào** header này chứ không thay thế | Phòng thủ thật là `ForwardLimit` của `UseForwardedHeaders` — app chỉ tin proxy gần nhất. **Việc còn nợ:** đặt `ForwardLimit = 1` tường minh trong `Program.cs` |
 | **WAF / chống DDoS tầng 7** | Chưa có AWS WAF | Cloudflare proxy đang che apex + api và cung cấp một phần; WAF của AWS là bước tiếp theo nếu cần |
 | **Không có IDS/IPS trong VPC** | GuardDuty chưa bật | GuardDuty có bậc dùng thử 30 ngày; nên bật khi trình bày |
-| **Host không ra được NTP công khai** | `sg-web` egress chỉ cho `1433`/`80`/`443` — hệ quả cố ý của egress tối thiểu | Không cần sửa: Amazon Linux dùng Amazon Time Sync ở `169.254.169.123` (link-local, không qua NAT). Ghi lại để không ai nhầm các bản ghi `REJECT` port 123 là sự cố |
-| **IAM user `athena232`** có `AdministratorAccess` trực tiếp, **không MFA** | Sót lại từ lúc khởi tạo account | Chủ dự án đã quyết định giữ nguyên. Đây là lỗ hổng lớn nhất còn lại của account và đã ghi vào mục việc còn nợ của runbook |
+| **Host không ra được NTP công khai** — đã **đo được 8 bản ghi `REJECT`** | `sg-web` egress chỉ cho `1433`/`80`/`443` — hệ quả cố ý của egress tối thiểu | Không cần sửa: `chrony` dùng Amazon Time Sync ở `169.254.169.123` (link-local, không qua NAT). Đồng hồ đúng được **chứng minh gián tiếp** bằng việc migrator xác thực cert RDS thành công và ECR pull ký SigV4 thành công — xem [mục 8.2](#82-egress-của-chính-ec2-bị-chặn-ở-port-123--và-đồng-hồ-vẫn-đúng) |
+| **Security group `default` của VPC cho phép mọi traffic từ chính nó** (gồm port 22) | AWS tự tạo một cái cho mỗi VPC và **không cho xoá**; Terraform của dự án không quản lý nó | Hiện **0 ENI** dùng nó nên không có bề mặt thật (xem [mục 8.1](#81-security-group-default-của-vpc-mở-mọi-port-từ-chính-nó)). Nhưng ai launch instance mà không chỉ định SG sẽ rơi vào nó. Bịt bằng `aws_default_security_group` với ingress/egress **rỗng**, hoặc bằng SCP. **Việc còn nợ.** |
+| **IAM user `hushstore-ops` có `AdministratorAccess`, KHÔNG MFA, và một access key dài hạn** | Account mới cố ý dùng IAM user thay vì SSO, vì bật Identity Center buộc vào Organization và làm **hết hạn credit** (AWS Support xác nhận) | Đây là **lỗ hổng lớn nhất còn lại**, và là một đánh đổi có ý thức: đổi bảo mật của danh tính vận hành lấy việc giữ được credit. Giảm nhẹ được ngay bằng **bật MFA** cho user này — không ảnh hưởng credit. Spec của dự án cũng nêu rõ điểm least-privilege được chấm nằm ở 4 role workload, không ở role vận hành |
+| **Account dùng chung, có 4 IAM user** | `hushstore-ops` (của nhóm, Admin, không MFA) · `DBT` (Admin, **có MFA**) · `Nhincc`, `ThinhDB` (chỉ `IAMUserChangePassword`) | Nhóm **không kiểm soát** ba user kia. Bán kính thiệt hại của account vì thế lớn hơn bán kính của hạ tầng: hai người có Admin. Ghi ra để không tuyên bố quá về mức độ cô lập |
 
 ---
 
 ## 5. Cách tái lập
 
 ```bash
-aws sso login --profile hushstore
-cd infra/tf/envs/prod
-# bật stack theo đúng thứ tự trong docs/terraform-runbook.md
-# (RDS phải available TRƯỚC khi bật service)
+# Account 551897327153 dùng IAM user (KHÔNG phải SSO) — xem lý do ở mục 4.
+aws sts get-caller-identity --profile hushstore   # phải trả về hushstore-ops
 
-# kịch bản 8 cần thêm:
-#   enable_deny_demo = true   trong terraform.tfvars
-# kịch bản 9 cần thêm:
-#   enable_flow_logs = true   (bản ghi xuất hiện sau ~10 phút, gom mỗi 600s)
+# 1. ECR phải có image, nếu không ECS sẽ CannotPullContainerError.
+#    Bốn image, tag = git SHA, build ghim linux/amd64:
+SHA=$(git rev-parse HEAD)
+for img in api web migrator seeder; do ... docker build --platform=linux/amd64 ... ; done
+#    Rồi đặt image_tag = $SHA trong terraform.tfvars.
 
-# Nhớ tắt lại cả hai sau khi thu bằng chứng — mặc định đều là false.
+# 2. my_ip PHẢI khớp IP công khai hiện tại, nếu không kịch bản 8 sẽ
+#    "đạt" một cách GIẢ (rule DENY chặn một IP không còn là của mình):
+curl -s https://checkip.amazonaws.com     # rồi cập nhật my_ip = <ip>/32
+
+# 3. Bật theo hai pha. Pha 1 KHÔNG có ALB, để chạy được migration:
+bash infra/tf/scripts/up.sh --no-alb
+#    rồi run-task migrator (phải exit 0) và run-task seeder.
+
+# 4. Pha 2 bật ALB. Cần cert ACM đã ISSUED — nếu account mới thì phải thêm
+#    hai record CNAME validation vào DNS trước, nếu không apply treo ở waiter.
+bash infra/tf/scripts/up.sh
+
+# kịch bản 9: enable_flow_logs = true (bản ghi hiện sau ~10 phút, gom mỗi 600s)
+#             -> bật SỚM để nó bắt được luôn đợt nmap của kịch bản 1
+# kịch bản 8: enable_deny_demo = true
+#             -> chạy CUỐI CÙNG, vì nó chặn chính máy đang test
+
+bash infra/tf/scripts/down.sh    # rồi XÁC MINH: ALB=0 NAT=0 EC2=0 ASG=0 RDS=stopped
 ```
 
-Mọi lệnh tấn công nằm nguyên văn trong các file `docs/evidence/kb*.txt`, kèm
-nguyên văn output. Không có số nào trong báo cáo này được viết tay.
+**Ba cái bẫy đã gặp thật khi chạy lại**, ghi ra để lần sau không mất thời gian:
+
+1. **ECR rỗng** thì bật hạ tầng chỉ để nhận `CannotPullContainerError` — kiểm
+   `aws ecr describe-images` **trước** khi bật bất cứ thứ gì tính tiền.
+2. **`my_ip` cũ** làm kịch bản 8 cho kết quả dương tính giả. IP nhà là IP động.
+3. **RDS SQL Server Express start rất lâu** (đo được ~14 phút, trạng thái
+   *Recovery*). Mọi cửa chặn chờ RDS phải có timeout tính theo đó.
+
+Mọi lệnh tấn công nằm nguyên văn trong `docs/evidence/acc-551897327153/kb*.txt`,
+kèm nguyên văn output. Không có số nào trong báo cáo này được viết tay.
 
 ---
 
@@ -456,3 +536,132 @@ aws iam simulate-principal-policy --policy-source-arn "$ROLE" \
   --context-entries "ContextKeyName=ecs:cluster,ContextKeyType=string,ContextKeyValues=$CL" \
   --query 'EvaluationResults[0].EvalDecision' --profile hushstore --no-cli-pager
 ```
+
+---
+
+## 8. Bốn phát hiện mới từ lần chạy lại
+
+Lần đo trên account cũ không có bốn thứ này. Chúng đáng ghi vì hai cái đầu là
+**giới hạn thật của hệ thống**, còn hai cái sau là **bằng chứng mạnh hơn** cho
+những gì báo cáo đã khẳng định.
+
+### 8.1. Security group `default` của VPC mở mọi port từ chính nó
+
+Khi liệt kê **mọi** rule ingress trong region, bảng có hai dòng
+`protocol = -1, from = -1, to = -1`. Dấu `-1` nghĩa là **mọi protocol, mọi
+port** — tức **có bao gồm 22**. Truy ra cả hai:
+
+| Security group | Thuộc VPC |
+|---|---|
+| `sg-0554e1f7ac63016d0` | `vpc-0b84a98c407cd4136` — **VPC của dự án** |
+| `sg-0c963910a01aa5522` | `vpc-056b9396279627317` — default VPC của account |
+
+Cả hai là security group **`default`**. AWS tự tạo một cái cho **mỗi** VPC và
+**không cho xoá**; mặc định của nó là "cho phép mọi traffic từ chính nó".
+Terraform của dự án không quản lý chúng.
+
+Câu hỏi đúng phải hỏi là: *có gì đang dùng chúng không?*
+
+```
+aws ec2 describe-network-interfaces --filters group-id=<hai SG đó>
+  -> 0
+```
+
+**0 ENI.** Không resource nào nằm trong chúng, nên **không có bề mặt tấn công
+thật** — ba security group của dự án đều có 0 rule phủ port 22, và đó là những
+SG thực sự được gắn.
+
+**Nhưng rủi ro còn lại là thật và dự án chưa bịt:** nếu sau này ai launch một
+instance mà **không chỉ định** security group, AWS gán default SG cho nó — và
+instance đó lập tức nằm trong một SG mở mọi port từ chính nó. Cách bịt đúng là
+đặt rule của default SG về rỗng bằng Terraform (`aws_default_security_group`
+với khối ingress/egress trống) hoặc dùng SCP. Đã ghi vào phần giới hạn.
+
+Đáng nói thêm về phương pháp: phát hiện này chỉ lộ ra khi liệt kê **mọi** rule
+trong region rồi mới lọc, thay vì chỉ kiểm ba SG mình biết. Kiểm cái mình biết
+thì chỉ xác nhận được cái mình biết.
+
+### 8.2. Egress của chính EC2 bị chặn ở port 123 — và đồng hồ vẫn đúng
+
+Trong 2264 bản ghi `REJECT`, có 8 bản ghi mà **nguồn là chính container
+instance** (`10.20.11.251`), đích là các IP của AWS, port **123 (NTP)**:
+
+```
+src=10.20.11.251  dst=52.207.222.50   dport=123
+src=10.20.11.251  dst=54.81.127.33    dport=123
+src=10.20.11.251  dst=3.94.91.31      dport=123
+...
+```
+
+Nguyên nhân: `sg-web` egress chỉ mở **80, 443, 1433**. Không có 123. Nên mỗi lần
+`chrony` thử danh sách NTP **công khai** mặc định của Amazon Linux là bị chặn.
+
+**Đây không phải sự cố, và cũng không phải lỗ hổng.** Đồng hồ hệ thống vẫn đúng
+vì `chrony` dùng được đường **chính**: Amazon Time Sync ở `169.254.169.123` — địa
+chỉ *link-local*, không đi qua route table, không qua NAT, nên không cần rule nào
+và **không xuất hiện trong Flow Logs**.
+
+Bằng chứng gián tiếp nhưng chắc chắn rằng đồng hồ đúng:
+
+1. Task migrator kết nối RDS với `Encrypt=True;TrustServerCertificate=False`,
+   tức **có xác thực** certificate. Lệch giờ sẽ làm cert bị coi là chưa hiệu lực
+   hoặc đã hết hạn → thất bại. Nó **exit 0**.
+2. ECS agent pull được image từ ECR. Request tới AWS được ký **SigV4** và bị từ
+   chối nếu lệch quá ~15 phút. Pull **thành công**.
+
+Hai điều đó không thể đúng nếu đồng hồ sai.
+
+Ghi lại ở đây để không ai đọc Flow Logs rồi tưởng port 123 là một sự cố mạng —
+đó là **hệ quả có ý** của egress tối thiểu.
+
+### 8.3. Flow Logs bắt được máy quét thật từ Internet
+
+Ngoài đợt nmap của nhóm, trong 30 phút Flow Logs ghi được các đợt dò **không mời**
+từ hàng chục IP lạ:
+
+| Port bị dò | Số bản ghi | Port đó thường là gì |
+|---|---|---|
+| **23** | 15 | Telnet — giao thức không mã hoá, mục tiêu số một của botnet IoT |
+| 123 | 8 | NTP (gồm cả egress của chính ta ở mục 8.2) |
+| 0 | 8 | Dò bằng gói tin dị dạng |
+| 53 | 6 | DNS |
+| **22** | 5 | SSH |
+| 892, 808, 6002 | 2 mỗi port | RPC và cổng linh tinh |
+
+Ví dụ: `165.22.18.23` dò port 23 năm lần; `181.160.148.152` dò **cả 22 và 23**.
+
+Giá trị của phần này với đề bài: nó chứng minh mệnh đề *"mở port là bị dò ngay"*
+bằng **lưu lượng thật trong 30 phút**, không phải bằng lập luận. Và nó cho thấy
+port 22 — cái mà hệ thống cố ý không mở — **đang thực sự bị dò**.
+
+### 8.4. Hạ tầng dựng lại từ Terraform cho kết quả bảo mật y hệt
+
+Đây là kết quả bao trùm, và là thứ chỉ có được nhờ đo hai lần trên hai account.
+
+| | Account cũ `667836586836` | Account mới `551897327153` |
+|---|---|---|
+| Ngày đo | 2026-08-20 và 08-23 | 2026-08-24 |
+| Port mở trên ALB | 80, 443 (998 filtered) | 80, 443 (998 filtered) |
+| Port 8080 qua ALB | timeout exit 28 | timeout exit 28 |
+| SSH mọi hướng | không kết nối được | không kết nối được |
+| Rate limit login | req 1-5 → 400, 6-20 → 429 | req 1-5 → 400, 6-20 → 429 |
+| Host lạ | 403 | 403 |
+| NACL DENY 1 IP | A timeout / B 200 | A timeout / B 200 |
+| Host đọc secret | explicitDeny | explicitDeny (cả 4 action) |
+| Giả mạo OIDC | InvalidIdentityToken | InvalidIdentityToken (3/3) |
+| **Kết quả** | **12/12 đạt** | **12/12 đạt** |
+
+Hạ tầng mới được dựng từ **cùng một mã Terraform**, trên một account trắng, với
+VPC/subnet/ALB/RDS hoàn toàn mới. Không có bước cấu hình tay nào ngoài hai record
+DNS để validate certificate.
+
+Nghĩa là: **tính chất bảo mật của hệ thống nằm trong mã, không nằm trong một lần
+cấu hình may mắn.** Một báo cáo chỉ đo một lần trên một account không phân biệt
+được hai điều đó — và đó chính là luận điểm mà "hạ tầng như mã" (Infrastructure
+as Code) tồn tại để bảo đảm.
+
+Kèm theo, việc dựng lại cũng chứng minh đường dữ liệu hoạt động: migration EF
+Core **exit 0**, seeder **exit 0** và đếm lại được `AppRoles=3`, `AppUsers=1`,
+`Categories=18`, `Manufacturers=21`, `Products=49`, `ProductVariants=52`; cả hai
+target group của ALB **healthy**, tức `/health/ready` chạm được database thật.
+Bằng chứng ở [`kb00-migration-va-seed.txt`](evidence/acc-551897327153/kb00-migration-va-seed.txt).
