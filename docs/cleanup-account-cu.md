@@ -31,7 +31,7 @@ RDS `hushstore-db-tf` mất 4 phút 44 giây để xoá — bước lâu nhất.
 2. **`force_destroy = false`** ở bucket `public-assets` (cố ý, xem comment
    `modules/storage/s3.tf:18-22`) làm destroy thất bại nếu bucket còn object.
    Bucket chỉ có 1 object 78 byte — chính file proof của KB-10. Đã **tải về
-   `docs/evidence/artifacts/kb10-upload-proof.png`** rồi mới xoá.
+   `docs/evidence/files/kb10-upload-proof.png`** rồi mới xoá.
 
 Bucket tfstate bật versioning nên phải dọn **hai** lượt, không phải một:
 **184 version** rồi **114 delete marker**. Xoá version xong vẫn còn delete
