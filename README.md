@@ -47,10 +47,16 @@ inject từ SSM Parameter Store.
 
 Mục lục đầy đủ: **[docs/README.md](docs/README.md)** — bảng "tôi muốn X thì mở file nào", thứ tự đọc, và ba điều cần biết trước khi chạy lệnh.
 
-**Sơ đồ hệ thống:** [docs/diagrams/hushstore-aws-2026.drawio](docs/diagrams/hushstore-aws-2026.drawio)
-— 5 trang, bộ icon AWS 2026. Mở bằng [app.diagrams.net](https://app.diagrams.net)
-hoặc extension *Draw.io Integration* của VS Code. Mở nó ra **trước** khi đọc tài
-liệu, và để mở bên cạnh.
+**Sơ đồ hệ thống** — hai bản, cùng bộ icon AWS 2026, mở bằng
+[app.diagrams.net](https://app.diagrams.net) hoặc extension *Draw.io Integration*
+của VS Code:
+
+- [hushstore-aws-don-gian.drawio](docs/diagrams/hushstore-aws-don-gian.drawio) —
+  **3 trang, để in báo cáo và làm slide.** Trang 1 vừa khổ A4 ngang, trang 2 và 3
+  vừa slide 16:9.
+- [hushstore-aws-2026.drawio](docs/diagrams/hushstore-aws-2026.drawio) —
+  **5 trang, đầy đủ mọi resource, để tra cứu.** Mở nó ra **trước** khi đọc tài
+  liệu, và để mở bên cạnh.
 
 Ba tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
 

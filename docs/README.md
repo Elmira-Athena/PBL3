@@ -12,7 +12,8 @@ file nào.*
 
 | Tôi muốn… | Mở | Dài |
 |---|---|---|
-| **Xem hình** — sơ đồ hạ tầng, luồng request, luồng CI/CD | [diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio) | 5 trang |
+| **Xem hình để in báo cáo / làm slide** | [diagrams/hushstore-aws-don-gian.drawio](diagrams/hushstore-aws-don-gian.drawio) | 3 trang |
+| **Xem hình để tra cứu khi đọc tài liệu** — đầy đủ mọi resource | [diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio) | 5 trang |
 | Hiểu hệ thống này **là cái gì** và **vì sao thiết kế vậy** | [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) | 1185 dòng |
 | **Bật hệ thống lên** / tắt đi / deploy bản mới / sửa sự cố | [terraform-runbook.md](terraform-runbook.md) | 864 dòng |
 | Biết hệ thống **chặn được tấn công gì**, và vì sao | [bao-mat-he-thong.md](bao-mat-he-thong.md) | 843 dòng |
@@ -34,9 +35,24 @@ liệu sau giả định bạn đã đọc tài liệu trước.
 
 ### Bước 0 — mở sơ đồ ra trước, và để đó
 
-[diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio), mở bằng
+Có **hai** file sơ đồ, phục vụ hai việc khác nhau. Mở bằng
 [app.diagrams.net](https://app.diagrams.net) (không cần cài gì) hoặc extension
-*Draw.io Integration* trong VS Code. Năm trang:
+*Draw.io Integration* trong VS Code.
+
+**Để in báo cáo, làm slide, trình bày với thầy** —
+[diagrams/hushstore-aws-don-gian.drawio](diagrams/hushstore-aws-don-gian.drawio),
+3 trang, 93 hình. Bản đầy đủ vẽ hết mọi thứ nên đọc trên giấy A4 bị rối; bản này
+cắt bớt để mỗi trang vừa **một** khổ giấy hoặc **một** slide:
+
+| Trang | Nội dung | Tỉ lệ khung |
+|---|---|---|
+| 1 | Kiến trúc tổng thể — 5 thành phần đề bài yêu cầu, 3 tier, 3 NACL, 3 SG | 1,38 — vừa A4 ngang |
+| 2 | Một request đi qua **10 chốt kiểm**, kèm lý do bảng NACL dài gấp đôi bảng SG | 1,79 — vừa slide 16:9 |
+| 3 | 6 kịch bản tấn công: chặn ở lớp nào, luật nào chặn, **kết quả đo được** | 1,73 — vừa slide 16:9 |
+
+**Để tra cứu trong lúc đọc tài liệu** —
+[diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio), 5
+trang, 240 hình, không cắt gì:
 
 | Trang | Nội dung |
 |---|---|
@@ -47,7 +63,7 @@ liệu sau giả định bạn đã đọc tài liệu trước.
 | 5 | 10 role IAM và ranh giới quyền |
 
 Đọc tài liệu mà không có hình bên cạnh thì tới mục Network ACL sẽ mất phương
-hướng. **Trang 1 và trang 2 là hai trang đáng in ra giấy.**
+hướng. Nếu chỉ in được ba tờ giấy, in cả **ba trang của bản đơn giản**.
 
 ### Bước 1 — [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md)
 
@@ -127,7 +143,7 @@ Chi tiết đầy đủ ở [terraform-runbook.md](terraform-runbook.md).
 | [phase4-chuyen-account.md](phase4-chuyen-account.md) | Hồ sơ một lần: dựng lại toàn bộ stack sang account AWS mới `551897327153` | Đọc khi cần hiểu vì sao có hai account |
 | [cleanup-account-cu.md](cleanup-account-cu.md) | Hồ sơ một lần: dọn sạch account cũ `667836586836` | Tham chiếu |
 | [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md) | Kết quả rà soát tầng code ứng dụng — lỗi đang có và việc còn phải kiểm | **Chưa sửa gì**, cố ý hoãn tới sau dự án hạ tầng |
-| [diagrams/](diagrams/) | Sơ đồ hệ thống dạng `.drawio`, 5 trang, dùng bộ icon AWS 2026 | Nguồn duy nhất của mọi hình — sửa ở đây, không sửa bản xuất |
+| [diagrams/](diagrams/) | Hai file `.drawio` dùng bộ icon AWS 2026: bản **đầy đủ** 5 trang để tra cứu, bản **đơn giản** 3 trang để in và trình chiếu | Nguồn duy nhất của mọi hình — sửa ở đây, không sửa bản xuất. Sửa một bản thì rà lại bản kia |
 | [archive/](archive/) | Hai bản rà soát kiến trúc app từ tháng 5/2026 | Đã lỗi thời, giữ để đối chiếu |
 | [superpowers/](superpowers/) | Spec và implementation plan của 3 phase hạ tầng | Tham chiếu khi cần biết một quyết định đến từ đâu |
 
@@ -161,7 +177,7 @@ Bốn chỗ **còn thiếu**, chưa làm, xếp theo mức chặn người mới
 | 1 | **Bộ câu hỏi vấn đáp phần AWS/Terraform** | [on-tap-van-dap.md](on-tap-van-dap.md) chỉ có .NET/Blazor. [bao-mat-he-thong.md](bao-mat-he-thong.md) §6 có câu phản biện nhưng **chỉ về bảo mật** — không có câu nào về Terraform, state, module, ECS, hay chi phí | Đây là tài liệu để **luyện thi**, không phải để hiểu hệ thống. Nên tách ra làm việc riêng, và nên viết sau khi biết hội đồng gồm những ai |
 | 2 | **Website này làm được gì** (chức năng nghiệp vụ) | Không tài liệu nào nói HushStore bán gì, có những luồng nào. Người mới đang đọc rất kỹ về cách **deploy** một thứ mà họ không biết là thứ gì | Cần quyết định của người chủ dự án về phạm vi mô tả. Và tầng ứng dụng đang **cố ý hoãn** — xem [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md) |
 | 3 | **Lược đồ database (ERD)** | Chuỗi `Category → Product → ProductVariant → ProductSerial` là trung tâm của cả nghiệp vụ, hiện chỉ có **một dòng** trong `CLAUDE.md`. Không có hình, không có mô tả quan hệ | Cùng lý do #2. Và ERD sinh từ code EF Core thì phải sinh lại mỗi lần đổi migration — cần quyết định có tự động hoá hay không trước khi viết |
-| 4 | **Bản xuất PNG/PDF của sơ đồ** | `.drawio` cần app.diagrams.net hoặc extension VS Code mới mở được. Nộp báo cáo giấy thì phải có ảnh | Cố ý chưa xuất: hai bản (`.drawio` + `.png`) sẽ lệch nhau ngay lần sửa đầu tiên. Xuất **một lần, sát lúc nộp**, từ chính file `.drawio` |
+| 4 | **Bản xuất PNG/PDF của sơ đồ** | `.drawio` cần app.diagrams.net hoặc extension VS Code mới mở được. Nộp báo cáo giấy thì phải có ảnh | Cố ý chưa xuất: hai bản (`.drawio` + `.png`) sẽ lệch nhau ngay lần sửa đầu tiên. Xuất **một lần, sát lúc nộp**, từ [bản đơn giản](diagrams/hushstore-aws-don-gian.drawio) — bản này đã dựng sẵn theo đúng tỉ lệ A4 ngang và 16:9 nên xuất ra là dùng được, không phải căn lại |
 
 Hai chỗ đã kiểm và kết luận **không thiếu**, ghi ra để không ai rà lại:
 
