@@ -138,6 +138,71 @@ Cách sửa rẻ nhất và đúng nhất: thêm `RowVersion` (`IsRowVersion()`)
 
 ---
 
+### A6 — Access token JWT sống 7 ngày, làm refresh token thành vô nghĩa
+
+Phát hiện ngày 2026-08-25 khi kiểm chứng các giá trị TTL để viết mục *Chứng chỉ TLS
+và TTL* của [bao-mat-he-thong.md](bao-mat-he-thong.md).
+
+[`appsettings.json:16`](../src/API/appsettings.json#L16) đặt:
+
+```json
+"AccessTokenExpirationMinutes": 10080,   // = 7 ngày
+"RefreshTokenExpirationDays": 7
+```
+
+Và production **không ghi đè** giá trị đó: task definition ở
+[`modules/ecs/taskdef.tf`](../infra/tf/modules/ecs/taskdef.tf) chỉ inject
+`JwtSettings__SecretKey`, không inject `JwtSettings__AccessTokenExpirationMinutes`.
+Nên 10080 phút là giá trị **thật đang chạy**.
+
+**Vì sao đây là lỗi, không phải một lựa chọn.** Mô hình access token + refresh
+token chỉ có ý nghĩa khi hai thời hạn **lệch nhau**: access token ngắn để giới hạn
+thiệt hại nếu bị lộ, refresh token dài để người dùng không phải đăng nhập lại.
+Đặt hai cái bằng nhau thì refresh token không mua được gì — nó chỉ thêm một đường
+tấn công (một bí mật nữa phải lưu, một endpoint nữa phải bảo vệ) mà không giảm
+được rủi ro nào.
+
+**Hệ quả cụ thể.** JWT là không trạng thái: cấp rồi thì không thu lại được. Nên
+một access token bị lộ (log, devtools, máy dùng chung) dùng được **7 ngày**. Thứ
+duy nhất còn chặn là middleware kiểm cờ `IsActive` với cache 30 giây. Nghĩa là
+middleware đó **không phải lớp bổ sung cho chắc — nó đang là lớp phòng thủ chính**,
+và [B2](#b2--cache-khoá-tài-khoản-không-xuyên-task-và-hướng-mở-khoá-mới-là-hướng-nguy-hiểm)
+nói rõ lớp đó còn có vấn đề riêng khi chạy nhiều task.
+
+**Đáng chú ý: `CLAUDE.md` mô tả đúng ý định.** Nó viết *"15-min access token +
+7-day refresh token"*. Nên đây là code **lệch khỏi thiết kế**, không phải thiết kế
+sai — và cách sửa là kéo code về đúng `CLAUDE.md`, không phải sửa `CLAUDE.md` theo
+code.
+
+**Sửa:** đặt `AccessTokenExpirationMinutes = 15`. Một dòng. Nhưng phải kiểm luôn
+phía client: Blazor WASM có xử lý 401 bằng cách gọi refresh rồi thử lại request
+hay không. Nếu chưa có, hạ thời hạn xuống 15 phút sẽ làm người dùng bị đăng xuất
+mỗi 15 phút — tức lỗi hiện tại đang **che** một thiếu sót ở tầng client. Việc kiểm
+đó thuộc [D1](#d1--tầng-frontend-blazor-chưa-rà-soát-dòng-nào), chưa làm.
+
+### A7 — Không bật HSTS
+
+[`Program.cs:311`](../src/API/Program.cs#L311) gọi `app.UseHttpsRedirection()`
+nhưng **không** gọi `app.UseHsts()`. Nên response không có header
+`Strict-Transport-Security`.
+
+Điều HSTS làm mà redirect 301 không làm được: nó dặn trình duyệt **tự đổi sang
+HTTPS trước khi gửi request**, cho những lần sau. Không có nó, request **đầu tiên**
+của mỗi phiên vẫn đi bằng HTTP và bị chặn giữa đường được — redirect 301 tới quá
+muộn, vì lúc đó request đã bay qua mạng rồi.
+
+Ở hệ thống này rủi ro nhỏ hơn bình thường: Cloudflare đứng trước và đang bật
+Full (strict), nên đoạn người dùng ↔ Cloudflare đã mã hoá. Nhưng **bản thân ứng
+dụng** thì chưa có lớp này, và đó là một khác biệt đáng ghi: bảo vệ đang đến từ
+cấu hình của một dịch vụ bên ngoài, không đến từ code.
+
+**Sửa:** thêm `app.UseHsts()` ở nhánh Production. Lưu ý `max-age` mặc định của
+.NET là 30 ngày, và HSTS **khó lùi**: trình duyệt đã nhớ thì trong `max-age` đó nó
+từ chối HTTP cho tên miền này, kể cả khi bạn muốn quay lại. Nên bật với `max-age`
+ngắn trước, xác nhận không có subdomain nào cần HTTP, rồi mới nâng.
+
+---
+
 ## B. Lỗi chỉ vỡ khi có từ 2 task trở lên
 
 ### B1 — Seed role `Technician` lúc khởi động làm chết task
@@ -308,6 +373,7 @@ riêng để thử.
 |---|---|---|---|
 | **0** | Viết script bắn request đồng thời, đo số 500 hiện tại (D2) | $0 (chạy local) | không |
 | **1** | Sửa nhóm **A** — A1 trước (mất trắng dữ liệu), rồi A3 (tiền + tồn kho), rồi A2, A4, A5 | $0 | vòng 0 để có con số đối chứng |
+| **1b** | **A6** (`AccessTokenExpirationMinutes = 15`) và **A7** (`UseHsts`) — mỗi cái một dòng code | $0 | A6 phụ thuộc D1: phải biết client có tự refresh khi gặp 401 hay không |
 | **2** | Rà soát frontend (D1) + quyết định D5 | $0 | hỏi người quyết định về D5 |
 | **3** | Sửa nhóm **B** — chỉ khi thật sự chuyển sang ≥2 task | $0 phần code | vòng 1 xong |
 | **4** | Thay đổi Terraform: mở trần task, `distinctInstance`, bộ số shutdown 30/45/90, `Max Pool Size=30` | tăng theo giờ chạy | vòng 3 xong |
