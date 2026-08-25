@@ -580,7 +580,7 @@ suất, và đã ghi ở Phần V của tài liệu thiết kế.
 **"Đã kiểm thử thật chưa, hay chỉ đọc cấu hình?"**
 
 Đã chạy thật 12 kịch bản từ laptop, có output lệnh và log CloudWatch làm bằng
-chứng trong `docs/evidence/`. Ngoài ra hạ tầng có **92 test tự động**
+chứng trong `docs/evidence/acc-551897327153/`. Ngoài ra hạ tầng có **93 test tự động**
 (`terraform test`) khoá lại từng khẳng định — ví dụ có một test sẽ **đỏ** nếu ai
 đó thêm rule port 22 vào bất kỳ Security Group nào.
 

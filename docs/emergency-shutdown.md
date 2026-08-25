@@ -35,7 +35,7 @@ ngược lại.
 
 ```bash
 cd ~/Athena/Code/PBL3/infra/tf/envs/prod
-aws sso login --profile hushstore          # nếu token hết hạn
+aws sts get-caller-identity --profile hushstore   # xác nhận credential còn dùng được
 
 # Hạ toàn bộ toggle
 sed -i '' 's|^enable_alb = .*|enable_alb = false|'     terraform.tfvars

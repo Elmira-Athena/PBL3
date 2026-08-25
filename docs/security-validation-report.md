@@ -12,7 +12,7 @@ nguyên tắc tối thiểu và **đã thực sự ngăn được tấn công**.
 | Mục tiêu | ALB `hushstore-alb-1075742626.ap-southeast-1.elb.amazonaws.com` (`13.251.164.95`) · EC2 `10.20.11.251` · RDS `10.20.21.168` |
 | Hạ tầng | Terraform, commit `2941d31`. Cả 4 image ECR ở tag `2941d316…` |
 | Output thô | [`docs/evidence/acc-551897327153/`](evidence/acc-551897327153/) — mọi số trong báo cáo này lấy từ đó, không có số nào viết tay |
-| Lần đo trước | [`docs/evidence/`](evidence/) (account `667836586836`, đã bị xoá) — giữ lại để đối chiếu |
+| Lần đo trước | [`docs/evidence/acc-667836586836/`](evidence/acc-667836586836/) (account đã bị xoá) — giữ lại để đối chiếu |
 
 Kiểm thử thực hiện trên hạ tầng **do chính nhóm sở hữu**, trong phạm vi đề bài.
 
@@ -196,8 +196,9 @@ duy nhất SỬA được hạ tầng.
 
 ## 3. Chi tiết từng kịch bản
 
-Xem output thô trong [`docs/evidence/`](evidence/). Mỗi file chứa nguyên văn
-lệnh đã chạy và nguyên văn kết quả.
+Xem output thô trong [`docs/evidence/acc-551897327153/`](evidence/acc-551897327153/) —
+lần đo hiện hành. Mỗi file chứa nguyên văn lệnh đã chạy và nguyên văn kết quả.
+Lần đo trước trên account cũ nằm ở [`evidence/acc-667836586836/`](evidence/acc-667836586836/).
 
 ### 3.2 / 3.3 — Tier private không tiếp cận được từ internet
 
@@ -343,7 +344,7 @@ Một báo cáo chỉ liệt kê thành công thì không dùng được. Các g
 |---|---|---|
 | **`nacl-app` buộc phải mở dải ephemeral `1024-65535`** vào từ `0.0.0.0/0` | NACL **stateless**: return traffic từ internet qua NAT Gateway vào subnet với src `0.0.0.0/0` và dst port ephemeral | Đã bù bằng DENY `1433` (rule 95) và DENY `8080` (rule 115) đặt ở số **nhỏ hơn** để được xét trước. Đây chính là lý do vẫn cần SG làm lớp thứ hai — SG stateful nên không có vấn đề này |
 | **Không lọc được egress theo domain** | NAT Gateway **không gắn được Security Group** (khác NAT instance) | Cần AWS Network Firewall (~$300/tháng) — không khả thi ở quy mô đồ án. Kiểm soát egress hiện dồn vào `sg-web` egress + `nacl-app` outbound |
-| **`drop_invalid_header_fields` KHÔNG chặn được giả mạo `X-Forwarded-*`** | ALB **thêm vào** header này chứ không thay thế | Phòng thủ thật là `ForwardLimit` của `UseForwardedHeaders` — app chỉ tin proxy gần nhất. **Việc còn nợ:** đặt `ForwardLimit = 1` tường minh trong `Program.cs` |
+| **`drop_invalid_header_fields` KHÔNG chặn được giả mạo `X-Forwarded-*`** | ALB **thêm vào** header này chứ không thay thế | **Đã xử lý** — `ForwardLimit = 1` đặt tường minh ở [`Program.cs:258`](../src/API/Program.cs#L258). ALB *append* nên client gửi `X-Forwarded-For: 1.2.3.4` sẽ thành `1.2.3.4, <IP thật>`; ASP.NET đọc từ **phải sang trái** nên đọc đúng 1 phần tử là lấy đúng IP mà ALB quan sát được, phần client tự bơm bị bỏ lại |
 | **WAF / chống DDoS tầng 7** | Chưa có AWS WAF | Cloudflare proxy đang che apex + api và cung cấp một phần; WAF của AWS là bước tiếp theo nếu cần |
 | **Không có IDS/IPS trong VPC** | GuardDuty chưa bật | GuardDuty có bậc dùng thử 30 ngày; nên bật khi trình bày |
 | **Host không ra được NTP công khai** — đã **đo được 8 bản ghi `REJECT`** | `sg-web` egress chỉ cho `1433`/`80`/`443` — hệ quả cố ý của egress tối thiểu | Không cần sửa: `chrony` dùng Amazon Time Sync ở `169.254.169.123` (link-local, không qua NAT). Đồng hồ đúng được **chứng minh gián tiếp** bằng việc migrator xác thực cert RDS thành công và ECR pull ký SigV4 thành công — xem [mục 8.2](#82-egress-của-chính-ec2-bị-chặn-ở-port-123--và-đồng-hồ-vẫn-đúng) |
@@ -400,7 +401,7 @@ kèm nguyên văn output. Không có số nào trong báo cáo này được vi�
 
 ## 6. Kịch bản 11 — giả mạo OIDC assume-role
 
-Đã chạy. Nguyên văn output ở [evidence/kb11-gia-mao-oidc.txt](evidence/kb11-gia-mao-oidc.txt).
+Đã chạy. Nguyên văn output ở [evidence/acc-551897327153/kb11-gia-mao-oidc.txt](evidence/acc-551897327153/kb11-gia-mao-oidc.txt).
 
 Kịch bản này đáng làm vì ARN của role deploy được **cố tình** lưu dưới dạng
 repository *variable* trên GitHub, không phải *secret* — tức nó công khai với
@@ -450,7 +451,7 @@ aws iam get-role --role-name hushstore-github-actions-deploy-role \
 ## 7. Kịch bản 12 — bán kính thiệt hại của role deploy
 
 Đã chạy. Nguyên văn output ở
-[evidence/kb12-blast-radius-deploy-role.txt](evidence/kb12-blast-radius-deploy-role.txt).
+[evidence/acc-551897327153/kb12-blast-radius-deploy-role.txt](evidence/acc-551897327153/kb12-blast-radius-deploy-role.txt).
 
 Kịch bản 11 chứng minh **không ai assume được** role deploy. Đó là nửa thứ nhất.
 Nửa thứ hai là câu hỏi ngược lại, và nó độc lập: *giả sử* có người assume được —

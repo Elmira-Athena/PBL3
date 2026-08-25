@@ -45,6 +45,8 @@ inject từ SSM Parameter Store.
 
 ## Tài liệu cho người mới
 
+Mục lục đầy đủ: **[docs/README.md](docs/README.md)** — bảng "tôi muốn X thì mở file nào", thứ tự đọc, và ba điều cần biết trước khi chạy lệnh.
+
 Ba tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
 
 1. **[thiet-ke-he-thong-aws.md](docs/thiet-ke-he-thong-aws.md)** — *cái gì* và
@@ -102,7 +104,9 @@ Runbook giải thích vì sao.
 xoá khỏi `Program.cs`.
 
 ```bash
-aws sso login --profile hushstore
+# Profile `hushstore` dùng IAM user thuần trên account 551897327153 — KHÔNG phải
+# SSO, nên không cần `aws sso login`. Kiểm tra credential còn dùng được:
+aws sts get-caller-identity --profile hushstore
 terraform -chdir=infra/tf/envs/prod init
 bash infra/tf/scripts/up.sh
 ```

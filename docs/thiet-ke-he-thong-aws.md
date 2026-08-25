@@ -849,13 +849,13 @@ Server Express **không tải** vẫn ngồi ở ~36% CPU. Nên riêng phần v�
 | Đề bài yêu cầu | Ở đâu trong hệ thống |
 |---|---|
 | **Tìm hiểu HĐH Linux + xây website trên đó** | Mục ["Linux — hệ điều hành chạy bên dưới tất cả"](#linux--hệ-điều-hành-chạy-bên-dưới-tất-cả): 3 bản phân phối, cloud-init/systemd, swap, namespace/cgroup, quyền file, không SSH |
-| **Tìm hiểu AWS Cloud + Terraform** | Phần II (khái niệm), và toàn bộ hạ tầng khai bằng Terraform: 8 module, 92 test tự động, không resource nào bấm tay |
+| **Tìm hiểu AWS Cloud + Terraform** | Phần II (khái niệm), và toàn bộ hạ tầng khai bằng Terraform: 8 module, 93 test tự động, không resource nào bấm tay |
 | VPC | `10.20.0.0/16`, 6 subnet, 3 tier, 2 AZ |
 | Security Group | 3 cái, rule tham chiếu SG, không có port 22 |
 | **Network ACL** | 3 cái, mỗi tier một cái, có rule DENY và thứ tự có ý nghĩa |
 | **Application Load Balancer** | ALB + ACM + 2 target group + allowlist Host |
 | EC2 Instance chạy website | 1 `t3.micro` chạy container nginx + .NET |
-| Máy tấn công verify rule | Laptop (`my_ip`), **12 kịch bản**, bằng chứng lưu trong `docs/evidence/` |
+| Máy tấn công verify rule | Laptop (`my_ip`), **12 kịch bản**, bằng chứng lưu trong `docs/evidence/acc-551897327153/` |
 | Rule mở theo nguyên tắc tối thiểu | Xem bảng dưới |
 | Rule đã ngăn được tấn công | [security-validation-report.md](security-validation-report.md) |
 | Giải thích **vì sao** rule chặn được | [bao-mat-he-thong.md](bao-mat-he-thong.md) — bảy lớp phòng thủ, và mục câu hỏi phản biện |
@@ -969,28 +969,102 @@ phần lớn những gì bị hỏi khi bảo vệ.
 
 ## Ba khoảng trống — và học ở đâu thay thế
 
-Nói thẳng để không ai mất thời gian tìm:
+AWS Study Group phủ được phần lớn hệ thống, nhưng có **ba thứ nó không dạy** — mà
+cả ba đều là thành phần đề bài nhấn mạnh. Mục này lấp đúng ba chỗ đó, **ưu tiên
+nguồn tiếng Việt**, và nói rõ mỗi nguồn dạy tới đâu thì hết.
 
-**Không có workshop Terraform.** Workshop IaC duy nhất trên site
-([000102](https://000102.awsstudygroup.com/vi/)) dạy **CloudFormation**. Khái
-niệm thì dùng chung được — IaC, state, plan trước khi apply, resource khai báo
-thay vì bấm tay — nhưng cú pháp thì khác hoàn toàn. Học Terraform ở
-[developer.hashicorp.com/terraform/tutorials/aws-get-started](https://developer.hashicorp.com/terraform/tutorials/aws-get-started),
-rồi đọc [terraform-runbook.md](terraform-runbook.md) của dự án.
+Mọi liên kết dưới đây đã được kiểm tra truy cập được ngày **2026-08-25**.
 
-**Không có workshop riêng về Network ACL.** Chỉ có một chương trong workshop VPC.
-Mà NACL lại là thành phần đề bài nhấn mạnh nhất. Nên phần NACL ở Phần III của tài
-liệu này **là nguồn chính**, không phải phần bổ trợ — đọc kỹ đoạn giải thích vì
-sao rule 95 và 115 tồn tại.
+### Khoảng trống 1 — Terraform
 
-**Không có workshop riêng về ALB.** ALB nằm lẫn trong workshop
-[ASG](https://000006.awsstudygroup.com/vi/) (chương 4) và
-[ECS](https://000016.awsstudygroup.com/vi/) (chương 7). Cả hai đều **không** dạy
-định tuyến theo header Host và allowlist — phần chặn được tấn công Host header
-injection trong hệ thống của ta.
+Workshop IaC duy nhất trên site ([000102](https://000102.awsstudygroup.com/vi/))
+dạy **CloudFormation**, không phải Terraform. Khái niệm dùng chung được — IaC,
+state, plan trước khi apply, khai báo thay vì bấm tay — nhưng cú pháp khác hoàn
+toàn, và `terraform plan`/`state`/`module` thì CloudFormation không có tương
+đương một-một.
 
-Ngoài ra ba chỗ workshop dạy **khác có chủ ý** với hệ thống của ta, đừng nhầm là
-ta làm sai:
+**Lộ trình thay thế, theo đúng thứ tự:**
+
+| # | Nguồn | Ngôn ngữ | Học được gì | Hết ở đâu |
+|---|---|---|---|---|
+| 1 | [Terraform Series — Bài 1: Infrastructure as Code và Terraform](https://viblo.asia/p/terraform-series-bai-1-infrastructure-as-code-va-terraform-maGK7Bqa5j2) (Viblo) | 🇻🇳 | Vì sao cần IaC, Terraform khác Ansible/CloudFormation ở chỗ nào, vòng đời `init → plan → apply → destroy` | Chỉ khái niệm, chưa động tới AWS |
+| 2 | [Học Terraform với AWS: 5 bước tạo EC2 đầu tiên](https://devops.vn/posts/hoc-terraform-voi-aws-5-buoc-tao-ec2-dau-tien/) (devops.vn) | 🇻🇳 | Bài thực hành ngắn nhất từ số 0 tới một EC2 chạy thật: provider, resource, `terraform apply` | Một file, không module, không state từ xa |
+| 3 | [Terraform Series — Bài 5: Module — tạo VPC trên AWS](https://viblo.asia/p/terraform-series-bai-5-terraform-module-create-virtual-private-cloud-on-aws-ORNZqp2MK0n) (Viblo) | 🇻🇳 | **Bài quan trọng nhất cho dự án này.** Cách gom resource thành module, truyền `variable`, lấy `output` — đúng cấu trúc `infra/tf/modules/` của ta | Dùng module VPC có sẵn từ Registry; ta tự viết module |
+| 4 | [Terraform Series — Bài 6: Module in depth — ứng dụng multi-tier](https://viblo.asia/p/terraform-series-bai-6-module-in-depth-create-multi-tier-application-1VgZvAb2KAw) (Viblo) | 🇻🇳 | Ghép **VPC + ALB + target group + listener + ASG + Launch Template + RDS** thành một hệ thống — gần kiến trúc của ta nhất trong mọi nguồn tiếng Việt tìm được | **Không có `aws_network_acl` nào.** Và dùng module từ Registry thay vì tự viết. Bài đăng 24/02/2022 nên cú pháp là Terraform 1.x đời đầu — vẫn đọc được |
+| 5 | [HashiCorp — AWS Get Started](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) | 🇬🇧 | Nguồn chính thức, luôn cập nhật. Nhất là hai chương **`Store remote state`** và **`Manage resource drift`** | Tiếng Anh |
+| 6 | [terraform-runbook.md](terraform-runbook.md) của chính dự án này | 🇻🇳 | Cách chạy stack thật: backend S3 + lockfile, biến toggle bật/tắt, thứ tự `up.sh`/`down.sh`, và **93 test `.tftest.hcl`** | — |
+
+**Chỗ không nguồn tiếng Việt nào phủ**, và ta dùng thật:
+
+- **`terraform test`** (`.tftest.hcl`) — framework test tích hợp, có từ Terraform 1.6.
+  Đây là thứ khiến hạ tầng của dự án này khác một bài blog: 93 test khẳng định
+  các bất biến bảo mật (không rule 22 nào, NACL DENY đúng thứ tự, NAT tắt theo
+  mặc định). Tài liệu chính thức:
+  [developer.hashicorp.com/terraform/language/tests](https://developer.hashicorp.com/terraform/language/tests).
+  Một điểm đã vấp phải và đáng biết trước: giá trị *known-after-apply* **không
+  assert được** ở `command = plan` — xem khối chú thích trong
+  [`modules/network/tests/vpc.tftest.hcl`](../infra/tf/modules/network/tests/vpc.tftest.hcl).
+- **`import` block** — đưa resource đã tồn tại vào state mà không tạo lại. Ta dùng
+  đúng một lần, cho bucket ảnh sản phẩm.
+- **Toggle chi phí bằng `count = var.enable_x ? 1 : 0`** — mẫu cho phép bật/tắt
+  NAT Gateway và ALB mà state không lệch. Không nguồn nào dạy, vì các bài hướng
+  dẫn không quan tâm tới việc tắt hạ tầng đi để khỏi tốn tiền.
+
+### Khoảng trống 2 — Network ACL
+
+Trên AWS Study Group, NACL chỉ là **một chương** trong workshop VPC. Mà NACL lại
+là thành phần đề bài nhấn mạnh nhất. Nên **phần NACL ở Phần III của tài liệu này
+là nguồn chính, không phải phần bổ trợ.**
+
+Đọc thêm để đối chiếu:
+
+| Nguồn | Ngôn ngữ | Phủ được | Không phủ |
+|---|---|---|---|
+| [Phân biệt Security Group và Network ACL trong AWS](https://indaacademy.vn/aws/phan-biet-security-group-va-network-acl-trong-aws/) (INDA Academy) | 🇻🇳 | Bài tiếng Việt tốt nhất tìm được. Nói đúng **cả ba** điều quan trọng: NACL stateless nên *"inbound và outbound traffic được đánh giá hoàn toàn độc lập"*; rule xét theo số, *"rule có số nhỏ hơn sẽ được đánh giá trước"*; và cảnh báo *"không tính đến ephemeral ports … là một lỗi thường gặp"* | Không có ví dụ DENY theo IP, không có bài toán "rule 120 vô tình mở 1433" |
+| [AWS — Sự khác biệt giữa Security Group và Network ACL](https://viblo.asia/p/aws-su-khac-biet-giua-security-group-va-network-access-controll-list-V3m5WQLvZO7) (Viblo) | 🇻🇳 | Bảng so sánh gọn: SG **chỉ có allow**, NACL có **cả allow và deny**; SG gắn từng instance, NACL gắn cả subnet; một subnet chỉ 1 NACL, một instance nhiều SG | Không đi vào thứ tự rule |
+| [AWS Docs — Network ACLs](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html) | 🇬🇧 | Nguồn thẩm quyền. Cần đọc mục **"Ephemeral ports"** và **"Custom network ACL examples"** | Tiếng Anh |
+
+**Ba câu hỏi mà không nguồn nào ở trên trả lời — nhưng dự án này trả lời:**
+
+1. *Vì sao SG không thay được NACL?* Vì SG **không có rule deny**. Muốn chặn đúng
+   một địa chỉ IP thì chỉ NACL làm được. Đây chính là kịch bản KB-08 trong
+   [security-validation-report.md](security-validation-report.md).
+2. *Vì sao rule 95 và 115 phải tồn tại?* Vì rule 120 buộc phải mở dải ephemeral
+   `1024-65535` cho return traffic qua NAT — mà `1433` và `8080` nằm **trong**
+   dải đó. Phải đặt DENY ở số nhỏ hơn để chặn trước khi rule 120 được xét.
+3. *Vì sao vẫn cần SG khi đã có NACL?* Vì chính điểm 2: NACL stateless buộc ta mở
+   một dải rộng, nên tầng lọc chặt phải nằm ở SG stateful.
+
+Đọc mục [Network ACL ở Phần III](#network-acl--phần-kỹ-thuật-đáng-nhất-của-đồ-án)
+để thấy ba câu trả lời này ở dạng bảng rule đầy đủ.
+
+### Khoảng trống 3 — Application Load Balancer
+
+ALB nằm lẫn trong workshop [ASG](https://000006.awsstudygroup.com/vi/) (chương 4)
+và [ECS](https://000016.awsstudygroup.com/vi/) (chương 7), không có workshop riêng.
+
+| Nguồn | Ngôn ngữ | Phủ được | Không phủ |
+|---|---|---|---|
+| [AWS Elastic Load Balancer cho người mới bắt đầu](https://viblo.asia/p/aws-elastic-load-balancer-cho-nguoi-moi-bat-dau-6J3ZgPyWlmB) (Viblo) | 🇻🇳 | Nhập môn: ELB là gì, health check, phân bổ traffic qua nhiều AZ | Không có listener rule |
+| [Tìm hiểu Classic ELB và ALB](https://viblo.asia/p/tim-hieu-classic-elb-va-alb-GrLZDOB3Kk0) (Viblo) | 🇻🇳 | Vì sao ALB thay CLB: định tuyến **theo path và theo header**, mỗi rule trỏ một target group khác nhau — đúng cơ chế ta dùng để tách `tg-web` và `tg-api` | Chỉ mô tả trên console, không có Terraform |
+| [AWS Docs — Listener rules](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-update-rules.html) | 🇬🇧 | Nguồn thẩm quyền cho `host-header`, `path-pattern`, thứ tự `priority`, và `fixed-response` | Tiếng Anh |
+| [Terraform Series — Bài 6](https://viblo.asia/p/terraform-series-bai-6-module-in-depth-create-multi-tier-application-1VgZvAb2KAw) (Viblo) | 🇻🇳 | Nguồn tiếng Việt duy nhất tạo ALB + target group + listener **bằng Terraform** | Dùng module Registry; chỉ listener HTTP :80, không TLS, không rule theo Host |
+
+**Bốn thứ hệ thống của ta làm mà không nguồn nào ở trên dạy:**
+
+- **Allowlist theo header Host.** Listener của ta có `fixed-response` 403 mặc
+  định, và chỉ request mang đúng tên miền mới được chuyển tiếp. Đây là thứ chặn
+  Host header injection — kịch bản KB-07.
+- **`drop_invalid_header_fields = true`.** Loại header dị dạng trước khi tới app.
+  Cần biết giới hạn của nó: nó **không** chặn được giả mạo `X-Forwarded-For`; thứ
+  chặn là `ForwardLimit = 1` phía ASP.NET.
+- **Redirect 301 từ `:80` sang `:443`** và chứng chỉ ACM xác thực bằng DNS.
+- **`deregistration_delay`** và mối quan hệ thứ tự với `stopTimeout` của ECS +
+  `ShutdownTimeout` của .NET. Sai thứ tự thì mỗi lần deploy cắt ngang request
+  đang bay. Xem mục B4 của
+  [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md).
+
+### Ba chỗ workshop dạy KHÁC có chủ ý — đừng nhầm là ta làm sai
 
 | Workshop dạy | Ta làm | Vì sao |
 |---|---|---|

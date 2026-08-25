@@ -12,7 +12,7 @@ tier. Mặc định cả hai đều **tắt**. Bật lên khi làm việc, tắt
 ```bash
 terraform -version          # >= 1.10
 aws --version               # >= 2.x
-aws sso login --profile hushstore    # mỗi ngày một lần, session 8 giờ
+aws sts get-caller-identity --profile hushstore   # profile dùng IAM user, KHÔNG phải SSO
 export ACCT=$(aws sts get-caller-identity --query Account --output text --profile hushstore)
 ```
 
@@ -116,7 +116,7 @@ lưới an toàn **bị động** chạy song song: Lambda `hushstore-cost-guard
 3.13, arm64), đánh thức mỗi đêm lúc `00:00 Asia/Ho_Chi_Minh` bởi EventBridge
 Scheduler `hushstore-nightly-stop` (`cron(0 0 * * ? *)`, retry 2 lần). Đã
 deploy và kiểm chứng bằng lệnh thật, không phải `terraform test` — output đầy
-đủ ở [docs/evidence/kb13-costguard-lambda.txt](evidence/kb13-costguard-lambda.txt).
+đủ ở [docs/evidence/acc-551897327153/kb13-costguard-lambda.txt](evidence/acc-551897327153/kb13-costguard-lambda.txt).
 
 Bốn điều cần biết trước khi tin vào nó:
 
@@ -694,7 +694,6 @@ phải bọc ngoặc nhọn: `$ACCT:role` bị zsh hiểu `:r` là modifier và 
 | **Account dùng chung, 2 người có Admin** | Account chia với bạn trong nhóm | Đo 2026-08-24: 4 IAM user — `hushstore-ops` (Admin, không MFA), `DBT` (Admin, **có MFA**), `Nhincc` và `ThinhDB` (chỉ `IAMUserChangePassword`). Nhóm không kiểm soát ba user kia, nên bán kính thiệt hại của **account** lớn hơn bán kính của **hạ tầng** |
 | **Default security group của VPC chưa bị khoá** | Chưa để ý tới; phát hiện khi chạy lại kiểm thử 2026-08-24 | AWS tạo một SG `default` cho mỗi VPC, không cho xoá, mặc định cho phép mọi traffic từ chính nó (gồm 22). Hiện **0 ENI** dùng nên chưa có bề mặt thật. Bịt bằng `aws_default_security_group` với ingress/egress **rỗng** — một resource, $0 |
 | **3 package NuGet có CVE mức High** | Đã quyết định để sau khi xong hạ tầng | `AutoMapper` 16.0.0→16.1.1 · `Microsoft.OpenApi` 2.4.1→2.7.5 · `System.Security.Cryptography.Xml` 9.0.0→9.0.18 (Infrastructure) và 10.0.0→10.0.10 (Service) — **hai project đang lệch version, nên hợp nhất luôn khi vá**. Là 3 package chứ không phải 4; con số 4 trước đây đếm theo dòng cảnh báo. Cả 3 là DoS qua đệ quy không kiểm soát, CVSS 7.5, đánh giá không tới được trong codebase này |
-| **`ForwardLimit = 1` chưa đặt tường minh** | Sót từ lúc sửa `UseForwardedHeaders` | ALB **thêm vào** `X-Forwarded-*` chứ không thay thế, nên `drop_invalid_header_fields` không chặn được giả mạo. Phòng thủ thật là `ForwardLimit` — app chỉ tin proxy gần nhất. Một dòng trong `Program.cs` |
 
 ## Chi phí
 
