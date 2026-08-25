@@ -224,6 +224,15 @@ jobs:
         run: |
           dotnet tool install --global dotnet-ef --version '10.0.*'
           export PATH="$PATH:$HOME/.dotnet/tools"
+
+          # BẮT BUỘC restore trước. `dotnet ef` hỏi metadata của project bằng
+          # MSBuild target GetEFProjectMetadata, và target đó chạy TRƯỚC bước
+          # build nên nó KHÔNG tự restore. Không có project.assets.json thì lỗi
+          # là NETSDK1004 "Assets file not found", theo sau là "Unable to
+          # retrieve project metadata" — thông báo dễ làm tưởng project hỏng
+          # chứ không phải thiếu restore.
+          dotnet restore PBL3.sln
+
           dotnet ef migrations script \
             --idempotent \
             --project src/Infrastructure/Infrastructure.csproj \

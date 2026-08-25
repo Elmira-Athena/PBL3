@@ -262,9 +262,43 @@ Nghĩa là một trong hai điều sau đúng, và cần quyết định là đi
 
 Không được đoán. Đây là câu hỏi nghiệp vụ, phải hỏi người quyết định.
 
-### D6 — 3 CVE mức High trong package NuGet
+### D6 — CVE trong package NuGet
 
-Đã biết, đã cố ý hoãn tới cuối dự án theo yêu cầu. Ghi lại ở đây để không quên.
+Đo lại ngày **2026-08-25** bằng `dotnet list PBL3.sln package --vulnerable --include-transitive`.
+Tất cả đều mức **High**, chia hai nhóm:
+
+| Package | Kiểu | Version | Advisory |
+|---|---|---|---|
+| `AutoMapper` | **top-level**, khai trong `Service` | 16.0.0 | [GHSA-rvv3-g6hj-g44x](https://github.com/advisories/GHSA-rvv3-g6hj-g44x) |
+| `System.Security.Cryptography.Xml` | **transitive** | 9.0.0 (Infrastructure) và 10.0.0 (Service) | 8 advisory: [GHSA-37gx-xxp4-5rgx](https://github.com/advisories/GHSA-37gx-xxp4-5rgx), [GHSA-w3x6-4m5h-cxqf](https://github.com/advisories/GHSA-w3x6-4m5h-cxqf), [GHSA-cvvh-rhrc-wg4q](https://github.com/advisories/GHSA-cvvh-rhrc-wg4q), [GHSA-g8r8-53c2-pm3f](https://github.com/advisories/GHSA-g8r8-53c2-pm3f), [GHSA-23rf-6693-g89p](https://github.com/advisories/GHSA-23rf-6693-g89p), [GHSA-8q5v-6pqq-x66h](https://github.com/advisories/GHSA-8q5v-6pqq-x66h), [GHSA-mmjf-rqrv-855v](https://github.com/advisories/GHSA-mmjf-rqrv-855v), [GHSA-6588-8gv4-xfgh](https://github.com/advisories/GHSA-6588-8gv4-xfgh) |
+
+`Shared` sạch.
+
+**Hai nhóm này sửa khác nhau, đừng gộp làm một:**
+
+- `AutoMapper` là **top-level** — nâng thẳng version trong `Service.csproj`. Rủi ro
+  là AutoMapper hay đổi API giữa các major version, nên sau khi nâng phải build
+  lại và chạy thử các đường có mapping phức tạp (`ProductVariant.Specifications`
+  là `Dictionary<string,string>`, đây là chỗ dễ vỡ nhất).
+- `System.Security.Cryptography.Xml` là **transitive** — không khai ở đâu cả, nó
+  đến từ package khác kéo vào. Nâng đúng cách là tìm package cha rồi nâng cha
+  (`dotnet nuget why PBL3.sln System.Security.Cryptography.Xml`). Ghim thẳng
+  version bằng cách thêm `PackageReference` top-level cũng chạy được, nhưng đó
+  là vá chứ không phải sửa: lần restore sau nếu cha nâng lên version khác thì
+  cái ghim tay trở thành nguồn xung đột.
+
+**Vì sao không sửa cùng lúc với dự án hạ tầng:** nâng package làm đổi image, tức
+phải build + deploy lại toàn bộ, tức phải bật hạ tầng lên (~$0.1954/giờ). Và nếu
+build vỡ thì nó vỡ đúng lúc mọi thứ khác đang xanh. Tách ra làm riêng, có cửa sổ
+riêng để thử.
+
+**Việc cần làm khi quay lại:**
+
+1. `dotnet nuget why PBL3.sln System.Security.Cryptography.Xml` — tìm package cha.
+2. Nâng cha (hoặc nâng `AutoMapper`), `dotnet build PBL3.sln -c Release`.
+3. Chạy lại `dotnet list PBL3.sln package --vulnerable --include-transitive` cho tới
+   khi ra "has no vulnerable packages" ở cả 4 project.
+4. Deploy trong một cửa sổ riêng, không gộp với thay đổi hạ tầng nào khác.
 
 ---
 
@@ -277,7 +311,7 @@ Không được đoán. Đây là câu hỏi nghiệp vụ, phải hỏi ngườ
 | **2** | Rà soát frontend (D1) + quyết định D5 | $0 | hỏi người quyết định về D5 |
 | **3** | Sửa nhóm **B** — chỉ khi thật sự chuyển sang ≥2 task | $0 phần code | vòng 1 xong |
 | **4** | Thay đổi Terraform: mở trần task, `distinctInstance`, bộ số shutdown 30/45/90, `Max Pool Size=30` | tăng theo giờ chạy | vòng 3 xong |
-| **5** | 3 CVE NuGet (D6) | $0 | cuối dự án |
+| **5** | CVE NuGet (D6) — `AutoMapper` + `System.Security.Cryptography.Xml` | $0 để sửa, ~$0.1954/giờ để deploy lại | làm trong cửa sổ riêng, không gộp với thay đổi hạ tầng |
 
 Lý do đặt vòng 1 trước vòng 4, dù câu hỏi ban đầu là về scale: **A1 làm mất trắng kết quả xử lý RMA và A3 làm voucher dùng quá lượt — ngay bây giờ, với đúng một task, hoàn toàn độc lập với chuyện scale.** Scale lên 2 task khi tầng dữ liệu còn những lỗi này chỉ làm chúng xảy ra thường xuyên hơn.
 
