@@ -1,0 +1,732 @@
+<mxfile host="app.diagrams.net" agent="HushStore doc generator" type="device">
+  <diagram id="1-—-Kiến-trúc-tổng-thể" name="1 — Kiến trúc tổng thể">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2100" pageHeight="1360" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t1" value="HushStore — hạ tầng AWS dựng bằng Terraform  ·  region ap-southeast-1 (Singapore)" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=17;fontColor=#232F3E;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="14" width="1200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t1b" value="Mọi resource trong sơ đồ này do Terraform tạo. Không resource nào bấm tay trên Console." style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=11;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="42" width="900" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="ext" value="Ngoài AWS" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=12;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="84" width="240" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="users" value="Người dùng&lt;br&gt;hushstore.io.vn" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#232F3E;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.users;" vertex="1" parent="1">
+          <mxGeometry x="95" y="118" width="66" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="cf" value="Cloudflare DNS&lt;br&gt;CNAME → DNS name của ALB&lt;br&gt;Full (strict): TLS cả 2 chặng" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="230" width="220" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="atk" value="Máy tấn công&lt;br&gt;laptop · var.my_ip" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#DD344C;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.user;" vertex="1" parent="1">
+          <mxGeometry x="100" y="330" width="56" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="gha" value="GitHub Actions&lt;br&gt;OIDC — không credential dài hạn" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EEF0F3;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="430" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="lg" value="CHÚ THÍCH&lt;br&gt;— khung tím: VPC&lt;br&gt;— khung xanh lá: subnet public&lt;br&gt;— khung xanh dương: subnet private&lt;br&gt;— nét liền: đường dữ liệu (data plane)&lt;br&gt;— nét đứt: đường điều khiển (control plane)&lt;br&gt;— nét đứt đỏ: tấn công đã thử và bị chặn&lt;br&gt;&lt;br&gt;TRẠNG THÁI MẶC ĐỊNH&lt;br&gt;enable_alb = false · enable_nat = false&lt;br&gt;instance_count = 0 · RDS stopped&lt;br&gt;→ chi phí ≈ $0/giờ. Bật lên: $0,1954/giờ." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="520" width="220" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="cloud" value="AWS Cloud — account 551897327153" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_aws_cloud_alt;strokeColor=#232F3E;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#232F3E;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="300" y="60" width="1740" height="1250" as="geometry" />
+        </mxCell>
+        <mxCell id="region" value="Region ap-southeast-1" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_region;strokeColor=#147EBA;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="120" width="1680" height="1170" as="geometry" />
+        </mxCell>
+        <mxCell id="vpc" value="VPC hushstore-vpc — 10.20.0.0/16" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_vpc2;strokeColor=#8C4FFF;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#8C4FFF;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="360" y="200" width="1030" height="1070" as="geometry" />
+        </mxCell>
+        <mxCell id="igw" value="Internet&lt;br&gt;Gateway" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.internet_gateway;" vertex="1" parent="1">
+          <mxGeometry x="397" y="238" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="dsg" value="default security group của VPC — Terraform adopt rồi XOÁ SẠCH rule. AWS không cho xoá SG này; để nguyên thì nó cho phép mọi port (kể cả 22) giữa các resource cùng nằm trong nó." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FDECEA;strokeColor=#DD344C;fontColor=#B0202F;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="620" y="232" width="560" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="aza" value="Availability Zone  ap-southeast-1a" style="fillColor=none;strokeColor=#147EBA;dashed=1;verticalAlign=top;align=left;spacingLeft=10;fontStyle=2;fontColor=#147EBA;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="385" y="320" width="400" height="800" as="geometry" />
+        </mxCell>
+        <mxCell id="azb" value="Availability Zone  ap-southeast-1b" style="fillColor=none;strokeColor=#147EBA;dashed=1;verticalAlign=top;align=left;spacingLeft=10;fontStyle=2;fontColor=#147EBA;whiteSpace=wrap;html=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="800" y="320" width="400" height="800" as="geometry" />
+        </mxCell>
+        <mxCell id="pa" value="public-a · 10.20.0.0/24" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#248814;fillColor=#E9F3E6;verticalAlign=top;align=left;spacingLeft=30;fontColor=#248814;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="398" y="385" width="372" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="pb" value="public-b · 10.20.1.0/24" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#248814;fillColor=#E9F3E6;verticalAlign=top;align=left;spacingLeft=30;fontColor=#248814;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="813" y="385" width="372" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="apa" value="app-a · 10.20.10.0/24 — KHÔNG có IP public" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#147EBA;fillColor=#E6F2F8;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="398" y="585" width="372" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="apb" value="app-b · 10.20.11.0/24" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#147EBA;fillColor=#E6F2F8;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="813" y="585" width="372" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="dba" value="db-a · 10.20.20.0/24 — KHÔNG có route ra Internet" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#147EBA;fillColor=#E6F2F8;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="398" y="900" width="372" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="dbb" value="db-b · 10.20.21.0/24" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#147EBA;fillColor=#E6F2F8;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="813" y="900" width="372" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="nat" value="NAT Gateway&lt;br&gt;+ EIP" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.nat_gateway;" vertex="1" parent="1">
+          <mxGeometry x="428" y="428" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="alb" value="Application Load Balancer&lt;br&gt;TLS 1.2/1.3 · 2 target group" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.application_load_balancer;" vertex="1" parent="1">
+          <mxGeometry x="756" y="435" width="70" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="pbn" value="Node thứ hai của ALB nằm ở AZ này — ALB bắt buộc ≥ 2 AZ. Nhưng CHỈ 1 NAT Gateway cho cả VPC: max_size = 1 nên không bao giờ có instance ở 2 AZ cùng lúc." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="843" y="428" width="330" height="74" as="geometry" />
+        </mxCell>
+        <mxCell id="asg" value="Auto Scaling Group · min 0 / max 1" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_auto_scaling_group;grStroke=1;strokeColor=#D86613;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#D86613;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="410" y="625" width="350" height="225" as="geometry" />
+        </mxCell>
+        <mxCell id="ec2" value="EC2 t3.micro&lt;br&gt;container instance" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ec2;" vertex="1" parent="1">
+          <mxGeometry x="428" y="660" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="ec2n" value="instance_count&lt;br&gt;= 0 hoặc 1&lt;br&gt;(0 = xoá cả EBS)" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=9;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="405" y="752" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cweb" value="web · nginx :80  (bundle Blazor WASM)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="518" y="660" width="232" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="capi" value="api · .NET 10 :8080" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="518" y="690" width="232" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="cmig" value="migrator · EF bundle (chạy 1 lần rồi thoát)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="518" y="720" width="232" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="csee" value="seeder · nạp dữ liệu mẫu (chạy 1 lần)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="518" y="750" width="232" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="bridgen" value="network_mode = bridge, host port TĨNH 80 và 8080 → sg-web chỉ cần 2 rule, không phải mở dải 32768-65535." style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=9;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="512" y="782" width="244" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="apbn" value="ASG khai báo CẢ hai app subnet. AZ-a hết capacity thì instance mới lên ở đây, không phải sửa gì. Bình thường AZ này rỗng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="843" y="640" width="330" height="74" as="geometry" />
+        </mxCell>
+        <mxCell id="rds" value="RDS SQL Server&lt;br&gt;Express · db.t3.micro" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#C925D1;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.rds_sql_server_instance;" vertex="1" parent="1">
+          <mxGeometry x="428" y="945" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="rdsn" value="publicly_accessible = false  ·  chỉ nghe :1433  ·  TLS bắt buộc (TrustServerCertificate = False)" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=9;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="405" y="1038" width="350" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="dbbn" value="DB subnet group của RDS bắt buộc 2 AZ nên subnet này PHẢI tồn tại. Nhưng SQL Server Express KHÔNG hỗ trợ Multi-AZ → không có standby ở đây." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="843" y="950" width="330" height="74" as="geometry" />
+        </mxCell>
+        <mxCell id="naclh" value="Network ACL" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=12;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1218" y="330" width="160" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="nacli" value="" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.network_access_control_list;" vertex="1" parent="1">
+          <mxGeometry x="1224" y="352" width="36" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="naclhn" value="stateless — phải&lt;br&gt;khai CẢ hai chiều" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=9;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1266" y="352" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="nacl_pub" value="nacl-public&lt;br&gt;IN  100 allow 80&lt;br&gt;IN  110 allow 443&lt;br&gt;IN  120 allow 1024-65535&lt;br&gt;IN  50  DENY var.my_ip&lt;br&gt;OUT 100/110 → app 80/8080&lt;br&gt;OUT 120/125 → 0.0.0.0/0 80/443&lt;br&gt;OUT 130 → 1024-65535" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#8C4FFF;fontColor=#232F3E;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1218" y="400" width="160" height="138" as="geometry" />
+        </mxCell>
+        <mxCell id="nacl_app" value="nacl-app&lt;br&gt;IN  90  DENY 22&lt;br&gt;IN  95  DENY 1433&lt;br&gt;IN  100 allow 80 ← public&lt;br&gt;IN  110 allow 8080 ← public&lt;br&gt;IN  115 DENY 8080 ← mọi nơi&lt;br&gt;IN  120 allow 1024-65535&lt;br&gt;OUT 100 → db 1433&lt;br&gt;OUT 110/115 → 80/443&lt;br&gt;OUT 120 → public 1024-65535&lt;br&gt;&lt;br&gt;rule 90/95/115 tồn tại VÌ&lt;br&gt;rule 120 buộc phải mở&lt;br&gt;dải ephemeral" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#8C4FFF;fontColor=#232F3E;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1218" y="585" width="160" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="nacl_db" value="nacl-db&lt;br&gt;IN  100 allow 1433 ← app&lt;br&gt;OUT 100 → app 1024-65535&lt;br&gt;&lt;br&gt;Hết. Không rule nào khác.&lt;br&gt;Mọi thứ còn lại: deny." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#8C4FFF;fontColor=#232F3E;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1218" y="900" width="160" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="mz" value="Dịch vụ AWS quản lý — KHÔNG có địa chỉ IP trong VPC" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C7D;fontColor=#3B4A57;fontSize=11;dashed=1;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1420" y="200" width="570" height="1070" as="geometry" />
+        </mxCell>
+        <mxCell id="ecs" value="ECS Cluster&lt;br&gt;hushstore" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecs;" vertex="1" parent="1">
+          <mxGeometry x="1462" y="262" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="ecr" value="ECR ×4&lt;br&gt;api·web·migrator·seeder" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecr;" vertex="1" parent="1">
+          <mxGeometry x="1652" y="262" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="acm" value="ACM&lt;br&gt;cert 2 tên miền" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#DD344C;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.certificate_manager_3;" vertex="1" parent="1">
+          <mxGeometry x="1842" y="262" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="ssm" value="SSM Parameter Store&lt;br&gt;3 SecureString" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.systems_manager;" vertex="1" parent="1">
+          <mxGeometry x="1462" y="394" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="kms" value="KMS&lt;br&gt;khoá aws/ssm" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#DD344C;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.key_management_service;" vertex="1" parent="1">
+          <mxGeometry x="1652" y="394" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="cwl" value="CloudWatch Logs&lt;br&gt;giữ 3 ngày" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch_2;" vertex="1" parent="1">
+          <mxGeometry x="1842" y="394" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="s3a" value="S3 public-assets&lt;br&gt;ảnh sản phẩm" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#7AA116;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;" vertex="1" parent="1">
+          <mxGeometry x="1462" y="526" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="s3r" value="S3 artifacts&lt;br&gt;migrate-&lt;sha&gt;.sql" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#7AA116;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;" vertex="1" parent="1">
+          <mxGeometry x="1652" y="526" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="s3l" value="S3 alb-logs&lt;br&gt;access log 7 ngày" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#7AA116;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;" vertex="1" parent="1">
+          <mxGeometry x="1842" y="526" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="s3t" value="S3 tfstate&lt;br&gt;state + lockfile" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#7AA116;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;" vertex="1" parent="1">
+          <mxGeometry x="1462" y="658" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="iam" value="IAM&lt;br&gt;10 role" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#DD344C;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.identity_and_access_management;" vertex="1" parent="1">
+          <mxGeometry x="1652" y="658" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="lam" value="Lambda&lt;br&gt;cost-guard" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="1">
+          <mxGeometry x="1842" y="658" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="ebs" value="EventBridge Scheduler&lt;br&gt;00:00 giờ VN" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eventbridge;" vertex="1" parent="1">
+          <mxGeometry x="1462" y="790" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="sns" value="SNS&lt;br&gt;1 email nhận báo động" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.sns;" vertex="1" parent="1">
+          <mxGeometry x="1652" y="790" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="bud" value="AWS Budgets&lt;br&gt;ngưỡng chi phí" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.budgets_2;" vertex="1" parent="1">
+          <mxGeometry x="1842" y="790" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="mzn" value="VÌ SAO CÁC DỊCH VỤ NÀY VẼ NGOÀI VPC&lt;br&gt;Chúng là dịch vụ AWS quản lý, gọi qua API endpoint công khai — không nằm trong dải 10.20.0.0/16, nên Security Group và Network ACL KHÔNG kiểm soát được chúng. Lớp phòng thủ cho nhóm này là IAM: role nào được gọi API nào.&lt;br&gt;Hệ quả cụ thể: EC2 trong app subnet muốn PULL image từ ECR thì phải đi qua NAT Gateway ra Internet. Riêng S3 đi qua S3 Gateway Endpoint (miễn phí) nên vẫn hoạt động khi NAT đã tắt." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="1050" width="530" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="s3ep" value="S3 Gateway&lt;br&gt;Endpoint (miễn phí)" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.endpoint;" vertex="1" parent="1">
+          <mxGeometry x="1218" y="1060" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="rtn" value="Route table&lt;br&gt;• rt-public → 0.0.0.0/0 qua IGW&lt;br&gt;• rt-private → 0.0.0.0/0 qua NAT (chỉ khi enable_nat)&lt;br&gt;• rt-db → KHÔNG có route 0.0.0.0/0, không bao giờ có" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#8C4FFF;fontColor=#232F3E;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="398" y="1120" width="660" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="flow" value="VPC Flow Logs (REJECT) — enable_flow_logs = false theo mặc định để không tốn phí ingest" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=9;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1128" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="hushstore.io.vn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="users" target="cf">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="HTTPS 443" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="cf" target="alb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="nmap -p- → chỉ 80, 443 mở" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#DD344C;strokeWidth=2;dashPattern=8 4;" edge="1" parent="1" source="atk" target="alb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value=":22 · :1433 · :8080 → chặn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#DD344C;strokeWidth=2;dashPattern=8 4;endArrow=cross;" edge="1" parent="1" source="atk" target="nacl_app">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeColor=#8C4FFF;endArrow=none;strokeWidth=2;" edge="1" parent="1" source="igw" target="alb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeColor=#8C4FFF;endArrow=none;strokeWidth=2;" edge="1" parent="1" source="igw" target="nat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="tg-web :80&lt;br&gt;Host = hushstore.io.vn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#248814;" edge="1" parent="1" source="alb" target="cweb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="tg-api :8080&lt;br&gt;Host = api.hushstore.io.vn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#248814;" edge="1" parent="1" source="alb" target="capi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value=":1433" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#C925D1;" edge="1" parent="1" source="capi" target="rds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="egress: pull ECR, SSM, yum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeColor=#ED7100;" edge="1" parent="1" source="ec2" target="nat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="chứng chỉ" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#DD344C;" edge="1" parent="1" source="acm" target="alb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="điều phối task" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#ED7100;" edge="1" parent="1" source="ecs" target="ec2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="inject secret lúc khởi task" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#E7157B;" edge="1" parent="1" source="ssm" target="ecs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="hạ ASG về 0 · stop RDS&lt;br&gt;KHÔNG bao giờ xoá gì" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#ED7100;" edge="1" parent="1" source="lam" target="ec2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="cron 00:00" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#E7157B;" edge="1" parent="1" source="ebs" target="lam">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" value="vượt ngưỡng" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#E7157B;" edge="1" parent="1" source="bud" target="sns">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" value="access log" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#7AA116;" edge="1" parent="1" source="alb" target="s3l">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" value="push image :SHA" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#3B4A57;" edge="1" parent="1" source="gha" target="ecr">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" value="update-service" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#3B4A57;" edge="1" parent="1" source="gha" target="ecs">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" value="log" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#E7157B;" edge="1" parent="1" source="ec2" target="cwl">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#7AA116;" edge="1" parent="1" source="capi" target="s3ep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22" value="ảnh sản phẩm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#7AA116;" edge="1" parent="1" source="s3ep" target="s3a">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="2-—-Luồng-request-từ-ngo" name="2 — Luồng request từ ngoài vào trong">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1680" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" value="Một request đi từ Internet tới database — và đường về" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=17;fontColor=#232F3E;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="50" y="20" width="900" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="t2b" value="Cùng một gói tin bị KIỂM 12 lần trước khi chạm được dữ liệu. Mỗi ô bên trái là một chốt kiểm; ô bên phải là câu hỏi mà chốt đó trả lời." style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=11;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="50" y="50" width="940" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="s1" value="① Phân giải DNS" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="110" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s1x" value="Máy khách hỏi hushstore.io.vn. Cloudflare trả về DNS name của ALB. AWS KHÔNG cấp IP tĩnh cho ALB — IP đổi được bất cứ lúc nào, nên bản ghi phải là CNAME/ALIAS trỏ tên, không phải A record trỏ IP." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="110" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="② TLS handshake với ALB" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="214" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s2x" value="ALB xuất chứng chỉ ACM cho hushstore.io.vn (+ SAN api.hushstore.io.vn). ssl_policy = ELBSecurityPolicy-TLS13-1-2-2021-06 → chỉ TLS 1.2 và 1.3; TLS 1.0/1.1 bị từ chối ngay ở đây, trước khi có byte HTTP nào." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="214" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s1" target="s2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" value="③ nacl-public · INBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="318" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s3x" value="Gói tin này có được VÀO SUBNET này không? Rule 100/110 cho 80 và 443. Nếu bật enable_deny_demo, rule 50 DENY đúng var.my_ip — và vì 50 &lt; 100, nó được xét TRƯỚC. Đây là điều Security Group không làm được: SG chỉ có allow." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="318" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s2" target="s3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s4" value="④ sg-alb · INBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="422" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s4x" value="Gói tin này có được vào MÁY này không? 80 và 443 từ 0.0.0.0/0 — cố ý mở rộng, vì đây là cửa công khai. Toàn bộ việc thu hẹp nằm ở chiều egress: sg-alb chỉ được nói chuyện với sg-web trên đúng 2 port." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="422" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s3" target="s4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s5" value="⑤ ALB — bóc TLS, đọc HTTP" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="526" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s5x" value="Tới đây mới có HTTP để đọc. ALB kiểm Host header với allowlist 2 tên miền. default_action của listener là TRẢ 403, không phải chuyển tiếp — nên gọi bằng DNS thô của ALB sẽ nhận 403, và đó là ĐÚNG thiết kế. Host khớp → chọn tg-web hoặc tg-api." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="526" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s4" target="s5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s6" value="⑥ nacl-public · OUTBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="630" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s6x" value="NACL stateless nên chiều RA cũng phải khai. Rule 100/110 cho phép đi tới app tier (10.20.10.0/23) trên port 80 và 8080. Không có rule này thì request chết ở đây dù chiều vào đã cho qua." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="630" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s5" target="s6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s7" value="⑦ nacl-app · INBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="734" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s7x" value="Chốt quan trọng nhất của cả sơ đồ. Rule 90 DENY 22 và rule 95 DENY 1433 đứng TRƯỚC rule 120 (allow 1024-65535 ← mọi nơi). Rule 120 buộc phải có để nhận traffic trả về từ Internet qua NAT — mà 1433 và 8080 nằm TRONG dải đó. Nếu không có 3 rule DENY số nhỏ hơn, rule 120 sẽ vô tình mở SQL Server ra Internet ở tầng NACL." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="734" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s6" target="s7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s8" value="⑧ sg-web · INBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="838" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s8x" value="80 và 8080 — source là SG ID của sg-alb, KHÔNG phải CIDR. Nghĩa là chỉ máy nào đang nằm trong sg-alb mới gọi được, bất kể nó có IP gì. KHÔNG có rule port 22 nào tồn tại trong toàn bộ 3 security group." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="838" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s7" target="s8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s9" value="⑨ Container api :8080 — tầng ứng dụng" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="942" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s9x" value="Vượt được 8 chốt trên chỉ nghĩa là CHẠM tới ứng dụng. Lấy được gì thì do đây quyết định: JWT kiểm 4 điều (chữ ký, issuer, audience, hạn — lệch giờ tối đa 1 phút), rate limit đăng nhập 5 lần/phút, và mọi truy vấn dữ liệu cá nhân bị ĐÓNG KHUNG theo userId lấy từ token chứ không lấy từ tham số URL." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="942" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s8" target="s9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s10" value="⑩ nacl-app · OUTBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1046" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s10x" value="Rule 100: cho 1433 đi tới db tier (10.20.20.0/23). Chỉ tới db tier — không phải 0.0.0.0/0." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="1046" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s9" target="s10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s11" value="⑪ sg-web · EGRESS" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1150" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s11x" value="1433 → sg-rds. Cộng thêm 80/443 ra 0.0.0.0/0 cho việc pull image và gọi SSM. Đây là chỗ duy nhất kiểm soát được egress của instance: NAT Gateway KHÔNG gắn được Security Group, khác với NAT instance." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="1150" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s10" target="s11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s12" value="⑫ nacl-db · INBOUND  +  sg-rds · INBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1254" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s12x" value="nacl-db có ĐÚNG một rule mỗi chiều: vào 1433 từ app tier, ra 1024-65535 về app tier. sg-rds: ingress 1433 từ sg-web, egress RỖNG. Hai lớp độc lập cùng nói một điều — và cần cả hai, vì NACL lọc theo CIDR còn SG lọc theo danh tính SG." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="1254" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s11" target="s12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s13" value="⑬ RDS SQL Server" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1358" width="340" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="s13x" value="publicly_accessible = false, subnet không có route 0.0.0.0/0. Kết nối bắt buộc TLS: connection string đặt TrustServerCertificate = False, nên container phải có sẵn CA gốc của Amazon RDS — đó là lý do Dockerfile gọi update-ca-certificates." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="410" y="1358" width="590" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="f12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s12" target="s13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lgd2" value="MÀU Ô BÊN TRÁI&lt;br&gt;tím = Network ACL (stateless, lọc theo CIDR, CÓ deny)&lt;br&gt;xanh lá = Security Group (stateful, lọc theo SG, CHỈ allow)&lt;br&gt;cam = nơi dữ liệu thật sự bị đọc/ghi&lt;br&gt;xám = không phải chốt lọc, chỉ là một bước của giao thức" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="110" width="470" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="eph" value="VÌ SAO PHẢI VẼ CẢ ĐƯỜNG VỀ&lt;br&gt;Security Group là STATEFUL: nó nhớ kết nối nào do bên trong mở ra, nên gói trả về tự động được cho qua. Đó là lý do sg-rds có egress RỖNG mà database vẫn trả được kết quả.&lt;br&gt;Network ACL là STATELESS: nó không nhớ gì cả. Với NACL, gói trả về là một gói hoàn toàn mới, phải có rule riêng cho nó. Đó là lý do bảng NACL dài gấp đôi bảng SG.&lt;br&gt;Và vì gói trả về đi tới một PORT NGẪU NHIÊN mà máy khách tự chọn (dải ephemeral 1024-65535), rule cho đường về buộc phải mở cả dải đó. Không thu hẹp được.&lt;br&gt;→ Chính ràng buộc này sinh ra rule 90/95/115 DENY ở nacl-app. Chúng không phải thêm cho chắc: chúng vá đúng cái lỗ mà rule 120 mở ra." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="240" width="470" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" value="RDS → nacl-db OUTBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="570" width="470" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="r1x" value="Rule 100: 1024-65535 → app tier. Không có rule này thì query đi được tới DB nhưng kết quả không bao giờ về." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="606" width="470" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="r2" value="→ sg-rds (không cần rule)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="700" width="470" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="r2x" value="Egress của sg-rds RỖNG. Vẫn về được, vì SG stateful." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="736" width="470" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="rr1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#8C4FFF;" edge="1" parent="1" source="r1x" target="r2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r3" value="→ nacl-app INBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="830" width="470" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="r3x" value="Đây là chỗ rule 120 phải tồn tại. Và chính vì nó tồn tại nên mới cần rule 95 DENY 1433 đứng trước." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="866" width="470" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="rr2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#8C4FFF;" edge="1" parent="1" source="r2x" target="r3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r4" value="→ nacl-app OUTBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="960" width="470" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="r4x" value="Rule 120: 1024-65535 → public tier. Chỉ tới public tier, KHÔNG mở ra 0.0.0.0/0." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="996" width="470" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="rr3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#8C4FFF;" edge="1" parent="1" source="r3x" target="r4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r5" value="→ nacl-public INBOUND → ALB → client" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="1090" width="470" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="r5x" value="Rule 120: 1024-65535 ← 0.0.0.0/0. ALB gói lại vào phiên TLS đã thiết lập ở bước ②." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="1126" width="470" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="rr4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#8C4FFF;" edge="1" parent="1" source="r4x" target="r5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rr0" value="đường về" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#8C4FFF;dashed=1;" edge="1" parent="1" source="s13" target="r1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="concl" value="ĐỌC RA ĐƯỢC GÌ TỪ SƠ ĐỒ NÀY&lt;br&gt;① Bảy chốt đầu chỉ quyết định gói tin có ĐI ĐƯỢC hay không. Chốt ⑨ mới quyết định kẻ tấn công LẤY ĐƯỢC gì. Một hệ thống mở đúng port vẫn mất dữ liệu nếu ⑨ sai.&lt;br&gt;② Không chốt nào là dư. Bỏ nacl-db thì sg-rds vẫn chặn — nhưng chỉ chặn theo danh tính SG; ai vào được một máy đang ở trong sg-web là qua luôn. Bỏ sg-rds thì nacl-db vẫn chặn — nhưng chỉ chặn theo CIDR; mọi thứ trong app tier đều qua được. Hai lớp chặn theo hai tiêu chí khác nhau, nên chúng không thay thế nhau.&lt;br&gt;③ Chỗ yếu nhất trong hình là rule 120 của nacl-app: nó buộc phải mở dải 1024-65535 cho toàn Internet. Đó là giới hạn BẢN CHẤT của NACL stateless, không phải lỗi cấu hình — và là câu trả lời cho câu hỏi 'đã có NACL rồi thì cần Security Group làm gì'." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EEF0F3;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1470" width="1450" height="150" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="3-—-Luồng-CI-CD" name="3 — Luồng CI-CD">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1560" pageHeight="1360" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t3" value="CI/CD — từ lúc bấm push tới lúc website đổi" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=17;fontColor=#232F3E;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="50" y="20" width="900" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="t3b" value="Hai workflow. ci.yml gác cổng CHẤT LƯỢNG trên mọi pull request. deploy.yml đưa code lên production — nhưng KHÔNG được phép tự bật hạ tầng." style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=11;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="50" y="50" width="940" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="cih" value="ci.yml — mọi pull request, và push vào main" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=12;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="50" y="108" width="340" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="ci1" value="terraform fmt -check&lt;br&gt;+ validate mọi module" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="136" width="340" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="ci1x" value="Sai format là đỏ. Giữ diff sạch nên review thấy được thay đổi thật." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="50" y="182" width="340" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="ci2" value="terraform test&lt;br&gt;93 test trên 8 module" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="268" width="340" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="ci2x" value="Chạy ở command = plan, không tạo resource thật → $0. Đây là lưới an toàn chính của hạ tầng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="50" y="314" width="340" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="ci3" value="dotnet build&lt;br&gt;toàn solution" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="400" width="340" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="ci3x" value="Không có test tự động cho phần .NET — build xanh chỉ chứng minh biên dịch được." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="50" y="446" width="340" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="cin" value="KHÔNG có terraform apply ở đâu trong ci.yml, và cũng không có trong deploy.yml. Hạ tầng tốn tiền theo giờ; một workflow tự apply nghĩa là mỗi lần merge là một lần bắt đầu tính tiền mà không ai biết." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FDECEA;strokeColor=#DD344C;fontColor=#B0202F;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=left;" vertex="1" parent="1">
+          <mxGeometry x="50" y="540" width="340" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="dph" value="deploy.yml — push vào main" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=12;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="470" y="108" width="380" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" value="push vào main  ·  hoặc bấm tay (workflow_dispatch)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="136" width="380" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" value="assume role qua OIDC&lt;br&gt;(không có credential nào lưu trong GitHub)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="220" width="380" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" value="3 job SONG SONG:&lt;br&gt;build ×4 image → ECR :SHA&lt;br&gt;migration-script → migrate-&lt;sha&gt;.sql&lt;br&gt;preflight → đọc trạng thái thật trên AWS" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="308" width="380" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="dd1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d1" target="d2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dd2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d2" target="d3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dq1" value="Hạ tầng đang BẬT?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="530" y="420" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="dd3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d3" target="dq1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dstop" value="KHÔNG → dừng ở đây, và job VẪN XANH.&lt;br&gt;Image đã nằm trên ECR, chưa deploy. Đây là trạng thái BÌNH THƯỜNG của dự án này, không phải lỗi — nhưng summary phải nói rõ, vì 'Actions xanh mà web chưa đổi' đúng là loại nhầm lẫn ăn hết một buổi debug." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FDECEA;strokeColor=#DD344C;fontColor=#B0202F;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=left;" vertex="1" parent="1">
+          <mxGeometry x="60" y="415" width="380" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="dd4" value="không" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#DD344C;" edge="1" parent="1" source="dq1" target="dstop">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" value="① ghi lại revision ĐANG chạy&lt;br&gt;(không có bước này thì rollback là đoán)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="530" width="380" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="d5" value="② register 3 task definition revision ở tag :SHA" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="630" width="380" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="d6" value="③ snapshot RDS  pre-migrate-&lt;sha&gt;" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="710" width="380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="d7" value="④ run-task migrator — bằng ARN CÓ REVISION,&lt;br&gt;không phải tên family" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="782" width="380" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="dd5" value="có" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#248814;" edge="1" parent="1" source="dq1" target="d4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dd6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d4" target="d5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dd7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d5" target="d6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dd8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d6" target="d7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dq2" value="exit code = 0 ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="530" y="872" width="260" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="dd9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d7" target="dq2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dfail" value="KHÔNG → FAIL, và KHÔNG deploy gì cả.&lt;br&gt;App bản cũ vẫn đang phục vụ bình thường. Job in log CloudWatch của task migrator ra ngay trong output. Đây là điểm quan trọng nhất của cả pipeline: migration là CỔNG, không phải một bước." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FDECEA;strokeColor=#DD344C;fontColor=#B0202F;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=left;" vertex="1" parent="1">
+          <mxGeometry x="60" y="867" width="380" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="dd10" value="không" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#DD344C;" edge="1" parent="1" source="dq2" target="dfail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d8" value="⑤ update-service ×2 (web, api)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="982" width="380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="d9" value="⑥ wait services-stable" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="1054" width="380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="d10" value="⑦ health check qua tên miền — CHỈ THÔNG BÁO, không phải cổng" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="1126" width="380" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="dd11" value="có" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#248814;" edge="1" parent="1" source="dq2" target="d8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dd12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d8" target="d9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="dd13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d9" target="d10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="droll" value="Bất kỳ bước nào ở trên fail → rollback&lt;br&gt;Trỏ hai service về revision đã ghi ở bước ①. KHÔNG rollback migration: chính sách là forward-only, đường về của DỮ LIỆU là snapshot ở bước ③ và đó là quyết định của người, không phải của pipeline." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FDECEA;strokeColor=#DD344C;fontColor=#B0202F;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=left;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1046" width="380" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="dd14" value="không stable" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#DD344C;" edge="1" parent="1" source="d9" target="droll">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d11" value="⑧ dọn snapshot cũ, giữ 3 cái mới nhất" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=left;align=center;" vertex="1" parent="1">
+          <mxGeometry x="470" y="1198" width="380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="dd15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#248814;" edge="1" parent="1" source="d10" target="d11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="d12" value="summary — luôn chạy, kể cả khi có job đỏ" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;align=center;spacingLeft=4;align=center;" vertex="1" parent="1">
+          <mxGeometry x="470" y="1270" width="380" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="dd16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;" edge="1" parent="1" source="d11" target="d12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n31" value="VÌ SAO OIDC, KHÔNG PHẢI SECRET&lt;br&gt;Pipeline cũ giữ một private key SSH trong GitHub Secrets. Key đó KHÔNG hết hạn: ai đọc được secret là vào được máy chủ, mãi mãi. OIDC đổi mô hình — GitHub cấp cho job một token sống vài phút, AWS đổi token đó lấy credential tạm thời, và trust policy giới hạn đúng repo + đúng branch. Không còn gì để trộm vì không còn gì được lưu." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="136" width="600" height="148" as="geometry" />
+        </mxCell>
+        <mxCell id="n32" value="VÌ SAO TAG BẰNG GIT SHA, KHÔNG PHẢI :latest&lt;br&gt;:latest không trả lời được câu 'production đang chạy commit nào'. Với tag = SHA, câu trả lời là một commit cụ thể, và rollback là trỏ lại một revision đã tồn tại chứ không phải build lại. ECR bật IMMUTABLE nên một tag đã push KHÔNG ghi đè được — thuộc tính này là thứ làm cho việc 'trỏ lại' đáng tin." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="296" width="600" height="148" as="geometry" />
+        </mxCell>
+        <mxCell id="n33" value="CÁI BẪY Ở BƯỚC ④ — ĐÁNG ĐỌC KỸ&lt;br&gt;Gọi run-task với TÊN FAMILY (hushstore-migrator) thì ECS tự chọn revision ACTIVE mới nhất — tức revision do terraform apply đăng ký, mà image của nó là image_tag ghim tay trong terraform.tfvars, KHÔNG phải commit vừa push.&lt;br&gt;Hậu quả: efbundle CŨ không chứa migration mới → nó exit 0 → cổng PASS → api/web bản MỚI được deploy lên một schema THIẾU migration. Và không có tín hiệu nào ở đâu, vì /health/ready chỉ kiểm kết nối chứ không kiểm schema.&lt;br&gt;Nên: register TRƯỚC (bước ②), rồi run-task bằng ARN có số revision." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="460" width="600" height="236" as="geometry" />
+        </mxCell>
+        <mxCell id="n34" value="VÌ SAO SNAPSHOT TRƯỚC KHI MIGRATE&lt;br&gt;Chính sách là forward-only — không dùng down-migration. Nên đường quay lại của DATABASE không phải một lệnh EF, mà là snapshot pre-migrate-&lt;sha&gt;. Rollback code và rollback schema là hai việc khác nhau; cái thứ hai luôn đắt hơn." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="712" width="600" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="n35" value="CỔNG CHẶN Ở TẦNG QUYỀN, KHÔNG CHỈ Ở COMMENT&lt;br&gt;IAM role của pipeline KHÔNG có autoscaling:SetDesiredCapacity và KHÔNG có rds:StartDBInstance. Nghĩa là ngay cả khi ai đó sửa file workflow để nó tự bật hạ tầng, AWS vẫn từ chối. Một quy tắc chỉ nằm trong comment thì chỉ tồn tại tới lần sửa file tiếp theo." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="858" width="600" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="n36" value="CONCURRENCY — VÌ SAO KHÔNG HUỶ JOB ĐANG CHẠY&lt;br&gt;concurrency group chặn hai lần deploy chồng nhau: cả hai sẽ cùng register task definition và cùng update-service, kết quả là service trỏ revision của lần SAU nhưng migration của lần TRƯỚC. Đặt cancel-in-progress = false vì huỷ giữa lúc migration đang chạy còn tệ hơn là xếp hàng chờ." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="1004" width="600" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="n38" value="VÌ SAO BƯỚC ⑦ KHÔNG PHẢI CỔNG&lt;br&gt;Bước này gọi qua tên miền công khai, tức đi qua Cloudflare. Nên nó đỏ cả khi DNS chưa trỏ đúng hoặc proxy sai chế độ — trong lúc container hoàn toàn khoẻ. Rollback vì lỗi DNS là rollback sai.&lt;br&gt;Tín hiệu sức khoẻ CÓ THẨM QUYỀN là target group của ALB, đã kiểm ở bước ⑥. Bước ⑦ đặt continue-on-error và chỉ ghi một warning, để người đọc biết phải nghi vấn ở tầng DNS chứ không ở tầng ứng dụng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="1290" width="600" height="148" as="geometry" />
+        </mxCell>
+        <mxCell id="n37" value="VIỆC TAY DUY NHẤT CÒN LẠI&lt;br&gt;Bật hạ tầng lên (bash infra/tf/scripts/up.sh) là việc của người, không phải của pipeline. Thứ tự bắt buộc: RDS trước → NAT + ALB → instance. Sai thứ tự thì ECS quay vòng thử replace task và không có gì báo lỗi rõ ràng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="900" y="1150" width="600" height="130" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="4-—-Vòng-đời-chi-phí" name="4 — Vòng đời chi phí">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="980" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t4" value="Vòng đời bật / tắt — và vì sao thứ tự là ràng buộc chứ không phải khuyến nghị" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=17;fontColor=#232F3E;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="50" y="20" width="1100" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="t4b" value="Hạ tầng này KHÔNG chạy 24/7. Mặc định nó tắt. Đó là quyết định thiết kế, không phải trạng thái tạm thời — và nó là lý do tên miền cố ý không vào được giữa hai cửa sổ làm việc." style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=11;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="50" y="50" width="1100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="off" value="TRẠNG THÁI TẮT  ≈  $0 / giờ" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=13;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;align=center;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="60" y="110" width="480" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="offl" value="KHÔNG tồn tại:&lt;br&gt;• ALB (enable_alb = false)&lt;br&gt;• NAT Gateway + EIP (enable_nat = false)&lt;br&gt;• EC2 instance (instance_count = 0)&lt;br&gt;  → EBS root bị xoá cùng instance&lt;br&gt;&lt;br&gt;Vẫn tồn tại nhưng gần như miễn phí:&lt;br&gt;• RDS ở trạng thái stopped — CÒN tính tiền storage 20GB&lt;br&gt;• 4 repo ECR (~vài trăm MB)&lt;br&gt;• 4 bucket S3 + snapshot&lt;br&gt;• Toàn bộ VPC, subnet, route table, NACL, SG — $0&lt;br&gt;&lt;br&gt;Đo thật ngày 2026-08-23. Đây là trạng thái mặc định sau mỗi lần làm việc, và cũng là trạng thái Lambda cost-guard kéo hệ thống về mỗi đêm." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="150" width="440" height="410" as="geometry" />
+        </mxCell>
+        <mxCell id="on" value="TRẠNG THÁI BẬT  =  $0,1954 / giờ" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=13;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;align=center;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="860" y="110" width="480" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="onl" value="Khoản tính theo giờ:&lt;br&gt;• NAT Gateway  $0,045/giờ + $0,045/GB&lt;br&gt;• ALB  $0,0225/giờ + LCU&lt;br&gt;• EC2 t3.micro&lt;br&gt;• RDS db.t3.micro (+ CPU credit surplus)&lt;br&gt;&lt;br&gt;Account 551897327153 KHÔNG có free tier 12 tháng — đã kiểm bằng cách liệt kê free tier: chỉ có nhóm Always Free, không có dòng nào '12 Months Free'.&lt;br&gt;&lt;br&gt;NAT Gateway là khoản đắt nhất và KHÔNG có bậc free tier nào cả. Đó là lý do down.sh không phải tuỳ chọn.&lt;br&gt;&lt;br&gt;Bật 3 giờ/ngày ≈ $18/tháng. Bật 24/7 ≈ $140/tháng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="880" y="150" width="440" height="410" as="geometry" />
+        </mxCell>
+        <mxCell id="up" value="up.sh — THỨ TỰ BẮT BUỘC&lt;br&gt;① RDS trước tiên, và CHỜ tới trạng thái available&lt;br&gt;② NAT + ALB (instance vẫn để 0)&lt;br&gt;③ instance — chỉ SAU khi NAT đã có đường ra&lt;br&gt;④ chờ instance đăng ký được vào ECS cluster&lt;br&gt;&lt;br&gt;Vì sao ③ phải sau ②: instance mới lên sẽ pull image từ ECR. Không có NAT thì không pull được, task fail, ECS thử lại vòng vòng — và thông báo lỗi không nói gì về NAT." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EEF0F3;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="570" y="130" width="260" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="down" value="down.sh — THỨ TỰ CŨNG BẮT BUỘC&lt;br&gt;① ECS service về 0 (phải chết TRƯỚC ALB)&lt;br&gt;② instance về 0&lt;br&gt;③ chờ instance biến mất THẬT, giải phóng lifecycle hook&lt;br&gt;④ NAT + EIP&lt;br&gt;⑤ RDS stop&lt;br&gt;⑥ xác nhận độc lập — đừng chỉ tin terraform&lt;br&gt;&lt;br&gt;Vì sao ① trước ④: xoá ALB trước khi service chết thì ECS liên tục thử đăng ký task vào một target group không còn tồn tại." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EEF0F3;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="570" y="360" width="260" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="u1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#D86613;" edge="1" parent="1" source="off" target="up">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u2" value="bật lên" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#D86613;" edge="1" parent="1" source="up" target="on">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#248814;" edge="1" parent="1" source="on" target="down">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="u4" value="tắt đi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#248814;" edge="1" parent="1" source="down" target="off">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lgd" value="Lambda hushstore-cost-guard&lt;br&gt;EventBridge Scheduler · 00:00 giờ Việt Nam" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FDECEA;strokeColor=#DD344C;fontColor=#B0202F;fontSize=11;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="860" y="640" width="480" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="lgdx" value="Nó làm ĐÚNG ba việc: UpdateService(desiredCount=0) ×2 → SetDesiredCapacity(0) → StopDBInstance.&lt;br&gt;Nó KHÔNG xoá gì cả, và KHÔNG bật gì cả. Hai giới hạn này là cố ý:&lt;br&gt;• Xoá ALB/NAT ngoài Terraform sẽ làm state lệch và hỏng lần apply sau. Nếu phát hiện ALB/NAT còn sống, nó gửi SNS nhắc chạy down.sh chứ không tự tay xoá.&lt;br&gt;• Không có quyền bật thì không có đường nào để một lỗi logic biến nó thành cái máy tiêu tiền.&lt;br&gt;→ Nghĩa là nó KHÔNG đưa chi phí về $0 một mình. Nó chỉ chặn khoản đắt nhất (EC2 + RDS compute), còn ALB và NAT vẫn tính tiền tới khi có người chạy down.sh." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DD344C;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="860" y="694" width="480" height="216" as="geometry" />
+        </mxCell>
+        <mxCell id="risk" value="MỘT RỦI RO CÓ NGÀY CỤ THỂ&lt;br&gt;AWS TỰ BẬT LẠI một RDS đã stopped sau 7 ngày. Đây là hành vi của AWS, không phải lỗi cấu hình, và không tắt được.&lt;br&gt;Lưới an toàn: Lambda cost-guard chạy 00:00 mỗi đêm sẽ stop lại. Nghĩa là thiệt hại tối đa là số giờ từ lúc AWS bật tới nửa đêm gần nhất — không phải cả tháng.&lt;br&gt;Đây chính là ví dụ tốt nhất cho việc vì sao cần một cơ chế TỰ ĐỘNG chứ không chỉ một dòng trong runbook: mốc 7 ngày rơi vào lúc không ai đang nhìn." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="60" y="640" width="740" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="nuke" value="nuke.sh — terraform destroy toàn bộ. Dùng khi kết thúc dự án, không dùng để tiết kiệm hằng ngày (dựng lại tốn ~30 phút và phải seed lại DB)." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EEF0F3;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="60" y="850" width="740" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="5-—-10-danh-tính-IAM" name="5 — 10 danh tính IAM">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1540" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t5" value="10 role IAM — mỗi role một phạm vi, và một chữ Deny quan trọng" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=17;fontColor=#232F3E;fontStyle=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="50" y="20" width="1100" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="t5b" value="Không role nào trong hệ thống có policy dạng *FullAccess. Chia nhỏ như thế này không phải để cho đẹp: nó quyết định 'nếu chỗ này bị chiếm thì mất tới đâu'." style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=11;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="50" y="50" width="1100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ga" value="Ai assume: EC2 và ECS agent  (5 role)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C7D;fontColor=#3B4A57;fontSize=12;dashed=1;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;verticalAlign=top;spacingTop=6;align=left;" vertex="1" parent="1">
+          <mxGeometry x="50" y="110" width="470" height="700" as="geometry" />
+        </mxCell>
+        <mxCell id="ra1" value="role instance  (EC2 instance profile)&lt;br&gt;ECS agent + Session Manager. KHÔNG có quyền S3 hay DB nào.&lt;br&gt;CÓ MỘT DENY TƯỜNG MINH — xem ô đỏ bên dưới." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#ED7100;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="145" width="430" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="ra2" value="role task-execution&lt;br&gt;Của ECS AGENT, không phải của app. Pull ECR, ghi log, và ssm:GetParameters trên đúng /hushstore/prod/*, kms:Decrypt." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#ED7100;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="253" width="430" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="ra3" value="role task-execution-seeder&lt;br&gt;Tách riêng vì task seeder cần đọc một tập parameter khác. Tách ra để phạm vi của role chính không phải nới rộng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#ED7100;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="361" width="430" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="ra4" value="role task-app  (container api lúc chạy)&lt;br&gt;CHỈ s3:PutObject/GetObject trên prefix của bucket ảnh, + ssmmessages cho ECS Exec. Đây là thứ THAY THẾ access key tĩnh trong appsettings.json." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#ED7100;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="469" width="430" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="ra5" value="role task-migrator&lt;br&gt;Chỉ đủ để chạy efbundle và ghi log. Không có quyền S3, không có quyền ECS." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#ED7100;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="70" y="577" width="430" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="deny" value="DENY TƯỜNG MINH trên role instance&lt;br&gt;Deny  ssm:GetParameter · GetParameters · GetParameterHistory · GetParametersByPath&lt;br&gt;trên  arn:aws:ssm:*:*:parameter/hushstore/*&lt;br&gt;&lt;br&gt;Vì sao cần: managed policy AmazonSSMManagedInstanceCore cấp ssm:GetParameter trên Resource &quot;*&quot;. Không chặn thì EC2 host đọc được MỌI SecureString, gồm cả mật khẩu database.&lt;br&gt;Vì sao không bỏ managed policy đi cho gọn: bỏ nó là mất Session Manager, tức mất đường admin DUY NHẤT vào instance ở private subnet (không có SSH, không có key pair).&lt;br&gt;Vì sao liệt kê ĐỦ BỐN action: GetParameterHistory với WithDecryption=true trả về plaintext của các version cũ. Hiện managed policy không cấp action đó nên nó đang là implicit deny — nhưng explicit Deny KHÔNG BAO GIỜ bị override, còn implicit deny thì bị bất cứ Allow nào về sau ghi đè.&lt;br&gt;Host không cần đọc parameter: việc inject secret vào container do ECS agent làm bằng task-execution role." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FDECEA;strokeColor=#DD344C;fontColor=#B0202F;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="50" y="830" width="470" height="320" as="geometry" />
+        </mxCell>
+        <mxCell id="gb" value="Ai assume: GitHub Actions qua OIDC  (2 role)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C7D;fontColor=#3B4A57;fontSize=12;dashed=1;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;verticalAlign=top;spacingTop=6;align=left;" vertex="1" parent="1">
+          <mxGeometry x="550" y="110" width="450" height="340" as="geometry" />
+        </mxCell>
+        <mxCell id="rb1" value="role deploy&lt;br&gt;ecr push trên đúng 4 repo · ecs RegisterTaskDefinition · RunTask giới hạn task def migrator · UpdateService trên đúng 2 service · iam:PassRole giới hạn danh sách role · rds CreateDBSnapshot · s3:PutObject trên artifacts.&lt;br&gt;KHÔNG có autoscaling:SetDesiredCapacity. KHÔNG có rds:StartDBInstance. → pipeline không thể tự bật hạ tầng dù có sửa file workflow." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="570" y="145" width="410" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="rb2" value="role plan  (chỉ dùng cho pull request)&lt;br&gt;ReadOnlyAccess + đọc state bucket, cộng một policy Deny riêng. Đủ để chạy terraform plan và comment vào PR, không đủ để đổi gì." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="570" y="315" width="410" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="trust" value="TRUST POLICY LÀ CHỖ THẬT SỰ GÁC CỔNG&lt;br&gt;Điều kiện sub = repo:&lt;owner&gt;/PBL3:ref:refs/heads/main. Lấy được ARN của role cũng vô dụng: AWS chỉ nhận OIDC token do GitHub cấp cho ĐÚNG repo và ĐÚNG branch đó. Đã thử assume-role-with-web-identity từ máy ngoài → AccessDenied." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="550" y="465" width="450" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="gc" value="Ai assume: dịch vụ AWS  (3 role)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C7D;fontColor=#3B4A57;fontSize=12;dashed=1;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;verticalAlign=top;spacingTop=6;align=left;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="110" width="450" height="340" as="geometry" />
+        </mxCell>
+        <mxCell id="rc1" value="role cost-guard  (Lambda)&lt;br&gt;UpdateService · SetDesiredCapacity · StopDBInstance · sns:Publish. KHÔNG có quyền Delete* nào. KHÔNG có Start* nào." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E7157B;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="145" width="410" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="rc2" value="role scheduler  (EventBridge Scheduler)&lt;br&gt;Chỉ lambda:InvokeFunction trên đúng một function. Đây là role tồn tại chỉ để một dịch vụ gọi được một dịch vụ khác." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E7157B;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="245" width="410" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="rc3" value="role flow  (VPC Flow Logs)&lt;br&gt;Chỉ ghi vào đúng một log group. Chỉ tạo khi enable_flow_logs = true." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E7157B;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="345" width="410" height="84" as="geometry" />
+        </mxCell>
+        <mxCell id="blast" value="ĐO THẬT: BÁN KÍNH THIỆT HẠI&lt;br&gt;Vào được container api bằng ECS Exec, lấy credential của task-app role qua 169.254.170.2$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI, rồi thử:&lt;br&gt;• s3:PutObject trên bucket ảnh  →  allowed&lt;br&gt;• rds:DescribeDBInstances     →  implicitDeny&lt;br&gt;• ssm:GetParameter /hushstore/*  →  implicitDeny&lt;br&gt;Nghĩa là chiếm được container ứng dụng KHÔNG cho kẻ tấn công đường nào tới database hay tới secret. Đó là điều mà một access key tĩnh trong appsettings.json không bao giờ cho được." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="465" width="450" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="noorg" value="KHÔNG có AWS Organization, KHÔNG bật IAM Identity Center trên account này&lt;br&gt;Không phải vì thiếu sót. Lần trước chuỗi SSO → Organization đã làm mất credit (AWS Support xác nhận). Nên profile hushstore dùng IAM user thuần, và không có lệnh aws sso login nào trong tài liệu." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="550" y="625" width="450" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="mfa" value="VIỆC CÒN NỢ, nói thẳng&lt;br&gt;IAM user hushstore-ops CHƯA bật MFA. Đây là danh tính người dùng duy nhất còn lại trong hệ thống, và nó là thứ duy nhất đứng giữa một mật khẩu bị lộ và toàn bộ hạ tầng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FDECEA;strokeColor=#DD344C;fontColor=#B0202F;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="725" width="450" height="110" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
