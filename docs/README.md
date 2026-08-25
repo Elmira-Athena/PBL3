@@ -1,6 +1,6 @@
 # Mục lục tài liệu — HushStore
 
-Thư mục này có 11 tài liệu và ba thư mục con. Trang này để bạn **không phải mở
+Thư mục này có 13 tài liệu và bốn thư mục con. Trang này để bạn **không phải mở
 từng file ra xem nó nói gì**.
 
 Đọc trang này mất 3 phút. Nó trả lời đúng một câu hỏi: *tôi đang cần gì thì mở
@@ -12,22 +12,42 @@ file nào.*
 
 | Tôi muốn… | Mở | Dài |
 |---|---|---|
-| Hiểu hệ thống này **là cái gì** và **vì sao thiết kế vậy** | [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) | 1096 dòng |
+| **Xem hình** — sơ đồ hạ tầng, luồng request, luồng CI/CD | [diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio) | 5 trang |
+| Hiểu hệ thống này **là cái gì** và **vì sao thiết kế vậy** | [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) | 1185 dòng |
 | **Bật hệ thống lên** / tắt đi / deploy bản mới / sửa sự cố | [terraform-runbook.md](terraform-runbook.md) | 864 dòng |
-| Biết hệ thống **chặn được tấn công gì**, và vì sao | [bao-mat-he-thong.md](bao-mat-he-thong.md) | 598 dòng |
+| Biết hệ thống **chặn được tấn công gì**, và vì sao | [bao-mat-he-thong.md](bao-mat-he-thong.md) | 843 dòng |
+| Hiểu **CI/CD** từ con số không | [cicd-cho-nguoi-moi.md](cicd-cho-nguoi-moi.md) | 399 dòng |
+| Biết **code Terraform nằm ở đâu**, đọc theo thứ tự nào | [doc-code-terraform.md](doc-code-terraform.md) | 289 dòng |
 | Xem **bằng chứng** đã tấn công thật và bị chặn thật | [security-validation-report.md](security-validation-report.md) | 668 dòng |
 | Biết dự án **đã đi qua những gì**, vấp ở đâu | [nhat-ky-trien-khai.md](nhat-ky-trien-khai.md) | 931 dòng |
 | **Đang tốn tiền** và cần tắt gấp ngay bây giờ | [emergency-shutdown.md](emergency-shutdown.md) | 210 dòng |
 | Ôn để **bảo vệ đồ án** (câu hỏi vấn đáp phần .NET/Blazor) | [on-tap-van-dap.md](on-tap-van-dap.md) | 704 dòng |
-| Biết **phần code ứng dụng còn lỗi gì** | [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md) | 292 dòng |
+| Biết **phần code ứng dụng còn lỗi gì** | [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md) | 392 dòng |
 | Test tay các chức năng nghiệp vụ | [manual-test/](manual-test/) | 9 kịch bản |
 
 ---
 
 ## Chưa từng dùng AWS? Đọc theo đúng thứ tự này
 
-Ba tài liệu, khoảng **4 tiếng** nếu đọc kỹ. Đừng đảo thứ tự — tài liệu sau giả
-định bạn đã đọc tài liệu trước.
+Một sơ đồ và bốn tài liệu, khoảng **5 tiếng** nếu đọc kỹ. Đừng đảo thứ tự — tài
+liệu sau giả định bạn đã đọc tài liệu trước.
+
+### Bước 0 — mở sơ đồ ra trước, và để đó
+
+[diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio), mở bằng
+[app.diagrams.net](https://app.diagrams.net) (không cần cài gì) hoặc extension
+*Draw.io Integration* trong VS Code. Năm trang:
+
+| Trang | Nội dung |
+|---|---|
+| 1 | Kiến trúc tổng thể — mọi resource, và cái gì nằm trong VPC / cái gì nằm ngoài |
+| 2 | Một request đi từ Internet tới database qua **12 chốt kiểm**, kèm đường về |
+| 3 | Luồng CI/CD — từ lúc bấm push tới lúc website đổi |
+| 4 | Vòng đời bật/tắt và chi phí |
+| 5 | 10 role IAM và ranh giới quyền |
+
+Đọc tài liệu mà không có hình bên cạnh thì tới mục Network ACL sẽ mất phương
+hướng. **Trang 1 và trang 2 là hai trang đáng in ra giấy.**
 
 ### Bước 1 — [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md)
 
@@ -57,6 +77,20 @@ không làm được, bảng 12 tấn công → lớp chặn → lớp dự phò
 thẳng thắn những gì hệ thống **không** chặn được.
 
 Mục **"câu hỏi phản biện"** ở cuối là thứ nên đọc ngay trước buổi bảo vệ.
+
+### Bước 4 — [cicd-cho-nguoi-moi.md](cicd-cho-nguoi-moi.md)
+
+*Code đi từ máy bạn lên máy chủ bằng đường nào.* Đọc được độc lập, không cần biết
+AWS trước — nhưng đọc sau bước 1 thì hiểu nhanh hơn nhiều.
+
+Nếu chỉ có 5 phút: đọc mục **§7 — Đọc một lần chạy**. Đó là thứ bạn cần đúng lúc
+vừa push code lên và đang không biết chuyện gì đang xảy ra.
+
+### Sắp mở code Terraform ra đọc?
+
+Đọc [doc-code-terraform.md](doc-code-terraform.md) trước. 68 file, 9713 dòng —
+không có bản đồ thì rất dễ mở đúng file ít quan trọng nhất. Nó cũng chỉ ra **ba
+chỗ dễ hiểu sai** trong code này, loại hiểu sai mà đọc kỹ vẫn mắc.
 
 ### Chưa biết Terraform?
 
@@ -93,6 +127,7 @@ Chi tiết đầy đủ ở [terraform-runbook.md](terraform-runbook.md).
 | [phase4-chuyen-account.md](phase4-chuyen-account.md) | Hồ sơ một lần: dựng lại toàn bộ stack sang account AWS mới `551897327153` | Đọc khi cần hiểu vì sao có hai account |
 | [cleanup-account-cu.md](cleanup-account-cu.md) | Hồ sơ một lần: dọn sạch account cũ `667836586836` | Tham chiếu |
 | [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md) | Kết quả rà soát tầng code ứng dụng — lỗi đang có và việc còn phải kiểm | **Chưa sửa gì**, cố ý hoãn tới sau dự án hạ tầng |
+| [diagrams/](diagrams/) | Sơ đồ hệ thống dạng `.drawio`, 5 trang, dùng bộ icon AWS 2026 | Nguồn duy nhất của mọi hình — sửa ở đây, không sửa bản xuất |
 | [archive/](archive/) | Hai bản rà soát kiến trúc app từ tháng 5/2026 | Đã lỗi thời, giữ để đối chiếu |
 | [superpowers/](superpowers/) | Spec và implementation plan của 3 phase hạ tầng | Tham chiếu khi cần biết một quyết định đến từ đâu |
 
@@ -109,6 +144,31 @@ tầng khác nhau:
 Việc hai lần đo trên hai account cho **cùng kết quả** chính là lập luận mạnh
 nhất của báo cáo bảo mật: các thuộc tính an toàn nằm trong **code Terraform**,
 không nằm trong một lần cấu hình may mắn.
+
+---
+
+## Còn thiếu gì — rà soát ngày 2026-08-25
+
+Rà soát này làm bằng cách **đóng vai một người chưa biết gì** đọc từ đầu bộ tài
+liệu, và ghi lại mọi chỗ phải đi hỏi người khác. Ba tài liệu vừa được thêm
+(`diagrams/`, `cicd-cho-nguoi-moi.md`, `doc-code-terraform.md`) đến từ chính rà
+soát này.
+
+Bốn chỗ **còn thiếu**, chưa làm, xếp theo mức chặn người mới:
+
+| # | Thiếu gì | Vì sao nó chặn người mới | Vì sao chưa làm |
+|---|---|---|---|
+| 1 | **Bộ câu hỏi vấn đáp phần AWS/Terraform** | [on-tap-van-dap.md](on-tap-van-dap.md) chỉ có .NET/Blazor. [bao-mat-he-thong.md](bao-mat-he-thong.md) §6 có câu phản biện nhưng **chỉ về bảo mật** — không có câu nào về Terraform, state, module, ECS, hay chi phí | Đây là tài liệu để **luyện thi**, không phải để hiểu hệ thống. Nên tách ra làm việc riêng, và nên viết sau khi biết hội đồng gồm những ai |
+| 2 | **Website này làm được gì** (chức năng nghiệp vụ) | Không tài liệu nào nói HushStore bán gì, có những luồng nào. Người mới đang đọc rất kỹ về cách **deploy** một thứ mà họ không biết là thứ gì | Cần quyết định của người chủ dự án về phạm vi mô tả. Và tầng ứng dụng đang **cố ý hoãn** — xem [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md) |
+| 3 | **Lược đồ database (ERD)** | Chuỗi `Category → Product → ProductVariant → ProductSerial` là trung tâm của cả nghiệp vụ, hiện chỉ có **một dòng** trong `CLAUDE.md`. Không có hình, không có mô tả quan hệ | Cùng lý do #2. Và ERD sinh từ code EF Core thì phải sinh lại mỗi lần đổi migration — cần quyết định có tự động hoá hay không trước khi viết |
+| 4 | **Bản xuất PNG/PDF của sơ đồ** | `.drawio` cần app.diagrams.net hoặc extension VS Code mới mở được. Nộp báo cáo giấy thì phải có ảnh | Cố ý chưa xuất: hai bản (`.drawio` + `.png`) sẽ lệch nhau ngay lần sửa đầu tiên. Xuất **một lần, sát lúc nộp**, từ chính file `.drawio` |
+
+Hai chỗ đã kiểm và kết luận **không thiếu**, ghi ra để không ai rà lại:
+
+- **Chạy dự án ở máy local** — có ở [`README.md`](../README.md) mục *Development*.
+- **Cách đọc hoá đơn AWS và đơn giá thật** — có ở
+  [terraform-runbook.md](terraform-runbook.md) mục *Chi phí*, kèm số đo thật và
+  bằng chứng account này **không** có free tier 12 tháng.
 
 ---
 

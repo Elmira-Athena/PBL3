@@ -47,6 +47,11 @@ inject từ SSM Parameter Store.
 
 Mục lục đầy đủ: **[docs/README.md](docs/README.md)** — bảng "tôi muốn X thì mở file nào", thứ tự đọc, và ba điều cần biết trước khi chạy lệnh.
 
+**Sơ đồ hệ thống:** [docs/diagrams/hushstore-aws-2026.drawio](docs/diagrams/hushstore-aws-2026.drawio)
+— 5 trang, bộ icon AWS 2026. Mở bằng [app.diagrams.net](https://app.diagrams.net)
+hoặc extension *Draw.io Integration* của VS Code. Mở nó ra **trước** khi đọc tài
+liệu, và để mở bên cạnh.
+
 Ba tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
 
 1. **[thiet-ke-he-thong-aws.md](docs/thiet-ke-he-thong-aws.md)** — *cái gì* và
@@ -63,6 +68,16 @@ Ba tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
    12 tấn công → lớp chặn → lớp dự phòng, danh sách thẳng thắn những gì hệ thống
    **không** chặn được, và mục **câu hỏi phản biện** kèm câu trả lời. Đọc mục này
    trước khi bảo vệ.
+
+Hai tài liệu nữa, đọc khi cần:
+
+- **[cicd-cho-nguoi-moi.md](docs/cicd-cho-nguoi-moi.md)** — CI/CD giải thích từ
+  con số không: workflow/job/step/runner là gì, vì sao dùng OIDC thay vì secret,
+  vì sao tag bằng git SHA, và cách đọc một lần chạy để biết **có deploy hay
+  chưa**. Đọc được độc lập với AWS.
+- **[doc-code-terraform.md](docs/doc-code-terraform.md)** — bản đồ 68 file trong
+  `infra/tf/`: bảy khối cú pháp HCL cần biết, đọc module theo thứ tự nào, và ba
+  chỗ dễ hiểu sai trong code này.
 
 Chưa từng dùng AWS: bắt đầu ở **Phần VI — Lộ trình học** của tài liệu số 1. Nó
 gắn từng thành phần trong hệ thống với workshop tiếng Việt tương ứng trên
