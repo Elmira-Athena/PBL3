@@ -128,12 +128,101 @@ không thể ghi cứng IP.
 
 ## 8. TLS/HTTPS — mã hoá và chứng chỉ
 
-HTTPS = HTTP + mã hoá TLS. Để mã hoá, server cần một **chứng chỉ (certificate)**
-do một tổ chức đáng tin cậy cấp, xác nhận "tôi đúng là chủ của tên miền này".
+HTTPS = HTTP + mã hoá TLS. Mã hoá giải quyết hai việc **khác nhau**, và trộn hai
+việc này là chỗ hay hiểu sai:
 
-**TLS termination** là chỗ mã hoá được *bóc ra*. Trong hệ thống này, load
-balancer bóc TLS rồi chuyển tiếp HTTP thường vào trong mạng riêng. Nhờ vậy các
-container không phải quản chứng chỉ — một chỗ duy nhất lo việc đó.
+1. **Bí mật** — người ngồi giữa (chủ quán wifi, nhà mạng) không đọc được nội dung.
+2. **Danh tính** — bạn đang nói chuyện đúng với `hushstore.io.vn`, không phải với
+   một máy chủ giả mạo nó.
+
+Việc thứ nhất chỉ cần thuật toán. Việc thứ hai cần **chứng chỉ**.
+
+### Chứng chỉ là gì
+
+Chứng chỉ là một file chứa: **tên miền**, **khoá công khai** của máy chủ, **thời
+hạn**, và **chữ ký số** của một tổ chức tên là **CA** (Certificate Authority).
+
+Cơ chế tin cậy nằm ở chữ ký đó. Trình duyệt của bạn được cài sẵn danh sách khoảng
+100–150 CA mà nó tin. Khi máy chủ xuất chứng chỉ, trình duyệt kiểm:
+
+```
+chứng chỉ của hushstore.io.vn
+   ├─ ký bởi CA trung gian (intermediate)
+   │     └─ ký bởi CA gốc (root) — cái này CÓ trong danh sách cài sẵn
+   ├─ tên miền trong chứng chỉ có khớp với tên miền đang gõ?
+   └─ hôm nay còn nằm trong thời hạn?
+```
+
+Chuỗi đó gọi là **chain of trust**. Sai một mắt là trình duyệt chặn — và nó chặn
+hẳn, không phải cảnh báo nhẹ, vì một chứng chỉ không kiểm được nghĩa là **không
+biết đang nói chuyện với ai**.
+
+Điểm mấu chốt: chứng chỉ **không** làm mã hoá. Nó chỉ chứng minh khoá công khai
+này thuộc về tên miền này. Mã hoá là việc của bước sau, dùng chính khoá đó.
+
+### Thời hạn — và vì sao nó đang ngắn dần rất nhanh
+
+Mỗi chứng chỉ có ngày hết hạn. Trước 2020 thời hạn thường là **2–3 năm**. Hiện
+trần là **200 ngày**, và theo lịch đã được CA/Browser Forum thông qua tháng 4/2025
+([ballot SC-081v3](https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/)):
+
+| Từ ngày | Thời hạn tối đa |
+|---|---|
+| 2026-03-15 | **200 ngày** ← đang áp dụng |
+| 2027-03-15 | 100 ngày |
+| 2029-03-15 | **47 ngày** |
+
+Lý do rút ngắn không phải để bán thêm chứng chỉ (phần lớn chứng chỉ giờ miễn phí).
+Lý do là **cơ chế thu hồi không hoạt động đáng tin**.
+
+Khi khoá riêng của một máy chủ bị lộ, chứng chỉ của nó phải bị **thu hồi**. Có hai
+cơ chế: **CRL** (danh sách thu hồi, trình duyệt tải về định kỳ) và **OCSP** (trình
+duyệt hỏi CA từng lần). Cả hai đều có vấn đề thực tế: CRL thì cũ, OCSP thì chậm và
+làm rò rỉ lịch sử duyệt web — nên phần lớn trình duyệt **bỏ qua lỗi khi không hỏi
+được**. Nghĩa là một chứng chỉ đã thu hồi vẫn thường dùng được.
+
+Kết luận của cả ngành: nếu không thu hồi được đáng tin, thì hãy để chứng chỉ
+**tự hết hạn nhanh**. Thời hạn ngắn chính là cơ chế thu hồi.
+
+Hệ quả cho người vận hành: **gia hạn tay sẽ không còn khả thi.** Tới 2029, mỗi tên
+miền phải thay chứng chỉ 8 lần/năm. Nên tự động hoá gia hạn không phải tiện lợi mà
+là bắt buộc — và đó là lý do thật sự để dùng ACM trong hệ thống này, không phải vì
+nó miễn phí.
+
+### "TTL" — cùng một chữ, bốn thứ khác nhau
+
+TTL (*time to live*) nghĩa là "sống được bao lâu rồi phải làm lại". Nó bị dùng cho
+quá nhiều thứ, nên khi ai đó nói "TTL", phải hỏi lại TTL của cái gì:
+
+| Loại | Nghĩa | Ai quyết định |
+|---|---|---|
+| **Thời hạn chứng chỉ** | Sau ngày này trình duyệt chặn website | CA, theo trần của CA/Browser Forum |
+| **TTL của bản ghi DNS** | Máy khách được cache kết quả phân giải tên bao lâu trước khi hỏi lại | Chủ tên miền |
+| **Thời hạn credential/token** | Sau đó phải xin cái mới (token JWT, credential tạm của AWS) | Người viết ứng dụng |
+| **Thời hạn lưu trữ** (retention) | Sau đó dữ liệu bị **xoá** — log, backup, artifact | Người viết hạ tầng |
+
+Ba loại đầu: hết hạn thì **xin lại**. Loại thứ tư: hết hạn thì **mất**. Nhầm hai
+nhóm này là cách người ta xoá mất bằng chứng của chính mình.
+
+Bảng đầy đủ mọi giá trị TTL thật của hệ thống này — kèm triệu chứng khi từng cái
+hết hạn — ở [bao-mat-he-thong.md](bao-mat-he-thong.md) mục *Lớp 3 → Chứng chỉ TLS:
+vòng đời và TTL*.
+
+### TLS termination
+
+**TLS termination** là chỗ mã hoá được *bóc ra*. Trong hệ thống này, load balancer
+bóc TLS rồi chuyển tiếp HTTP thường vào trong mạng riêng. Nhờ vậy các container
+không phải quản chứng chỉ — một chỗ duy nhất lo việc đó.
+
+Đánh đổi cần biết: đoạn từ load balancer vào container là **HTTP không mã hoá**.
+Chấp nhận được ở đây vì đoạn đó nằm hoàn toàn trong VPC riêng, và Security Group
+chỉ cho đúng một nguồn gọi vào. Nếu yêu cầu là mã hoá đầu-cuối (ví dụ hệ thống
+thanh toán) thì phải mã hoá lại đoạn trong, và giá phải trả là mỗi container lại
+cần chứng chỉ riêng.
+
+Một hệ quả nữa của việc bóc TLS: ứng dụng bên trong nhận request HTTP, nên nếu
+không đọc header `X-Forwarded-Proto` thì nó **tưởng người dùng đang dùng HTTP** và
+sẽ redirect vòng vòng. Chi tiết ở Phần III.
 
 ---
 

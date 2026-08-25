@@ -55,7 +55,9 @@ tấn công **không có nghĩa**. Không thể gõ sai mật khẩu vào một 
 
 ---
 
-## 2. Sơ đồ: một request đi qua bảy lớp
+## 2. Sơ đồ luồng request
+
+### 2.1. Bảy lớp, nhìn tĩnh
 
 ```mermaid
 flowchart TB
@@ -128,6 +130,121 @@ hàng. Mỗi lớp trả lời một câu hỏi khác:
 
 Vượt được lớp 1–4 chỉ có nghĩa là *chạm được vào ứng dụng*. Lớp 5–7 mới quyết
 định **lấy được gì**.
+
+---
+
+### 2.2. Cùng một request, nhìn theo thời gian — từ ngoài vào trong
+
+Sơ đồ trên xếp bảy lớp cạnh nhau như bảy cái hộp. Nhưng một gói tin thật không đi
+qua "bảy lớp": nó đi qua **12 chốt kiểm**, vì mỗi lớp mạng bị hỏi **hai lần** —
+một lần lúc vào subnet, một lần lúc ra khỏi subnet.
+
+Bản vẽ đầy đủ có ở
+[diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio) **trang 2**.
+Bản rút gọn:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant NP as nacl-public
+    participant SA as sg-alb
+    participant LB as ALB
+    participant NA as nacl-app
+    participant SW as sg-web
+    participant AP as container api (8080)
+    participant ND as nacl-db
+    participant SR as sg-rds
+    participant DB as RDS SQL Server
+
+    Note over C: DNS: hushstore.io.vn → tên DNS của ALB
+    C->>NP: TCP 443 (SYN)
+    Note over NP: IN 100/110 allow 80,443<br/>IN 50 DENY var.my_ip (khi demo)
+    NP->>SA: qua
+    Note over SA: ingress 80,443 ← 0.0.0.0/0
+    SA->>LB: qua
+    Note over LB: handshake TLS bằng cert ACM<br/>ssl_policy chỉ cho TLS 1.2 / 1.3<br/>rồi kiểm Host header: 2 tên miền<br/>mọi Host khác → 403
+    LB->>NP: OUT 100/110 → app tier 80,8080
+    NP->>NA: tới app tier
+    Note over NA: IN 90 DENY 22 · IN 95 DENY 1433<br/>IN 100/110 allow ← public tier<br/>IN 115 DENY 8080 ← 0.0.0.0/0<br/>IN 120 allow 1024-65535 ← mọi nơi
+    NA->>SW: qua
+    Note over SW: ingress 80,8080 ← CHỈ sg-alb<br/>KHÔNG có rule port 22 nào
+    SW->>AP: qua
+    Note over AP: JWT 4 phép kiểm · rate limit 5/phút<br/>truy vấn ĐÓNG KHUNG theo userId trong token
+    AP->>NA: OUT 100 → db tier 1433
+    NA->>SW: EGRESS 1433 → sg-rds
+    SW->>ND: tới db tier
+    Note over ND: IN 100 allow 1433 ← app tier<br/>(rule duy nhất)
+    ND->>SR: qua
+    Note over SR: ingress 1433 ← CHỈ sg-web<br/>egress RỖNG
+    SR->>DB: qua
+
+    DB-->>ND: OUT 100 → app tier 1024-65535
+    ND-->>NA: IN 120 (chỗ rule này BẮT BUỘC phải có)
+    NA-->>NP: OUT 120 → public tier 1024-65535
+    NP-->>C: IN 120 ← 0.0.0.0/0, gói lại vào phiên TLS
+```
+
+#### Mỗi chốt trả lời một câu hỏi khác nhau
+
+| Chốt | Câu hỏi | Nếu bỏ chốt này thì mất gì |
+|---|---|---|
+| `nacl-public` IN | Gói tin có được vào **subnet** này? | Mất khả năng **chặn theo IP** — SG chỉ có allow-list, không có deny |
+| `sg-alb` IN | Gói tin có được vào **máy** này? | Không mất nhiều: 80/443 vốn mở cho cả Internet. Giá trị của `sg-alb` nằm ở chiều **egress** |
+| ALB | Request gửi tới **tên miền** nào? Có mã hoá không? | Mất chống Host header injection, và mất luôn TLS |
+| `nacl-app` IN | Gói tin có được vào **subnet app**? | Mất ba rule DENY 22/1433/8080 — tức mất lớp chặn ở tầng **subnet** cho ba port nguy hiểm nhất |
+| `sg-web` IN | Máy **nào** được gọi container? | Mất phép lọc theo **danh tính SG**. NACL chỉ lọc theo CIDR, nên mọi thứ trong public tier sẽ gọi được container |
+| container api | Người dùng này được xem **dữ liệu của ai**? | Mất tất cả. Tám chốt trên chỉ chặn *chạm tới*, chốt này chặn *lấy được* |
+| `nacl-db` IN | Ai được vào **subnet database**? | Còn `sg-rds` chặn — nhưng chỉ theo danh tính SG |
+| `sg-rds` IN | Ai được nói chuyện với **RDS**? | Còn `nacl-db` chặn — nhưng chỉ theo CIDR |
+
+Hai dòng cuối là chỗ đáng chú ý nhất của cả bảng: `nacl-db` và `sg-rds` **nói cùng
+một điều** (chỉ 1433, chỉ từ app tier), nhưng chúng **không thay thế nhau**, vì
+chúng lọc theo hai tiêu chí khác nhau:
+
+- Bỏ `nacl-db`: ai chiếm được **một máy đang nằm trong `sg-web`** là đi thẳng tới
+  database. Danh tính SG là thứ duy nhất còn lại, và kẻ tấn công đã có nó.
+- Bỏ `sg-rds`: **mọi thứ trong app tier** đều tới được database. CIDR là thứ duy
+  nhất còn lại, và kẻ tấn công đã ở trong CIDR đó.
+
+Đó là ý nghĩa cụ thể của "phòng thủ nhiều lớp": không phải hai cái khoá giống nhau
+trên cùng một cửa, mà hai cái khoá **mở bằng hai loại chìa khác nhau**.
+
+#### Vì sao phải vẽ cả đường về
+
+Bốn mũi tên nét đứt ở cuối sơ đồ không phải cho đủ. Chúng là chỗ khác biệt
+stateful/stateless **thành ra hậu quả cụ thể**:
+
+**Security Group là stateful.** Nó nhớ kết nối nào do bên trong mở ra, nên gói trả
+về tự động được cho qua. Đó là lý do `sg-rds` có **egress rỗng** mà database vẫn
+trả được kết quả — và là lý do đường về trong sơ đồ chỉ ghi tên `nacl-*`, không
+ghi `sg-*`.
+
+**Network ACL là stateless.** Nó không nhớ gì cả. Với NACL, gói trả về là một gói
+**hoàn toàn mới**, phải có rule riêng. Đó là lý do bảng NACL dài gấp đôi bảng SG.
+
+Và đây là hệ quả không tránh được: gói trả về đi tới **một port ngẫu nhiên mà máy
+khách tự chọn** (dải ephemeral 1024–65535). Nên rule cho đường về buộc phải mở cả
+dải đó. **Không thu hẹp được.**
+
+Chính ràng buộc này sinh ra ba rule DENY ở `nacl-app`:
+
+```
+IN 90  DENY 22           ─┐
+IN 95  DENY 1433          ├─ tồn tại VÌ rule 120, không phải "thêm cho chắc"
+IN 115 DENY 8080         ─┘
+IN 120 allow 1024-65535  ←  bắt buộc có, và nó chứa cả 1433 và 8080
+```
+
+Rule 120 phải mở dải 1024–65535 cho toàn Internet để nhận traffic trả về từ NAT
+Gateway. Mà **1433 và 8080 nằm trong dải đó**. Nếu không có ba rule DENY ở số nhỏ
+hơn, rule 120 sẽ vô tình mở SQL Server ra Internet **ở tầng NACL**.
+
+Ba rule DENY đó không phải phòng thủ thêm. Chúng **vá đúng cái lỗ mà rule 120 mở
+ra**. Và đó là câu trả lời trực tiếp cho câu hỏi *"đã có Network ACL rồi thì cần
+Security Group làm gì"*: NACL stateless không bao giờ siết được đường về, nên
+`sg-web` với ingress đúng hai port từ đúng một SG là lớp bù cho giới hạn bản chất
+đó.
 
 ---
 
@@ -240,6 +357,121 @@ người đọc tin rằng `www` đang được hỗ trợ.
 
 **3. Che hoàn toàn máy thật.** Client không bao giờ biết IP của EC2. ALB là thứ
 duy nhất có mặt trên Internet.
+
+#### Chứng chỉ TLS: vòng đời và TTL
+
+Mục này trả lời ba câu hỏi mà "cert do ACM cấp, miễn phí và tự gia hạn" ở trên bỏ
+qua: **chứng chỉ sống bao lâu**, **gia hạn xảy ra khi nào**, và **cái gì làm gia
+hạn thất bại**.
+
+Lý thuyết nền (chứng chỉ là gì, chuỗi tin cậy, vì sao thời hạn đang bị rút ngắn)
+ở [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) **Phần I mục 8**. Mục này
+chỉ nói về hệ thống cụ thể này.
+
+**Thời hạn thật của chứng chỉ trong hệ thống này**
+
+| | Giá trị | Nguồn |
+|---|---|---|
+| Thời hạn chứng chỉ ACM cấp | **198 ngày** | Trần của CA/Browser Forum là 200 ngày kể từ 2026-03-15; ACM cấp 198 ngày để nằm trong trần |
+| ACM bắt đầu gia hạn | còn **45 ngày** trước khi hết hạn | Tài liệu ACM. *(Chứng chỉ cũ 395 ngày thì mốc là 60 ngày, và bản gia hạn sẽ chỉ còn 198 ngày)* |
+| ARN sau khi gia hạn | **không đổi** | Nên Terraform không thấy drift, không phải apply lại, ALB không phải cấu hình lại |
+| Nếu ACM không xác thực được | Cảnh báo qua AWS Health + EventBridge ở mốc **30, 15, 7, 3, 1 ngày** | Tài liệu ACM |
+
+Con số 198 ngày không phải AWS tự chọn. Nó là hệ quả của
+[ballot SC-081v3](https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/)
+mà CA/Browser Forum thông qua tháng 4/2025, rút trần thời hạn chứng chỉ TLS theo
+lịch: **200 ngày** từ 2026-03-15 → **100 ngày** từ 2027-03-15 → **47 ngày** từ
+2029-03-15.
+
+Điều đáng rút ra cho đồ án: xu hướng của cả ngành là **thời hạn ngắn dần**, và lý
+do là cơ chế thu hồi chứng chỉ (CRL/OCSP) trong thực tế hoạt động không đáng tin —
+nên cách chống một chứng chỉ bị lộ khoá tốt hơn là **để nó tự hết hạn nhanh**.
+Hệ quả trực tiếp: gia hạn tay sẽ không còn khả thi. Tới 2029, một người phải thay
+chứng chỉ **8 lần mỗi năm** cho mỗi tên miền. Việc chọn ACM ở đây vì thế không
+phải để tiết kiệm $0 phí chứng chỉ — mà vì **tự động hoá gia hạn sắp trở thành bắt
+buộc**, và ACM làm việc đó mà không cần ta viết gì.
+
+**Cái duy nhất có thể làm gia hạn thất bại**
+
+ACM chỉ tự gia hạn khi **cả hai** điều kiện đúng:
+
+1. Chứng chỉ đang được một dịch vụ AWS dùng (ở đây: ALB đang tồn tại).
+2. **Toàn bộ bản ghi CNAME xác thực** của ACM còn nằm trong DNS công khai — một
+   bản ghi cho mỗi tên miền, tức hệ thống này có **hai**.
+
+Điều kiện thứ hai là bẫy thật, và nó có một hình dạng cụ thể: người ta nghĩ bản
+ghi CNAME xác thực chỉ cần cho **lần cấp đầu tiên**, xong thì xoá cho gọn. **Sai.**
+ACM đọc lại chính hai bản ghi đó ở mỗi lần gia hạn. Xoá đi thì:
+
+- Không có gì hỏng **ngay**. Chứng chỉ vẫn chạy tiếp tới 5–6 tháng nữa.
+- Rồi tới mốc còn 45 ngày, gia hạn im lặng thất bại.
+- Rồi cảnh báo bắt đầu về ở mốc 30 ngày — vào một hộp thư mà lúc đó có thể không
+  ai đang đọc.
+- Rồi tới ngày hết hạn, **mọi trình duyệt chặn website**, và triệu chứng không hề
+  trỏ về nguyên nhân đã gây ra nó 5 tháng trước.
+
+Nên hai bản ghi đó nằm trong danh sách "đừng xoá" ở
+[terraform-runbook.md](terraform-runbook.md), và đó là lý do chúng được ghi ra
+`terraform output` chứ không chỉ nằm trong state.
+
+> Điều kiện thứ nhất cũng có một hệ quả mà dự án này đụng phải: hệ thống **mặc
+> định tắt ALB**. Nếu ALB bị destroy suốt một thời gian dài rồi đúng mốc 45 ngày
+> rơi vào khoảng đó, chứng chỉ mất điều kiện "đang được dùng". Chưa xảy ra vì
+> khoảng tắt tính bằng ngày chứ không bằng tháng, nhưng nó là một rủi ro **có
+> thật** của kiến trúc bật/tắt này, và nó chưa được canh bằng cơ chế nào.
+
+**Bảng mọi thứ có thời hạn trong hệ thống**
+
+"TTL" bị dùng cho quá nhiều thứ khác nhau. Bảng này gom hết lại, và cột cuối là
+cột đáng đọc — nó nói **triệu chứng khi giá trị đó hết hạn**, vì đó là thứ bạn sẽ
+gặp trước khi biết nguyên nhân.
+
+| Cái gì | Giá trị | Hết hạn / vượt hạn thì sao |
+|---|---|---|
+| Chứng chỉ ACM | 198 ngày, tự gia hạn ở mốc còn 45 ngày | Trình duyệt chặn hoàn toàn website |
+| Bản ghi CNAME xác thực ACM | **không có thời hạn — phải tồn tại mãi** | Gia hạn thất bại im lặng, biểu hiện sau ~5 tháng |
+| Credential tạm của OIDC/STS | ~1 giờ | Job CI dài quá sẽ mất quyền giữa chừng |
+| Credential của ECS task role | tự động luân chuyển | Không cần làm gì — đây là cái thay thế access key tĩnh |
+| **Access token JWT** | **10080 phút = 7 ngày** | Xem ghi chú bên dưới — **con số này là một vấn đề** |
+| Refresh token | 7 ngày | Người dùng phải đăng nhập lại |
+| `ClockSkew` của JWT | 1 phút (mặc định .NET là 5) | Token hết hạn vẫn được nhận thêm đúng 1 phút |
+| Cache cờ `IsActive` (khoá tài khoản) | 30 giây | Trần thời gian một tài khoản vừa bị khoá còn dùng được |
+| Cửa sổ rate limit đăng nhập | 1 phút / 5 lần | Request thứ 6 nhận HTTP 429 |
+| `deregistration_delay` của target group | **5 giây** | Deploy nhanh hơn, đổi lấy việc request đang bay có thể bị cắt |
+| Idle timeout của ALB | 60 giây (mặc định AWS, không đặt tường minh) | Kết nối im lặng quá 60s bị đóng |
+| CloudWatch Logs của container | 3 ngày | Log cũ hơn 3 ngày **không còn để điều tra** |
+| Log group của Lambda cost-guard | 30 ngày | Giữ dài hơn vì đây là bằng chứng "nó có chạy đêm đó không" |
+| ALB access logs trên S3 | 7 ngày | Đây là nguồn bằng chứng chính cho báo cáo kiểm thử khi Flow Logs đang tắt |
+| S3 artifacts | 365 ngày | Giữ `migrate-<sha>.sql` đủ lâu để đối chiếu |
+| Backup tự động của RDS | 7 ngày | Point-in-time recovery chỉ lùi được 7 ngày |
+| Số image giữ trong mỗi ECR repo | 5 image gần nhất | Rollback chỉ đi lùi được 5 bản |
+| **RDS tự bật lại sau khi stop** | **7 ngày** | Không phải TTL của ta, là hành vi của AWS và **không tắt được**. Lưới an toàn là Lambda cost-guard chạy 00:00 mỗi đêm |
+
+> **Hai chỗ chưa đúng, nói thẳng ra ở đây:**
+>
+> **1. Access token sống 7 ngày, không phải 15 phút.**
+> `src/API/appsettings.json` đặt `AccessTokenExpirationMinutes = 10080`, và
+> **không có** biến môi trường nào ghi đè giá trị đó ở production — task
+> definition chỉ inject `JwtSettings__SecretKey`. Nghĩa là access token và refresh
+> token có **cùng** thời hạn 7 ngày, tức cơ chế refresh token đang không mang lại
+> lợi ích nào: ý tưởng của nó là *access token ngắn, refresh token dài*, và ở đây
+> hai cái bằng nhau.
+>
+> Hệ quả cụ thể: JWT là không trạng thái, cấp rồi thì không thu lại được. Nên một
+> token bị lộ dùng được **7 ngày**, không phải 15 phút. Thứ duy nhất còn chặn là
+> middleware kiểm cờ `IsActive` với cache 30 giây — nghĩa là cơ chế đó không phải
+> "lớp bổ sung cho chắc" như mô tả ở Lớp 7, mà đang là **lớp phòng thủ chính**
+> chống token bị lộ.
+>
+> Việc sửa nằm ở tầng code ứng dụng, đã cố ý hoãn tới sau dự án hạ tầng — hồ sơ ở
+> [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md).
+>
+> **2. Không bật HSTS.** `Program.cs` gọi `UseHttpsRedirection()` nhưng **không**
+> gọi `UseHsts()`. Nên không có header `Strict-Transport-Security`, tức trình
+> duyệt không được dặn "từ nay chỉ nói chuyện với tên miền này bằng HTTPS". Rủi ro
+> còn lại là kịch bản request **đầu tiên** đi bằng HTTP và bị chặn giữa đường
+> trước khi redirect 301 kịp xảy ra. Ở đây rủi ro đó nhỏ vì Cloudflare đứng trước
+> và đang bật Full (strict), nhưng **hệ thống tự nó** thì chưa có lớp này.
 
 ### Lớp 4 — Kiến trúc mạng: phòng thủ mạnh nhất không phải là một rule
 
@@ -365,8 +597,15 @@ ClockSkew = TimeSpan.FromMinutes(1)
 ```
 
 `ClockSkew` mặc định của .NET là **5 phút** — nghĩa là token hết hạn vẫn được
-nhận thêm 5 phút. Ta hạ xuống **1 phút**. Access token sống 15 phút, refresh
-token 7 ngày.
+nhận thêm 5 phút. Ta hạ xuống **1 phút**.
+
+> **Access token sống 7 ngày, không phải 15 phút.** `appsettings.json` đặt
+> `AccessTokenExpirationMinutes = 10080`, và production không ghi đè giá trị đó —
+> task definition chỉ inject `JwtSettings__SecretKey`. Tức access token và refresh
+> token **cùng** thời hạn 7 ngày, nên cơ chế refresh token đang không mang lại lợi
+> ích nào. Đây là một lỗi thật, chưa sửa; hồ sơ ở
+> [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md), phân tích đầy
+> đủ ở mục *Chứng chỉ TLS: vòng đời và TTL* của Lớp 3.
 
 Và trong JWT **không có** dữ liệu nhạy cảm nào. Payload của JWT chỉ là Base64,
 **ai cũng giải mã được** — nó chống *sửa*, không chống *đọc*.
@@ -409,7 +648,8 @@ giờ được ghép vào chuỗi SQL. Không có `FromSqlRaw` với chuỗi n�
 
 **Khoá tài khoản có hiệu lực gần như tức thì.** JWT bản chất là *không trạng
 thái* — cấp rồi thì không thu lại được, hết hạn mới thôi. Nên admin khoá một tài
-khoản thì access token của người đó vẫn còn hiệu lực tối đa 15 phút.
+khoản thì access token của người đó vẫn còn hiệu lực **tối đa 7 ngày** — xem ghi
+chú về `AccessTokenExpirationMinutes` ở trên.
 
 Đóng khoảng đó bằng một middleware chạy **sau** `UseAuthentication()`: mỗi request
 đã xác thực đều kiểm cờ `IsActive`, cache 30 giây để không đánh DB mỗi lần.
@@ -421,7 +661,12 @@ UseForwardedHeaders → UseCors → UseRateLimiter
 
 Thứ tự này bắt buộc: phải biết *ai* (`UseAuthentication`) trước khi kiểm *người
 đó còn được vào không*. Bị khoá thì nhận 403 kèm header `X-Account-Status: locked`
-để client tự đăng xuất. **Trần thời gian tụt từ 15 phút xuống 30 giây.**
+để client tự đăng xuất. **Trần thời gian tụt từ 7 ngày xuống 30 giây.**
+
+> Vì access token thật sống 7 ngày chứ không phải 15 phút, middleware này không
+> phải một lớp bổ sung cho chắc — nó đang là **lớp phòng thủ chính** chống một
+> token đã bị lộ. Nghĩa là nếu nó hỏng (cache không invalidate, hoặc thứ tự
+> middleware bị đổi) thì trần thời gian nhảy từ 30 giây lên 7 ngày.
 
 **`UseForwardedHeaders` phải chạy đầu tiên** — và đây là một chi tiết bảo mật, không
 chỉ là chuyện thứ tự. ALB terminate TLS rồi chuyển tiếp bằng HTTP, nên nếu không
