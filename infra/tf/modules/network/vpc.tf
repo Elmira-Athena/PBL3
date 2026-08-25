@@ -7,6 +7,35 @@ resource "aws_vpc" "this" {
   tags = { Name = "${var.project}-vpc" }
 }
 
+# ─── DEFAULT SECURITY GROUP — khoá về RỖNG ───────────────────────
+# AWS tự tạo một security group tên "default" cho MỌI VPC và KHÔNG cho xoá nó.
+# Mặc định của nó là "cho phép mọi protocol, mọi port, từ chính nó" — tức nếu
+# hai resource cùng nằm trong SG này thì chúng nói chuyện được với nhau qua BẤT
+# KỲ port nào, kể cả 22.
+#
+# Phát hiện lúc chạy lại kiểm thử 2026-08-24: liệt kê MỌI rule ingress trong
+# region thì có hai dòng `protocol = -1, from = -1, to = -1` — một của VPC này,
+# một của default VPC. `-1` nghĩa là mọi port, nên nó CÓ bao gồm 22. Lúc đó đo
+# được 0 ENI đang dùng nên chưa có bề mặt tấn công thật, nhưng đó là may mắn,
+# không phải thiết kế: ai launch một instance mà KHÔNG chỉ định security group
+# thì AWS gán default SG cho nó, và instance ấy lập tức nằm trong một SG mở.
+#
+# Khai báo resource này KHÔNG tạo SG mới — Terraform adopt cái AWS đã tạo, rồi
+# xoá sạch rule của nó. Khối ingress/egress để TRỐNG là cách diễn đạt "không có
+# rule nào", khác với việc bỏ hẳn khối (bỏ hẳn thì Terraform không quản rule và
+# giữ nguyên mặc định của AWS).
+#
+# Không ảnh hưởng gì tới hệ thống: cả 3 SG thật (sg-alb, sg-web, sg-rds) đều
+# được khai báo tường minh ở module `security`, không resource nào của ta dùng
+# default SG. Giá: $0 — security group không tính phí.
+resource "aws_default_security_group" "this" {
+  vpc_id = aws_vpc.this.id
+
+  # Cố ý KHÔNG có ingress và egress. Đây là toàn bộ mục đích của resource này.
+
+  tags = { Name = "${var.project}-default-KHONG-DUNG" }
+}
+
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
 

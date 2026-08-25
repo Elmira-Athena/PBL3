@@ -98,3 +98,45 @@ run "bat_nat_thi_tao_dung_1_nat_gateway_va_1_route" {
     error_message = "Route qua NAT phải là 0.0.0.0/0."
   }
 }
+
+run "default_security_group_bi_khoa_ve_rong" {
+  command = plan
+
+  # AWS tạo một security group "default" cho MỌI VPC, không cho xoá, và mặc định
+  # nó cho phép mọi protocol / mọi port từ chính nó — kể cả 22. Khai báo
+  # aws_default_security_group KHÔNG tạo SG mới: Terraform adopt cái AWS đã tạo
+  # rồi xoá sạch rule của nó.
+  #
+  # Test này bảo vệ một điều dễ mất. Nếu ai đó thêm một rule vào khối đó "cho
+  # tiện debug", cả VPC lại có một SG mở sẵn mà không ai để ý — đúng cái lỗ phát
+  # hiện ngày 2026-08-24 khi liệt kê MỌI rule ingress trong region và thấy hai
+  # dòng protocol = -1 (nghĩa là mọi port, tức có 22).
+  # ── GIỚI HẠN CỦA TEST NÀY, nói thẳng ─────────────────────────────────────
+  # Tôi đã thử ba assertion mạnh hơn và cả ba đều KHÔNG chạy được ở plan-time:
+  #
+  #   length(aws_default_security_group.this.ingress) == 0   -> Unknown value
+  #   length(aws_default_security_group.this.egress)  == 0   -> Unknown value
+  #   aws_default_security_group.this.vpc_id == aws_vpc.this.id -> Unknown value
+  #
+  # Hai cái đầu unknown vì `ingress`/`egress` của resource này là
+  # **Optional + Computed**: khi ta CỐ Ý bỏ trống khối, provider phải đọc từ AWS
+  # mới biết giá trị, nên ở plan-time nó là known-after-apply. Cái thứ ba unknown
+  # vì cả hai id đều chưa tồn tại khi chỉ plan.
+  #
+  # Nên assertion dưới đây chỉ chứng minh được MỘT điều: resource này CÓ được
+  # khai báo và Terraform ĐANG quản default SG. Nó KHÔNG chứng minh rule đã rỗng.
+  # Điều đó đến từ cấu trúc code — bỏ trống khối ingress/egress chính là cách
+  # provider diễn đạt "xoá hết rule" — và chỉ kiểm được bằng `command = apply`
+  # (cần AWS thật) hoặc bằng lệnh sau khi apply:
+  #
+  #   aws ec2 describe-security-group-rules \
+  #     --filters Name=group-id,Values=<default sg của VPC> \
+  #     --query 'length(SecurityGroupRules)'      # phải ra 0
+  #
+  # Giá trị thật của test này là chống XOÁ: nếu ai bỏ resource khỏi vpc.tf thì
+  # test đỏ ngay, và default SG lặng lẽ quay về mặc định mở của AWS.
+  assert {
+    condition     = aws_default_security_group.this.tags["Name"] == "${var.project}-default-KHONG-DUNG"
+    error_message = "Phải khai báo aws_default_security_group để Terraform QUẢN default SG của VPC. Bỏ resource này đi thì default SG quay về mặc định của AWS: cho phép mọi protocol/mọi port từ chính nó, kể cả 22 — và mọi instance launch mà không chỉ định SG sẽ rơi vào đó."
+  }
+}
