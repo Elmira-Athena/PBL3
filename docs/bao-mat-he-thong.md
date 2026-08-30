@@ -729,7 +729,7 @@ Nói thẳng phần này khi bảo vệ sẽ được điểm cao hơn là vờ 
 | **Kẻ tấn công đã có credential hợp lệ của user** | Bảy lớp đều cho họ vào. Chặn được bằng MFA — chưa có |
 | **Hành vi bất thường sau khi đã vào** | Không có GuardDuty, không có alarm nào. Không ai được thông báo |
 | **Điều tra sau sự cố quá 90 ngày** | Chưa tạo CloudTrail trail. Chỉ có Event History mặc định (90 ngày, chỉ management event) |
-| **Lỗ hổng trong thư viện phụ thuộc** | ECR có `scan_on_push`, nhưng CI **không** fail khi phát hiện. Còn 3 package mức High chưa vá |
+| **Lỗ hổng trong thư viện phụ thuộc** | ECR có `scan_on_push`, nhưng CI **không** fail khi phát hiện. Còn **3 package mức High chưa vá** — xem mục 5.1 bên dưới để biết tên và số hiệu advisory |
 | **Instance launch không chỉ định SG sẽ rơi vào default SG** | AWS tạo một security group `default` cho **mỗi** VPC, không cho xoá, và mặc định nó cho phép mọi traffic từ chính nó — gồm port 22. Đo được: **0 ENI** đang dùng nó nên hiện không có bề mặt thật, nhưng dự án chưa đặt rule của nó về rỗng. Bịt bằng `aws_default_security_group` với ingress/egress trống, hoặc SCP |
 | **Danh tính vận hành yếu hơn danh tính workload** | IAM user `hushstore-ops` có `AdministratorAccess`, **không MFA**, và một access key dài hạn. Đây là đánh đổi có ý thức: bật SSO buộc vào Organization và làm hết hạn credit. Giảm nhẹ ngay được bằng cách **bật MFA** — không ảnh hưởng credit |
 
@@ -737,6 +737,35 @@ Nói thẳng phần này khi bảo vệ sẽ được điểm cao hơn là vờ 
 và **phản ứng**. Đó là hình dạng điển hình của một hệ thống làm đúng phần hạ tầng
 nhưng chưa có phần vận hành bảo mật (Security Operations) — và cũng đúng là ranh
 giới hợp lý cho phạm vi một đồ án.
+
+
+### 5.1 Ba gói phụ thuộc còn lỗ hổng mức High (đo được, chưa vá)
+
+`dotnet build` in ra cảnh báo **NU1903** ở mỗi lần build. Đây là số liệu **đo
+được từ chính máy build**, không phải suy đoán — nên nó là bằng chứng tốt cho
+luận điểm "kiểm soát chuỗi cung ứng phụ thuộc":
+
+| Gói | Phiên bản | Số advisory | Dùng ở |
+|---|---|---|---|
+| `System.Security.Cryptography.Xml` | 9.0.0 và 10.0.0 | **8** | Infrastructure, Service |
+| `AutoMapper` | 16.0.0 | 1 (GHSA-rvv3-g6hj-g44x) | API, Service |
+| `Microsoft.OpenApi` | 2.4.1 | 1 (GHSA-v5pm-xwqc-g5wc) | API |
+
+Ba điều đáng nói khi bảo vệ:
+
+1. **Cảnh báo đã hiện sẵn ở mỗi lần build mà không ai dừng lại đọc.** Đó mới là
+   vấn đề thật — không phải bản thân ba gói này. Công cụ đã báo đúng; quy trình
+   chưa có chỗ nào bắt buộc phải xử lý cái báo đó.
+2. **`scan_on_push` của ECR quét image nhưng CI không fail.** Kết quả quét nằm
+   đó chờ người vào xem, tức trên thực tế là không ai xem.
+3. **Cách bịt rẻ nhất:** thêm một bước `dotnet list package --vulnerable
+   --include-transitive` vào pipeline và cho nó fail build khi có mức High. Không
+   tốn thêm đồng nào, và biến "cảnh báo trôi qua" thành "không merge được".
+
+⚠️ **Chưa vá trong đợt 2** vì nâng phiên bản là thay đổi có rủi ro hồi quy riêng
+(AutoMapper 16 → bản mới có breaking change ở cấu hình profile), và repo **không
+có test tự động nào** để đỡ. Việc này nên đi thành một PR riêng, làm cùng lúc với
+bước kiểm ở pipeline nói trên.
 
 ---
 

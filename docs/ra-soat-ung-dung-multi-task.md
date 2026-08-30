@@ -156,7 +156,22 @@ Cách sửa rẻ nhất và đúng nhất: thêm `RowVersion` (`IsRowVersion()`)
 
 ---
 
-### A6 — Access token JWT sống 7 ngày, làm refresh token thành vô nghĩa
+### A6 — Access token JWT sống 7 ngày, làm refresh token thành vô nghĩa — ✅ ĐÃ SỬA (đợt 2)
+
+> **Trạng thái:** đã sửa, `AccessTokenExpirationMinutes: 10080 -> 15`.
+>
+> Điều kiện chặn nêu ngay bên dưới ("phải biết client có tự refresh khi gặp 401
+> hay không") đã được giải quyết TRƯỚC: `AuthHeaderHandler` nay làm mới token rồi
+> gửi lại request đúng một lần, với single-flight bằng `TokenRefreshCoordinator`.
+>
+> **Đã kiểm bằng trình duyệt thật**, không phải suy luận: để token hết hạn 78 giây
+> (vượt `ClockSkew` 60 giây của server) rồi bắn 12 request cùng lúc —
+> 12 lời gọi nhận 401 → **đúng 1** lời gọi `/api/auth/refresh-token` → 12 lời gọi
+> lại đều thành công, cả hai token đều xoay vòng, người dùng không hề thấy trang
+> đăng nhập.
+>
+> Ghi chú: vòng đời thực tế là **15 + 1 phút** vì
+> `TokenValidationParameters.ClockSkew = TimeSpan.FromMinutes(1)`.
 
 Phát hiện ngày 2026-08-25 khi kiểm chứng các giá trị TTL để viết mục *Chứng chỉ TLS
 và TTL* của [bao-mat-he-thong.md](bao-mat-he-thong.md).
@@ -198,9 +213,28 @@ hay không. Nếu chưa có, hạ thời hạn xuống 15 phút sẽ làm ngư�
 mỗi 15 phút — tức lỗi hiện tại đang **che** một thiếu sót ở tầng client. Việc kiểm
 đó thuộc [D1](#d1--tầng-frontend-blazor-chưa-rà-soát-dòng-nào), chưa làm.
 
-### A7 — Không bật HSTS
+### A7 — Không bật HSTS — ✅ ĐÃ SỬA (đợt 2)
 
-[`Program.cs:311`](../src/API/Program.cs#L311) gọi `app.UseHttpsRedirection()`
+> **Trạng thái:** đã sửa, commit `fix(security): viết lại rate limiter theo IP,
+> thu hẹp bề mặt ẩn danh, bật HSTS`.
+>
+> **Bối cảnh ghi ở đây trước kia SAI và đã sửa lại bên dưới.** Production không
+> chỉ thiếu HSTS mà thiếu **cả hai**: `UseHttpsRedirection()` nằm **bên trong**
+> `if (!IsProduction())`, còn `UseHsts()` chưa từng được gọi.
+>
+> **Cách sửa:** thêm `app.UseHsts()` ở nhánh Production, với `max-age` 1 ngày,
+> `IncludeSubDomains = false` (api là host riêng), `Preload = false`. **Không**
+> thêm `UseHttpsRedirection` ở nhánh đó — ALB đã 301 ở listener, bật thêm sẽ gây
+> redirect loop.
+>
+> 🔴 **Chi tiết quyết định tính đúng sai, ghi lại vì nó im lặng:** khối HSTS phải
+> đứng **sau** `app.UseForwardedHeaders()`. `UseHsts()` chỉ phát header khi
+> `Request.IsHttps == true`, mà container nhận HTTP thuần từ ALB — chỉ sau khi
+> ForwardedHeaders đọc `X-Forwarded-Proto` thì `IsHttps` mới thành true. Đảo thứ
+> tự là một **no-op hoàn toàn im lặng**: không lỗi, không cảnh báo, không header,
+> và không có cách nào biết ngoài việc tự đi curl kiểm tra.
+
+Mô tả gốc (giữ lại để đối chiếu): `Program.cs` gọi `app.UseHttpsRedirection()`
 nhưng **không** gọi `app.UseHsts()`. Nên response không có header
 `Strict-Transport-Security`.
 

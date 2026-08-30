@@ -1,6 +1,7 @@
-# Đợt 1 — Kết quả và bàn giao
+# Đợt 1 + Đợt 2 — Kết quả và bàn giao
 
-**Ngày:** 2026-08-30 · **Trạng thái:** đợt 1 xong, build sạch (`0 Error(s)`), chưa commit.
+**Ngày:** 2026-08-30 · **Trạng thái:** **đợt 1 xong, mục 4.1 xong, đợt 2 xong**;
+build sạch (`0 Error(s)`); **đã commit thành 9 commit trên `main`**.
 **Kế hoạch gốc:** `/Users/ml/.claude/plans/hi-n-t-i-t-i-ang-memoized-quill.md`
 **Trục chính:** sửa lỗi chương trình → autoscale EC2 → mở rộng (PostgreSQL, Redis).
 
@@ -185,6 +186,37 @@ Chạy trên container `hushstore_sqlserver_dev`, API ở `http://localhost:5111
 
 Cặp khoá/mở khoá chính là hình **before/after** thuyết phục nhất cho báo cáo, và tốn $0.
 
+### Bằng chứng bổ sung — mục 4.1 và đợt 2 (cũng $0)
+
+| Kiểm | Kết quả |
+|---|---|
+| `POST /api/inventory-checks` (đường **có transaction**) sau khi bật retry | 200, sinh `KK-20260830-000001` — tức `strategy.ExecuteAsync` bọc `BeginTransactionAsync` hợp lệ, đúng thứ EF Core **cấm** nếu làm sai |
+| 8 lần đăng nhập sai liên tiếp | `400,400,400,400,400,429,429,429` — rate limit nay **theo IP** |
+| Thân phản hồi 429 | `{"success":false,"message":"Bạn thao tác quá nhanh..."}` + `Retry-After: 60` (bản cũ trả **thân rỗng**) |
+| 150 request tới `/health/live` | **0 lần** khác 200 → miễn trừ health check hoạt động |
+| 130 request tới `/api/products` | **11 lần 429** → global limiter *có* chạy, nên miễn trừ health là **có ý nghĩa** |
+| `POST /api/vouchers/available-for-order` ẩn danh | **401** (trước: 200 + liệt kê toàn bộ khuyến mãi) |
+| `GET /api/employees/technicians` ẩn danh | **401** (trước: 200 + lộ danh sách nhân sự) |
+| XSS: `<script>`, `onerror=`, `javascript:`, `<iframe>` gửi qua `PUT /api/products/1` | **bị loại sạch**; `<h2>`, `<p>`, `<a href="https://...">` **giữ nguyên** |
+
+**Kiểm luồng refresh bằng trình duyệt thật** (Chrome DevTools, API `localhost:5222`
++ Blazor WASM `localhost:5214`, token TTL đặt 1 phút để quan sát được):
+
+| Kịch bản | Kết quả |
+|---|---|
+| Token hết hạn lúc **điều hướng** (đường `JwtAuthenticationStateProvider`) | 1 lời gọi `/api/auth/refresh-token` chạy **trước** mọi lời gọi dữ liệu; 6 lời gọi analytics cách nhau 17ms **không** sinh refresh thứ hai |
+| Token hết hạn **giữa phiên** (đường 401 của `AuthHeaderHandler`) | 12 lời gọi mang token cũ → **tất cả 401** → **đúng 1** lời gọi refresh → 12 lời gọi lại **đều thành công** |
+
+Kịch bản thứ hai là bằng chứng quyết định cho **single-flight**: không có nó thì sẽ
+có 12 lời gọi refresh, mà refresh token **xoay vòng mỗi lần dùng**, nên 11 cái sau
+cầm token đã bị thu hồi — chúng thất bại **và** vô hiệu hoá kết quả của cái đầu
+tiên, và người dùng bị đăng xuất **đúng lúc hệ thống đang cố giữ họ đăng nhập**.
+
+> **Bẫy gặp khi kiểm, ghi lại để lần sau khỏi mất thời gian:** lần thử đầu ở kịch
+> bản 2 **không** sinh 401 nào dù token đã quá hạn 45 giây. Lý do:
+> `TokenValidationParameters.ClockSkew = TimeSpan.FromMinutes(1)` — server vẫn chấp
+> nhận token quá hạn tối đa 60 giây. Vòng đời thực tế vì thế là **15 + 1 phút**.
+
 ---
 
 ## 3. Phát hiện mới trong lúc làm (chưa có trong tài liệu nào)
@@ -265,38 +297,70 @@ chứng cho luận điểm "kiểm soát chuỗi cung ứng phụ thuộc".
 
 ## 4. Việc còn lại — bắt đầu phiên sau từ đây
 
-### 4.1 Việc đầu tiên: bật `EnableRetryOnFailure` (phần cuối của đợt 1)
+### 4.1 ✅ XONG — `EnableRetryOnFailure` đã bật, kèm hợp đồng retry
 
-18 call-site nay đã phủ hết bằng `ExecuteInTransactionAsync`, tức **điều kiện cần đã đủ**.
-Nhưng **chưa bật**, và lý do phải hiểu trước khi bật:
+Commit `feat(resilience): bật EnableRetryOnFailure kèm hợp đồng retry cho 18 call-site`.
 
-> Khi retry, delegate chạy lại **toàn bộ**. Change Tracker **không** được clear giữa các
-> lần thử — và đó là cố ý: nhiều call-site nạp entity **trước** khi mở transaction rồi sửa
-> chúng bên trong; clear sẽ tháo mất những entity đó và lệnh sửa lại rơi vào hư vô (đúng
-> lỗi A1 mà đợt này vừa sửa). Ngược lại, không clear thì lần thử thứ hai làm việc trên
-> entity đã bị sửa dở ở lần thử thứ nhất.
+**Phát hiện lớn khi rà: 14/18 call-site KHÔNG chạy lại được** — nhiều hơn hẳn dự
+kiến của kế hoạch gốc. Cơ chế hỏng, viết ra vì nó không hiển nhiên:
 
-Nên phải **rà từng call-site**, không bật hàng loạt. Với mỗi chỗ, trả lời: *thứ gì tính
-trước khi vào transaction? nó có idempotent không? nếu không thì chuyển vào trong delegate.*
+> Nếu lỗi transient rơi đúng lúc `CommitAsync` thì mọi `SaveChangesAsync` **bên
+> trong** đã thành công rồi. EF đánh dấu entity là `Unchanged` **và** cập nhật
+> snapshot giá trị gốc thành giá trị **mới**. Lần thử thứ hai gán lại đúng giá trị
+> đó (`ticket.Status = 2`) thì EF thấy **không có thay đổi** → không sinh câu
+> `UPDATE` nào → hàng dữ liệu (vừa bị rollback về giá trị cũ) **giữ nguyên giá trị
+> cũ**. Không exception, không log. **Mất dữ liệu âm thầm.**
 
-Danh sách 18 chỗ (dùng `grep -rn "ExecuteInTransactionAsync" --include='*.cs' src/Service/`):
-`ServiceTicketService` ×9 · `InventoryCheckService` ×4 · `OrderService` ×2 ·
-`ImportReceiptService` ×1 · `InventoryExportService` ×1 · `PosService` ×1.
+**Giải pháp: opt-in thay vì refactor 14 chỗ ngay.** `ExecuteInTransactionAsync`
+nhận thêm `retrySafe`, **mặc định `false`**. Khi `false`, lần thử thứ hai **ném lỗi
+rõ ràng kèm tên call-site** (qua `CallerMemberName`/`CallerFilePath`/`CallerLineNumber`)
+thay vì làm hỏng dữ liệu. Hành vi người dùng thấy **giống hệt** trước khi bật retry.
 
-### 4.2 Đợt 2 — Frontend + vá bảo mật thuần code ($0, chạy song song được)
+Vì sao vẫn đáng bật cờ dù 14/18 chưa retry: giá trị lớn nhất **không** nằm ở 18 chỗ
+có transaction mà ở **toàn bộ phần còn lại** — mọi query đọc, mọi `SaveChanges` đơn
+lẻ, health check — tức gần như toàn bộ lưu lượng, nay tự chịu được lỗi transient.
+Đó đúng là thứ xảy ra khi RDS failover, khi rolling deploy, và khi pool cạn.
 
-Chưa động tới dòng nào. Thứ tự trong kế hoạch gốc:
+**4 chỗ đã rà và bật `retrySafe: true`:** `ImportReceiptService.CreateAsync`,
+`InventoryCheckService.CreateAsync`, `ServiceTicketService.CreateTicketFromSerialScanAsync`,
+`ServiceTicketService.IssueServiceInvoiceAsync`.
 
-1. Refresh + retry + single-flight ở `AuthHeaderHandler` (bốn ràng buộc ép cấu trúc —
-   xem kế hoạch gốc, mỗi cái là chỗ một bản viết ngây thơ sẽ vỡ)
-2. `BusyState` / `BusyScope` / `ActionButton` — chống double-submit ở 25 chỗ bằng 3 file
-3. `ErrorBoundary` + `SendApiAsync` (409 phải có mặt **từ đợt 2**, dù đợt 3 mới bắt đầu trả)
-4. XSS: bỏ `MarkupString` ở `ProductDetail.razor:276`
-5. Viết lại rate limiter — **hiện tại nó là một DoS tự gây ra**
-6. Thu hẹp bề mặt anonymous, bật HSTS
-7. **Cuối cùng**, sau khi 6 bước kiểm refresh đã xanh: `AccessTokenExpirationMinutes` → 15
+**14 chỗ còn lại** đều có comment ⚠️ ghi **đích danh** lý do chưa bật được. Việc còn
+lại ở mỗi chỗ cùng một hình dạng: **chuyển phần nạp entity vào bên trong delegate.**
 
-### 4.3 Đợt 0 còn thiếu
+### 4.2 ✅ XONG — Đợt 2 (frontend + vá bảo mật thuần code)
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| 1 | Refresh + retry + single-flight ở `AuthHeaderHandler` | ✅ xong, đã kiểm bằng trình duyệt thật |
+| 2 | `BusyState`/`BusyScope`/`ActionButton` chống double-submit | ⚠️ **xong một phần** — xem dưới |
+| 3 | `ErrorBoundary` + `ApiCall` (409 có mặt từ đợt 2) | ✅ xong |
+| 4 | XSS: bỏ `MarkupString` ở `ProductDetail.razor` | ✅ xong — **đổi phương án**, xem dưới |
+| 5 | Viết lại rate limiter | ✅ xong |
+| 6 | Thu hẹp bề mặt anonymous, bật HSTS | ✅ xong |
+| 7 | `AccessTokenExpirationMinutes` → 15 | ✅ xong, làm cuối cùng đúng như kế hoạch |
+
+**Hai chỗ lệch khỏi kế hoạch gốc, và lệch vì dữ liệu thật nói khác:**
+
+- **Việc 4 (XSS).** Kế hoạch chọn "bỏ `MarkupString`, render text thuần", với giả
+  định định dạng duy nhất UI tạo ra được là xuống dòng. Kế hoạch cũng yêu cầu
+  **kiểm dữ liệu thật trước** — đã kiểm, và kết quả **lật ngược lựa chọn**: 2/2
+  sản phẩm có mô tả là **HTML thật** (`<h2>`, `<p>`, `<img>`). Render text thuần sẽ
+  hiện nguyên thẻ ra cho khách. Nên chuyển sang đúng **"kế hoạch B"** mà tài liệu
+  đã dự trù: `HtmlSanitizer` (namespace `Ganss.Xss`) áp ở **tầng API trên đường ghi**.
+- **Việc 6 (bề mặt anonymous).** Kế hoạch bảo "xoá `[AllowAnonymous]` ở
+  `EmployeesController:103`". Nhưng class là `[Authorize(Roles="Admin")]` nên xoá
+  suông sẽ thành **Admin-only**, trong khi endpoint gán kỹ thuật viên
+  `PUT {id}/assign` là `"Admin, Employee"` → Employee vẫn gán được nhưng **không
+  tải nổi danh sách để chọn**. Đặt tường minh `[Authorize(Roles = "Admin, Employee")]`.
+
+**Việc 2 mới xong một phần — phần còn lại, ghi rõ để không bị nhầm là đã phủ:**
+`MarkAsPaid`, `OrderDetail`, và các form CRUD admin **vẫn dùng `MudButton` trần**.
+Ba file cơ chế (`BusyState`/`BusyScope`/`ActionButton`) đã có sẵn và đã chứng minh
+chạy đúng ở POS + 4 chỗ kiểm kê + 16 nút phiếu dịch vụ; việc còn lại thuần tuý là
+quét nốt các call-site.
+
+### 4.3 Đợt 0 còn thiếu (chưa động)
 
 - `tools/LoadProbe/` — console app .NET, 9 kịch bản `IProbeScenario`
 - `docker-compose` 2 replica API + nginx round-robin
@@ -305,14 +369,19 @@ Chưa động tới dòng nào. Thứ tự trong kế hoạch gốc:
 
 ### 4.4 Đợt 3 trở đi
 
-Giữ nguyên như kế hoạch gốc. **Chặn cứng: phải có kết quả script kiểm dữ liệu trên RDS
-(mục 3.1) trước khi bắt đầu đợt 3.**
+Giữ nguyên như kế hoạch gốc. **Chặn cứng: phải có kết quả script kiểm dữ liệu trên
+RDS (mục 3.1) trước khi bắt đầu đợt 3.**
+
+Bổ sung một việc mới sinh ra từ đợt 2: **rà nốt 14 call-site chưa retry-safe** (mục
+4.1). Không chặn đợt 3, nhưng nên làm trước khi chạy nhiều task thật.
 
 ---
 
-## 5. Tài liệu cần cập nhật (chưa làm)
+## 5. Tài liệu — ✅ ĐÃ CẬP NHẬT
 
-- **`CLAUDE.md`**
+Cả ba đã làm xong.
+
+- **`CLAUDE.md`** ✅
   - Sửa khẳng định sai *"Every entity has `IsDeleted`..."* (xem 3.2)
   - Mô tả đúng cơ chế tồn kho ảo đang chạy, thay cho luồng
     `Available → Reserved → Sold` **không tồn tại**
@@ -320,9 +389,12 @@ Giữ nguyên như kế hoạch gốc. **Chặn cứng: phải có kết quả s
   - Thêm quy tắc: **không cache trạng thái phân quyền/khoá tài khoản trong `MemoryCache`**
   - Thêm quy tắc: mở transaction **chỉ** qua `IUnitOfWork.ExecuteInTransactionAsync`
   - Thêm quy tắc: sinh mã chứng từ **chỉ** qua `IDocumentCodeGenerator`
-- **`docs/ra-soat-ung-dung-multi-task.md`** — chuyển A1/A3/A5 sang "đã sửa, có bằng chứng";
-  sửa mục A7 (production không có cả redirect lẫn HSTS vì `if (!IsProduction())`)
-- **`docs/bao-mat-he-thong.md`** — bổ sung phát hiện 3.5 (lỗ hổng gói NuGet)
+- **`docs/ra-soat-ung-dung-multi-task.md`** ✅ — A1/A3/A5 đã chuyển sang "đã sửa, có
+  bằng chứng"; **A6 và A7 nay đánh dấu ĐÃ SỬA** kèm bằng chứng và kèm chốt "khối HSTS
+  phải đứng sau `UseForwardedHeaders`, đảo thứ tự là no-op im lặng".
+- **`docs/bao-mat-he-thong.md`** ✅ — thêm mục **5.1** liệt kê đích danh 3 gói còn lỗ
+  hổng mức High kèm số hiệu advisory, và nói rõ vấn đề thật không phải ba gói đó mà
+  là **cảnh báo đã hiện sẵn ở mỗi lần build mà quy trình không có chỗ nào bắt buộc xử lý**.
 
 ---
 
@@ -337,14 +409,27 @@ Giữ nguyên như kế hoạch gốc. **Chặn cứng: phải có kết quả s
   ```
   Server=localhost,1433;Database=HushStoreDb;User Id=sa;Password=<SA_PASSWORD trong .env>;TrustServerCertificate=True;MultipleActiveResultSets=True
   ```
-- **Chưa commit gì.** 37 file sửa, 5 đường dẫn mới:
-  `Infrastructure/db/checks/`, `src/API/Filters/`, `src/Core/Interfaces/IDocumentCodeGenerator.cs`,
-  `src/Service/Common/`, `src/Shared/DTOs/Common/PagedRequest.cs`.
+- **Đã commit hết**, working tree sạch. 9 commit trên `main`:
 
-**Gợi ý tách commit** (kế hoạch gốc yêu cầu phần transaction đi PR riêng):
+| # | Commit |
+|---|---|
+| 1 | `fix(inventory)`: đồng bộ tồn kho một câu UPDATE |
+| 2 | `fix(security)`: bỏ cache `IsActive` + `ClampPageSizeFilter` + `PagedRequest` |
+| 3 | `fix(concurrency)`: A1 + A3 + A5 + transaction + sinh mã + seed role |
+| 4 | `docs`: sửa khẳng định sai về schema, script kiểm dữ liệu |
+| 5 | `feat(resilience)`: bật `EnableRetryOnFailure` + hợp đồng retry *(mục 4.1)* |
+| 6 | `feat(auth)`: refresh + retry + single-flight *(đợt 2 việc 1)* |
+| 7 | `fix(security)`: vá stored XSS bằng sanitizer *(việc 4)* |
+| 8 | `fix(security)`: rate limiter theo IP + bề mặt ẩn danh + HSTS *(việc 5, 6)* |
+| 9 | `feat(ui)`: chống double-submit *(việc 2)* · `feat(ui)`: ErrorBoundary + ApiCall *(việc 3)* · `feat(security)`: token 15 phút *(việc 7)* |
 
-1. `fix(concurrency)`: A1 + A3 voucher + A3 báo giá + A5 + seed role
-2. `refactor(uow)`: `ExecuteInTransactionAsync` + 18 call-site — **riêng, không trộn**
-3. `fix(inventory)`: `InventorySyncService` một câu UPDATE
-4. `refactor(codegen)`: `IDocumentCodeGenerator` + 5 repository
-5. `fix(security)`: bỏ cache `IsActive` + `ClampPageSizeFilter` + `PagedRequest`
+> **Lệch khỏi "gợi ý tách 5 commit" của bản trước, và lý do đáng ghi:** ba nhóm
+> `fix(concurrency)` + `refactor(uow)` + `refactor(codegen)` **không tách được**.
+> Bọc thân phương thức vào `ExecuteInTransactionAsync` làm **thụt lề lại toàn bộ
+> khối**, nên bản vá A1 và lời gọi `IDocumentCodeGenerator` nằm **đúng trên những
+> dòng** mà refactor transaction đã viết lại — cùng hunk, không phải cùng file.
+> Tách ra sẽ phải dựng tay các trạng thái trung gian **không build được**. Hai
+> nhóm tách được (`fix(inventory)`, `fix(security)`) thì đã tách.
+
+- **Gói mới thêm:** `HtmlSanitizer 9.2.1039` (namespace `Ganss.Xss`) ở `Service`,
+  cho việc 4 của đợt 2.
