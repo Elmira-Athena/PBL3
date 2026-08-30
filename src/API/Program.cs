@@ -18,6 +18,7 @@ using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Infrastructure.Repositories;
+using PBL3.API.Filters;
 using PBL3.Service.Auth;
 using PBL3.Service.Categories;
 using PBL3.Service.ImportReceipts;
@@ -51,7 +52,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    // Chặn trần pageSize cho toàn bộ 148 endpoint, kể cả endpoint viết sau này.
+    options.Filters.Add<ClampPageSizeFilter>();
+});
 
 builder.Services.AddMemoryCache();
 
@@ -316,29 +321,40 @@ app.UseCors("AllowClient");
 app.UseRateLimiter();
 app.UseAuthentication();
 
-// Kiểm tra IsActive sau khi JWT đã được xác thực — dùng MemoryCache 30 giây để giảm DB query
+// Kiểm tra IsActive sau khi JWT đã được xác thực — ĐỌC THẲNG DB, KHÔNG CACHE.
+//
+// Vì sao bỏ MemoryCache 30 giây (đợt 1):
+//   MemoryCache nằm trong RAM của MỘT tiến trình. Với 1 task, admin khoá tài khoản
+//   thì phiên của người đó còn sống thêm tối đa 30 giây — chấp nhận được.
+//   Với 2 task sau ALB, lệnh xoá cache chỉ chạm cache của task NHẬN request khoá;
+//   task còn lại vẫn giữ bản cũ và vẫn cho vào. Triệu chứng là "lúc được lúc không
+//   tuỳ ALB định tuyến" — loại lỗi không tái hiện được.
+//
+//   Điểm mấu chốt: hướng nguy hiểm là hướng MỞ KHOÁ (cache nói còn hoạt động trong
+//   khi DB đã khoá), không phải hướng khoá. Đó là lỗi bảo mật, không phải lỗi hiệu năng.
+//
+//   Đây cũng chính là thứ làm cho việc chạy nhiều task KHÔNG cần Redis.
+//
+// Đổi luôn FindByIdAsync (kéo TOÀN BỘ hàng AppUsers về) sang projection đúng 2 cột —
+// theo quy tắc "DTO Projection" của CLAUDE.md, và rẻ hơn hẳn kể cả khi còn cache.
 app.Use(async (context, next) =>
 {
     if (context.User.Identity?.IsAuthenticated == true &&
         !context.Request.Path.StartsWithSegments("/api/auth"))
     {
-        var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!string.IsNullOrEmpty(userId))
+        var userIdRaw = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!string.IsNullOrEmpty(userIdRaw) && Guid.TryParse(userIdRaw, out var userId))
         {
-            var cache = context.RequestServices.GetRequiredService<IMemoryCache>();
-            var cacheKey = $"user_isactive_{userId.ToLowerInvariant()}";
+            var db = context.RequestServices.GetRequiredService<HushStoreDbContext>();
+            var userData = await db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.IsActive, u.LockReason })
+                .FirstOrDefaultAsync();
 
-            if (!cache.TryGetValue(cacheKey, out (bool IsActive, string? LockReason) userData))
+            if (userData is null || !userData.IsActive)
             {
-                var userManager = context.RequestServices.GetRequiredService<UserManager<AppUser>>();
-                var user = await userManager.FindByIdAsync(userId);
-                userData = (user?.IsActive ?? false, user?.LockReason);
-                cache.Set(cacheKey, userData, TimeSpan.FromSeconds(30));
-            }
-
-            if (!userData.IsActive)
-            {
-                var reason = !string.IsNullOrEmpty(userData.LockReason)
+                var reason = !string.IsNullOrEmpty(userData?.LockReason)
                     ? userData.LockReason
                     : "Vui lòng liên hệ quản trị viên.";
                 var message = $"Tài khoản của bạn đã bị khóa. Lý do: {reason}";

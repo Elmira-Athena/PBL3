@@ -1,3 +1,4 @@
+using PBL3.Shared.DTOs.Common;
 namespace PBL3.Shared.DTOs.Inventory
 {
     // ========== REQUESTS ==========
@@ -41,25 +42,24 @@ namespace PBL3.Shared.DTOs.Inventory
         public bool ReturnToDraft { get; set; }
     }
 
-    public class InventoryCheckFilterRequest
+    public class InventoryCheckFilterRequest : PagedRequest
     {
         public string? Keyword { get; set; }
         public byte? Status { get; set; }
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
         public Guid? EmployeeId { get; set; }
-        public int PageNumber { get; set; } = 1;
-        public int PageSize { get; set; } = 10;
         public string? SortBy { get; set; }
         public bool SortDescending { get; set; } = true;
     }
 
-    public class InventoryCheckSerialFilterRequest
+    public class InventoryCheckSerialFilterRequest : PagedRequest
     {
+        // Màn hình quét serial hiển thị 20 dòng/trang, khác mặc định 10 của lớp cơ sở.
+        public InventoryCheckSerialFilterRequest() => PageSize = 20;
+
         public byte? ScanStatus { get; set; }
         public int? VariantId { get; set; }
-        public int PageNumber { get; set; } = 1;
-        public int PageSize { get; set; } = 20;
     }
 
     // ========== RESPONSES ==========

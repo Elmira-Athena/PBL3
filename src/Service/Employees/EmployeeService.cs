@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
@@ -19,20 +18,17 @@ namespace PBL3.Service.Employees
         private readonly IEmployeeRepository _employeeRepo;
         private readonly UserManager<AppUser> _userManager;
         private readonly RoleManager<AppRole> _roleManager;
-        private readonly IMemoryCache _cache;
         private readonly ILogger<EmployeeService> _logger;
 
         public EmployeeService(
             IEmployeeRepository employeeRepo,
             UserManager<AppUser> userManager,
             RoleManager<AppRole> roleManager,
-            IMemoryCache cache,
             ILogger<EmployeeService> logger)
         {
             _employeeRepo = employeeRepo;
             _userManager = userManager;
             _roleManager = roleManager;
-            _cache = cache;
             _logger = logger;
         }
 
@@ -168,7 +164,6 @@ namespace PBL3.Service.Employees
             if (!updateResult.Succeeded)
                 return ApiResult<bool>.Fail("Cập nhật trạng thái thất bại.");
 
-            _cache.Remove($"user_isactive_{id.ToString().ToLowerInvariant()}");
             _logger.LogInformation("Khóa tài khoản nhân viên: {Email} (Id: {UserId})", user.Email, user.Id);
 
             return ApiResult<bool>.Ok(true, "Khóa tài khoản thành công.");
@@ -189,7 +184,7 @@ namespace PBL3.Service.Employees
 
             await _userManager.SetLockoutEndDateAsync(user, null);
             await _userManager.ResetAccessFailedCountAsync(user);
-            _cache.Remove($"user_isactive_{id.ToString().ToLowerInvariant()}");
+
             _logger.LogInformation("Mở khóa tài khoản nhân viên: {Email} (Id: {UserId})", user.Email, user.Id);
             return ApiResult<bool>.Ok(true, "Mở khóa tài khoản thành công.");
         }

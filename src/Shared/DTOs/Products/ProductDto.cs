@@ -1,3 +1,4 @@
+using PBL3.Shared.DTOs.Common;
 namespace PBL3.Shared.DTOs.Products
 {
     // ========================================================
@@ -217,7 +218,7 @@ namespace PBL3.Shared.DTOs.Products
     /// <summary>
     /// Bộ lọc cho danh sách sản phẩm.
     /// </summary>
-    public class ProductFilterRequest
+    public class ProductFilterRequest : PagedRequest
     {
         public string? Keyword { get; set; }
         public int? CategoryId { get; set; }
@@ -225,8 +226,6 @@ namespace PBL3.Shared.DTOs.Products
         public decimal? PriceMin { get; set; }
         public decimal? PriceMax { get; set; }
         public ProductStatus? Status { get; set; }
-        public int PageNumber { get; set; } = 1;
-        public int PageSize { get; set; } = 10;
         public string? SortBy { get; set; }
         public bool SortDescending { get; set; }
     }

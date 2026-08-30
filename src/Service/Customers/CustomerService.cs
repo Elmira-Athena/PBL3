@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
@@ -19,20 +18,17 @@ namespace PBL3.Service.Customers
         private readonly ICustomerRepository _customerRepo;
         private readonly ICartRepository _cartRepo;
         private readonly UserManager<AppUser> _userManager;
-        private readonly IMemoryCache _cache;
         private readonly ILogger<CustomerService> _logger;
 
         public CustomerService(
             ICustomerRepository customerRepo,
             ICartRepository cartRepo,
             UserManager<AppUser> userManager,
-            IMemoryCache cache,
             ILogger<CustomerService> logger)
         {
             _customerRepo = customerRepo;
             _cartRepo = cartRepo;
             _userManager = userManager;
-            _cache = cache;
             _logger = logger;
         }
 
@@ -225,7 +221,6 @@ namespace PBL3.Service.Customers
                 return ApiResult<bool>.Fail("Cập nhật trạng thái thất bại.");
             }
 
-            _cache.Remove($"user_isactive_{id.ToString().ToLowerInvariant()}");
             _logger.LogInformation("Khóa tài khoản khách hàng: {Email} (Id: {UserId})", user.Email, user.Id);
 
             return ApiResult<bool>.Ok(true, "Khóa tài khoản thành công.");
@@ -246,7 +241,7 @@ namespace PBL3.Service.Customers
 
             await _userManager.SetLockoutEndDateAsync(user, null);
             await _userManager.ResetAccessFailedCountAsync(user);
-            _cache.Remove($"user_isactive_{id.ToString().ToLowerInvariant()}");
+
             _logger.LogInformation("Mở khóa tài khoản khách hàng: {Email} (Id: {UserId})", user.Email, user.Id);
             return ApiResult<bool>.Ok(true, "Mở khóa tài khoản thành công.");
         }
