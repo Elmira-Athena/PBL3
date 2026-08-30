@@ -69,6 +69,12 @@ namespace PBL3.Service.Inventory
             // BẮT ĐẦU TRANSACTION: Bảo toàn tính toàn vẹn dữ liệu xuất kho hàng loạt
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `order` nạp TRACKED ở ngoài (GetByIdWithDetailsTrackedAsync) rồi đặt
+                // order.Status = Exported bên trong. Thêm nữa: orderDetail.OrderSerials.Add(...)
+                // chạy lại sẽ sinh bản ghi OrderSerial TRÙNG.
                 var variantIdsToSync = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // Load Serials WITH TRACKING so updates are tracked by DbContext

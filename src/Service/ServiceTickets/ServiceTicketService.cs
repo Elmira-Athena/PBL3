@@ -160,15 +160,24 @@ namespace PBL3.Service.ServiceTickets
             // Đánh giá bảo hành thời gian thực để chốt snapshot ngay lúc tiếp nhận
             var warranty = await WarrantyEvaluator.EvaluateAsync(serial, variant, _warrantyRepository);
 
-            // Sinh mã phiếu dịch vụ ST-yyyyMMdd-NNNNNN
-            var now = DateTime.UtcNow;
-            var ticketCode = await _codeGenerator.NextAsync(DocumentCodeKind.ServiceTicket);
-
             // Thực thi Transaction để đảm bảo tính toàn vẹn khi ghi nhận phiếu và lịch sử trạng thái ban đầu
+            //
+            // retrySafe: call-site này thoả cả ba điều kiện của hợp đồng retry
+            // (xem IUnitOfWork.ExecuteInTransactionAsync):
+            //   1. Không sửa entity nào nạp sẵn ở ngoài — `serial` và `order` đều là
+            //      AsNoTracking, chỉ đọc Id/UserId ra để dựng phiếu mới.
+            //   2. Mã phiếu và mốc thời gian sinh BÊN TRONG delegate (xem ngay dưới).
+            //   3. Không có tác dụng phụ không-idempotent nào chạy trước delegate.
             try
             {
                 var ticket = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    // Sinh mã phiếu dịch vụ ST-yyyyMMdd-NNNNNN.
+                    // PHẢI nằm trong delegate: nếu sinh ở ngoài thì lần thử lại dùng lại
+                    // đúng mã cũ, và mã đó có thể đã bị request khác lấy mất trong lúc đó.
+                    var now = DateTime.UtcNow;
+                    var ticketCode = await _codeGenerator.NextAsync(DocumentCodeKind.ServiceTicket);
+
                     var ticket = new ServiceTicket
                     {
                         TicketCode = ticketCode,
@@ -214,7 +223,7 @@ namespace PBL3.Service.ServiceTickets
                     await _unitOfWork.SaveChangesAsync();
 
                     return ticket;
-                });
+                }, retrySafe: true);
 
                 return await GetTicketByIdAsync(ticket.Id, userId, false);
             }
@@ -332,6 +341,11 @@ namespace PBL3.Service.ServiceTickets
             // Sử dụng Transaction để bảo vệ quy trình lưu trữ báo giá & chi tiết báo giá đồng thời cập nhật phiếu dịch vụ
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `ticket` nạp TRACKED ở ngoài (GetByIdWithTrackingAsync) rồi sửa ticket.Status
+                // bên trong. Lần thử 2 gán lại đúng giá trị đó => EF không sinh UPDATE nào.
                 var quotation = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // NGHIỆP VỤ HỦY BÁO GIÁ CŨ: đánh dấu mọi báo giá "Chờ duyệt" (0) của phiếu này
@@ -431,6 +445,10 @@ namespace PBL3.Service.ServiceTickets
 
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `ticket` và `quotation` đều nạp TRACKED ở ngoài rồi sửa bên trong.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // CỔNG NGUYÊN TỬ: chốt kiểm ở trên chỉ fail-fast cho UX — nó là check-then-act
@@ -494,6 +512,10 @@ namespace PBL3.Service.ServiceTickets
 
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `ticket` và `quotation` đều nạp TRACKED ở ngoài rồi sửa bên trong.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // CỔNG NGUYÊN TỬ — xem giải thích ở nhánh duyệt.
@@ -551,6 +573,10 @@ namespace PBL3.Service.ServiceTickets
             // Issue #13: Use UoW transaction pattern instead of individual SaveChanges
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `ticket` nạp TRACKED ở ngoài rồi sửa bên trong.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     var rma = new RmaShipment
@@ -625,6 +651,10 @@ namespace PBL3.Service.ServiceTickets
 
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `rma` và `ticket` đều nạp TRACKED ở ngoài rồi sửa bên trong.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     var now = DateTime.UtcNow;
@@ -805,6 +835,11 @@ namespace PBL3.Service.ServiceTickets
 
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // Nặng nhất: `ticket`, `oldSerial`, `newSerial`, `oldOrderSerial`, `oldWarranties`
+                // — NĂM cụm entity đều nạp TRACKED ở ngoài rồi sửa bên trong.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     var now = DateTime.UtcNow;
@@ -894,6 +929,10 @@ namespace PBL3.Service.ServiceTickets
 
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `ticket` nạp TRACKED ở ngoài rồi sửa bên trong.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // Issue #4: Capture FromStatus BEFORE changing status
@@ -1060,6 +1099,14 @@ namespace PBL3.Service.ServiceTickets
                 throw new InvalidOperationException("Không tìm thấy báo giá được duyệt.");
 
             // Khởi chạy Transaction để bảo đảm việc sinh hóa đơn và sao chép danh mục phụ tùng diễn ra an toàn
+            //
+            // retrySafe: call-site này thoả cả ba điều kiện của hợp đồng retry
+            // (xem IUnitOfWork.ExecuteInTransactionAsync):
+            //   1. Không sửa entity nào nạp sẵn ở ngoài — `ticket` và `quotations` đều đọc
+            //      qua đường AsNoTracking, và delegate chỉ TẠO MỚI (ServiceInvoice +
+            //      ServiceInvoiceItem), không cập nhật bản ghi có sẵn nào.
+            //   2. Mã hóa đơn và mốc thời gian sinh BÊN TRONG delegate.
+            //   3. Không có tác dụng phụ không-idempotent nào chạy trước delegate.
             try
             {
                 var invoice = await _unitOfWork.ExecuteInTransactionAsync(async () =>
@@ -1108,7 +1155,7 @@ namespace PBL3.Service.ServiceTickets
                     await _unitOfWork.SaveChangesAsync();
 
                     return invoice;
-                });
+                }, retrySafe: true);
 
                 var reloadedInvoice = await _invoiceRepository.GetByIdWithDetailsAsync(invoice.Id);
                 return MapServiceInvoiceToDto(reloadedInvoice);

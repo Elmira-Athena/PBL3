@@ -144,6 +144,14 @@ namespace PBL3.Service.Orders
             // ── BƯỚC 4: TẠO ĐƠN HÀNG (Chạy trong Transaction đảm bảo tính toàn vẹn) ──
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `usages` (VoucherUsage) được DỰNG ở ngoài bởi ApplyVouchersAsync rồi mới
+                // AddUsagesAsync bên trong — lần thử 2 là no-op nên lượt dùng voucher không được
+                // ghi. `carts` cũng nạp TRACKED ở ngoài.
+                // (TryConsumeByCodesAsync thì AN TOÀN: nó nằm trong transaction nên rollback
+                //  hoàn tác luôn phép +1, lần thử 2 tăng lại cho ra đúng net +1.)
                 var order = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // Tự sinh mã đơn hàng định dạng ORD-yyyyMMdd-NNNNNN
@@ -276,6 +284,11 @@ namespace PBL3.Service.Orders
             // 4. TRANSACTION
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `usages` (VoucherUsage) được DỰNG ở ngoài bởi ApplyVouchersAsync rồi mới
+                // AddUsagesAsync bên trong — lần thử 2 là no-op nên lượt dùng voucher không được ghi.
                 var order = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // Generate OrderCode (ORD-yyyyMMdd-NNNNNN)

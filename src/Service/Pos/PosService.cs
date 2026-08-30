@@ -308,6 +308,14 @@ namespace PBL3.Service.Pos
 
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // Ba lý do: (a) `order` được DỰNG ở ngoài rồi mới AddAsync bên trong — lần thử 2
+                // gọi AddAsync trên entity đã tracked ở trạng thái Unchanged là NO-OP, nên hoá đơn
+                // KHÔNG BAO GIỜ được chèn và od.OrderId trỏ vào một Order không tồn tại;
+                // (b) `serialsToUpdate` nạp TRACKED ở ngoài rồi đổi Status bên trong;
+                // (c) mã hoá đơn POS sinh ở ngoài nên lần thử 2 dùng lại đúng mã cũ.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // Lưu hóa đơn POS

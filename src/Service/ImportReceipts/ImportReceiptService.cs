@@ -100,6 +100,16 @@ namespace PBL3.Service.ImportReceipts
             // -------------------------------------------------------
             // Bước 2: Mở Transaction (qua IUnitOfWork) để bảo vệ tính nhất quán dữ liệu
             // -------------------------------------------------------
+            //
+            // retrySafe: call-site này thoả cả ba điều kiện của hợp đồng retry
+            // (xem IUnitOfWork.ExecuteInTransactionAsync):
+            //   1. Không sửa entity nào nạp sẵn ở ngoài — toàn bộ phần trên chỉ là kiểm
+            //      tra đọc (supplier, serial trùng, variant tồn tại); delegate chỉ TẠO MỚI.
+            //      `supplier` có được dùng lại sau delegate để lấy Name, nhưng chỉ đọc, và
+            //      ChangeTracker.Clear() chỉ detach chứ không làm mất tham chiếu C#.
+            //   2. Mã phiếu (receiptCode) và tổng tiền tính BÊN TRONG delegate.
+            //   3. SyncStockBatchAsync nằm trong delegate nhưng là một câu UPDATE đặt giá
+            //      trị TUYỆT ĐỐI theo COUNT — idempotent, chạy lại vẫn ra cùng kết quả.
             try
             {
                 var (receipt, receiptCode, totalAmount) = await _unitOfWork.ExecuteInTransactionAsync(async () =>
@@ -176,7 +186,7 @@ namespace PBL3.Service.ImportReceipts
                     // ---------------------------------------------------
 
                     return (receipt, receiptCode, totalAmount);
-                });
+                }, retrySafe: true);
 
                 _logger.LogInformation(
                     "Tạo phiếu nhập kho thành công: {ReceiptCode}, NCC: {SupplierName}, Tổng: {TotalAmount}",

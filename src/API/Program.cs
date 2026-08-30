@@ -84,7 +84,25 @@ builder.Services.AddSwaggerGen();
 // Add DbContext
 builder.Services.AddDbContext<HushStoreDbContext>(options =>
 {
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sql => sql.EnableRetryOnFailure(
+            // Đợt 1 mục 4.1. Điều kiện cần đã đủ: 18 call-site transaction đều đi qua
+            // IUnitOfWork.ExecuteInTransactionAsync, tức qua CreateExecutionStrategy().
+            // EF Core CẤM BeginTransactionAsync() thủ công khi có retrying strategy và
+            // ném LÚC CHẠY chứ không lúc biên dịch — nên thứ tự "gom transaction trước,
+            // bật retry sau" là bắt buộc, không phải sở thích.
+            //
+            // Giá trị lớn nhất của việc bật cờ này KHÔNG nằm ở 18 chỗ có transaction mà
+            // ở toàn bộ phần còn lại: mọi query đọc, mọi SaveChanges đơn lẻ, health check
+            // — tức gần như toàn bộ lưu lượng — nay tự chịu được lỗi transient. Đó đúng
+            // là thứ xảy ra khi RDS failover, khi rolling deploy, và khi pool cạn.
+            //
+            // 18 chỗ có transaction thì mặc định VẪN KHÔNG retry (retrySafe = false) cho
+            // tới khi từng chỗ được rà. Xem hợp đồng retry ở IUnitOfWork.
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorNumbersToAdd: null));
     // ServiceInvoice intentionally omits the query filter so financial records
     // remain queryable even after the parent ServiceTicket is soft-deleted.
     options.ConfigureWarnings(w => w.Ignore(

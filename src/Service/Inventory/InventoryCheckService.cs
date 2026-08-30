@@ -80,6 +80,14 @@ namespace PBL3.Service.Inventory
             }
 
             // Sử dụng Transaction để đảm bảo tính toàn vẹn dữ liệu khi ghi nhận Snapshot tồn kho số lượng lớn
+            //
+            // retrySafe: call-site này thoả cả ba điều kiện của hợp đồng retry
+            // (xem IUnitOfWork.ExecuteInTransactionAsync):
+            //   1. Không sửa entity nào nạp sẵn ở ngoài — `variantIds` chỉ là danh sách int
+            //      lấy từ truy vấn chỉ đọc; delegate chỉ TẠO MỚI (InventoryCheck + Detail +
+            //      DetailSerial), không cập nhật bản ghi có sẵn nào.
+            //   2. Mã phiếu (checkCode) và mốc thời gian sinh BÊN TRONG delegate.
+            //   3. Không có tác dụng phụ không-idempotent nào chạy trước delegate.
             try
             {
                 var (check, checkCode, availableSerials) = await _unitOfWork.ExecuteInTransactionAsync(async () =>
@@ -150,7 +158,7 @@ namespace PBL3.Service.Inventory
                     await _unitOfWork.SaveChangesAsync();
 
                     return (check, checkCode, availableSerials);
-                });
+                }, retrySafe: true);
 
                 _logger.LogInformation(
                     "Tạo phiếu kiểm kê: {CheckCode}, Phạm vi: {ScopeType}, Snapshot: {Total} serials",
@@ -593,6 +601,11 @@ namespace PBL3.Service.Inventory
 
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `check` nạp TRACKED ở ngoài — InventoryCheckRepository.GetByIdAsync KHÔNG có
+                // AsNoTracking — rồi sửa bên trong.
                 var pendingRows = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // NGHIỆP VỤ QUAN TRỌNG: Tất cả các mã Serial nằm trong danh sách chốt ban đầu (Pending)
@@ -662,6 +675,10 @@ namespace PBL3.Service.Inventory
 
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `check` nạp TRACKED ở ngoài rồi sửa bên trong.
                 var adjustmentLogs = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     var adjustmentLogs = new List<InventoryAdjustmentLog>();
@@ -806,6 +823,10 @@ namespace PBL3.Service.Inventory
 
             try
             {
+                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
+                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
+                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
+                // `check` nạp TRACKED ở ngoài rồi sửa bên trong.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     check.RejectReason = request.Reason.Trim();
