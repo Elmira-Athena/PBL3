@@ -25,6 +25,9 @@ namespace PBL3.Service.Pos
         private readonly HushStoreDbContext _dbContext; // For user lookup and quick queries
         private readonly UserManager<AppUser> _userManager;
 
+        private readonly IDocumentCodeGenerator _codeGenerator;
+
+
         public PosService(
             IUnitOfWork unitOfWork,
             IOrderRepository orderRepo,
@@ -34,7 +37,8 @@ namespace PBL3.Service.Pos
             IProductRepository productRepo,
             IInventorySyncService inventorySyncService,
             HushStoreDbContext dbContext,
-            UserManager<AppUser> userManager)
+            UserManager<AppUser> userManager,
+            IDocumentCodeGenerator codeGenerator)
         {
             _unitOfWork = unitOfWork;
             _orderRepo = orderRepo;
@@ -45,6 +49,7 @@ namespace PBL3.Service.Pos
             _inventorySyncService = inventorySyncService;
             _dbContext = dbContext;
             _userManager = userManager;
+            _codeGenerator = codeGenerator;
         }
 
         // ========================================================
@@ -276,19 +281,8 @@ namespace PBL3.Service.Pos
             discountAmount = Math.Min(discountAmount, subTotal);
             decimal totalAmount = subTotal - discountAmount;
 
-            // ── BƯỚC 4: TỰ SINH MÃ HÓA ĐƠN POS (POS-YYYYMMDD-XXX) ──
-            string datePrefix = "POS-" + DateTime.Now.ToString("yyyyMMdd");
-            string? lastCode = await _orderRepo.GetLastOrderCodeByDateAsync(datePrefix);
-            int nextIndex = 1;
-            if (!string.IsNullOrEmpty(lastCode))
-            {
-                string suffix = lastCode.Substring(lastCode.LastIndexOf('-') + 1);
-                if (int.TryParse(suffix, out int lastIndex))
-                {
-                    nextIndex = lastIndex + 1;
-                }
-            }
-            string newOrderCode = $"{datePrefix}-{nextIndex:D3}";
+            // ── BƯỚC 4: TỰ SINH MÃ HÓA ĐƠN POS (POS-yyyyMMdd-NNNNNN) ──
+            string newOrderCode = await _codeGenerator.NextAsync(DocumentCodeKind.PosOrder);
 
             // ── BƯỚC 5: TẠO HÓA ĐƠN & THANH TOÁN (Transaction bảo vệ dữ liệu) ──
             var order = new Order
@@ -312,78 +306,84 @@ namespace PBL3.Service.Pos
                 Note = request.EmployeeNote
             };
 
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // Lưu hóa đơn POS
-                await _orderRepo.AddAsync(order);
-                await _unitOfWork.SaveChangesAsync();
-
-                // Lưu các dòng chi tiết OrderDetail
-                foreach (var od in orderDetailsMap.Values)
+                await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    od.OrderId = order.Id;
-                    await _dbContext.OrderDetails.AddAsync(od);
-                }
-                await _unitOfWork.SaveChangesAsync(); // Lưu để lấy Id chi tiết đơn hàng
+                    // Lưu hóa đơn POS
+                    await _orderRepo.AddAsync(order);
+                    await _unitOfWork.SaveChangesAsync();
 
-                // ── BƯỚC 5.1: CẬP NHẬT TRẠNG THÁI SERIAL, ORDER_SERIAL & TẠO PHIẾU BẢO HÀNH (WARRANTY) ──
-                var now = DateTime.UtcNow;
-                foreach (var s in serialsToUpdate)
-                {
-                    // Chuyển trạng thái Serial sang "Sold" (Đã bán)
-                    s.Status = (byte)SerialStatus.Sold;
-                    s.SoldDate = now;
-                    s.OrderId = order.Id;
-
-                    var od = orderDetailsMap[s.VariantId];
-                    // Liên kết Serial với dòng chi tiết hóa đơn (OrderSerial)
-                    await _dbContext.OrderSerials.AddAsync(new OrderSerial
+                    // Lưu các dòng chi tiết OrderDetail
+                    foreach (var od in orderDetailsMap.Values)
                     {
-                        OrderDetailId = od.Id,
-                        SerialId = s.Id
-                    });
-
-                    // NGHIỆP VỤ PHÁT SINH BẢO HÀNH TỰ ĐỘNG:
-                    // Nếu sản phẩm đó có cấu hình thời hạn bảo hành (WarrantyMonth > 0), hệ thống tự sinh bản ghi Warranty ở trạng thái Active.
-                    if (s.Variant.WarrantyMonth > 0)
-                    {
-                        newWarranties.Add(new Warranty
-                        {
-                            SerialId = s.Id,
-                            CustomerId = customerId,
-                            OrderId = order.Id,
-                            StartDate = now,
-                            EndDate = now.AddMonths(s.Variant.WarrantyMonth),
-                            Status = (byte)WarrantyStatus.Active
-                        });
+                        od.OrderId = order.Id;
+                        await _dbContext.OrderDetails.AddAsync(od);
                     }
-                }
+                    await _unitOfWork.SaveChangesAsync(); // Lưu để lấy Id chi tiết đơn hàng
 
-                if (newWarranties.Any())
-                {
-                    await _warrantyRepo.AddRangeAsync(newWarranties);
-                }
-
-                // Ghi nhận Voucher đã dùng
-                if (appliedVoucher != null)
-                {
-                    appliedVoucher.UsedCount++;
-                    if (customerId.HasValue)
+                    // ── BƯỚC 5.1: CẬP NHẬT TRẠNG THÁI SERIAL, ORDER_SERIAL & TẠO PHIẾU BẢO HÀNH (WARRANTY) ──
+                    var now = DateTime.UtcNow;
+                    foreach (var s in serialsToUpdate)
                     {
-                        await _dbContext.VoucherUsages.AddAsync(new VoucherUsage
-                        {
-                            VoucherId = appliedVoucher.Id,
-                            UserId = customerId.Value,
-                            OrderId = order.Id,
-                            DiscountApplied = discountAmount,
-                            UsedDate = now
-                        });
-                    }
-                }
+                        // Chuyển trạng thái Serial sang "Sold" (Đã bán)
+                        s.Status = (byte)SerialStatus.Sold;
+                        s.SoldDate = now;
+                        s.OrderId = order.Id;
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                        var od = orderDetailsMap[s.VariantId];
+                        // Liên kết Serial với dòng chi tiết hóa đơn (OrderSerial)
+                        await _dbContext.OrderSerials.AddAsync(new OrderSerial
+                        {
+                            OrderDetailId = od.Id,
+                            SerialId = s.Id
+                        });
+
+                        // NGHIỆP VỤ PHÁT SINH BẢO HÀNH TỰ ĐỘNG:
+                        // Nếu sản phẩm đó có cấu hình thời hạn bảo hành (WarrantyMonth > 0), hệ thống tự sinh bản ghi Warranty ở trạng thái Active.
+                        if (s.Variant.WarrantyMonth > 0)
+                        {
+                            newWarranties.Add(new Warranty
+                            {
+                                SerialId = s.Id,
+                                CustomerId = customerId,
+                                OrderId = order.Id,
+                                StartDate = now,
+                                EndDate = now.AddMonths(s.Variant.WarrantyMonth),
+                                Status = (byte)WarrantyStatus.Active
+                            });
+                        }
+                    }
+
+                    if (newWarranties.Any())
+                    {
+                        await _warrantyRepo.AddRangeAsync(newWarranties);
+                    }
+
+                    // Ghi nhận Voucher đã dùng
+                    if (appliedVoucher != null)
+                    {
+                        // TIÊU THỤ NGUYÊN TỬ thay cho appliedVoucher.UsedCount++ (lost update).
+                        // Kiểm ở PosService:155 chỉ là chốt sớm cho UX; chốt THẬT là câu UPDATE này.
+                        if (!await _voucherRepo.TryConsumeAsync(appliedVoucher.Id))
+                            throw new InvalidOperationException(
+                                $"Mã '{appliedVoucher.Code}' đã hết lượt sử dụng. Vui lòng bỏ mã và thử lại.");
+
+                        if (customerId.HasValue)
+                        {
+                            await _dbContext.VoucherUsages.AddAsync(new VoucherUsage
+                            {
+                                VoucherId = appliedVoucher.Id,
+                                UserId = customerId.Value,
+                                OrderId = order.Id,
+                                DiscountApplied = discountAmount,
+                                UsedDate = now
+                            });
+                        }
+                    }
+
+                    await _unitOfWork.SaveChangesAsync();
+                });
 
                 // ── BƯỚC 6: ĐỒNG BỘ TỒN KHO THỰC TẾ (StockQuantity) ──
                 // Cập nhật tồn kho (Stock Qty) cho các Variant sau khi đã xuất bán thành công các serial vật lý
@@ -403,7 +403,6 @@ namespace PBL3.Service.Pos
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackAsync();
                 return ApiResult<PosOrderDto>.Fail("Lỗi khi quá trình thanh toán: " + ex.Message);
             }
         }

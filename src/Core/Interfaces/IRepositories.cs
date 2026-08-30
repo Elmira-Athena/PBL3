@@ -201,7 +201,7 @@ namespace PBL3.Core.Interfaces
         /// <summary>
         /// Lấy mã phiếu nhập cuối cùng theo ngày (để sinh mã tự động).
         /// </summary>
-        Task<string?> GetLastReceiptCodeByDateAsync(string datePrefix);
+        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
 
         Task AddAsync(ImportReceipt receipt);
         Task AddDetailAsync(ImportReceiptDetail detail);
@@ -357,6 +357,31 @@ namespace PBL3.Core.Interfaces
         Task AddUsagesAsync(IEnumerable<VoucherUsage> usages);
 
         /// <summary>
+        /// TIÊU THỤ NGUYÊN TỬ một lượt của mỗi voucher trong danh sách mã.
+        ///
+        /// Vì sao cần: cách cũ đọc entity rồi gán <c>voucher.UsedCount += 1</c> là mẫu
+        /// đọc-về-RAM-cộng-ghi-lại. Hai request đồng thời cùng đọc UsedCount = 5 và cùng
+        /// ghi 6 → LOST UPDATE: hai đơn đã tiêu thụ nhưng chỉ một lượt được đếm, nên
+        /// voucher dùng được NHIỀU HƠN số lượng phát hành. Check constraint
+        /// CK_Vouchers_Quantity KHÔNG bắt được vì UsedCount vẫn ≤ Quantity.
+        ///
+        /// Cách này sinh <c>SET UsedCount = UsedCount + 1 WHERE ... UsedCount &lt; Quantity</c>
+        /// — phép tăng diễn ra Ở PHÍA DB và vị từ nằm CÙNG câu lệnh với phép gán, nên
+        /// không còn khe check-then-act và không thể lost update.
+        ///
+        /// LƯU Ý: ExecuteUpdateAsync thực thi NGAY (không đợi SaveChangesAsync), bỏ qua
+        /// Change Tracker và bỏ qua concurrency token. Phải gọi trong transaction đang mở.
+        /// </summary>
+        /// <returns>Danh sách mã KHÔNG tiêu thụ được vì đã hết lượt. Rỗng = thành công.</returns>
+        Task<List<string>> TryConsumeByCodesAsync(List<string> codes);
+
+        /// <summary>
+        /// Như <see cref="TryConsumeByCodesAsync"/> nhưng cho một voucher theo Id.
+        /// </summary>
+        /// <returns>true nếu tiêu thụ được, false nếu đã hết lượt.</returns>
+        Task<bool> TryConsumeAsync(int voucherId);
+
+        /// <summary>
         /// Lấy tất cả voucher active, trong thời hạn hiệu lực, chưa hết số lượng.
         /// Dùng cho popup chọn voucher ở trang Checkout.
         /// </summary>
@@ -383,7 +408,7 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<Order?> GetByIdWithDetailsTrackedAsync(int id);
 
-        Task<string?> GetLastOrderCodeByDateAsync(string datePrefix);
+        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
         
         /// <summary>
         /// Lấy danh sách các đơn POS đang lưu nháp bởi một nhân viên.
@@ -407,8 +432,15 @@ namespace PBL3.Core.Interfaces
     {
         /// <summary>
         /// Lấy danh sách bảo hành active (status != Claimed) của một serial, sắp xếp theo EndDate giảm dần.
+        /// CHỈ ĐỌC — không tracking, gán lên entity trả về sẽ bị bỏ qua im lặng.
         /// </summary>
-        Task<List<Warranty>> GetActiveBySerialIdAsync(int serialId);
+        Task<List<Warranty>> GetActiveBySerialIdReadOnlyAsync(int serialId);
+
+        /// <summary>
+        /// Như trên nhưng CÓ tracking — dùng cho đường ghi (huỷ hiệu lực bảo hành cũ
+        /// khi đổi 1-1). Danh sách này vừa được đọc vừa được ghi nên bắt buộc tracked.
+        /// </summary>
+        Task<List<Warranty>> GetActiveBySerialIdTrackedAsync(int serialId);
 
         /// <summary>
         /// Lấy bảo hành theo Id, có tracking để update.
@@ -601,7 +633,7 @@ namespace PBL3.Core.Interfaces
         /// <summary>
         /// Lấy mã phiếu kiểm kê cuối cùng theo ngày (để sinh mã tự động KK-yyyyMMdd-NNN).
         /// </summary>
-        Task<string?> GetLastCheckCodeByDateAsync(string datePrefix);
+        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
 
         /// <summary>
         /// Lấy 1 row InventoryCheckDetailSerial theo Id.

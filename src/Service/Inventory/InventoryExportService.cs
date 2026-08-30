@@ -67,77 +67,79 @@ namespace PBL3.Service.Inventory
             }
 
             // BẮT ĐẦU TRANSACTION: Bảo toàn tính toàn vẹn dữ liệu xuất kho hàng loạt
-            await _unitOfWork.BeginTransactionAsync();
-
             try
             {
-                // Load Serials WITH TRACKING so updates are tracked by DbContext
-                var dbSerials = await _serialRepo.GetSerialsWithTrackingAsync(allSerialNumbers);
-                var dbSerialsMap = dbSerials.ToDictionary(s => s.SerialNumber, s => s, StringComparer.OrdinalIgnoreCase);
-                var variantIdsToSync = new HashSet<int>();
-
-                foreach (var detailReq in request.Details)
+                var variantIdsToSync = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    // Find corresponding OrderDetail in DB
-                    var orderDetail = order.OrderDetails.FirstOrDefault(od => od.Id == detailReq.OrderDetailId);
-                    if (orderDetail == null)
-                    {
-                        throw new Exception($"Chi tiết đơn hàng {detailReq.OrderDetailId} không thuộc về đơn hàng này.");
-                    }
+                    // Load Serials WITH TRACKING so updates are tracked by DbContext
+                    var dbSerials = await _serialRepo.GetSerialsWithTrackingAsync(allSerialNumbers);
+                    var dbSerialsMap = dbSerials.ToDictionary(s => s.SerialNumber, s => s, StringComparer.OrdinalIgnoreCase);
+                    var variantIdsToSync = new HashSet<int>();
 
-                    // 2. Kiểm tra Số lượng (Quantity Match)
-                    // LƯU Ý NGHIỆP VỤ: Đảm bảo số lượng Serial quét thực tế khớp chính xác tuyệt đối với số lượng đặt hàng
-                    if (detailReq.SerialNumbers.Count != orderDetail.Quantity)
+                    foreach (var detailReq in request.Details)
                     {
-                        throw new Exception($"Chưa quét đúng số lượng cho sản phẩm {orderDetail.Variant?.VariantName ?? orderDetail.VariantId.ToString()}. " +
-                                            $"Yêu cầu: {orderDetail.Quantity}, Đã quét: {detailReq.SerialNumbers.Count}");
-                    }
-
-                    // 3. Bảo vệ chéo Mismatched Variant & Trạng thái Available
-                    foreach (var serialNo in detailReq.SerialNumbers)
-                    {
-                        if (!dbSerialsMap.TryGetValue(serialNo, out var productSerial))
+                        // Find corresponding OrderDetail in DB
+                        var orderDetail = order.OrderDetails.FirstOrDefault(od => od.Id == detailReq.OrderDetailId);
+                        if (orderDetail == null)
                         {
-                            throw new Exception($"Mã Serial '{serialNo}' không tồn tại trong hệ thống.");
+                            throw new Exception($"Chi tiết đơn hàng {detailReq.OrderDetailId} không thuộc về đơn hàng này.");
                         }
 
-                        // Đảm bảo thiết bị chưa bị xuất bán hoặc bị hỏng hóc từ trước
-                        if (productSerial.Status != (byte)SerialStatus.Available)
+                        // 2. Kiểm tra Số lượng (Quantity Match)
+                        // LƯU Ý NGHIỆP VỤ: Đảm bảo số lượng Serial quét thực tế khớp chính xác tuyệt đối với số lượng đặt hàng
+                        if (detailReq.SerialNumbers.Count != orderDetail.Quantity)
                         {
-                            throw new Exception($"Mã Serial '{serialNo}' không ở trạng thái trong kho (Available). Trạng thái hiện tại: {productSerial.Status}.");
+                            throw new Exception($"Chưa quét đúng số lượng cho sản phẩm {orderDetail.Variant?.VariantName ?? orderDetail.VariantId.ToString()}. " +
+                                                $"Yêu cầu: {orderDetail.Quantity}, Đã quét: {detailReq.SerialNumbers.Count}");
                         }
 
-                        // LƯU Ý NGHIỆP VỤ (Mismatched Variant Protection):
-                        // Ràng buộc cực kỳ quan trọng ngăn chặn nhân viên đóng nhầm mã hàng/phiên bản màu sắc/dung lượng khác đơn đặt
-                        if (productSerial.VariantId != orderDetail.VariantId)
+                        // 3. Bảo vệ chéo Mismatched Variant & Trạng thái Available
+                        foreach (var serialNo in detailReq.SerialNumbers)
                         {
-                            throw new Exception($"Mã Serial '{serialNo}' (thuộc sản phẩm {productSerial.Variant?.VariantName ?? productSerial.VariantId.ToString()}) " +
-                                                $"KHÔNG KHỚP với sản phẩm yêu cầu trong đơn hàng ({orderDetail.Variant?.VariantName ?? orderDetail.VariantId.ToString()}).");
+                            if (!dbSerialsMap.TryGetValue(serialNo, out var productSerial))
+                            {
+                                throw new Exception($"Mã Serial '{serialNo}' không tồn tại trong hệ thống.");
+                            }
+
+                            // Đảm bảo thiết bị chưa bị xuất bán hoặc bị hỏng hóc từ trước
+                            if (productSerial.Status != (byte)SerialStatus.Available)
+                            {
+                                throw new Exception($"Mã Serial '{serialNo}' không ở trạng thái trong kho (Available). Trạng thái hiện tại: {productSerial.Status}.");
+                            }
+
+                            // LƯU Ý NGHIỆP VỤ (Mismatched Variant Protection):
+                            // Ràng buộc cực kỳ quan trọng ngăn chặn nhân viên đóng nhầm mã hàng/phiên bản màu sắc/dung lượng khác đơn đặt
+                            if (productSerial.VariantId != orderDetail.VariantId)
+                            {
+                                throw new Exception($"Mã Serial '{serialNo}' (thuộc sản phẩm {productSerial.Variant?.VariantName ?? productSerial.VariantId.ToString()}) " +
+                                                    $"KHÔNG KHỚP với sản phẩm yêu cầu trong đơn hàng ({orderDetail.Variant?.VariantName ?? orderDetail.VariantId.ToString()}).");
+                            }
+
+                            // 4. Cập nhật Dữ liệu (Ghi nhận Xuất kho)
+                            // Chuyển trạng thái vật lý của Serial sang Đã bán (Sold) và ghi nhận ngày bán thực tế
+                            productSerial.Status = (byte)SerialStatus.Sold;
+                            productSerial.SoldDate = DateTime.UtcNow;
+                            productSerial.OrderId = order.Id;
+
+                            // Insert OrderSerial link: Tạo bản ghi liên kết lịch sử bán của Serial phục vụ chẩn đoán bảo hành và truy vết giá vốn
+                            orderDetail.OrderSerials.Add(new OrderSerial
+                            {
+                                OrderDetailId = orderDetail.Id,
+                                SerialId = productSerial.Id
+                            });
+
+                            variantIdsToSync.Add(productSerial.VariantId);
                         }
-
-                        // 4. Cập nhật Dữ liệu (Ghi nhận Xuất kho)
-                        // Chuyển trạng thái vật lý của Serial sang Đã bán (Sold) và ghi nhận ngày bán thực tế
-                        productSerial.Status = (byte)SerialStatus.Sold;
-                        productSerial.SoldDate = DateTime.UtcNow;
-                        productSerial.OrderId = order.Id;
-
-                        // Insert OrderSerial link: Tạo bản ghi liên kết lịch sử bán của Serial phục vụ chẩn đoán bảo hành và truy vết giá vốn
-                        orderDetail.OrderSerials.Add(new OrderSerial
-                        {
-                            OrderDetailId = orderDetail.Id,
-                            SerialId = productSerial.Id
-                        });
-
-                        variantIdsToSync.Add(productSerial.VariantId);
                     }
-                }
 
-                // 5. Cập nhật Trạng thái Đơn hàng sang Đã xuất kho (Exported)
-                order.Status = (byte)OrderStatus.Exported;
+                    // 5. Cập nhật Trạng thái Đơn hàng sang Đã xuất kho (Exported)
+                    order.Status = (byte)OrderStatus.Exported;
 
-                // 6. Commit Transaction: Xác nhận mọi thay đổi vật lý thành công
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                    // 6. Commit Transaction: Xác nhận mọi thay đổi vật lý thành công
+                    await _unitOfWork.SaveChangesAsync();
+
+                    return variantIdsToSync;
+                });
 
                 // 7. Đồng bộ số lượng tồn kho ảo thực tế (StockQuantity) bên ngoài transaction
                 if (variantIdsToSync.Any())
@@ -152,7 +154,6 @@ namespace PBL3.Service.Inventory
             catch (Exception ex)
             {
                 // ROLLBACK TRANSACTION: Reset lại toàn bộ trạng thái nếu xảy ra bất kỳ lỗi quét mã nào
-                await _unitOfWork.RollbackAsync();
                 _logger.LogError(ex, "Lỗi khi xuất kho cho đơn hàng {OrderId}", order.Id);
                 return ApiResult<bool>.Fail($"Lỗi khi xuất kho: {ex.Message}");
             }

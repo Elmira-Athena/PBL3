@@ -14,10 +14,18 @@ namespace PBL3.Infrastructure.Repositories
             _dbContext = dbContext;
         }
 
-        public async Task<RmaShipment?> GetByTicketIdAsync(int ticketId)
+        public async Task<RmaShipment?> GetByTicketIdReadOnlyAsync(int ticketId)
         {
             return await _dbContext.RmaShipments
                 .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.TicketId == ticketId);
+        }
+
+        public async Task<RmaShipment?> GetByTicketIdTrackedAsync(int ticketId)
+        {
+            // Không có AsNoTracking: caller sẽ ghi lên entity này và cần SaveChangesAsync
+            // sinh ra câu UPDATE.
+            return await _dbContext.RmaShipments
                 .FirstOrDefaultAsync(r => r.TicketId == ticketId);
         }
 

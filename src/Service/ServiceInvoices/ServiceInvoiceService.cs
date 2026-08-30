@@ -24,7 +24,7 @@ namespace PBL3.Service.ServiceInvoices
 
         public async Task<ServiceInvoiceDetailDto?> GetByTicketIdAsync(int ticketId)
         {
-            var invoice = await _repository.GetByTicketIdAsync(ticketId);
+            var invoice = await _repository.GetByTicketIdReadOnlyAsync(ticketId);
             return invoice == null ? null : MapToDetailDto(invoice);
         }
 

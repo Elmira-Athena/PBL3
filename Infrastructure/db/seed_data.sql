@@ -9,6 +9,7 @@ GO
 DECLARE @AdminRoleId UNIQUEIDENTIFIER = '29837492-3847-4837-2938-472938472938';
 DECLARE @EmployeeRoleId UNIQUEIDENTIFIER = '39485729-3847-4837-2938-472938472939';
 DECLARE @CustomerRoleId UNIQUEIDENTIFIER = '49586730-3847-4837-2938-472938472940';
+DECLARE @TechnicianRoleId UNIQUEIDENTIFIER = '59687841-3847-4837-2938-472938472941';
 
 IF NOT EXISTS (SELECT 1 FROM AppRoles WHERE RoleCode = 'ADMIN')
     INSERT INTO AppRoles (Id, Name, NormalizedName, ConcurrencyStamp, Description, RoleCode)
@@ -24,6 +25,23 @@ IF NOT EXISTS (SELECT 1 FROM AppRoles WHERE RoleCode = 'CUSTOMER')
     INSERT INTO AppRoles (Id, Name, NormalizedName, ConcurrencyStamp, Description, RoleCode)
     VALUES (@CustomerRoleId, 'Customer', 'CUSTOMER', NEWID(), 'Regular customer', 'CUSTOMER');
 SET @CustomerRoleId = (SELECT TOP 1 Id FROM AppRoles WHERE RoleCode = 'CUSTOMER');
+
+-- Technician (KTV): role nay TRUOC DAY chi duoc tao boi khoi seed trong Program.cs.
+-- Khoi do khong co try/catch va chay o top-level statement, nen hai ECS task
+-- cold-start cung luc (tuc dung luc deploy) se co mot task vi pham unique index
+-- RoleNameIndex + IX_AppRoles_RoleCode => exception chua bat => process exit != 0
+-- => TASK CHET LUC BOOT. Ngoai ra no lam startup phu thuoc vao viec DB dang song.
+--
+-- THU TU BAT BUOC: dong nay phai chay TRUOC khi xoa khoi seed trong Program.cs.
+-- Dao thu tu thi EmployeeService.AddToRoleAsync(user, "Technician") vo hieu IM LANG.
+--
+-- NormalizedName phai ghi tay 'TECHNICIAN': RoleManager.CreateAsync tu sinh no qua
+-- UpperInvariantLookupNormalizer, INSERT tay thi khong. Thieu no thi
+-- FindByNameAsync/RoleExistsAsync KHONG BAO GIO tim thay role nay.
+IF NOT EXISTS (SELECT 1 FROM AppRoles WHERE RoleCode = 'KTV')
+    INSERT INTO AppRoles (Id, Name, NormalizedName, ConcurrencyStamp, Description, RoleCode)
+    VALUES (@TechnicianRoleId, 'Technician', 'TECHNICIAN', NEWID(), 'Ky thuat vien sua chua', 'KTV');
+SET @TechnicianRoleId = (SELECT TOP 1 Id FROM AppRoles WHERE RoleCode = 'KTV');
 
 -- 2. SEED ADMIN ACCOUNT (Password: Admin@123)
 -- Verified Hash generated via Microsoft.AspNetCore.Identity.PasswordHasher
@@ -48,5 +66,14 @@ END
 
 
 
-PRINT 'Seed data with verified hash completed successfully.';
+-- Chot kiem: phai co du 4 role. Neu thieu, seeder phai that bai ON AO
+-- chu khong duoc exit 0 roi de he thong chay voi role bi thieu.
+DECLARE @RoleCount INT = (SELECT COUNT(*) FROM AppRoles WHERE RoleCode IN ('ADMIN','EMPLOYEE','CUSTOMER','KTV'));
+IF @RoleCount <> 4
+BEGIN
+    DECLARE @msg NVARCHAR(200) = N'SEED THAT BAI: mong doi 4 role, tim thay ' + CAST(@RoleCount AS NVARCHAR(10));
+    THROW 50001, @msg, 1;
+END
+
+PRINT 'Seed data with verified hash completed successfully. AppRoles = 4.';
 GO

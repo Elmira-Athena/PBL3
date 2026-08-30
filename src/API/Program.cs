@@ -19,6 +19,7 @@ using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Infrastructure.Repositories;
 using PBL3.API.Filters;
+using PBL3.Service.Common;
 using PBL3.Service.Auth;
 using PBL3.Service.Categories;
 using PBL3.Service.ImportReceipts;
@@ -171,6 +172,9 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IImportReceiptService, ImportReceiptService>();
 builder.Services.AddScoped<IProductSerialService, ProductSerialService>();
 builder.Services.AddScoped<IInventorySyncService, InventorySyncService>();
+
+// Sinh mã chứng từ (ORD/POS/PN/KK/ST/SRV) — gom 7 khối trùng lặp về một chỗ.
+builder.Services.AddScoped<IDocumentCodeGenerator, DocumentCodeGenerator>();
 builder.Services.AddScoped<IInventoryCheckService, InventoryCheckService>();
 builder.Services.AddScoped<IInventoryExportService, InventoryExportService>();
 builder.Services.AddScoped<IPosService, PosService>();
@@ -272,13 +276,46 @@ var app = builder.Build();
 // __EFMigrationsHistory.
 // Xem docs/superpowers/specs/2026-08-17-aws-terraform-ecs-infra-design.md
 
-// Seed "Technician" role if it doesn't exist
+// Seed "Technician" role if it doesn't exist.
+//
+// LƯỚI AN TOÀN TẠM THỜI — sẽ xoá hẳn ở đợt 5.
+// Nguồn tạo role này giờ là Infrastructure/db/seed_data.sql (RoleCode 'KTV').
+// Khối dưới đây chỉ còn để đỡ cho môi trường nào chưa chạy lại seeder.
+// Điều kiện xoá: xác nhận `SELECT * FROM AppRoles WHERE RoleCode = 'KTV'`
+// trả về 1 dòng trên production.
+//
+// VÌ SAO PHẢI CÓ try/catch: đây là top-level statement chạy trước mọi middleware.
+// Hai ECS task cold-start cùng lúc (tức đúng lúc deploy) thì cả hai cùng thấy
+// role chưa có và cùng INSERT. Task thua vi phạm HAI unique index cùng lúc —
+// RoleNameIndex trên NormalizedName và IX_AppRoles_RoleCode. Vi phạm unique ở
+// tầng DB NÉM EXCEPTION chứ không trả IdentityResult thất bại, nên kiểm
+// result.Succeeded cũng không cứu được. Exception chưa bắt ở đây => process
+// exit khác 0 => TASK CHẾT NGAY LÚC BOOT.
+//
+// Triệu chứng khó chịu: lần khởi động lại sẽ thành công (role đã tồn tại), nên
+// biểu hiện là "một trong hai task chết đúng một lần rồi tự lành" — rất dễ trôi
+// qua trong log deploy mà không ai để ý.
+//
+// Bắt exception ở đây cũng gỡ luôn việc startup của API phụ thuộc vào chuyện
+// DB đang sống và cho ghi: RDS chớp tắt lúc task đang lên sẽ không còn gây
+// crash-loop. /health/ready tồn tại chính là để xử lý DB chết một cách mềm mại.
 using (var roleScope = app.Services.CreateScope())
 {
-    var roleManager = roleScope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
-    if (!await roleManager.RoleExistsAsync("Technician"))
+    try
     {
-        await roleManager.CreateAsync(new AppRole { Name = "Technician", RoleCode = "KTV" });
+        var roleManager = roleScope.ServiceProvider.GetRequiredService<RoleManager<AppRole>>();
+        if (!await roleManager.RoleExistsAsync("Technician"))
+        {
+            await roleManager.CreateAsync(new AppRole { Name = "Technician", RoleCode = "KTV" });
+        }
+    }
+    catch (Exception ex)
+    {
+        // Nuốt có chủ đích. Nếu role thật sự thiếu, EmployeeService sẽ báo lỗi khi
+        // gán quyền kỹ thuật viên — ồn ào và đúng chỗ, thay vì giết cả tiến trình.
+        app.Logger.LogWarning(ex,
+            "Không seed được role Technician lúc khởi động. Bỏ qua để tiến trình " +
+            "tiếp tục lên. Nếu role thiếu thật, chạy lại task seeder (seed_data.sql).");
     }
 }
 

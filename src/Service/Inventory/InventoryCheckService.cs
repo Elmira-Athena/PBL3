@@ -23,6 +23,9 @@ namespace PBL3.Service.Inventory
         private readonly HushStoreDbContext _context;
         private readonly ILogger<InventoryCheckService> _logger;
 
+        private readonly IDocumentCodeGenerator _codeGenerator;
+
+
         public InventoryCheckService(
             IInventoryCheckRepository checkRepo,
             IProductSerialRepository serialRepo,
@@ -30,7 +33,8 @@ namespace PBL3.Service.Inventory
             IInventorySyncService inventorySyncService,
             IUnitOfWork unitOfWork,
             HushStoreDbContext context,
-            ILogger<InventoryCheckService> logger)
+            ILogger<InventoryCheckService> logger,
+            IDocumentCodeGenerator codeGenerator)
         {
             _checkRepo = checkRepo;
             _serialRepo = serialRepo;
@@ -39,6 +43,7 @@ namespace PBL3.Service.Inventory
             _unitOfWork = unitOfWork;
             _context = context;
             _logger = logger;
+            _codeGenerator = codeGenerator;
         }
 
         // ========================================================
@@ -64,84 +69,88 @@ namespace PBL3.Service.Inventory
                     return ApiResult<InventoryCheckDto>.Fail("Danh mục kiểm kê không tồn tại.");
             }
 
+            // NGHIỆP VỤ XÁC ĐỊNH PHẠM VI: Truy vấn toàn bộ các mã biến thể sản phẩm (ProductVariants) thuộc phạm vi kiểm kê.
+            // Nếu kiểm kê theo danh mục, tự động dùng thuật toán lấy cả các danh mục con cháu phẳng (flat subcategories tree).
+            // Đây là truy vấn CHỈ ĐỌC nên đặt TRƯỚC transaction: trước đây nó nằm trong transaction và
+            // nhánh "không có sản phẩm" return thẳng ra ngoài — transaction bị bỏ dở, không commit không rollback.
+            var variantIds = await GetVariantIdsInScopeAsync(request.ScopeType, request.ScopeCategoryId);
+            if (!variantIds.Any())
+            {
+                return ApiResult<InventoryCheckDto>.Fail("Không có sản phẩm nào trong phạm vi kiểm kê.");
+            }
+
             // Sử dụng Transaction để đảm bảo tính toàn vẹn dữ liệu khi ghi nhận Snapshot tồn kho số lượng lớn
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var now = DateTime.UtcNow;
-                var checkCode = await GenerateCheckCodeAsync();
-
-                // 1. Tạo bản ghi đầu phiếu kiểm kê ở trạng thái Nháp (Draft)
-                var check = new InventoryCheck
+                var (check, checkCode, availableSerials) = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    CheckCode = checkCode,
-                    EmployeeId = employeeId,
-                    CheckDate = now,
-                    SnapshotAt = now,
-                    Status = (byte)InventoryCheckStatus.Draft,
-                    ScopeType = request.ScopeType,
-                    ScopeCategoryId = request.ScopeCategoryId,
-                    Note = request.Note?.Trim(),
-                    IsDeleted = false
-                };
+                    var now = DateTime.UtcNow;
+                    var checkCode = await GenerateCheckCodeAsync();
 
-                await _checkRepo.AddAsync(check);
-                await _unitOfWork.SaveChangesAsync();
+                    // 1. Tạo bản ghi đầu phiếu kiểm kê ở trạng thái Nháp (Draft)
+                    var check = new InventoryCheck
+                    {
+                        CheckCode = checkCode,
+                        EmployeeId = employeeId,
+                        CheckDate = now,
+                        SnapshotAt = now,
+                        Status = (byte)InventoryCheckStatus.Draft,
+                        ScopeType = request.ScopeType,
+                        ScopeCategoryId = request.ScopeCategoryId,
+                        Note = request.Note?.Trim(),
+                        IsDeleted = false
+                    };
 
-                // 2. NGHIỆP VỤ XÁC ĐỊNH PHẠM VI: Truy vấn toàn bộ các mã biến thể sản phẩm (ProductVariants) thuộc phạm vi kiểm kê
-                // Nếu kiểm kê theo danh mục, tự động dùng thuật toán lấy cả các danh mục con cháu phẳng (flat subcategories tree)
-                var variantIds = await GetVariantIdsInScopeAsync(request.ScopeType, request.ScopeCategoryId);
-                if (!variantIds.Any())
-                {
-                    await _unitOfWork.RollbackAsync();
-                    return ApiResult<InventoryCheckDto>.Fail("Không có sản phẩm nào trong phạm vi kiểm kê.");
-                }
+                    await _checkRepo.AddAsync(check);
+                    await _unitOfWork.SaveChangesAsync();
 
-                // 3. CHỐT SNAPSHOT SỔ SÁCH THỜI GIAN THỰC (Book Inventory Snapshot):
-                // Lấy toàn bộ mã Serial đang có trạng thái khả dụng trong kho (Available) thuộc phạm vi trên để làm mốc đối chiếu
-                var availableSerials = await _serialRepo.GetAvailableSerialsBatchAsync(variantIds);
+                    // 3. CHỐT SNAPSHOT SỔ SÁCH THỜI GIAN THỰC (Book Inventory Snapshot):
+                    // Lấy toàn bộ mã Serial đang có trạng thái khả dụng trong kho (Available) thuộc phạm vi trên để làm mốc đối chiếu
+                    var availableSerials = await _serialRepo.GetAvailableSerialsBatchAsync(variantIds);
 
-                // 4. KHỞI TẠO CHI TIẾT PHIẾU (InventoryCheckDetail)
-                // Gom nhóm và đếm số lượng sổ sách của từng Variant dựa trên danh sách Serial chốt được
-                var detailMap = new Dictionary<int, InventoryCheckDetail>();
-                foreach (var variantId in variantIds)
-                {
-                    var sysQty = availableSerials.Count(s => s.VariantId == variantId);
-                    var detail = new InventoryCheckDetail
+                    // 4. KHỞI TẠO CHI TIẾT PHIẾU (InventoryCheckDetail)
+                    // Gom nhóm và đếm số lượng sổ sách của từng Variant dựa trên danh sách Serial chốt được
+                    var detailMap = new Dictionary<int, InventoryCheckDetail>();
+                    foreach (var variantId in variantIds)
+                    {
+                        var sysQty = availableSerials.Count(s => s.VariantId == variantId);
+                        var detail = new InventoryCheckDetail
+                        {
+                            CheckId = check.Id,
+                            VariantId = variantId,
+                            SystemQuantity = sysQty,    // Số lượng sổ sách chốt tại thời điểm kiểm kê (System Qty)
+                            ActualQuantity = 0,        // Số lượng thực tế quét được (bắt đầu bằng 0)
+                            MatchedQuantity = 0,       // Số lượng khớp thực tế quét (bắt đầu bằng 0)
+                            MissingQuantity = 0,       // Số lượng thiếu so với sổ sách (bắt đầu bằng 0)
+                            SurplusQuantity = 0,       // Số lượng thừa (bắt đầu bằng 0)
+                            DefectiveQuantity = 0      // Số lượng hàng lỗi vật lý quét được (bắt đầu bằng 0)
+                        };
+                        await _checkRepo.AddDetailAsync(detail);
+                        detailMap[variantId] = detail;
+                    }
+
+                    await _unitOfWork.SaveChangesAsync(); // Lưu để phát sinh Detail.Id tự động phục vụ khóa ngoại ở bước sau
+
+                    // 5. GHI NHẬN SNAPSHOT SERIAL CHI TIẾT (InventoryCheckDetailSerial)
+                    // Mỗi mã serial chốt ở bước 3 sẽ được ánh xạ thành 1 dòng trạng thái "Chờ quét" (Pending)
+                    // làm cơ sở đối chiếu khi quét barcode thực tế tại kho
+                    var snapshotRows = availableSerials.Select(s => new InventoryCheckDetailSerial
                     {
                         CheckId = check.Id,
-                        VariantId = variantId,
-                        SystemQuantity = sysQty,    // Số lượng sổ sách chốt tại thời điểm kiểm kê (System Qty)
-                        ActualQuantity = 0,        // Số lượng thực tế quét được (bắt đầu bằng 0)
-                        MatchedQuantity = 0,       // Số lượng khớp thực tế quét (bắt đầu bằng 0)
-                        MissingQuantity = 0,       // Số lượng thiếu so với sổ sách (bắt đầu bằng 0)
-                        SurplusQuantity = 0,       // Số lượng thừa (bắt đầu bằng 0)
-                        DefectiveQuantity = 0      // Số lượng hàng lỗi vật lý quét được (bắt đầu bằng 0)
-                    };
-                    await _checkRepo.AddDetailAsync(detail);
-                    detailMap[variantId] = detail;
-                }
+                        DetailId = detailMap.TryGetValue(s.VariantId, out var d) ? d.Id : null,
+                        VariantId = s.VariantId,
+                        SerialId = s.SerialId,
+                        SerialNumberRaw = s.SerialNumber,
+                        OriginalStatus = (byte)SerialStatus.Available,
+                        ScanStatus = (byte)InventoryScanStatus.Pending, // Bắt đầu ở trạng thái Pending (chờ nhân viên quét barcode)
+                        ScannedAt = null
+                    }).ToList();
 
-                await _unitOfWork.SaveChangesAsync(); // Lưu để phát sinh Detail.Id tự động phục vụ khóa ngoại ở bước sau
+                    await _checkRepo.AddDetailSerialsAsync(snapshotRows);
+                    await _unitOfWork.SaveChangesAsync();
 
-                // 5. GHI NHẬN SNAPSHOT SERIAL CHI TIẾT (InventoryCheckDetailSerial)
-                // Mỗi mã serial chốt ở bước 3 sẽ được ánh xạ thành 1 dòng trạng thái "Chờ quét" (Pending)
-                // làm cơ sở đối chiếu khi quét barcode thực tế tại kho
-                var snapshotRows = availableSerials.Select(s => new InventoryCheckDetailSerial
-                {
-                    CheckId = check.Id,
-                    DetailId = detailMap.TryGetValue(s.VariantId, out var d) ? d.Id : null,
-                    VariantId = s.VariantId,
-                    SerialId = s.SerialId,
-                    SerialNumberRaw = s.SerialNumber,
-                    OriginalStatus = (byte)SerialStatus.Available,
-                    ScanStatus = (byte)InventoryScanStatus.Pending, // Bắt đầu ở trạng thái Pending (chờ nhân viên quét barcode)
-                    ScannedAt = null
-                }).ToList();
-
-                await _checkRepo.AddDetailSerialsAsync(snapshotRows);
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                    return (check, checkCode, availableSerials);
+                });
 
                 _logger.LogInformation(
                     "Tạo phiếu kiểm kê: {CheckCode}, Phạm vi: {ScopeType}, Snapshot: {Total} serials",
@@ -152,7 +161,6 @@ namespace PBL3.Service.Inventory
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackAsync();
                 _logger.LogError(ex, "Lỗi khi tạo phiếu kiểm kê.");
                 return ApiResult<InventoryCheckDto>.Fail("Đã xảy ra lỗi khi tạo phiếu kiểm kê. Vui lòng thử lại.");
             }
@@ -583,37 +591,40 @@ namespace PBL3.Service.Inventory
             if (check.EmployeeId != employeeId)
                 return ApiResult<bool>.Fail("Bạn không có quyền gửi duyệt phiếu này.");
 
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // NGHIỆP VỤ QUAN TRỌNG: Tất cả các mã Serial nằm trong danh sách chốt ban đầu (Pending)
-                // mà không được nhân viên quét barcode thực tế (chưa được tìm thấy tại kho)
-                // sẽ tự động được coi là thất thoát và chuyển sang trạng thái "Thiếu" (Missing).
-                var pendingRows = await _checkRepo.GetPendingDetailSerialsAsync(checkId);
-                var detailMissingCounts = new Dictionary<int, int>();
-
-                foreach (var row in pendingRows)
+                var pendingRows = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    row.ScanStatus = (byte)InventoryScanStatus.Missing;
-                    if (row.DetailId.HasValue)
+                    // NGHIỆP VỤ QUAN TRỌNG: Tất cả các mã Serial nằm trong danh sách chốt ban đầu (Pending)
+                    // mà không được nhân viên quét barcode thực tế (chưa được tìm thấy tại kho)
+                    // sẽ tự động được coi là thất thoát và chuyển sang trạng thái "Thiếu" (Missing).
+                    var pendingRows = await _checkRepo.GetPendingDetailSerialsAsync(checkId);
+                    var detailMissingCounts = new Dictionary<int, int>();
+
+                    foreach (var row in pendingRows)
                     {
-                        detailMissingCounts.TryAdd(row.DetailId.Value, 0);
-                        detailMissingCounts[row.DetailId.Value]++;
+                        row.ScanStatus = (byte)InventoryScanStatus.Missing;
+                        if (row.DetailId.HasValue)
+                        {
+                            detailMissingCounts.TryAdd(row.DetailId.Value, 0);
+                            detailMissingCounts[row.DetailId.Value]++;
+                        }
                     }
-                }
 
-                // Cập nhật lại số lượng Thiếu (MissingQuantity) trên dòng tổng hợp Detail của từng Variant
-                foreach (var (detailId, missingCount) in detailMissingCounts)
-                {
-                    var detail = await _context.InventoryCheckDetails
-                        .FirstOrDefaultAsync(d => d.Id == detailId);
-                    if (detail != null)
-                        detail.MissingQuantity += missingCount;
-                }
+                    // Cập nhật lại số lượng Thiếu (MissingQuantity) trên dòng tổng hợp Detail của từng Variant
+                    foreach (var (detailId, missingCount) in detailMissingCounts)
+                    {
+                        var detail = await _context.InventoryCheckDetails
+                            .FirstOrDefaultAsync(d => d.Id == detailId);
+                        if (detail != null)
+                            detail.MissingQuantity += missingCount;
+                    }
 
-                check.Status = (byte)InventoryCheckStatus.AwaitingApproval; // Chuyển trạng thái phiếu sang Chờ duyệt (AwaitingApproval)
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                    check.Status = (byte)InventoryCheckStatus.AwaitingApproval; // Chuyển trạng thái phiếu sang Chờ duyệt (AwaitingApproval)
+                    await _unitOfWork.SaveChangesAsync();
+
+                    return pendingRows;
+                });
 
                 _logger.LogInformation(
                     "Gửi duyệt phiếu kiểm kê {CheckCode}: {MissingCount} serials thiếu",
@@ -623,7 +634,6 @@ namespace PBL3.Service.Inventory
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackAsync();
                 _logger.LogError(ex, "Lỗi khi gửi duyệt phiếu kiểm kê {CheckId}.", checkId);
                 return ApiResult<bool>.Fail("Đã xảy ra lỗi khi gửi duyệt. Vui lòng thử lại.");
             }
@@ -650,113 +660,115 @@ namespace PBL3.Service.Inventory
             if (check.Status != (byte)InventoryCheckStatus.AwaitingApproval)
                 return ApiResult<bool>.Fail("Chỉ có thể phê duyệt phiếu ở trạng thái Chờ duyệt.");
 
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var adjustmentLogs = new List<InventoryAdjustmentLog>();
-                var affectedVariantIds = new HashSet<int>();
-
-                // ── BƯỚC 1: XỬ LÝ SERIAL THẤT THOÁT (Missing rows → Lost) ──
-                var missingRows = await _checkRepo.GetMissingDetailSerialsWithSerialAsync(checkId);
-                foreach (var row in missingRows)
+                var adjustmentLogs = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    if (row.Serial == null) continue;
+                    var adjustmentLogs = new List<InventoryAdjustmentLog>();
+                    var affectedVariantIds = new HashSet<int>();
 
-                    var currentStatus = row.Serial.Status;
-
-                    // QUY TẮC NGHIỆP VỤ CỐT LÕI (BR1):
-                    // Chỉ cập nhật trạng thái Serial sang "Lost" (Mất) nếu tại thời điểm phê duyệt, serial đó VẪN ĐANG ở trạng thái "Available".
-                    if (currentStatus == (byte)SerialStatus.Available)
+                    // ── BƯỚC 1: XỬ LÝ SERIAL THẤT THOÁT (Missing rows → Lost) ──
+                    var missingRows = await _checkRepo.GetMissingDetailSerialsWithSerialAsync(checkId);
+                    foreach (var row in missingRows)
                     {
-                        // Lấy giá vốn của Serial từ Hóa đơn nhập kho gần nhất để làm cơ sở tính chi phí tổn thất
-                        var costImpact = await GetSerialCostAsync(row.Serial);
+                        if (row.Serial == null) continue;
 
-                        row.Serial.Status = (byte)SerialStatus.Lost; // Chuyển trạng thái phần mềm sang Thất thoát
-                        affectedVariantIds.Add(row.Serial.VariantId); // Đánh dấu Variant cần đồng bộ số lượng tồn
+                        var currentStatus = row.Serial.Status;
 
-                        // Lưu log điều chỉnh kho phục vụ báo cáo tài chính/kiểm toán
-                        adjustmentLogs.Add(new InventoryAdjustmentLog
+                        // QUY TẮC NGHIỆP VỤ CỐT LÕI (BR1):
+                        // Chỉ cập nhật trạng thái Serial sang "Lost" (Mất) nếu tại thời điểm phê duyệt, serial đó VẪN ĐANG ở trạng thái "Available".
+                        if (currentStatus == (byte)SerialStatus.Available)
                         {
-                            AuditCheckId = checkId,
-                            SerialId = row.Serial.Id,
-                            VariantId = row.Serial.VariantId,
-                            OldStatus = currentStatus,
-                            NewStatus = (byte)SerialStatus.Lost,
-                            AdjustmentType = (byte)InventoryAdjustmentType.Lost,
-                            CostImpact = costImpact,
-                            Reason = row.Note ?? "Không tìm thấy khi kiểm kê.",
-                            AdjustedDate = DateTime.UtcNow,
-                            AdjustedByEmployeeId = adminId
-                        });
+                            // Lấy giá vốn của Serial từ Hóa đơn nhập kho gần nhất để làm cơ sở tính chi phí tổn thất
+                            var costImpact = await GetSerialCostAsync(row.Serial);
+
+                            row.Serial.Status = (byte)SerialStatus.Lost; // Chuyển trạng thái phần mềm sang Thất thoát
+                            affectedVariantIds.Add(row.Serial.VariantId); // Đánh dấu Variant cần đồng bộ số lượng tồn
+
+                            // Lưu log điều chỉnh kho phục vụ báo cáo tài chính/kiểm toán
+                            adjustmentLogs.Add(new InventoryAdjustmentLog
+                            {
+                                AuditCheckId = checkId,
+                                SerialId = row.Serial.Id,
+                                VariantId = row.Serial.VariantId,
+                                OldStatus = currentStatus,
+                                NewStatus = (byte)SerialStatus.Lost,
+                                AdjustmentType = (byte)InventoryAdjustmentType.Lost,
+                                CostImpact = costImpact,
+                                Reason = row.Note ?? "Không tìm thấy khi kiểm kê.",
+                                AdjustedDate = DateTime.UtcNow,
+                                AdjustedByEmployeeId = adminId
+                            });
+                        }
+                        else
+                        {
+                            // "CỬA SỔ KIỂM KÊ" (CỰC KỲ QUAN TRỌNG):
+                            // Nếu trong thời gian chờ duyệt phiếu, serial này đã được khách mua trực tuyến (Sold) hoặc đang được giữ chỗ (Reserved) trong một đơn hàng mới,
+                            // ta KHÔNG được phép chuyển nó sang Lost nữa (để tránh làm hỏng đơn hàng của khách).
+                            // Hệ thống ghi nhận trạng thái ResolvedDuringApproval = true để bỏ qua và cập nhật lý do rõ ràng.
+                            row.ResolvedDuringApproval = true;
+                            var resolveNote = currentStatus switch
+                            {
+                                (byte)SerialStatus.Sold => "Đã bán trong cửa sổ kiểm kê — không ghi lỗ.",
+                                (byte)SerialStatus.Reserved => "Đã giữ chỗ trong cửa sổ kiểm kê — không ghi lỗ.",
+                                _ => $"Trạng thái thay đổi trong cửa sổ kiểm kê ({currentStatus}) — không ghi lỗ."
+                            };
+                            row.Note = string.IsNullOrEmpty(row.Note)
+                                ? resolveNote
+                                : $"{row.Note} | {resolveNote}";
+                        }
                     }
-                    else
+
+                    // ── BƯỚC 2: XỬ LÝ SERIAL LỖI VẬT LÝ (Defective rows → Defective) ──
+                    var defectiveRows = await _checkRepo.GetDefectiveDetailSerialsWithSerialAsync(checkId);
+                    foreach (var row in defectiveRows)
                     {
-                        // "CỬA SỔ KIỂM KÊ" (CỰC KỲ QUAN TRỌNG):
-                        // Nếu trong thời gian chờ duyệt phiếu, serial này đã được khách mua trực tuyến (Sold) hoặc đang được giữ chỗ (Reserved) trong một đơn hàng mới,
-                        // ta KHÔNG được phép chuyển nó sang Lost nữa (để tránh làm hỏng đơn hàng của khách).
-                        // Hệ thống ghi nhận trạng thái ResolvedDuringApproval = true để bỏ qua và cập nhật lý do rõ ràng.
-                        row.ResolvedDuringApproval = true;
-                        var resolveNote = currentStatus switch
+                        if (row.Serial == null) continue;
+
+                        var currentStatus = row.Serial.Status;
+
+                        // Chỉ chuyển sang lỗi hỏng vật lý nếu thực tế nó vẫn đang được coi là Available trên phần mềm
+                        if (currentStatus == (byte)SerialStatus.Available)
                         {
-                            (byte)SerialStatus.Sold => "Đã bán trong cửa sổ kiểm kê — không ghi lỗ.",
-                            (byte)SerialStatus.Reserved => "Đã giữ chỗ trong cửa sổ kiểm kê — không ghi lỗ.",
-                            _ => $"Trạng thái thay đổi trong cửa sổ kiểm kê ({currentStatus}) — không ghi lỗ."
-                        };
-                        row.Note = string.IsNullOrEmpty(row.Note)
-                            ? resolveNote
-                            : $"{row.Note} | {resolveNote}";
+                            var costImpact = await GetSerialCostAsync(row.Serial);
+
+                            row.Serial.Status = (byte)SerialStatus.Defective; // Chuyển trạng thái sang Lỗi hỏng (không được bán nữa)
+                            affectedVariantIds.Add(row.Serial.VariantId);
+
+                            adjustmentLogs.Add(new InventoryAdjustmentLog
+                            {
+                                AuditCheckId = checkId,
+                                SerialId = row.Serial.Id,
+                                VariantId = row.Serial.VariantId,
+                                OldStatus = currentStatus,
+                                NewStatus = (byte)SerialStatus.Defective,
+                                AdjustmentType = (byte)InventoryAdjustmentType.Defective,
+                                CostImpact = costImpact,
+                                Reason = row.Note ?? "Hàng lỗi vật lý phát hiện khi kiểm kê.",
+                                AdjustedDate = DateTime.UtcNow,
+                                AdjustedByEmployeeId = adminId
+                            });
+                        }
                     }
-                }
 
-                // ── BƯỚC 2: XỬ LÝ SERIAL LỖI VẬT LÝ (Defective rows → Defective) ──
-                var defectiveRows = await _checkRepo.GetDefectiveDetailSerialsWithSerialAsync(checkId);
-                foreach (var row in defectiveRows)
-                {
-                    if (row.Serial == null) continue;
+                    // Lưu toàn bộ lịch sử điều chỉnh kho
+                    if (adjustmentLogs.Any())
+                        await _checkRepo.AddAdjustmentLogsAsync(adjustmentLogs);
 
-                    var currentStatus = row.Serial.Status;
+                    // Cập nhật thông tin phiếu kiểm kê sang Đã hoàn tất (Completed)
+                    check.Status = (byte)InventoryCheckStatus.Completed;
+                    check.ApprovedByEmployeeId = adminId;
+                    check.ApprovedAt = DateTime.UtcNow;
 
-                    // Chỉ chuyển sang lỗi hỏng vật lý nếu thực tế nó vẫn đang được coi là Available trên phần mềm
-                    if (currentStatus == (byte)SerialStatus.Available)
-                    {
-                        var costImpact = await GetSerialCostAsync(row.Serial);
+                    await _unitOfWork.SaveChangesAsync();
 
-                        row.Serial.Status = (byte)SerialStatus.Defective; // Chuyển trạng thái sang Lỗi hỏng (không được bán nữa)
-                        affectedVariantIds.Add(row.Serial.VariantId);
+                    // ── BƯỚC 3: ĐỒNG BỘ HÓA TỒN KHO THỰC TẾ (StockQuantity) ──
+                    // Kích hoạt đồng bộ lại số lượng tồn khả dụng của các Variant bị ảnh hưởng để hiển thị đúng lên Website bán hàng
+                    if (affectedVariantIds.Any())
+                        await _inventorySyncService.SyncStockBatchAsync(affectedVariantIds);
 
-                        adjustmentLogs.Add(new InventoryAdjustmentLog
-                        {
-                            AuditCheckId = checkId,
-                            SerialId = row.Serial.Id,
-                            VariantId = row.Serial.VariantId,
-                            OldStatus = currentStatus,
-                            NewStatus = (byte)SerialStatus.Defective,
-                            AdjustmentType = (byte)InventoryAdjustmentType.Defective,
-                            CostImpact = costImpact,
-                            Reason = row.Note ?? "Hàng lỗi vật lý phát hiện khi kiểm kê.",
-                            AdjustedDate = DateTime.UtcNow,
-                            AdjustedByEmployeeId = adminId
-                        });
-                    }
-                }
-
-                // Lưu toàn bộ lịch sử điều chỉnh kho
-                if (adjustmentLogs.Any())
-                    await _checkRepo.AddAdjustmentLogsAsync(adjustmentLogs);
-
-                // Cập nhật thông tin phiếu kiểm kê sang Đã hoàn tất (Completed)
-                check.Status = (byte)InventoryCheckStatus.Completed;
-                check.ApprovedByEmployeeId = adminId;
-                check.ApprovedAt = DateTime.UtcNow;
-
-                await _unitOfWork.SaveChangesAsync();
-
-                // ── BƯỚC 3: ĐỒNG BỘ HÓA TỒN KHO THỰC TẾ (StockQuantity) ──
-                // Kích hoạt đồng bộ lại số lượng tồn khả dụng của các Variant bị ảnh hưởng để hiển thị đúng lên Website bán hàng
-                if (affectedVariantIds.Any())
-                    await _inventorySyncService.SyncStockBatchAsync(affectedVariantIds);
-
-                await _unitOfWork.CommitAsync();
+                    return adjustmentLogs;
+                });
 
                 _logger.LogInformation(
                     "Phê duyệt phiếu kiểm kê {CheckCode}: {Lost} lost, {Defective} defective. Admin: {AdminId}",
@@ -769,7 +781,6 @@ namespace PBL3.Service.Inventory
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackAsync();
                 _logger.LogError(ex, "Lỗi khi phê duyệt phiếu kiểm kê {CheckId}.", checkId);
                 return ApiResult<bool>.Fail("Đã xảy ra lỗi khi phê duyệt. Vui lòng thử lại.");
             }
@@ -793,84 +804,85 @@ namespace PBL3.Service.Inventory
             if (check.Status != (byte)InventoryCheckStatus.AwaitingApproval)
                 return ApiResult<bool>.Fail("Chỉ có thể từ chối phiếu ở trạng thái Chờ duyệt.");
 
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                check.RejectReason = request.Reason.Trim();
-
-                // NGHIỆP VỤ: Từ chối có 2 hướng đi: Trả về nháp để quét lại hoặc Hủy phiếu hoàn toàn
-                if (request.ReturnToDraft)
+                await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    // ── PHƯƠNG ÁN 1: TRẢ VỀ TRẠNG THÁI NHÁP (Draft) ──
-                    // Chuyển toàn bộ các dòng "Thiếu" (Missing) trở lại thành trạng thái "Chờ quét" (Pending)
-                    var actualMissingRows = await _context.InventoryCheckDetailSerials
-                        .Where(s => s.CheckId == checkId && s.ScanStatus == (byte)InventoryScanStatus.Missing)
-                        .Include(s => s.Detail)
-                        .ToListAsync();
+                    check.RejectReason = request.Reason.Trim();
 
-                    foreach (var row in actualMissingRows)
+                    // NGHIỆP VỤ: Từ chối có 2 hướng đi: Trả về nháp để quét lại hoặc Hủy phiếu hoàn toàn
+                    if (request.ReturnToDraft)
                     {
-                        row.ScanStatus = (byte)InventoryScanStatus.Pending;
-                        if (row.Detail != null)
-                            row.Detail.MissingQuantity = 0;
-                    }
+                        // ── PHƯƠNG ÁN 1: TRẢ VỀ TRẠNG THÁI NHÁP (Draft) ──
+                        // Chuyển toàn bộ các dòng "Thiếu" (Missing) trở lại thành trạng thái "Chờ quét" (Pending)
+                        var actualMissingRows = await _context.InventoryCheckDetailSerials
+                            .Where(s => s.CheckId == checkId && s.ScanStatus == (byte)InventoryScanStatus.Missing)
+                            .Include(s => s.Detail)
+                            .ToListAsync();
 
-                    // Xóa hoàn toàn tất cả các dòng ghi nhận Thừa (Surplus) hoặc Thừa mã lạ (UnknownSurplus) phát sinh trong lần quét trước
-                    var surplusRows = await _checkRepo.GetSurplusDetailSerialsAsync(checkId);
-                    await _checkRepo.RemoveDetailSerialsAsync(surplusRows);
-
-                    // Khởi động lại (Reset) toàn bộ các cột chỉ số lượng đếm trên bảng chi tiết
-                    var details = await _context.InventoryCheckDetails
-                        .Where(d => d.CheckId == checkId)
-                        .ToListAsync();
-                    foreach (var d in details)
-                    {
-                        d.ActualQuantity = 0;
-                        d.MatchedQuantity = 0;
-                        d.MissingQuantity = 0;
-                        d.SurplusQuantity = 0;
-                        d.DefectiveQuantity = 0;
-                    }
-
-                    // Đếm lại và điền lại số lượng cho các dòng đã quét "Khớp" (Matched) vẫn giữ nguyên kết quả
-                    var matchedRows = await _context.InventoryCheckDetailSerials
-                        .Where(s => s.CheckId == checkId && s.ScanStatus == (byte)InventoryScanStatus.Matched)
-                        .Include(s => s.Detail)
-                        .ToListAsync();
-                    foreach (var row in matchedRows)
-                    {
-                        if (row.Detail != null)
+                        foreach (var row in actualMissingRows)
                         {
-                            row.Detail.ActualQuantity++;
-                            row.Detail.MatchedQuantity++;
+                            row.ScanStatus = (byte)InventoryScanStatus.Pending;
+                            if (row.Detail != null)
+                                row.Detail.MissingQuantity = 0;
                         }
-                    }
 
-                    // Tương tự, điền lại số lượng đếm thực tế cho hàng Lỗi vật lý (Defective)
-                    var defectiveRows = await _context.InventoryCheckDetailSerials
-                        .Where(s => s.CheckId == checkId && s.ScanStatus == (byte)InventoryScanStatus.Defective)
-                        .Include(s => s.Detail)
-                        .ToListAsync();
-                    foreach (var row in defectiveRows)
-                    {
-                        if (row.Detail != null)
+                        // Xóa hoàn toàn tất cả các dòng ghi nhận Thừa (Surplus) hoặc Thừa mã lạ (UnknownSurplus) phát sinh trong lần quét trước
+                        var surplusRows = await _checkRepo.GetSurplusDetailSerialsAsync(checkId);
+                        await _checkRepo.RemoveDetailSerialsAsync(surplusRows);
+
+                        // Khởi động lại (Reset) toàn bộ các cột chỉ số lượng đếm trên bảng chi tiết
+                        var details = await _context.InventoryCheckDetails
+                            .Where(d => d.CheckId == checkId)
+                            .ToListAsync();
+                        foreach (var d in details)
                         {
-                            row.Detail.ActualQuantity++;
-                            row.Detail.DefectiveQuantity++;
+                            d.ActualQuantity = 0;
+                            d.MatchedQuantity = 0;
+                            d.MissingQuantity = 0;
+                            d.SurplusQuantity = 0;
+                            d.DefectiveQuantity = 0;
                         }
+
+                        // Đếm lại và điền lại số lượng cho các dòng đã quét "Khớp" (Matched) vẫn giữ nguyên kết quả
+                        var matchedRows = await _context.InventoryCheckDetailSerials
+                            .Where(s => s.CheckId == checkId && s.ScanStatus == (byte)InventoryScanStatus.Matched)
+                            .Include(s => s.Detail)
+                            .ToListAsync();
+                        foreach (var row in matchedRows)
+                        {
+                            if (row.Detail != null)
+                            {
+                                row.Detail.ActualQuantity++;
+                                row.Detail.MatchedQuantity++;
+                            }
+                        }
+
+                        // Tương tự, điền lại số lượng đếm thực tế cho hàng Lỗi vật lý (Defective)
+                        var defectiveRows = await _context.InventoryCheckDetailSerials
+                            .Where(s => s.CheckId == checkId && s.ScanStatus == (byte)InventoryScanStatus.Defective)
+                            .Include(s => s.Detail)
+                            .ToListAsync();
+                        foreach (var row in defectiveRows)
+                        {
+                            if (row.Detail != null)
+                            {
+                                row.Detail.ActualQuantity++;
+                                row.Detail.DefectiveQuantity++;
+                            }
+                        }
+
+                        check.Status = (byte)InventoryCheckStatus.Draft; // Chuyển trạng thái phiếu về Nháp
+                    }
+                    else
+                    {
+                        // ── PHƯƠNG ÁN 2: HỦY PHIẾU (Cancelled) ──
+                        // Đóng vĩnh viễn phiếu và giữ nguyên hiện trạng số liệu đã ghi nhận để lưu vết lịch sử lỗi
+                        check.Status = (byte)InventoryCheckStatus.Cancelled;
                     }
 
-                    check.Status = (byte)InventoryCheckStatus.Draft; // Chuyển trạng thái phiếu về Nháp
-                }
-                else
-                {
-                    // ── PHƯƠNG ÁN 2: HỦY PHIẾU (Cancelled) ──
-                    // Đóng vĩnh viễn phiếu và giữ nguyên hiện trạng số liệu đã ghi nhận để lưu vết lịch sử lỗi
-                    check.Status = (byte)InventoryCheckStatus.Cancelled;
-                }
-
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                    await _unitOfWork.SaveChangesAsync();
+                });
 
                 var action = request.ReturnToDraft ? "trả về Nháp" : "hủy";
                 _logger.LogInformation(
@@ -881,7 +893,6 @@ namespace PBL3.Service.Inventory
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackAsync();
                 _logger.LogError(ex, "Lỗi khi từ chối phiếu kiểm kê {CheckId}.", checkId);
                 return ApiResult<bool>.Fail("Đã xảy ra lỗi khi từ chối. Vui lòng thử lại.");
             }
@@ -917,18 +928,7 @@ namespace PBL3.Service.Inventory
 
         private async Task<string> GenerateCheckCodeAsync()
         {
-            var dateStr = DateTime.UtcNow.ToString("yyyyMMdd");
-            var prefix = $"KK-{dateStr}-";
-            var lastCode = await _checkRepo.GetLastCheckCodeByDateAsync(prefix);
-
-            int nextNumber = 1;
-            if (!string.IsNullOrEmpty(lastCode))
-            {
-                var lastPart = lastCode.Substring(prefix.Length);
-                if (int.TryParse(lastPart, out int lastNumber))
-                    nextNumber = lastNumber + 1;
-            }
-            return $"{prefix}{nextNumber:D3}";
+            return await _codeGenerator.NextAsync(DocumentCodeKind.InventoryCheck);
         }
 
         private async Task<List<int>> GetVariantIdsInScopeAsync(byte scopeType, int? scopeCategoryId)

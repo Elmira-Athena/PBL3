@@ -43,7 +43,7 @@ namespace PBL3.Core.Interfaces
         /// <summary>
         /// Lấy mã phiếu cuối cùng của một ngày (để sinh mã tự động ST-yyyyMMdd-NNN).
         /// </summary>
-        Task<string?> GetLastTicketCodeByDateAsync(string datePrefix);
+        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
 
         /// <summary>
         /// Kiểm tra xem một serial đã có phiếu mở không (status != terminal).
@@ -84,8 +84,46 @@ namespace PBL3.Core.Interfaces
 
         /// <summary>
         /// Lấy danh sách báo giá của một phiếu (allow multiple revisions).
+        /// CHỈ ĐỌC — entity trả về KHÔNG nằm trong Change Tracker, mọi lệnh gán lên nó
+        /// sẽ bị SaveChangesAsync bỏ qua im lặng. Cần ghi thì dùng
+        /// GetByIdWithTrackingAsync hoặc MarkPendingAsSupersededAsync.
         /// </summary>
-        Task<List<Quotation>> GetByTicketIdAsync(int ticketId);
+        Task<List<Quotation>> GetByTicketIdReadOnlyAsync(int ticketId);
+
+        /// <summary>
+        /// Đánh dấu MỌI báo giá đang "Chờ duyệt" (0) của phiếu thành "Bị thay thế" (3)
+        /// bằng một câu UPDATE set-based duy nhất.
+        ///
+        /// Vì sao là set-based chứ không phải đọc-rồi-gán: cách cũ đọc qua
+        /// GetByTicketIdAsync (AsNoTracking) rồi gán q.Status = 3, nên KHÔNG sinh ra
+        /// câu UPDATE nào — bất biến "chỉ tồn tại duy nhất một báo giá có hiệu lực"
+        /// chưa bao giờ tồn tại. Một câu UPDATE ... WHERE Status = 0 vừa sửa lỗi đó,
+        /// vừa đóng luôn khe check-then-act: hai request tạo báo giá song song không
+        /// thể cùng để lại hai bản Status = 0.
+        ///
+        /// LƯU Ý: ExecuteUpdateAsync thực thi NGAY, không đợi SaveChangesAsync — phải
+        /// gọi bên trong transaction đang mở. Nó cũng bỏ qua Change Tracker.
+        /// </summary>
+        /// <returns>Số báo giá bị đánh dấu.</returns>
+        Task<int> MarkPendingAsSupersededAsync(int ticketId);
+
+        /// <summary>
+        /// CỔNG NGUYÊN TỬ cho quyết định của khách trên một báo giá: chuyển
+        /// <paramref name="fromStatus"/> → <paramref name="toStatus"/> bằng một câu
+        /// UPDATE ... WHERE Status = fromStatus.
+        ///
+        /// Vì sao cần: cả hai nhánh duyệt và từ chối đều theo mẫu check-then-act —
+        /// đọc quotation.Status, kiểm, rồi mới ghi ở một câu lệnh khác. Hai request
+        /// đồng thời cùng qua được câu kiểm trước khi ai kịp ghi, nên một báo giá
+        /// được xử lý HAI lần và phiếu rơi vào trạng thái mâu thuẫn với lịch sử.
+        /// Mở transaction bao quanh KHÔNG sửa được: dưới READ COMMITTED, shared lock
+        /// của câu SELECT nhả ngay khi đọc xong.
+        ///
+        /// Câu UPDATE này thì nguyên tử: DB lấy row lock rồi ĐÁNH GIÁ LẠI vị từ trên
+        /// bản mới nhất, nên đúng một request thắng.
+        /// </summary>
+        /// <returns>true nếu request này thắng; false nếu người khác đã xử lý trước.</returns>
+        Task<bool> TryDecideAsync(int quotationId, byte fromStatus, byte toStatus, DateTime decidedAt, string? note);
 
         /// <summary>
         /// Kiểm tra phiếu đã có báo giá được chấp nhận (status=Accepted) hay không.
@@ -102,9 +140,15 @@ namespace PBL3.Core.Interfaces
     public interface IRmaShipmentRepository
     {
         /// <summary>
-        /// Lấy phiếu RMA của một phiếu sửa chữa (1:1), không tracking.
+        /// Lấy phiếu RMA của một phiếu sửa chữa (1:1). CHỈ ĐỌC — không tracking,
+        /// mọi lệnh gán lên entity trả về sẽ bị SaveChangesAsync bỏ qua im lặng.
         /// </summary>
-        Task<RmaShipment?> GetByTicketIdAsync(int ticketId);
+        Task<RmaShipment?> GetByTicketIdReadOnlyAsync(int ticketId);
+
+        /// <summary>
+        /// Như trên nhưng CÓ tracking — dùng cho đường ghi (ghi nhận kết quả từ hãng).
+        /// </summary>
+        Task<RmaShipment?> GetByTicketIdTrackedAsync(int ticketId);
 
         /// <summary>
         /// Lấy RMA theo Id, với tracking để update.
@@ -141,12 +185,16 @@ namespace PBL3.Core.Interfaces
         /// <summary>
         /// Lấy hóa đơn của một phiếu sửa chữa (1:1), không tracking.
         /// </summary>
-        Task<ServiceInvoice?> GetByTicketIdAsync(int ticketId);
+        /// <summary>
+        /// CHỈ ĐỌC — không tracking. Cùng bẫy như các repository khác: gán lên entity
+        /// trả về sẽ không bao giờ vào DB.
+        /// </summary>
+        Task<ServiceInvoice?> GetByTicketIdReadOnlyAsync(int ticketId);
 
         /// <summary>
         /// Lấy mã hóa đơn cuối cùng của một ngày (để sinh mã tự động SRV-yyyyMMdd-NNN).
         /// </summary>
-        Task<string?> GetLastInvoiceCodeByDateAsync(string datePrefix);
+        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
 
         /// <summary>
         /// Lấy hóa đơn theo Id, với tracking để update.

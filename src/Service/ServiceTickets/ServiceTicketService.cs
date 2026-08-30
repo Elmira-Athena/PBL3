@@ -25,6 +25,9 @@ namespace PBL3.Service.ServiceTickets
         private readonly HushStoreDbContext _dbContext;
         private readonly IInventorySyncService _inventorySyncService;
 
+        private readonly IDocumentCodeGenerator _codeGenerator;
+
+
         public ServiceTicketService(
             IServiceTicketRepository ticketRepository,
             IQuotationRepository quotationRepository,
@@ -36,7 +39,8 @@ namespace PBL3.Service.ServiceTickets
             IOrderRepository orderRepository,
             IUnitOfWork unitOfWork,
             HushStoreDbContext dbContext,
-            IInventorySyncService inventorySyncService)
+            IInventorySyncService inventorySyncService,
+            IDocumentCodeGenerator codeGenerator)
         {
             _ticketRepository = ticketRepository;
             _quotationRepository = quotationRepository;
@@ -49,6 +53,7 @@ namespace PBL3.Service.ServiceTickets
             _unitOfWork = unitOfWork;
             _dbContext = dbContext;
             _inventorySyncService = inventorySyncService;
+            _codeGenerator = codeGenerator;
         }
 
         /// <summary>
@@ -155,73 +160,66 @@ namespace PBL3.Service.ServiceTickets
             // Đánh giá bảo hành thời gian thực để chốt snapshot ngay lúc tiếp nhận
             var warranty = await WarrantyEvaluator.EvaluateAsync(serial, variant, _warrantyRepository);
 
-            // Sinh mã phiếu dịch vụ tăng dần tự động ST-yyyyMMdd-NNN theo ngày
+            // Sinh mã phiếu dịch vụ ST-yyyyMMdd-NNNNNN
             var now = DateTime.UtcNow;
-            var datePrefix = "ST-" + now.ToString("yyyyMMdd");
-            var lastCode = await _ticketRepository.GetLastTicketCodeByDateAsync(datePrefix);
-            int nextIndex = 1;
-            if (!string.IsNullOrEmpty(lastCode))
-            {
-                var suffix = lastCode.Substring(lastCode.LastIndexOf('-') + 1);
-                if (int.TryParse(suffix, out int lastIdx))
-                    nextIndex = lastIdx + 1;
-            }
-            var ticketCode = $"{datePrefix}-{nextIndex:D3}";
+            var ticketCode = await _codeGenerator.NextAsync(DocumentCodeKind.ServiceTicket);
 
             // Thực thi Transaction để đảm bảo tính toàn vẹn khi ghi nhận phiếu và lịch sử trạng thái ban đầu
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var ticket = new ServiceTicket
+                var ticket = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    TicketCode = ticketCode,
-                    SerialId = serial.Id,
-                    OriginalOrderId = order.Id,
-                    CustomerId = order.UserId,
-                    IntakeDate = now,
-                    IntakeEmployeeId = userId,
-                    // NGHIỆP VỤ: Ghi vết Snapshot Ngoại quan lúc nhận máy (Phòng chống tranh chấp pháp lý về móp méo, trầy xước, thiếu linh kiện sau sửa)
-                    HasScratches = request.HasScratches,
-                    HasDents = request.HasDents,
-                    HasBurnMarks = request.HasBurnMarks,
-                    HasMissingAccessories = request.HasMissingAccessories,
-                    CosmeticNotes = request.CosmeticNotes,
-                    CustomerReportedIssue = request.CustomerReportedIssue,
-                    WalkInCustomerName = request.WalkInCustomerName,
-                    WalkInCustomerPhone = request.WalkInCustomerPhone,
-                    // NGHIỆP VỤ CHỐT CHẶN: Lưu cứng thông tin bảo hành ngay tại thời điểm tiếp nhận (WasInWarrantyAtIntake)
-                    // Làm căn cứ xuyên suốt cho việc phê duyệt các nhánh bảo hành miễn phí hoặc sửa tính phí về sau
-                    WasInWarrantyAtIntake = warranty.IsInWarranty,
-                    WarrantyEndDateAtIntake = warranty.ExpiresOn,
-                    WarrantyEvalSource = warranty.Source,
-                    Status = (byte)0, // Trạng thái mặc định ban đầu: Received (Đã tiếp nhận)
-                    ResolutionType = (byte)0, // Trạng thái giải quyết mặc định: Pending (Chờ xác định nhánh)
-                    CreatedDate = now,
-                    ModifiedDate = now
-                };
+                    var ticket = new ServiceTicket
+                    {
+                        TicketCode = ticketCode,
+                        SerialId = serial.Id,
+                        OriginalOrderId = order.Id,
+                        CustomerId = order.UserId,
+                        IntakeDate = now,
+                        IntakeEmployeeId = userId,
+                        // NGHIỆP VỤ: Ghi vết Snapshot Ngoại quan lúc nhận máy (Phòng chống tranh chấp pháp lý về móp méo, trầy xước, thiếu linh kiện sau sửa)
+                        HasScratches = request.HasScratches,
+                        HasDents = request.HasDents,
+                        HasBurnMarks = request.HasBurnMarks,
+                        HasMissingAccessories = request.HasMissingAccessories,
+                        CosmeticNotes = request.CosmeticNotes,
+                        CustomerReportedIssue = request.CustomerReportedIssue,
+                        WalkInCustomerName = request.WalkInCustomerName,
+                        WalkInCustomerPhone = request.WalkInCustomerPhone,
+                        // NGHIỆP VỤ CHỐT CHẶN: Lưu cứng thông tin bảo hành ngay tại thời điểm tiếp nhận (WasInWarrantyAtIntake)
+                        // Làm căn cứ xuyên suốt cho việc phê duyệt các nhánh bảo hành miễn phí hoặc sửa tính phí về sau
+                        WasInWarrantyAtIntake = warranty.IsInWarranty,
+                        WarrantyEndDateAtIntake = warranty.ExpiresOn,
+                        WarrantyEvalSource = warranty.Source,
+                        Status = (byte)0, // Trạng thái mặc định ban đầu: Received (Đã tiếp nhận)
+                        ResolutionType = (byte)0, // Trạng thái giải quyết mặc định: Pending (Chờ xác định nhánh)
+                        CreatedDate = now,
+                        ModifiedDate = now
+                    };
 
-                await _ticketRepository.AddAsync(ticket);
-                await _unitOfWork.SaveChangesAsync();
+                    await _ticketRepository.AddAsync(ticket);
+                    await _unitOfWork.SaveChangesAsync();
 
-                // KHỞI TẠO LỊCH SỬ TRẠNG THÁI: Lưu vết lịch sử chuyển dịch trạng thái đầu tiên của phiếu dịch vụ
-                await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
-                {
-                    TicketId = ticket.Id,
-                    FromStatus = (byte)0, // Từ Received
-                    ToStatus = (byte)0, // Đến Received
-                    ChangedByEmployeeId = userId,
-                    ChangedAt = now,
-                    Note = "Tiếp nhận sản phẩm"
+                    // KHỞI TẠO LỊCH SỬ TRẠNG THÁI: Lưu vết lịch sử chuyển dịch trạng thái đầu tiên của phiếu dịch vụ
+                    await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                    {
+                        TicketId = ticket.Id,
+                        FromStatus = (byte)0, // Từ Received
+                        ToStatus = (byte)0, // Đến Received
+                        ChangedByEmployeeId = userId,
+                        ChangedAt = now,
+                        Note = "Tiếp nhận sản phẩm"
+                    });
+
+                    await _unitOfWork.SaveChangesAsync();
+
+                    return ticket;
                 });
-
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
 
                 return await GetTicketByIdAsync(ticket.Id, userId, false);
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }
@@ -332,70 +330,75 @@ namespace PBL3.Service.ServiceTickets
                 throw new InvalidOperationException("Chỉ phiếu sửa tính phí mới có báo giá.");
 
             // Sử dụng Transaction để bảo vệ quy trình lưu trữ báo giá & chi tiết báo giá đồng thời cập nhật phiếu dịch vụ
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // NGHIỆP VỤ HỦY BÁO GIÁ CŨ: Lấy tất cả báo giá nháp cũ của phiếu này đang ở trạng thái "Chờ duyệt" (0)
-                // và đánh dấu chúng thành "Bị thay thế" (3) để bảo đảm chỉ tồn tại duy nhất một bản báo giá có hiệu lực.
-                var oldQuotations = await _quotationRepository.GetByTicketIdAsync(ticketId);
-                foreach (var q in oldQuotations.Where(q => q.Status == (byte)0))
+                var quotation = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    q.Status = (byte)3;
-                }
+                    // NGHIỆP VỤ HỦY BÁO GIÁ CŨ: đánh dấu mọi báo giá "Chờ duyệt" (0) của phiếu này
+                    // thành "Bị thay thế" (3), để bảo đảm chỉ tồn tại duy nhất một bản báo giá
+                    // có hiệu lực.
+                    //
+                    // Cách cũ đọc qua GetByTicketIdAsync (có AsNoTracking) rồi gán q.Status = 3.
+                    // Entity trả về KHÔNG nằm trong Change Tracker nên SaveChangesAsync không
+                    // sinh câu UPDATE nào — bất biến mà comment trên mô tả CHƯA BAO GIỜ TỒN TẠI.
+                    //
+                    // Một câu UPDATE set-based vừa sửa lỗi đó, vừa đóng luôn khe check-then-act.
+                    await _quotationRepository.MarkPendingAsSupersededAsync(ticketId);
 
-                // CÔNG THỨC TÍNH CHI PHÍ: Tổng tiền báo giá = Chi phí nhân công (LaborCost) + Tổng tiền linh kiện (PartsTotal)
-                var partsTotal = request.Items.Sum(i => i.Quantity * i.UnitPrice);
-                var grandTotal = request.LaborCost + partsTotal;
+                    // CÔNG THỨC TÍNH CHI PHÍ: Tổng tiền báo giá = Chi phí nhân công (LaborCost) + Tổng tiền linh kiện (PartsTotal)
+                    var partsTotal = request.Items.Sum(i => i.Quantity * i.UnitPrice);
+                    var grandTotal = request.LaborCost + partsTotal;
 
-                var quotation = new Quotation
-                {
-                    TicketId = ticketId,
-                    IssuedDate = DateTime.UtcNow,
-                    IssuedByEmployeeId = userId,
-                    LaborCost = request.LaborCost,
-                    PartsTotal = partsTotal,
-                    GrandTotal = grandTotal,
-                    Status = (byte)0, // Mặc định báo giá mới tạo ở trạng thái: Chờ duyệt (Pending)
-                };
-
-                await _quotationRepository.AddAsync(quotation);
-                await _unitOfWork.SaveChangesAsync();
-
-                // Ghi nhận chi tiết từng dòng linh kiện/dịch vụ phụ tùng trong báo giá
-                foreach (var item in request.Items)
-                {
-                    await _dbContext.QuotationItems.AddAsync(new QuotationItem
+                    var quotation = new Quotation
                     {
-                        QuotationId = quotation.Id,
-                        VariantId = item.VariantId,
-                        Description = item.Description,
-                        Quantity = item.Quantity,
-                        UnitPrice = item.UnitPrice,
-                        LineTotal = item.Quantity * item.UnitPrice
+                        TicketId = ticketId,
+                        IssuedDate = DateTime.UtcNow,
+                        IssuedByEmployeeId = userId,
+                        LaborCost = request.LaborCost,
+                        PartsTotal = partsTotal,
+                        GrandTotal = grandTotal,
+                        Status = (byte)0, // Mặc định báo giá mới tạo ở trạng thái: Chờ duyệt (Pending)
+                    };
+
+                    await _quotationRepository.AddAsync(quotation);
+                    await _unitOfWork.SaveChangesAsync();
+
+                    // Ghi nhận chi tiết từng dòng linh kiện/dịch vụ phụ tùng trong báo giá
+                    foreach (var item in request.Items)
+                    {
+                        await _dbContext.QuotationItems.AddAsync(new QuotationItem
+                        {
+                            QuotationId = quotation.Id,
+                            VariantId = item.VariantId,
+                            Description = item.Description,
+                            Quantity = item.Quantity,
+                            UnitPrice = item.UnitPrice,
+                            LineTotal = item.Quantity * item.UnitPrice
+                        });
+                    }
+
+                    // Cập nhật trạng thái phiếu dịch vụ sang: Chờ duyệt báo giá (SentQuotation - 2)
+                    ticket.Status = (byte)2;
+                    await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                    {
+                        TicketId = ticketId,
+                        FromStatus = (byte)1,
+                        ToStatus = (byte)2,
+                        ChangedByEmployeeId = userId,
+                        ChangedAt = DateTime.UtcNow,
+                        Note = "Gửi báo giá cho khách"
                     });
-                }
 
-                // Cập nhật trạng thái phiếu dịch vụ sang: Chờ duyệt báo giá (SentQuotation - 2)
-                ticket.Status = (byte)2;
-                await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
-                {
-                    TicketId = ticketId,
-                    FromStatus = (byte)1,
-                    ToStatus = (byte)2,
-                    ChangedByEmployeeId = userId,
-                    ChangedAt = DateTime.UtcNow,
-                    Note = "Gửi báo giá cho khách"
+                    await _unitOfWork.SaveChangesAsync();
+
+                    return quotation;
                 });
-
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
 
                 var reloadedQuotation = await _quotationRepository.GetByIdWithItemsAsync(quotation.Id);
                 return MapQuotationToDto(reloadedQuotation);
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }
@@ -426,34 +429,42 @@ namespace PBL3.Service.ServiceTickets
 
             ValidateTransition(ticket.Status, nextStatus);
 
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // Cập nhật trạng thái báo giá sang: Đã duyệt (1 - Approved)
-                quotation.Status = (byte)1;
-                quotation.CustomerDecidedAt = DateTime.UtcNow;
-
-                // Chuyển dịch trạng thái phiếu dịch vụ sang Đang sửa (5) hoặc Chờ phụ tùng (4) tùy thuộc quyết định
-                ticket.Status = nextStatus;
-                ticket.ModifiedDate = DateTime.UtcNow;
-
-                await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    TicketId = ticketId,
-                    FromStatus = (byte)2,
-                    ToStatus = nextStatus,
-                    ChangedByEmployeeId = userId,
-                    ChangedAt = DateTime.UtcNow,
-                    Note = "Khách chấp nhận báo giá"
+                    // CỔNG NGUYÊN TỬ: chốt kiểm ở trên chỉ fail-fast cho UX — nó là check-then-act
+                    // và không chặn được hai request đồng thời. Câu UPDATE ... WHERE Status = 0
+                    // dưới đây mới là thứ bảo đảm đúng một request duyệt được.
+                    // (Sau khi gọi, entity `quotation` đang track lỗi thời ở cột Status —
+                    //  không được gán quotation.Status ở đây nữa.)
+                    if (!await _quotationRepository.TryDecideAsync(
+                            quotationId, fromStatus: (byte)0, toStatus: (byte)1,
+                            decidedAt: DateTime.UtcNow, note: null))
+                        throw new InvalidOperationException(
+                            "Báo giá này vừa được xử lý ở nơi khác. Vui lòng tải lại trang.");
+
+                    // Chuyển dịch trạng thái phiếu dịch vụ sang Đang sửa (5) hoặc Chờ phụ tùng (4) tùy thuộc quyết định
+                    ticket.Status = nextStatus;
+                    ticket.ModifiedDate = DateTime.UtcNow;
+
+                    await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                    {
+                        TicketId = ticketId,
+                        FromStatus = (byte)2,
+                        ToStatus = nextStatus,
+                        ChangedByEmployeeId = userId,
+                        ChangedAt = DateTime.UtcNow,
+                        Note = "Khách chấp nhận báo giá"
+                    });
+
+                    await _unitOfWork.SaveChangesAsync();
                 });
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
                 return true;
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }
@@ -473,35 +484,45 @@ namespace PBL3.Service.ServiceTickets
             if (quotation == null || quotation.TicketId != ticketId)
                 throw new InvalidOperationException("Báo giá không tồn tại.");
 
+            // CHỐT CHẶN còn thiếu: trước đây nhánh từ chối KHÔNG kiểm Status gì cả,
+            // khác hẳn nhánh duyệt. Hệ quả: từ chối được cả báo giá ĐÃ ĐƯỢC DUYỆT,
+            // chỉ cần bấm hai lần — không cần đồng thời mới lộ.
+            if (quotation.Status != (byte)0)
+                throw new InvalidOperationException("Chỉ được từ chối báo giá chưa được xử lý.");
+
             ValidateTransition(ticket.Status, (byte)3);
 
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                quotation.Status = (byte)2;
-                quotation.CustomerDecisionNote = request.Reason;
-                quotation.CustomerDecidedAt = DateTime.UtcNow;
-
-                ticket.Status = (byte)3;
-                ticket.ModifiedDate = DateTime.UtcNow;
-
-                await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    TicketId = ticketId,
-                    FromStatus = (byte)2,
-                    ToStatus = (byte)3,
-                    ChangedByEmployeeId = userId,
-                    ChangedAt = DateTime.UtcNow,
-                    Note = "Khách từ chối báo giá"
+                    // CỔNG NGUYÊN TỬ — xem giải thích ở nhánh duyệt.
+                    if (!await _quotationRepository.TryDecideAsync(
+                            quotationId, fromStatus: (byte)0, toStatus: (byte)2,
+                            decidedAt: DateTime.UtcNow, note: request.Reason))
+                        throw new InvalidOperationException(
+                            "Báo giá này vừa được xử lý ở nơi khác. Vui lòng tải lại trang.");
+
+                    ticket.Status = (byte)3;
+                    ticket.ModifiedDate = DateTime.UtcNow;
+
+                    await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                    {
+                        TicketId = ticketId,
+                        FromStatus = (byte)2,
+                        ToStatus = (byte)3,
+                        ChangedByEmployeeId = userId,
+                        ChangedAt = DateTime.UtcNow,
+                        Note = "Khách từ chối báo giá"
+                    });
+
+                    await _unitOfWork.SaveChangesAsync();
                 });
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
                 return true;
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }
@@ -521,50 +542,50 @@ namespace PBL3.Service.ServiceTickets
                 throw new InvalidOperationException("Sản phẩm đã hết bảo hành, không thể gửi RMA.");
 
             // Issue #8: Check duplicate RMA
-            var existingRma = await _rmaRepository.GetByTicketIdAsync(ticketId);
+            var existingRma = await _rmaRepository.GetByTicketIdReadOnlyAsync(ticketId);
             if (existingRma != null)
                 throw new InvalidOperationException("Phiếu này đã được gửi hãng rồi.");
 
             ValidateTransition(ticket.Status, (byte)6);
 
             // Issue #13: Use UoW transaction pattern instead of individual SaveChanges
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var rma = new RmaShipment
+                await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    TicketId = ticketId,
-                    CarrierName = request.CarrierName,
-                    TrackingCode = request.TrackingCode,
-                    ShippedDate = DateTime.UtcNow,
-                    ShippedByEmployeeId = userId,
-                    ManufacturerResolution = (byte)0
-                };
+                    var rma = new RmaShipment
+                    {
+                        TicketId = ticketId,
+                        CarrierName = request.CarrierName,
+                        TrackingCode = request.TrackingCode,
+                        ShippedDate = DateTime.UtcNow,
+                        ShippedByEmployeeId = userId,
+                        ManufacturerResolution = (byte)0
+                    };
 
-                await _rmaRepository.AddAsync(rma);
+                    await _rmaRepository.AddAsync(rma);
 
-                ticket.Status = (byte)6;
-                ticket.ModifiedDate = DateTime.UtcNow;
+                    ticket.Status = (byte)6;
+                    ticket.ModifiedDate = DateTime.UtcNow;
 
-                await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
-                {
-                    TicketId = ticketId,
-                    FromStatus = (byte)1,
-                    ToStatus = (byte)6,
-                    ChangedByEmployeeId = userId,
-                    ChangedAt = DateTime.UtcNow,
-                    Note = $"Gửi hãng qua {request.CarrierName}"
+                    await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                    {
+                        TicketId = ticketId,
+                        FromStatus = (byte)1,
+                        ToStatus = (byte)6,
+                        ChangedByEmployeeId = userId,
+                        ChangedAt = DateTime.UtcNow,
+                        Note = $"Gửi hãng qua {request.CarrierName}"
+                    });
+
+                    await _unitOfWork.SaveChangesAsync();
                 });
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
-
-                var reloadedRma = await _rmaRepository.GetByTicketIdAsync(ticketId);
+                var reloadedRma = await _rmaRepository.GetByTicketIdReadOnlyAsync(ticketId);
                 return MapRmaShipmentToDto(reloadedRma!);
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }
@@ -580,7 +601,10 @@ namespace PBL3.Service.ServiceTickets
         /// </summary>
         public async Task<bool> RecordRmaResolutionAsync(int ticketId, RmaResolutionUpdateDto request, Guid userId, bool isAdmin = false)
         {
-            var rma = await _rmaRepository.GetByTicketIdAsync(ticketId);
+            // TRACKED: bên dưới ghi 4 field lên rma (ManufacturerResolution, ManufacturerNotes,
+            // ReceivedBackDate, ReceivedByEmployeeId). Bản ReadOnly sẽ khiến cả 4 lệnh gán
+            // rơi vào hư vô — kết quả xử lý RMA mất trắng mà không có lỗi nào.
+            var rma = await _rmaRepository.GetByTicketIdTrackedAsync(ticketId);
             if (rma == null)
                 throw new InvalidOperationException("Không có phiếu RMA cho ticket này.");
 
@@ -599,112 +623,113 @@ namespace PBL3.Service.ServiceTickets
             };
             ValidateTransition(ticket.Status, toStatus);
 
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var now = DateTime.UtcNow;
-                byte previousStatus = ticket.Status;
-
-                rma.ManufacturerResolution = request.ManufacturerResolution;
-                rma.ManufacturerNotes = request.ManufacturerNotes;
-                rma.ReceivedBackDate = now;
-                rma.ReceivedByEmployeeId = userId;
-
-                // NGHIỆP VỤ PHỨC TẠP: Xử lý đổi mới thiết bị khi Hãng đồng ý bảo hành đổi 1-1 (ManufacturerResolution = 2)
-                if (request.ManufacturerResolution == (byte)2)
+                await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    if (!request.ReplacementSerialId.HasValue)
-                        throw new InvalidOperationException("Phải cung cấp Serial thay thế khi hãng đã thay thế.");
+                    var now = DateTime.UtcNow;
+                    byte previousStatus = ticket.Status;
 
-                    var newSerialId = request.ReplacementSerialId.Value;
-                    var oldSerial = ticket.Serial;
-                    var newSerial = await _serialRepository.GetByIdWithTrackingAsync(newSerialId);
+                    rma.ManufacturerResolution = request.ManufacturerResolution;
+                    rma.ManufacturerNotes = request.ManufacturerNotes;
+                    rma.ReceivedBackDate = now;
+                    rma.ReceivedByEmployeeId = userId;
 
-                    // Kiểm định độ khả dụng của Serial thay thế mới nhận từ hãng
-                    if (newSerial == null || newSerial.Status != (byte)0)
-                        throw new InvalidOperationException("Serial thay thế không sẵn trong kho hoặc đã được giữ chỗ.");
-
-                    if (newSerial.VariantId != oldSerial.VariantId)
-                        throw new InvalidOperationException("Serial thay thế phải cùng biến thể với serial hỏng.");
-
-                    // Truy vấn liên kết xuất kho trong lịch sử để trỏ lại sang Serial mới (Invoice Preservation)
-                    var oldOrderSerial = await _dbContext.OrderSerials
-                        .FirstOrDefaultAsync(os => os.SerialId == oldSerial.Id);
-                    if (oldOrderSerial == null)
-                        throw new InvalidOperationException("Không tìm thấy bản ghi xuất kho gốc của serial này.");
-
-                    // Xác định thời hạn bảo hành gốc để phục vụ kế thừa
-                    var oldWarranties = await _warrantyRepository.GetActiveBySerialIdAsync(oldSerial.Id);
-                    var oldEndDate = oldWarranties.FirstOrDefault()?.EndDate
-                        ?? oldSerial.SoldDate?.AddMonths(oldSerial.Variant.WarrantyMonth)
-                        ?? now;
-
-                    // 1. Thu hồi Serial cũ bằng cách đổi trạng thái sang Hỏng (Defective - 4)
-                    oldSerial.Status = (byte)4;
-
-                    // 2. Kích hoạt Serial mới bằng cách đổi trạng thái sang Đã bán (Sold - 2) và liên kết đơn hàng cũ
-                    newSerial.Status = (byte)2;
-                    newSerial.SoldDate = now;
-                    newSerial.OrderId = oldSerial.OrderId;
-
-                    // 3. Bảo toàn hóa đơn: Sửa lại tham chiếu Serial cũ thành Serial mới trong bảng OrderSerials
-                    oldOrderSerial.SerialId = newSerialId;
-
-                    // 4. Hủy hiệu lực bảo hành cũ (Status = 2 - Cancelled/Deactivated)
-                    if (oldWarranties.Count > 0)
+                    // NGHIỆP VỤ PHỨC TẠP: Xử lý đổi mới thiết bị khi Hãng đồng ý bảo hành đổi 1-1 (ManufacturerResolution = 2)
+                    if (request.ManufacturerResolution == (byte)2)
                     {
-                        oldWarranties[0].Status = (byte)2;
+                        if (!request.ReplacementSerialId.HasValue)
+                            throw new InvalidOperationException("Phải cung cấp Serial thay thế khi hãng đã thay thế.");
+
+                        var newSerialId = request.ReplacementSerialId.Value;
+                        var oldSerial = ticket.Serial;
+                        var newSerial = await _serialRepository.GetByIdWithTrackingAsync(newSerialId);
+
+                        // Kiểm định độ khả dụng của Serial thay thế mới nhận từ hãng
+                        if (newSerial == null || newSerial.Status != (byte)0)
+                            throw new InvalidOperationException("Serial thay thế không sẵn trong kho hoặc đã được giữ chỗ.");
+
+                        if (newSerial.VariantId != oldSerial.VariantId)
+                            throw new InvalidOperationException("Serial thay thế phải cùng biến thể với serial hỏng.");
+
+                        // Truy vấn liên kết xuất kho trong lịch sử để trỏ lại sang Serial mới (Invoice Preservation)
+                        var oldOrderSerial = await _dbContext.OrderSerials
+                            .FirstOrDefaultAsync(os => os.SerialId == oldSerial.Id);
+                        if (oldOrderSerial == null)
+                            throw new InvalidOperationException("Không tìm thấy bản ghi xuất kho gốc của serial này.");
+
+                        // Xác định thời hạn bảo hành gốc để phục vụ kế thừa
+                        var oldWarranties = await _warrantyRepository.GetActiveBySerialIdTrackedAsync(oldSerial.Id);  // TRACKED: bên dưới ghi oldWarranties[0].Status = 2
+                        var oldEndDate = oldWarranties.FirstOrDefault()?.EndDate
+                            ?? oldSerial.SoldDate?.AddMonths(oldSerial.Variant.WarrantyMonth)
+                            ?? now;
+
+                        // 1. Thu hồi Serial cũ bằng cách đổi trạng thái sang Hỏng (Defective - 4)
+                        oldSerial.Status = (byte)4;
+
+                        // 2. Kích hoạt Serial mới bằng cách đổi trạng thái sang Đã bán (Sold - 2) và liên kết đơn hàng cũ
+                        newSerial.Status = (byte)2;
+                        newSerial.SoldDate = now;
+                        newSerial.OrderId = oldSerial.OrderId;
+
+                        // 3. Bảo toàn hóa đơn: Sửa lại tham chiếu Serial cũ thành Serial mới trong bảng OrderSerials
+                        oldOrderSerial.SerialId = newSerialId;
+
+                        // 4. Hủy hiệu lực bảo hành cũ (Status = 2 - Cancelled/Deactivated)
+                        if (oldWarranties.Count > 0)
+                        {
+                            oldWarranties[0].Status = (byte)2;
+                        }
+
+                        // 5. Khởi tạo bảo hành mới cho thiết bị thay thế nhưng kế thừa ngày hết hạn gốc (oldEndDate)
+                        var newWarranty = new Warranty
+                        {
+                            SerialId = newSerialId,
+                            CustomerId = oldWarranties.FirstOrDefault()?.CustomerId,
+                            OrderId = oldSerial.OrderId!.Value,
+                            StartDate = now,
+                            EndDate = oldEndDate,
+                            Status = (byte)0 // Active (Hoạt động)
+                        };
+                        await _warrantyRepository.AddAsync(newWarranty);
+
+                        ticket.Status = (byte)8;
+                        ticket.ReplacementSerialId = newSerialId;
+
+                        // Ghi chép lịch sử sửa chữa thiết bị (Serial Repair Log) chi tiết
+                        await _logRepository.AddAsync(new SerialRepairLog
+                        {
+                            SerialId = oldSerial.Id,
+                            TicketId = ticketId,
+                            ResolutionType = (byte)2,
+                            LoggedAt = now,
+                            LoggedByEmployeeId = userId,
+                            Summary = $"Hãng thay thế sang serial {newSerial.SerialNumber}. Bảo hành kế thừa đến {oldEndDate:dd/MM/yyyy}.",
+                            ReplacedBySerialId = newSerialId
+                        });
+                    }
+                    else
+                    {
+                        ticket.Status = request.ManufacturerResolution == (byte)3 ? (byte)1 : (byte)7;
                     }
 
-                    // 5. Khởi tạo bảo hành mới cho thiết bị thay thế nhưng kế thừa ngày hết hạn gốc (oldEndDate)
-                    var newWarranty = new Warranty
+                    await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
                     {
-                        SerialId = newSerialId,
-                        CustomerId = oldWarranties.FirstOrDefault()?.CustomerId,
-                        OrderId = oldSerial.OrderId!.Value,
-                        StartDate = now,
-                        EndDate = oldEndDate,
-                        Status = (byte)0 // Active (Hoạt động)
-                    };
-                    await _warrantyRepository.AddAsync(newWarranty);
-
-                    ticket.Status = (byte)8;
-                    ticket.ReplacementSerialId = newSerialId;
-
-                    // Ghi chép lịch sử sửa chữa thiết bị (Serial Repair Log) chi tiết
-                    await _logRepository.AddAsync(new SerialRepairLog
-                    {
-                        SerialId = oldSerial.Id,
                         TicketId = ticketId,
-                        ResolutionType = (byte)2,
-                        LoggedAt = now,
-                        LoggedByEmployeeId = userId,
-                        Summary = $"Hãng thay thế sang serial {newSerial.SerialNumber}. Bảo hành kế thừa đến {oldEndDate:dd/MM/yyyy}.",
-                        ReplacedBySerialId = newSerialId
+                        FromStatus = previousStatus,
+                        ToStatus = ticket.Status,
+                        ChangedByEmployeeId = userId,
+                        ChangedAt = now,
+                        Note = request.ManufacturerResolution switch
+                        {
+                            2 => "Hãng thay thế, chuyển sang Đã đổi 1-1",
+                            3 => "Hãng từ chối, quay lại chẩn đoán",
+                            _ => "Nhận lại từ hãng"
+                        }
                     });
-                }
-                else
-                {
-                    ticket.Status = request.ManufacturerResolution == (byte)3 ? (byte)1 : (byte)7;
-                }
 
-                await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
-                {
-                    TicketId = ticketId,
-                    FromStatus = previousStatus,
-                    ToStatus = ticket.Status,
-                    ChangedByEmployeeId = userId,
-                    ChangedAt = now,
-                    Note = request.ManufacturerResolution switch
-                    {
-                        2 => "Hãng thay thế, chuyển sang Đã đổi 1-1",
-                        3 => "Hãng từ chối, quay lại chẩn đoán",
-                        _ => "Nhận lại từ hãng"
-                    }
+                    await _unitOfWork.SaveChangesAsync();
                 });
-
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
 
                 // NGHIỆP VỤ KHO: Tự động kích hoạt đồng bộ hóa số lượng tồn kho của biến thể do có sự biến đổi Serial vật lý thực tế
                 if (request.ManufacturerResolution == (byte)2)
@@ -716,7 +741,6 @@ namespace PBL3.Service.ServiceTickets
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }
@@ -774,74 +798,75 @@ namespace PBL3.Service.ServiceTickets
                 throw new InvalidOperationException("Không tìm thấy bản ghi xuất kho gốc của serial này.");
 
             // Lấy thời hạn kết thúc bảo hành hiện hữu để chuyển tiếp bảo hành kế thừa
-            var oldWarranties = await _warrantyRepository.GetActiveBySerialIdAsync(oldSerial.Id);
+            var oldWarranties = await _warrantyRepository.GetActiveBySerialIdTrackedAsync(oldSerial.Id);  // TRACKED: bên dưới ghi oldWarranties[0].Status = 2
             var oldEndDate = oldWarranties.FirstOrDefault()?.EndDate
                 ?? oldSerial.SoldDate?.AddMonths(oldSerial.Variant.WarrantyMonth)
                 ?? DateTime.UtcNow;
 
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var now = DateTime.UtcNow;
-                byte previousStatus = ticket.Status;
-
-                // 1. Phế thải Serial cũ: Đổi trạng thái sang Hỏng (Defective - 4)
-                oldSerial.Status = (byte)4;
-
-                // 2. Xuất kho Serial thay thế: Đổi trạng thái sang Đã bán (Sold - 2) và liên kết đơn hàng cũ
-                newSerial.Status = (byte)2;
-                newSerial.SoldDate = now;
-                newSerial.OrderId = oldSerial.OrderId;
-
-                // 3. Hoán đổi liên kết: Ghi nhận Serial mới thay thế Serial cũ trong bảng chi tiết xuất kho OrderSerials
-                oldOrderSerial.SerialId = newSerialId;
-
-                // 4. Vô hiệu hóa bảo hành cũ
-                if (oldWarranties.Count > 0)
+                await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    oldWarranties[0].Status = (byte)2;
-                }
+                    var now = DateTime.UtcNow;
+                    byte previousStatus = ticket.Status;
 
-                // 5. Tạo bảo hành mới kế thừa thời hạn bảo hành cũ của khách
-                var newWarranty = new Warranty
-                {
-                    SerialId = newSerialId,
-                    CustomerId = oldWarranties.FirstOrDefault()?.CustomerId,
-                    OrderId = oldSerial.OrderId!.Value,
-                    StartDate = now,
-                    EndDate = oldEndDate,
-                    Status = (byte)0
-                };
-                await _warrantyRepository.AddAsync(newWarranty);
+                    // 1. Phế thải Serial cũ: Đổi trạng thái sang Hỏng (Defective - 4)
+                    oldSerial.Status = (byte)4;
 
-                ticket.Status = (byte)8;
-                ticket.ReplacementSerialId = newSerialId;
-                ticket.ResolutionType = (byte)3;
-                ticket.ModifiedDate = now;
+                    // 2. Xuất kho Serial thay thế: Đổi trạng thái sang Đã bán (Sold - 2) và liên kết đơn hàng cũ
+                    newSerial.Status = (byte)2;
+                    newSerial.SoldDate = now;
+                    newSerial.OrderId = oldSerial.OrderId;
 
-                await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
-                {
-                    TicketId = ticketId,
-                    FromStatus = previousStatus,
-                    ToStatus = (byte)8,
-                    ChangedByEmployeeId = userId,
-                    ChangedAt = now,
-                    Note = $"Đổi 1-1 sang serial {newSerial.SerialNumber}"
+                    // 3. Hoán đổi liên kết: Ghi nhận Serial mới thay thế Serial cũ trong bảng chi tiết xuất kho OrderSerials
+                    oldOrderSerial.SerialId = newSerialId;
+
+                    // 4. Vô hiệu hóa bảo hành cũ
+                    if (oldWarranties.Count > 0)
+                    {
+                        oldWarranties[0].Status = (byte)2;
+                    }
+
+                    // 5. Tạo bảo hành mới kế thừa thời hạn bảo hành cũ của khách
+                    var newWarranty = new Warranty
+                    {
+                        SerialId = newSerialId,
+                        CustomerId = oldWarranties.FirstOrDefault()?.CustomerId,
+                        OrderId = oldSerial.OrderId!.Value,
+                        StartDate = now,
+                        EndDate = oldEndDate,
+                        Status = (byte)0
+                    };
+                    await _warrantyRepository.AddAsync(newWarranty);
+
+                    ticket.Status = (byte)8;
+                    ticket.ReplacementSerialId = newSerialId;
+                    ticket.ResolutionType = (byte)3;
+                    ticket.ModifiedDate = now;
+
+                    await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                    {
+                        TicketId = ticketId,
+                        FromStatus = previousStatus,
+                        ToStatus = (byte)8,
+                        ChangedByEmployeeId = userId,
+                        ChangedAt = now,
+                        Note = $"Đổi 1-1 sang serial {newSerial.SerialNumber}"
+                    });
+
+                    await _logRepository.AddAsync(new SerialRepairLog
+                    {
+                        SerialId = oldSerial.Id,
+                        TicketId = ticketId,
+                        ResolutionType = (byte)3,
+                        LoggedAt = now,
+                        LoggedByEmployeeId = userId,
+                        Summary = $"Đổi 1-1 sang serial {newSerial.SerialNumber}. Bảo hành kế thừa đến {oldEndDate:dd/MM/yyyy}.",
+                        ReplacedBySerialId = newSerialId
+                    });
+
+                    await _unitOfWork.SaveChangesAsync();
                 });
-
-                await _logRepository.AddAsync(new SerialRepairLog
-                {
-                    SerialId = oldSerial.Id,
-                    TicketId = ticketId,
-                    ResolutionType = (byte)3,
-                    LoggedAt = now,
-                    LoggedByEmployeeId = userId,
-                    Summary = $"Đổi 1-1 sang serial {newSerial.SerialNumber}. Bảo hành kế thừa đến {oldEndDate:dd/MM/yyyy}.",
-                    ReplacedBySerialId = newSerialId
-                });
-
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
 
                 // NGHIỆP VỤ KHO: Tự động kích hoạt đồng bộ hóa số lượng tồn kho khả dụng của biến thể trong RAM
                 await _inventorySyncService.SyncStockBatchAsync(new[] { oldSerial.VariantId });
@@ -850,7 +875,6 @@ namespace PBL3.Service.ServiceTickets
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }
@@ -868,47 +892,48 @@ namespace PBL3.Service.ServiceTickets
 
             ValidateTransition(ticket.Status, (byte)9);
 
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // Issue #4: Capture FromStatus BEFORE changing status
-                byte previousStatus = ticket.Status;
-
-                ticket.Status = (byte)9;
-                ticket.CompletedDate = DateTime.UtcNow;
-                ticket.ModifiedDate = DateTime.UtcNow;
-
-                await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    TicketId = ticketId,
-                    FromStatus = previousStatus,
-                    ToStatus = (byte)9,
-                    ChangedByEmployeeId = userId,
-                    ChangedAt = DateTime.UtcNow,
-                    Note = "Hoàn tất sửa chữa"
+                    // Issue #4: Capture FromStatus BEFORE changing status
+                    byte previousStatus = ticket.Status;
+
+                    ticket.Status = (byte)9;
+                    ticket.CompletedDate = DateTime.UtcNow;
+                    ticket.ModifiedDate = DateTime.UtcNow;
+
+                    await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
+                    {
+                        TicketId = ticketId,
+                        FromStatus = previousStatus,
+                        ToStatus = (byte)9,
+                        ChangedByEmployeeId = userId,
+                        ChangedAt = DateTime.UtcNow,
+                        Note = "Hoàn tất sửa chữa"
+                    });
+
+                    // Issue #12: Only add log if not already logged during swap operation
+                    if (previousStatus != (byte)8)
+                    {
+                        await _logRepository.AddAsync(new SerialRepairLog
+                        {
+                            SerialId = ticket.SerialId,
+                            TicketId = ticketId,
+                            ResolutionType = ticket.ResolutionType,
+                            LoggedAt = DateTime.UtcNow,
+                            LoggedByEmployeeId = userId,
+                            Summary = request.Note ?? "Sửa chữa xong"
+                        });
+                    }
+
+                    await _unitOfWork.SaveChangesAsync();
                 });
 
-                // Issue #12: Only add log if not already logged during swap operation
-                if (previousStatus != (byte)8)
-                {
-                    await _logRepository.AddAsync(new SerialRepairLog
-                    {
-                        SerialId = ticket.SerialId,
-                        TicketId = ticketId,
-                        ResolutionType = ticket.ResolutionType,
-                        LoggedAt = DateTime.UtcNow,
-                        LoggedByEmployeeId = userId,
-                        Summary = request.Note ?? "Sửa chữa xong"
-                    });
-                }
-
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
                 return true;
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }
@@ -1029,74 +1054,67 @@ namespace PBL3.Service.ServiceTickets
                 throw new InvalidOperationException("Hóa đơn cho phiếu này đã tồn tại.");
 
             // Lấy báo giá đã được khách hàng duyệt làm căn cứ áp giá thanh toán
-            var quotations = await _quotationRepository.GetByTicketIdAsync(ticketId);
+            var quotations = await _quotationRepository.GetByTicketIdReadOnlyAsync(ticketId);
             var acceptedQuote = quotations.FirstOrDefault(q => q.Status == (byte)1);
             if (acceptedQuote == null)
                 throw new InvalidOperationException("Không tìm thấy báo giá được duyệt.");
 
             // Khởi chạy Transaction để bảo đảm việc sinh hóa đơn và sao chép danh mục phụ tùng diễn ra an toàn
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // Sinh mã hóa đơn dịch vụ tự động SRV-yyyyMMdd-NNN tăng dần theo ngày
-                var now = DateTime.UtcNow;
-                var datePrefix = "SRV-" + now.ToString("yyyyMMdd");
-                var lastCode = await _invoiceRepository.GetLastInvoiceCodeByDateAsync(datePrefix);
-                int nextIndex = 1;
-                if (!string.IsNullOrEmpty(lastCode))
+                var invoice = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    var suffix = lastCode.Substring(lastCode.LastIndexOf('-') + 1);
-                    if (int.TryParse(suffix, out int lastIdx))
-                        nextIndex = lastIdx + 1;
-                }
-                var invoiceCode = $"{datePrefix}-{nextIndex:D3}";
+                    // Sinh mã hóa đơn dịch vụ SRV-yyyyMMdd-NNNNNN
+                    var now = DateTime.UtcNow;
+                    var invoiceCode = await _codeGenerator.NextAsync(DocumentCodeKind.ServiceInvoice);
 
-                // Tạo mới hóa đơn dịch vụ (ServiceInvoice) với đầy đủ thông số nhân công và phụ tùng kế thừa từ báo giá đã duyệt
-                var invoice = new ServiceInvoice
-                {
-                    InvoiceCode = invoiceCode,
-                    TicketId = ticketId,
-                    QuotationId = acceptedQuote.Id,
-                    IssuedDate = now,
-                    IssuedByEmployeeId = userId,
-                    LaborCost = acceptedQuote.LaborCost,
-                    PartsTotal = acceptedQuote.PartsTotal,
-                    GrandTotal = acceptedQuote.GrandTotal,
-                    PaymentMethod = request.PaymentMethod,
-                    PaymentStatus = (byte)0, // Mặc định hóa đơn mới sinh ở trạng thái: Chưa thanh toán (Unpaid)
-                    Note = request.Note
-                };
-
-                await _invoiceRepository.AddAsync(invoice);
-                await _unitOfWork.SaveChangesAsync();
-
-                // Sao chép chính xác danh sách linh kiện thay thế từ Báo giá sang bảng hóa đơn thực tế (ServiceInvoiceItems)
-                var quotationItems = await _dbContext.QuotationItems
-                    .Where(qi => qi.QuotationId == acceptedQuote.Id)
-                    .ToListAsync();
-
-                foreach (var qItem in quotationItems)
-                {
-                    await _dbContext.ServiceInvoiceItems.AddAsync(new ServiceInvoiceItem
+                    // Tạo mới hóa đơn dịch vụ (ServiceInvoice) với đầy đủ thông số nhân công và phụ tùng kế thừa từ báo giá đã duyệt
+                    var invoice = new ServiceInvoice
                     {
-                        InvoiceId = invoice.Id,
-                        VariantId = qItem.VariantId,
-                        Description = qItem.Description,
-                        Quantity = qItem.Quantity,
-                        UnitPrice = qItem.UnitPrice,
-                        LineTotal = qItem.Quantity * qItem.UnitPrice
-                    });
-                }
+                        InvoiceCode = invoiceCode,
+                        TicketId = ticketId,
+                        QuotationId = acceptedQuote.Id,
+                        IssuedDate = now,
+                        IssuedByEmployeeId = userId,
+                        LaborCost = acceptedQuote.LaborCost,
+                        PartsTotal = acceptedQuote.PartsTotal,
+                        GrandTotal = acceptedQuote.GrandTotal,
+                        PaymentMethod = request.PaymentMethod,
+                        PaymentStatus = (byte)0, // Mặc định hóa đơn mới sinh ở trạng thái: Chưa thanh toán (Unpaid)
+                        Note = request.Note
+                    };
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                    await _invoiceRepository.AddAsync(invoice);
+                    await _unitOfWork.SaveChangesAsync();
+
+                    // Sao chép chính xác danh sách linh kiện thay thế từ Báo giá sang bảng hóa đơn thực tế (ServiceInvoiceItems)
+                    var quotationItems = await _dbContext.QuotationItems
+                        .Where(qi => qi.QuotationId == acceptedQuote.Id)
+                        .ToListAsync();
+
+                    foreach (var qItem in quotationItems)
+                    {
+                        await _dbContext.ServiceInvoiceItems.AddAsync(new ServiceInvoiceItem
+                        {
+                            InvoiceId = invoice.Id,
+                            VariantId = qItem.VariantId,
+                            Description = qItem.Description,
+                            Quantity = qItem.Quantity,
+                            UnitPrice = qItem.UnitPrice,
+                            LineTotal = qItem.Quantity * qItem.UnitPrice
+                        });
+                    }
+
+                    await _unitOfWork.SaveChangesAsync();
+
+                    return invoice;
+                });
 
                 var reloadedInvoice = await _invoiceRepository.GetByIdWithDetailsAsync(invoice.Id);
                 return MapServiceInvoiceToDto(reloadedInvoice);
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }

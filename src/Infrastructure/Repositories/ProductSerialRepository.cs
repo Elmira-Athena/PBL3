@@ -156,14 +156,19 @@ namespace PBL3.Infrastructure.Repositories
 
         public async Task<List<(int SerialId, int VariantId, string SerialNumber)>> GetAvailableSerialsBatchAsync(List<int> variantIds)
         {
-            return await _context.ProductSerials
+            // Trước đây dùng .ContinueWith(t => t.Result ...) — chỗ DUY NHẤT trong repo
+            // chạm .Result. Không gây deadlock, nhưng nó bọc mọi exception thành
+            // AggregateException, nên khối catch (SqlException) ở tầng service KHÔNG
+            // BẮT ĐƯỢC: lỗi DB rơi thẳng thành HTTP 500 vô danh, đúng lúc RDS quá tải.
+            var rows = await _context.ProductSerials
                 .AsNoTracking()
                 .Where(s => variantIds.Contains(s.VariantId) && s.Status == 0) // Available
                 .Select(s => new { s.Id, s.VariantId, s.SerialNumber })
-                .ToListAsync()
-                .ContinueWith(t => t.Result
-                    .Select(x => (x.Id, x.VariantId, x.SerialNumber))
-                    .ToList());
+                .ToListAsync();
+
+            return rows
+                .Select(x => (x.Id, x.VariantId, x.SerialNumber))
+                .ToList();
         }
     }
 }

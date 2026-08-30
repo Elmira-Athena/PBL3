@@ -166,6 +166,42 @@ namespace PBL3.Infrastructure.Repositories
             await _dbContext.VoucherUsages.AddRangeAsync(usages);
         }
 
+        public async Task<List<string>> TryConsumeByCodesAsync(List<string> codes)
+        {
+            if (codes == null || codes.Count == 0)
+                return new List<string>();
+
+            var distinct = codes.Distinct().ToList();
+
+            // Một câu UPDATE duy nhất cho cả lô. Vị từ (Quantity == null || UsedCount < Quantity)
+            // nằm cùng câu lệnh với phép tăng → nguyên tử, không lost update.
+            var affected = await _dbContext.Vouchers
+                .Where(v => distinct.Contains(v.Code)
+                            && (v.Quantity == null || v.UsedCount < v.Quantity))
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.UsedCount, v => v.UsedCount + 1));
+
+            if (affected == distinct.Count)
+                return new List<string>();
+
+            // Có mã không tiêu thụ được — truy lại để báo đúng mã nào cho người dùng,
+            // thay vì một thông báo chung chung.
+            return await _dbContext.Vouchers
+                .Where(v => distinct.Contains(v.Code)
+                            && v.Quantity != null && v.UsedCount >= v.Quantity)
+                .Select(v => v.Code)
+                .ToListAsync();
+        }
+
+        public async Task<bool> TryConsumeAsync(int voucherId)
+        {
+            var affected = await _dbContext.Vouchers
+                .Where(v => v.Id == voucherId
+                            && (v.Quantity == null || v.UsedCount < v.Quantity))
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.UsedCount, v => v.UsedCount + 1));
+
+            return affected > 0;
+        }
+
         public async Task SaveChangesAsync()
         {
             await _dbContext.SaveChangesAsync();

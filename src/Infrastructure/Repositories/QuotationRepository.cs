@@ -29,13 +29,45 @@ namespace PBL3.Infrastructure.Repositories
                 .FirstOrDefaultAsync(q => q.Id == id);
         }
 
-        public async Task<List<Quotation>> GetByTicketIdAsync(int ticketId)
+        public async Task<List<Quotation>> GetByTicketIdReadOnlyAsync(int ticketId)
         {
             return await _dbContext.Quotations
                 .Where(q => q.TicketId == ticketId)
                 .Include(q => q.Items)
                 .AsNoTracking()
                 .ToListAsync();
+        }
+
+        public async Task<int> MarkPendingAsSupersededAsync(int ticketId)
+        {
+            // Một câu UPDATE duy nhất, nguyên tử. Vị từ Status == 0 nằm CÙNG câu lệnh
+            // với phép gán, nên không còn khe check-then-act: dưới READ COMMITTED,
+            // DB lấy row lock rồi ĐÁNH GIÁ LẠI vị từ trên bản mới nhất.
+            //
+            // ExecuteUpdateAsync chạy ngay lập tức (không đợi SaveChangesAsync) và
+            // dùng chung DbContext — tức chung transaction — với UnitOfWork.
+            return await _dbContext.Quotations
+                .Where(q => q.TicketId == ticketId && q.Status == (byte)0)
+                .ExecuteUpdateAsync(s => s.SetProperty(q => q.Status, (byte)3));
+        }
+
+        public async Task<bool> TryDecideAsync(int quotationId, byte fromStatus, byte toStatus, DateTime decidedAt, string? note)
+        {
+            var query = _dbContext.Quotations
+                .Where(q => q.Id == quotationId && q.Status == fromStatus);
+
+            // Tách hai nhánh thay vì luôn ghi note: nhánh duyệt không đụng tới
+            // CustomerDecisionNote, truyền null vào sẽ XOÁ note đang có.
+            var affected = note is null
+                ? await query.ExecuteUpdateAsync(s => s
+                    .SetProperty(q => q.Status, toStatus)
+                    .SetProperty(q => q.CustomerDecidedAt, decidedAt))
+                : await query.ExecuteUpdateAsync(s => s
+                    .SetProperty(q => q.Status, toStatus)
+                    .SetProperty(q => q.CustomerDecidedAt, decidedAt)
+                    .SetProperty(q => q.CustomerDecisionNote, note));
+
+            return affected > 0;
         }
 
         public async Task<bool> HasAcceptedQuotationAsync(int ticketId)

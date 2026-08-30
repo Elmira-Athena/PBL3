@@ -21,6 +21,9 @@ namespace PBL3.Service.Orders
         private readonly IUserAddressRepository _userAddressRepo;
         private readonly IProductSerialRepository _productSerialRepo;
 
+        private readonly IDocumentCodeGenerator _codeGenerator;
+
+
         public OrderService(
             IUnitOfWork unitOfWork,
             IOrderRepository orderRepo,
@@ -28,7 +31,8 @@ namespace PBL3.Service.Orders
             IProductRepository productRepo,
             ICartRepository cartRepo,
             IUserAddressRepository userAddressRepo,
-            IProductSerialRepository productSerialRepo)
+            IProductSerialRepository productSerialRepo,
+            IDocumentCodeGenerator codeGenerator)
         {
             _unitOfWork = unitOfWork;
             _orderRepo = orderRepo;
@@ -37,6 +41,7 @@ namespace PBL3.Service.Orders
             _cartRepo = cartRepo;
             _userAddressRepo = userAddressRepo;
             _productSerialRepo = productSerialRepo;
+            _codeGenerator = codeGenerator;
         }
 
         /// <summary>
@@ -137,88 +142,83 @@ namespace PBL3.Service.Orders
             decimal totalAmount = subTotal + request.ShippingFee - totalDiscount;
 
             // ── BƯỚC 4: TẠO ĐƠN HÀNG (Chạy trong Transaction đảm bảo tính toàn vẹn) ──
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // Tự sinh mã đơn hàng định dạng ORD-YYYYMMDD-XXX (Ví dụ: ORD-20260521-001)
-                string datePrefix = "ORD-" + DateTime.Now.ToString("yyyyMMdd");
-                string? lastCode = await _orderRepo.GetLastOrderCodeByDateAsync(datePrefix);
-                int nextIndex = 1;
-                if (!string.IsNullOrEmpty(lastCode))
+                var order = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    string suffix = lastCode.Substring(lastCode.LastIndexOf('-') + 1);
-                    if (int.TryParse(suffix, out int lastIndex))
+                    // Tự sinh mã đơn hàng định dạng ORD-yyyyMMdd-NNNNNN
+                    string newOrderCode = await _codeGenerator.NextAsync(DocumentCodeKind.Order);
+
+                    // Tất cả đơn hàng online đều bắt đầu ở Pending (chờ duyệt), dù COD hay chuyển khoản trực tuyến.
+                    byte orderStatus = (byte)OrderStatus.Pending;
+
+                    var order = new Order
                     {
-                        nextIndex = lastIndex + 1;
-                    }
-                }
-                string newOrderCode = $"{datePrefix}-{nextIndex:D3}";
+                        OrderCode = newOrderCode,
+                        UserId = userId,
+                        OrderDate = DateTime.UtcNow,
+                        Status = orderStatus,
+                        SubTotal = subTotal,
+                        ShippingFee = request.ShippingFee,
+                        DiscountAmount = totalDiscount,
+                        TotalAmount = totalAmount,
+                        ShipName = address.ReceiverName,
+                        ShipPhone = address.PhoneNumber,
+                        ShipAddress = address.AddressLine,
+                        ShipCity = address.City,
+                        PaymentMethod = request.PaymentMethod,
+                        PaymentStatus = (byte)(request.PaymentMethod == 0 ? 0 : 1), // 0: COD (Chưa trả), 1: Online Payment (Đã trả)
+                        OrderType = 0, // 0: Đơn đặt hàng Online
+                        Note = request.Note
+                    };
 
-                // Tất cả đơn hàng online đều bắt đầu ở Pending (chờ duyệt), dù COD hay chuyển khoản trực tuyến.
-                byte orderStatus = (byte)OrderStatus.Pending;
+                    await _orderRepo.AddAsync(order);
+                    await _unitOfWork.SaveChangesAsync(); // Lưu trước để phát sinh Id đơn hàng phục vụ bảng chi tiết
 
-                var order = new Order
-                {
-                    OrderCode = newOrderCode,
-                    UserId = userId,
-                    OrderDate = DateTime.UtcNow,
-                    Status = orderStatus,
-                    SubTotal = subTotal,
-                    ShippingFee = request.ShippingFee,
-                    DiscountAmount = totalDiscount,
-                    TotalAmount = totalAmount,
-                    ShipName = address.ReceiverName,
-                    ShipPhone = address.PhoneNumber,
-                    ShipAddress = address.AddressLine,
-                    ShipCity = address.City,
-                    PaymentMethod = request.PaymentMethod,
-                    PaymentStatus = (byte)(request.PaymentMethod == 0 ? 0 : 1), // 0: COD (Chưa trả), 1: Online Payment (Đã trả)
-                    OrderType = 0, // 0: Đơn đặt hàng Online
-                    Note = request.Note
-                };
-
-                await _orderRepo.AddAsync(order);
-                await _unitOfWork.SaveChangesAsync(); // Lưu trước để phát sinh Id đơn hàng phục vụ bảng chi tiết
-
-                // Thêm chi tiết đơn hàng (OrderDetail)
-                foreach (var item in checkoutItems)
-                {
-                    order.OrderDetails.Add(new OrderDetail
+                    // Thêm chi tiết đơn hàng (OrderDetail)
+                    foreach (var item in checkoutItems)
                     {
-                        OrderId = order.Id,
-                        VariantId = item.VariantId,
-                        Quantity = item.Quantity,
-                        UnitPrice = item.Price
-                    });
-                }
-
-                // Ghi nhận lịch sử sử dụng Voucher (VoucherUsages) và tăng số lượt đã dùng của mã
-                foreach (var usage in usages)
-                {
-                    usage.OrderId = order.Id;
-                }
-                if (usages.Any())
-                {
-                    await _voucherRepo.AddUsagesAsync(usages);
-                    
-                    if (request.VoucherCodes != null && request.VoucherCodes.Any())
-                    {
-                        var vouchersToUpdate = await _voucherRepo.GetByCodesAsync(request.VoucherCodes);
-                        foreach (var voucher in vouchersToUpdate)
+                        order.OrderDetails.Add(new OrderDetail
                         {
-                            voucher.UsedCount += 1;
+                            OrderId = order.Id,
+                            VariantId = item.VariantId,
+                            Quantity = item.Quantity,
+                            UnitPrice = item.Price
+                        });
+                    }
+
+                    // Ghi nhận lịch sử sử dụng Voucher (VoucherUsages) và tăng số lượt đã dùng của mã
+                    foreach (var usage in usages)
+                    {
+                        usage.OrderId = order.Id;
+                    }
+                    if (usages.Any())
+                    {
+                        await _voucherRepo.AddUsagesAsync(usages);
+                    
+                        if (request.VoucherCodes != null && request.VoucherCodes.Any())
+                        {
+                            // TIÊU THỤ NGUYÊN TỬ: một câu UPDATE ... SET UsedCount = UsedCount + 1
+                            // WHERE UsedCount < Quantity. Cách cũ (đọc entity rồi += 1) là lost update:
+                            // hai đơn đồng thời chỉ đếm một lượt, voucher dùng vượt số phát hành.
+                            var exhausted = await _voucherRepo.TryConsumeByCodesAsync(request.VoucherCodes);
+                            if (exhausted.Any())
+                                throw new Exception(
+                                    $"Mã '{string.Join("', '", exhausted)}' đã hết lượt sử dụng. " +
+                                    "Vui lòng bỏ mã này và thử lại.");
                         }
                     }
-                }
 
-                // Dọn dẹp giỏ hàng sau khi đặt hàng thành công
-                if (!request.IsBuyNow && cartsToRemove != null)
-                {
-                    _cartRepo.RemoveRange(cartsToRemove);
-                }
+                    // Dọn dẹp giỏ hàng sau khi đặt hàng thành công
+                    if (!request.IsBuyNow && cartsToRemove != null)
+                    {
+                        _cartRepo.RemoveRange(cartsToRemove);
+                    }
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                    await _unitOfWork.SaveChangesAsync();
+
+                    return order;
+                });
 
                 var response = new CheckoutResponse
                 {
@@ -234,7 +234,6 @@ namespace PBL3.Service.Orders
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackAsync();
                 throw new Exception("Lỗi hệ thống khi đặt hàng: " + ex.Message, ex);
             }
         }
@@ -275,78 +274,71 @@ namespace PBL3.Service.Orders
             totalDiscount = Math.Min(totalDiscount, subTotal);
 
             // 4. TRANSACTION
-            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // Generate OrderCode (e.g. ORD-YYYYMMDD-001)
-                string datePrefix = "ORD-" + DateTime.Now.ToString("yyyyMMdd");
-                string? lastCode = await _orderRepo.GetLastOrderCodeByDateAsync(datePrefix);
-                int nextIndex = 1;
-                if (!string.IsNullOrEmpty(lastCode))
+                var order = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    string suffix = lastCode.Substring(lastCode.LastIndexOf('-') + 1);
-                    if (int.TryParse(suffix, out int lastIndex))
-                    {
-                        nextIndex = lastIndex + 1;
-                    }
-                }
-                string newOrderCode = $"{datePrefix}-{nextIndex:D3}";
+                    // Generate OrderCode (ORD-yyyyMMdd-NNNNNN)
+                    string newOrderCode = await _codeGenerator.NextAsync(DocumentCodeKind.Order);
 
-                // 4a. Insert Order
-                var order = new Order
-                {
-                    OrderCode = newOrderCode,
-                    UserId = userId,
-                    OrderDate = DateTime.UtcNow,
-                    Status = 0, // Pending
-                    SubTotal = subTotal,
-                    ShippingFee = shippingFee,
-                    DiscountAmount = totalDiscount,
-                    TotalAmount = subTotal + shippingFee - totalDiscount,
-                    ShipName = request.ShipName,
-                    ShipPhone = request.ShipPhone,
-                    ShipAddress = request.ShipAddress,
-                    ShipCity = request.ShipCity,
-                    PaymentMethod = request.PaymentMethod,
-                    PaymentStatus = (byte)(request.PaymentMethod == 0 ? 0 : 1),
-                    Note = request.Note
-                };
+                    // 4a. Insert Order
+                    var order = new Order
+                    {
+                        OrderCode = newOrderCode,
+                        UserId = userId,
+                        OrderDate = DateTime.UtcNow,
+                        Status = 0, // Pending
+                        SubTotal = subTotal,
+                        ShippingFee = shippingFee,
+                        DiscountAmount = totalDiscount,
+                        TotalAmount = subTotal + shippingFee - totalDiscount,
+                        ShipName = request.ShipName,
+                        ShipPhone = request.ShipPhone,
+                        ShipAddress = request.ShipAddress,
+                        ShipCity = request.ShipCity,
+                        PaymentMethod = request.PaymentMethod,
+                        PaymentStatus = (byte)(request.PaymentMethod == 0 ? 0 : 1),
+                        Note = request.Note
+                    };
                 
-                await _orderRepo.AddAsync(order);
-                await _unitOfWork.SaveChangesAsync(); // Get Order.Id
+                    await _orderRepo.AddAsync(order);
+                    await _unitOfWork.SaveChangesAsync(); // Get Order.Id
 
-                // 4b. Insert OrderDetails
-                foreach (var item in request.Items)
-                {
-                    order.OrderDetails.Add(new OrderDetail
+                    // 4b. Insert OrderDetails
+                    foreach (var item in request.Items)
                     {
-                        OrderId = order.Id,
-                        VariantId = item.VariantId,
-                        Quantity = item.Quantity,
-                        UnitPrice = variantPrices[item.VariantId]
-                    });
-                }
-
-                // 4c. Update Usages with OrderId and Add
-                foreach (var usage in usages)
-                {
-                    usage.OrderId = order.Id;
-                }
-                await _voucherRepo.AddUsagesAsync(usages);
-
-                // 4d. Increase UsedCount of vouchers
-                if (request.VoucherCodes != null && request.VoucherCodes.Any())
-                {
-                    var vouchers = await _voucherRepo.GetByCodesAsync(request.VoucherCodes);
-                    foreach (var voucher in vouchers)
-                    {
-                        voucher.UsedCount += 1;
+                        order.OrderDetails.Add(new OrderDetail
+                        {
+                            OrderId = order.Id,
+                            VariantId = item.VariantId,
+                            Quantity = item.Quantity,
+                            UnitPrice = variantPrices[item.VariantId]
+                        });
                     }
-                }
 
-                // 4e-4f. Flush and Commit
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                    // 4c. Update Usages with OrderId and Add
+                    foreach (var usage in usages)
+                    {
+                        usage.OrderId = order.Id;
+                    }
+                    await _voucherRepo.AddUsagesAsync(usages);
+
+                    // 4d. Increase UsedCount of vouchers
+                    if (request.VoucherCodes != null && request.VoucherCodes.Any())
+                    {
+                        // TIÊU THỤ NGUYÊN TỬ — xem giải thích ở nhánh checkout phía trên.
+                        var exhausted = await _voucherRepo.TryConsumeByCodesAsync(request.VoucherCodes);
+                        if (exhausted.Any())
+                            throw new Exception(
+                                $"Mã '{string.Join("', '", exhausted)}' đã hết lượt sử dụng. " +
+                                "Vui lòng bỏ mã này và thử lại.");
+                    }
+
+                    // 4e-4f. Flush and Commit
+                    await _unitOfWork.SaveChangesAsync();
+
+                    return order;
+                });
 
                 // 5. Manual Mapping
                 var savedOrderInfo = await _orderRepo.GetByIdWithDetailsAsync(order.Id);
@@ -356,7 +348,6 @@ namespace PBL3.Service.Orders
             }
             catch (Exception ex)
             {
-                await _unitOfWork.RollbackAsync();
                 throw new Exception("Lỗi khi tạo đơn hàng: " + ex.Message, ex);
             }
         }

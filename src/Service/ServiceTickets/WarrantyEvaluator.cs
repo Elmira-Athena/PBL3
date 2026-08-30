@@ -17,7 +17,7 @@ namespace PBL3.Service.ServiceTickets
             var now = DateTime.UtcNow;
 
             // 1. Try to find active Warranty row
-            var activeWarranties = await warrantyRepository.GetActiveBySerialIdAsync(serial.Id);
+            var activeWarranties = await warrantyRepository.GetActiveBySerialIdReadOnlyAsync(serial.Id);
             if (activeWarranties.Count > 0)
             {
                 var warranty = activeWarranties[0]; // Already ordered by EndDate desc

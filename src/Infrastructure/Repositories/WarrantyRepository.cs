@@ -16,12 +16,22 @@ namespace PBL3.Infrastructure.Repositories
             _dbContext = dbContext;
         }
 
-        public async Task<List<Warranty>> GetActiveBySerialIdAsync(int serialId)
+        public async Task<List<Warranty>> GetActiveBySerialIdReadOnlyAsync(int serialId)
         {
             return await _dbContext.Warranties
                 .Where(w => w.SerialId == serialId && w.Status != 2) // 2 = Claimed
                 .OrderByDescending(w => w.EndDate)
                 .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task<List<Warranty>> GetActiveBySerialIdTrackedAsync(int serialId)
+        {
+            // Không có AsNoTracking: caller vừa đọc (CustomerId, EndDate) vừa ghi
+            // (Status = 2) trên chính danh sách này.
+            return await _dbContext.Warranties
+                .Where(w => w.SerialId == serialId && w.Status != 2) // 2 = Claimed
+                .OrderByDescending(w => w.EndDate)
                 .ToListAsync();
         }
 

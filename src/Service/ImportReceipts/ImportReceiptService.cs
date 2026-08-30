@@ -22,6 +22,9 @@ namespace PBL3.Service.ImportReceipts
         private readonly IInventorySyncService _inventorySyncService;
         private readonly ILogger<ImportReceiptService> _logger;
 
+        private readonly IDocumentCodeGenerator _codeGenerator;
+
+
         public ImportReceiptService(
             IImportReceiptRepository receiptRepo,
             IProductSerialRepository serialRepo,
@@ -29,7 +32,8 @@ namespace PBL3.Service.ImportReceipts
             IProductRepository productRepo,
             IUnitOfWork unitOfWork,
             IInventorySyncService inventorySyncService,
-            ILogger<ImportReceiptService> logger)
+            ILogger<ImportReceiptService> logger,
+            IDocumentCodeGenerator codeGenerator)
         {
             _receiptRepo = receiptRepo;
             _serialRepo = serialRepo;
@@ -38,6 +42,7 @@ namespace PBL3.Service.ImportReceipts
             _unitOfWork = unitOfWork;
             _inventorySyncService = inventorySyncService;
             _logger = logger;
+            _codeGenerator = codeGenerator;
         }
 
         // ========================================================
@@ -95,81 +100,83 @@ namespace PBL3.Service.ImportReceipts
             // -------------------------------------------------------
             // Bước 2: Mở Transaction (qua IUnitOfWork) để bảo vệ tính nhất quán dữ liệu
             // -------------------------------------------------------
-            await _unitOfWork.BeginTransactionAsync();
-
             try
             {
-                // ---------------------------------------------------
-                // Bước 3: Tạo Header phiếu nhập kho (ImportReceipt)
-                // ---------------------------------------------------
-                var receiptCode = await GenerateReceiptCodeAsync();
-
-                // Tính tổng tiền phiếu nhập = Tổng của (Số lượng nhập * Đơn giá nhập từng biến thể)
-                var totalAmount = request.Details
-                    .Sum(d => d.Quantity * d.ImportPrice);
-
-                var receipt = new ImportReceipt
+                var (receipt, receiptCode, totalAmount) = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    ReceiptCode = receiptCode,
-                    SupplierId = request.SupplierId,
-                    EmployeeId = Guid.Empty, // Tạm hardcode — chưa tích hợp hoàn thiện mô-đun Auth phân quyền nhân viên
-                    ImportDate = DateTime.UtcNow,
-                    TotalAmount = totalAmount,
-                    Note = request.Note?.Trim(),
-                    IsDeleted = false
-                };
+                    // ---------------------------------------------------
+                    // Bước 3: Tạo Header phiếu nhập kho (ImportReceipt)
+                    // ---------------------------------------------------
+                    var receiptCode = await GenerateReceiptCodeAsync();
 
-                await _receiptRepo.AddAsync(receipt);
-                await _unitOfWork.SaveChangesAsync(); // Lưu tạm để DB phát sinh ReceiptId phục vụ cho các bản ghi chi tiết bên dưới
+                    // Tính tổng tiền phiếu nhập = Tổng của (Số lượng nhập * Đơn giá nhập từng biến thể)
+                    var totalAmount = request.Details
+                        .Sum(d => d.Quantity * d.ImportPrice);
 
-                // ---------------------------------------------------
-                // Bước 4: Tạo Details (Chi tiết hàng nhập) & Đăng ký danh sách Serials vật lý tương ứng
-                // ---------------------------------------------------
-                var allNewSerials = new List<ProductSerial>();
-
-                foreach (var detailReq in request.Details)
-                {
-                    var detail = new ImportReceiptDetail
+                    var receipt = new ImportReceipt
                     {
-                        ReceiptId = receipt.Id,
-                        VariantId = detailReq.VariantId,
-                        Quantity = detailReq.Quantity,
-                        ImportPrice = detailReq.ImportPrice
+                        ReceiptCode = receiptCode,
+                        SupplierId = request.SupplierId,
+                        EmployeeId = Guid.Empty, // Tạm hardcode — chưa tích hợp hoàn thiện mô-đun Auth phân quyền nhân viên
+                        ImportDate = DateTime.UtcNow,
+                        TotalAmount = totalAmount,
+                        Note = request.Note?.Trim(),
+                        IsDeleted = false
                     };
 
-                    await _receiptRepo.AddDetailAsync(detail);
+                    await _receiptRepo.AddAsync(receipt);
+                    await _unitOfWork.SaveChangesAsync(); // Lưu tạm để DB phát sinh ReceiptId phục vụ cho các bản ghi chi tiết bên dưới
 
-                    // Tạo bản ghi ProductSerial tương ứng với số lượng (Quantity) và danh sách mã quét được
-                    foreach (var serialNumber in detailReq.SerialNumbers)
+                    // ---------------------------------------------------
+                    // Bước 4: Tạo Details (Chi tiết hàng nhập) & Đăng ký danh sách Serials vật lý tương ứng
+                    // ---------------------------------------------------
+                    var allNewSerials = new List<ProductSerial>();
+
+                    foreach (var detailReq in request.Details)
                     {
-                        allNewSerials.Add(new ProductSerial
+                        var detail = new ImportReceiptDetail
                         {
-                            SerialNumber = serialNumber.Trim(),
+                            ReceiptId = receipt.Id,
                             VariantId = detailReq.VariantId,
-                            ImportReceiptId = receipt.Id,
-                            Status = 0, // Trạng thái ban đầu: 0 = Available (Sẵn sàng bán ra)
-                            CreatedDate = DateTime.UtcNow
-                        });
+                            Quantity = detailReq.Quantity,
+                            ImportPrice = detailReq.ImportPrice
+                        };
+
+                        await _receiptRepo.AddDetailAsync(detail);
+
+                        // Tạo bản ghi ProductSerial tương ứng với số lượng (Quantity) và danh sách mã quét được
+                        foreach (var serialNumber in detailReq.SerialNumbers)
+                        {
+                            allNewSerials.Add(new ProductSerial
+                            {
+                                SerialNumber = serialNumber.Trim(),
+                                VariantId = detailReq.VariantId,
+                                ImportReceiptId = receipt.Id,
+                                Status = 0, // Trạng thái ban đầu: 0 = Available (Sẵn sàng bán ra)
+                                CreatedDate = DateTime.UtcNow
+                            });
+                        }
                     }
-                }
 
-                // Thực hiện chèn hàng loạt (Bulk Insert) danh sách Serial mới để tối ưu hiệu năng cơ sở dữ liệu
-                await _serialRepo.AddRangeAsync(allNewSerials);
+                    // Thực hiện chèn hàng loạt (Bulk Insert) danh sách Serial mới để tối ưu hiệu năng cơ sở dữ liệu
+                    await _serialRepo.AddRangeAsync(allNewSerials);
 
-                // Lưu toàn bộ chi tiết và mã serial mới đăng ký vào database
-                await _unitOfWork.SaveChangesAsync();
+                    // Lưu toàn bộ chi tiết và mã serial mới đăng ký vào database
+                    await _unitOfWork.SaveChangesAsync();
 
-                // ---------------------------------------------------
-                // Bước 5: Cập nhật đồng bộ tồn kho (StockQuantity)
-                // ---------------------------------------------------
-                // NGHIỆP VỤ: Kích hoạt đồng bộ hóa số lượng tồn kho vật lý khả dụng dựa trên số lượng Serial thực tế vừa nhập.
-                var importedVariantIds = request.Details.Select(d => d.VariantId).Distinct().ToList();
-                await _inventorySyncService.SyncStockBatchAsync(importedVariantIds);
+                    // ---------------------------------------------------
+                    // Bước 5: Cập nhật đồng bộ tồn kho (StockQuantity)
+                    // ---------------------------------------------------
+                    // NGHIỆP VỤ: Kích hoạt đồng bộ hóa số lượng tồn kho vật lý khả dụng dựa trên số lượng Serial thực tế vừa nhập.
+                    var importedVariantIds = request.Details.Select(d => d.VariantId).Distinct().ToList();
+                    await _inventorySyncService.SyncStockBatchAsync(importedVariantIds);
 
-                // ---------------------------------------------------
-                // Bước 6: Commit Transaction để hoàn tất giao dịch nhập kho
-                // ---------------------------------------------------
-                await _unitOfWork.CommitAsync();
+                    // ---------------------------------------------------
+                    // Bước 6: Commit Transaction để hoàn tất giao dịch nhập kho
+                    // ---------------------------------------------------
+
+                    return (receipt, receiptCode, totalAmount);
+                });
 
                 _logger.LogInformation(
                     "Tạo phiếu nhập kho thành công: {ReceiptCode}, NCC: {SupplierName}, Tổng: {TotalAmount}",
@@ -194,7 +201,6 @@ namespace PBL3.Service.ImportReceipts
             {
                 // NGHIỆP VỤ: Nếu xảy ra bất kỳ lỗi gì trong quá trình lưu hoặc đồng bộ tồn kho,
                 // lập tức Rollback toàn bộ Transaction để tránh tình trạng rác dữ liệu hoặc lệch tồn kho.
-                await _unitOfWork.RollbackAsync();
 
                 _logger.LogError(ex, "Lỗi khi tạo phiếu nhập kho.");
 
@@ -315,25 +321,7 @@ namespace PBL3.Service.ImportReceipts
         /// </summary>
         private async Task<string> GenerateReceiptCodeAsync()
         {
-            var dateStr = DateTime.UtcNow.ToString("yyyyMMdd");
-            var prefix = $"PN-{dateStr}-";
-
-            // Tìm mã phiếu nhập cuối cùng được tạo ra trong ngày hôm nay
-            var lastCode = await _receiptRepo.GetLastReceiptCodeByDateAsync(prefix);
-
-            int nextNumber = 1;
-            if (!string.IsNullOrEmpty(lastCode))
-            {
-                // Tách lấy phần số thứ tự cuối cùng: ví dụ "PN-20260521-003" -> tách lấy "003" -> chuyển thành số 3 -> cộng thêm 1 = 4
-                var lastPart = lastCode.Substring(prefix.Length);
-                if (int.TryParse(lastPart, out int lastNumber))
-                {
-                    nextNumber = lastNumber + 1;
-                }
-            }
-
-            // Trả về mã định danh chuẩn hóa, đảm bảo tối thiểu có 3 chữ số cho số thứ tự (ví dụ: PN-20260521-004)
-            return $"{prefix}{nextNumber:D3}";
+            return await _codeGenerator.NextAsync(DocumentCodeKind.ImportReceipt);
         }
     }
 }
