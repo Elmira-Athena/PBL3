@@ -272,6 +272,20 @@ else
                     <div style="background:var(--hs-white); border-radius:12px; padding:36px 40px;">
                         @if (!string.IsNullOrWhiteSpace(_product.Description))
                         {
+                            @*
+                                MarkupString CỐ Ý bỏ qua HTML encoding của Razor.
+                                An toàn ở đây CHỈ VÌ mô tả đã được làm sạch trên
+                                ĐƯỜNG GHI bởi IHtmlContentSanitizer (ProductService
+                                .CreateAsync/UpdateAsync) — script, handler on* và
+                                URI javascript: đều bị loại trước khi xuống DB.
+
+                                Render text thuần không dùng được: dữ liệu thật đang
+                                lưu là HTML thật (<h2>, <p>, <img>), bỏ MarkupString
+                                sẽ hiện nguyên các thẻ đó ra cho khách.
+
+                                ⚠️ Thêm bất kỳ trường free-text nào khác vào đây thì
+                                trường đó cũng PHẢI đi qua sanitizer lúc ghi.
+                            *@
                             <div class="pd-description">
                                 @((MarkupString)_product.Description)
                             </div>

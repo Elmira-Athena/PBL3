@@ -193,6 +193,10 @@ builder.Services.AddScoped<IInventorySyncService, InventorySyncService>();
 
 // Sinh mã chứng từ (ORD/POS/PN/KK/ST/SRV) — gom 7 khối trùng lặp về một chỗ.
 builder.Services.AddScoped<IDocumentCodeGenerator, DocumentCodeGenerator>();
+
+// Làm sạch HTML người dùng nhập, áp TRÊN ĐƯỜNG GHI. Singleton vì HtmlSanitizer
+// dựng khá tốn (kéo theo AngleSharp) và an toàn để dùng lại sau khi cấu hình.
+builder.Services.AddSingleton<IHtmlContentSanitizer, HtmlContentSanitizer>();
 builder.Services.AddScoped<IInventoryCheckService, InventoryCheckService>();
 builder.Services.AddScoped<IInventoryExportService, InventoryExportService>();
 builder.Services.AddScoped<IPosService, PosService>();

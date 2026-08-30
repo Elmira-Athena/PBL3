@@ -12,10 +12,19 @@ namespace PBL3.Service.Products
         private readonly IProductRepository _productRepo;
         private readonly ILogger<ProductService> _logger;
 
-        public ProductService(IProductRepository productRepo, ILogger<ProductService> logger)
+        // Mô tả sản phẩm được render bằng MarkupString ở ProductDetail.razor, tức
+        // HTML chạy thật trên trình duyệt khách. Làm sạch TRÊN ĐƯỜNG GHI để dữ liệu
+        // nằm trong DB đã vô hại — mọi consumer hiện tại và tương lai đều an toàn.
+        private readonly IHtmlContentSanitizer _htmlSanitizer;
+
+        public ProductService(
+            IProductRepository productRepo,
+            ILogger<ProductService> logger,
+            IHtmlContentSanitizer htmlSanitizer)
         {
             _productRepo = productRepo;
             _logger = logger;
+            _htmlSanitizer = htmlSanitizer;
         }
 
         // ========================================================
@@ -119,8 +128,8 @@ namespace PBL3.Service.Products
             {
                 Name = request.Name,
                 Slug = ProductSlugHelper.GenerateProductSlug(request.Name),
-                ShortDescription = request.ShortDescription,
-                Description = request.Description,
+                ShortDescription = _htmlSanitizer.Sanitize(request.ShortDescription),
+                Description = _htmlSanitizer.Sanitize(request.Description),
                 ManufacturerId = request.ManufacturerId,
                 CategoryId = request.CategoryId,
                 Status = 1, // Active
@@ -190,8 +199,8 @@ namespace PBL3.Service.Products
             // Update fields
             product.Name = request.Name;
             product.Slug = ProductSlugHelper.GenerateProductSlug(request.Name);
-            product.ShortDescription = request.ShortDescription;
-            product.Description = request.Description;
+            product.ShortDescription = _htmlSanitizer.Sanitize(request.ShortDescription);
+            product.Description = _htmlSanitizer.Sanitize(request.Description);
             product.ManufacturerId = request.ManufacturerId;
             product.CategoryId = request.CategoryId;
             product.Status = (byte)request.Status;
