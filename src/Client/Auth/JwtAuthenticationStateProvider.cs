@@ -14,11 +14,24 @@ namespace Client.Auth;
 public class JwtAuthenticationStateProvider : AuthenticationStateProvider
 {
     private readonly ILocalStorageService _localStorage;
+    private readonly TokenRefreshCoordinator _refreshCoordinator;
     private const string TokenKey = "authToken";
 
-    public JwtAuthenticationStateProvider(ILocalStorageService localStorage)
+    private static readonly AuthenticationState Anonymous =
+        new(new ClaimsPrincipal(new ClaimsIdentity()));
+
+    public JwtAuthenticationStateProvider(
+        ILocalStorageService localStorage,
+        TokenRefreshCoordinator refreshCoordinator)
     {
         _localStorage = localStorage;
+        _refreshCoordinator = refreshCoordinator;
+
+        // Coordinator làm mới token ở tầng HttpClient (nhánh 401 của
+        // AuthHeaderHandler); UI phải biết để vẽ lại menu theo role mới.
+        // Chiều phụ thuộc là một chiều — coordinator không biết gì về lớp này —
+        // nên không có vòng tròn DI.
+        _refreshCoordinator.TokensChanged += NotifyAuthStateChanged;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
@@ -28,12 +41,31 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
         // Nếu không có token hoặc token rỗng -> Trạng thái "Chưa đăng nhập"
         if (string.IsNullOrWhiteSpace(token))
         {
-            return new AuthenticationState(
-                new ClaimsPrincipal(new ClaimsIdentity()));
+            return Anonymous;
         }
 
         // Loại bỏ dấu ngoặc kép nếu LocalStorage trả về chuỗi có bọc quotes
         token = token.Trim('"');
+
+        // ── Token đã quá hạn: LÀM MỚI, KHÔNG trả anonymous ──
+        //
+        // Cách làm sai mà rất dễ viết: "hết hạn => anonymous". Với access token
+        // sống 15 phút, người dùng để tab mở 20 phút rồi bấm vào một route
+        // [Authorize] sẽ bị đá ra ngay, DÙ refresh token còn hạn tới 7 ngày.
+        //
+        // Dùng CHUNG coordinator với AuthHeaderHandler là bắt buộc: nếu lớp này
+        // tự gọi refresh riêng thì lúc trang load sẽ có hai lời gọi refresh song
+        // song, mà refresh token XOAY VÒNG mỗi lần dùng nên chúng vô hiệu hoá
+        // lẫn nhau và người dùng bị đăng xuất oan.
+        if (IsExpired(token))
+        {
+            var refreshed = await _refreshCoordinator.TryRefreshAsync(token);
+            if (string.IsNullOrWhiteSpace(refreshed))
+            {
+                return Anonymous;
+            }
+            token = refreshed;
+        }
 
         // Parse claims từ JWT payload
         var claims = ParseClaimsFromJwt(token);
@@ -51,6 +83,47 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
     public void NotifyAuthStateChanged()
     {
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+    }
+
+    /// <summary>
+    /// Token đã quá hạn chưa, đọc từ claim `exp` (Unix seconds, chuẩn JWT).
+    ///
+    /// Trừ hao 30 giây: token còn đúng vài giây thì coi như đã hết, để tránh
+    /// trường hợp nó hết hạn ngay giữa lúc request đang bay.
+    ///
+    /// Token không đọc được `exp` thì coi là CHƯA hết hạn — cứ để server phán
+    /// quyết bằng 401 rồi nhánh refresh của AuthHeaderHandler xử lý. Đoán ở
+    /// client rồi tự đăng xuất người dùng là tệ hơn.
+    /// </summary>
+    private static bool IsExpired(string jwt)
+    {
+        var parts = jwt.Split('.');
+        if (parts.Length != 3) return false;
+
+        var jsonBytes = DecodeBase64Url(parts[1]);
+        if (jsonBytes is null || jsonBytes.Length == 0) return false;
+
+        try
+        {
+            var payload = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(jsonBytes);
+            if (payload is null || !payload.TryGetValue("exp", out var expElement)) return false;
+
+            long exp;
+            if (expElement.ValueKind == JsonValueKind.Number)
+            {
+                exp = expElement.GetInt64();
+            }
+            else if (!long.TryParse(expElement.GetString(), out exp))
+            {
+                return false;
+            }
+
+            return DateTimeOffset.FromUnixTimeSeconds(exp) <= DateTimeOffset.UtcNow.AddSeconds(30);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

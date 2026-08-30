@@ -1,0 +1,45 @@
+@implements IDisposable
+@inject SessionEndedNotifier SessionEndedNotifier
+@inject NavigationManager NavigationManager
+
+@*
+    Component không vẽ gì cả. Việc duy nhất của nó: nghe sự kiện "phiên đã kết
+    thúc" từ tầng HttpClient và điều hướng về trang đăng nhập.
+
+    VÌ SAO PHẢI TÁCH RA ĐÂY thay vì gọi NavigateTo ngay trong AuthHeaderHandler:
+    handler chạy giữa lúc một component khác đang await request của nó. Điều
+    hướng ở đó sẽ dispose chính component đang chờ, và cái await kia tỉnh dậy
+    trên một component đã chết => ObjectDisposedException ở chỗ không liên quan.
+
+    Đặt trong App.razor nên phủ CẢ BỐN layout (Storefront/Admin/Employee/Login)
+    bằng một chỗ duy nhất.
+*@
+
+@code {
+    protected override void OnInitialized()
+    {
+        SessionEndedNotifier.SessionEnded += HandleSessionEnded;
+    }
+
+    private void HandleSessionEnded(SessionEndedEventArgs args)
+    {
+        // Sự kiện được phát từ tầng HttpClient, không nhất thiết đang ở trên
+        // sync-context của renderer. InvokeAsync đưa việc điều hướng về đúng luồng.
+        _ = InvokeAsync(() =>
+        {
+            var target = args.Reason switch
+            {
+                SessionEndedReason.Locked =>
+                    $"/login?locked=true&reason={Uri.EscapeDataString(args.Message ?? "Tài khoản của bạn đã bị khóa.")}",
+                _ => "/login?expired=true"
+            };
+
+            NavigationManager.NavigateTo(target, forceLoad: false);
+        });
+    }
+
+    public void Dispose()
+    {
+        SessionEndedNotifier.SessionEnded -= HandleSessionEnded;
+    }
+}

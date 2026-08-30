@@ -3,6 +3,10 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
+@* Nghe sự kiện "phiên kết thúc" từ AuthHeaderHandler và điều hướng về /login.
+   Đặt ở đây để phủ cả bốn layout bằng một chỗ. *@
+<Client.Auth.SessionGuard />
+
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">

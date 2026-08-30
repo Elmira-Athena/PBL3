@@ -35,6 +35,14 @@ builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<JwtAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
     sp.GetRequiredService<JwtAuthenticationStateProvider>());
+
+// Một cửa duy nhất để làm mới token, dùng chung bởi AuthHeaderHandler (nhánh 401)
+// và JwtAuthenticationStateProvider (nhánh token quá hạn lúc render).
+// PHẢI là Scoped — Transient thì mỗi chỗ inject được một SemaphoreSlim RIÊNG và
+// cơ chế single-flight mất tác dụng hoàn toàn, đúng lúc cần nó nhất.
+builder.Services.AddScoped<TokenRefreshCoordinator>();
+builder.Services.AddScoped<SessionEndedNotifier>();
+
 builder.Services.AddTransient<AuthHeaderHandler>();
 
 // ===== HttpClient trỏ về API Backend (có gắn AuthHeaderHandler) =====
@@ -45,6 +53,16 @@ builder.Services.AddHttpClient("HushStoreAPI", client =>
 {
     client.BaseAddress = new Uri(apiBaseUrl);
 }).AddHttpMessageHandler<AuthHeaderHandler>();
+
+// Client THÔ — cố ý KHÔNG gắn AuthHeaderHandler.
+// TokenRefreshCoordinator gọi /api/auth/refresh-token qua đây. Nếu nó dùng client
+// "HushStoreAPI" ở trên thì: handler bắt 401 -> gọi coordinator -> coordinator gửi
+// qua handler -> lại 401 -> ĐỆ QUY VÔ HẠN. Tách client là cách chặn ở gốc, thay vì
+// dựa vào một lá cờ "đang refresh" mà ai đó sau này có thể bỏ quên.
+builder.Services.AddHttpClient(TokenRefreshCoordinator.RawClientName, client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+});
 
 // HttpClient cho Provinces API (public, không cần auth)
 builder.Services.AddHttpClient("ProvincesAPI", client =>
