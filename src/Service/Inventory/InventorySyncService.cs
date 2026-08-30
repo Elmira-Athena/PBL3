@@ -18,15 +18,7 @@ namespace PBL3.Service.Inventory
 
         public async Task SyncStockAsync(int variantId)
         {
-            // 1. Count Serials Available (Status = 0)
-            var availableCount = await _context.ProductSerials
-                .CountAsync(s => s.VariantId == variantId && s.Status == 0);
-
-            // 2. Update cột vật lý — ExecuteUpdateAsync (Bulk update, KHÔNG load data lên memory)
-            await _context.ProductVariants
-                .Where(v => v.Id == variantId)
-                .ExecuteUpdateAsync(s =>
-                    s.SetProperty(v => v.StockQuantity, availableCount));
+            await SyncStockBatchAsync(new[] { variantId });
         }
 
         public async Task SyncStockBatchAsync(IEnumerable<int> variantIds)
@@ -34,23 +26,25 @@ namespace PBL3.Service.Inventory
             var ids = variantIds.Distinct().ToList();
             if (ids.Count == 0) return;
 
-            // 1. Batch COUNT — 1 query duy nhất GROUP BY cho tất cả variants
-            var stockCounts = await _context.ProductSerials
-                .Where(s => ids.Contains(s.VariantId) && s.Status == 0)
-                .GroupBy(s => s.VariantId)
-                .Select(g => new { VariantId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.VariantId, x => x.Count);
-
-            // 2. Bulk Update — xử lý từng variant (kể cả những variant có 0 serial cũng phải update về 0)
-            foreach (var variantId in ids)
-            {
-                var count = stockCounts.GetValueOrDefault(variantId, 0);
-                
-                await _context.ProductVariants
-                    .Where(v => v.Id == variantId)
-                    .ExecuteUpdateAsync(s =>
-                        s.SetProperty(v => v.StockQuantity, count));
-            }
+            // MỘT câu UPDATE duy nhất với subquery tương quan:
+            //   UPDATE ProductVariants SET StockQuantity = (SELECT COUNT(*) FROM ProductSerials
+            //                                               WHERE VariantId = ProductVariants.Id AND Status = 0)
+            //   WHERE Id IN (...)
+            //
+            // Vì sao không tách COUNT rồi UPDATE như bản cũ:
+            //   1. Bản cũ có khe race giữa bước COUNT và bước UPDATE — một serial bán ra
+            //      trong khoảng đó làm StockQuantity bị ghi đè bằng con số đã cũ.
+            //      Gộp vào một câu thì DB tự đánh giá COUNT tại thời điểm ghi, khe đó biến mất.
+            //   2. Bản cũ gọi ExecuteUpdateAsync trong vòng foreach => N round-trip và
+            //      giữ X-lock trên ProductVariants suốt N lượt. Giờ còn đúng 1 lượt.
+            //
+            // Variant không còn serial Available nào vẫn được set về 0 (subquery trả 0),
+            // đúng như hành vi của bản cũ.
+            await _context.ProductVariants
+                .Where(v => ids.Contains(v.Id))
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    v => v.StockQuantity,
+                    v => _context.ProductSerials.Count(ps => ps.VariantId == v.Id && ps.Status == 0)));
         }
     }
 }
