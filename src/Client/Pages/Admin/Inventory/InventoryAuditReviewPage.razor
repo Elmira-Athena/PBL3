@@ -71,21 +71,18 @@
                     <b>Lưu ý:</b> Phê duyệt sẽ tự động cân bằng tồn kho: Serial thiếu → trạng thái Thất thoát, Serial lỗi → trạng thái Hàng lỗi. Hành động này không thể hoàn tác.
                 </MudAlert>
                 <div class="d-flex gap-3">
-                    <MudButton Variant="Variant.Filled" Color="Color.Success"
+                    <ActionButton Variant="Variant.Filled" Color="Color.Success"
                                StartIcon="@Icons.Material.Filled.CheckCircle"
                                OnClick="HandleApprove"
-                               Disabled="_isActioning"
                                Style="text-transform: none; border-radius: 8px; font-weight: 600;">
-                        @if (_isActioning) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
                         Phê duyệt &amp; cân bằng kho
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                    </ActionButton>
+                    <ActionButton Variant="Variant.Outlined" Color="Color.Error"
                                StartIcon="@Icons.Material.Filled.Cancel"
                                OnClick="HandleReject"
-                               Disabled="_isActioning"
                                Style="text-transform: none; border-radius: 8px;">
                         Từ chối
-                    </MudButton>
+                    </ActionButton>
                 </div>
             }
             else
@@ -290,7 +287,6 @@
     private InventoryCheckDto? _check;
     private InventoryCheckDashboardDto? _dashboard;
     private bool _isLoading = true;
-    private bool _isActioning;
 
     private MudTable<InventoryCheckSerialDto>? _serialTable;
     private InventoryCheckSerialFilterRequest _serialFilter = new();
@@ -344,9 +340,9 @@
 
         if (confirm != true) return;
 
-        _isActioning = true;
+        // Cờ bận nay do ActionButton sở hữu và đặt TRƯỚC khi handler này chạy,
+        // nên không cần (và không được) tự quản ở đây nữa — xem BusyState.
         var result = await CheckService.ApproveAsync(Id);
-        _isActioning = false;
 
         if (result.Success)
         {

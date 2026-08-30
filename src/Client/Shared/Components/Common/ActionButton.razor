@@ -1,0 +1,114 @@
+@using MudBlazor
+@implements IDisposable
+
+@*
+    Nút gọi API có sẵn chống double-submit.
+
+    ĐIỂM MẤU CHỐT: cờ bận thuộc về NÚT, và được đặt TRƯỚC khi handler chạy.
+
+    Nhờ vậy nó sửa luôn lỗi tinh vi ở 4 chỗ trong trang kiểm kê MÀ KHÔNG CẦN
+    SỬA MỘT DÒNG NÀO trong thân handler — kể cả những handler mở dialog xác nhận
+    ở đầu (`await DialogService.ShowMessageBox(...)`) rồi mới đặt cờ. Xem
+    BusyState để biết vì sao cách viết thủ công đó không bao giờ chạy đúng.
+
+    ⚠️ CƠ CHẾ NÀY KHÔNG BẢO VỆ SERVER. Hai tab, F5 giữa chừng, hay curl — vẫn
+    double-submit được như thường. Phòng tuyến thật là conditional update và
+    unique index ở tầng DB (đợt 1 và đợt 3). Đây thuần tuý là UX: ngăn người
+    dùng thật vô tình bấm hai lần.
+*@
+
+<MudButton Variant="@Variant"
+           Color="@Color"
+           Size="@Size"
+           StartIcon="@(IsRunning ? null : StartIcon)"
+           EndIcon="@EndIcon"
+           FullWidth="@FullWidth"
+           Class="@Class"
+           Style="@Style"
+           ButtonType="@ButtonType"
+           Disabled="@IsDisabled"
+           OnClick="HandleClickAsync">
+    @if (IsRunning)
+    {
+        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+    }
+    @ChildContent
+</MudButton>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Handler gọi API. Nút tự khoá trong suốt thời gian nó chạy.</summary>
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    [Parameter] public Variant Variant { get; set; } = Variant.Filled;
+    [Parameter] public Color Color { get; set; } = Color.Primary;
+    [Parameter] public Size Size { get; set; } = Size.Medium;
+    [Parameter] public string? StartIcon { get; set; }
+    [Parameter] public string? EndIcon { get; set; }
+    [Parameter] public bool FullWidth { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public ButtonType ButtonType { get; set; } = ButtonType.Button;
+
+    /// <summary>Khoá vì lý do nghiệp vụ (sai trạng thái, thiếu quyền...).</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Nếu nút nằm trong một BusyScope, một hành động đang chạy ở BẤT KỲ nút nào
+    /// trong vùng đó cũng khoá nút này.
+    /// </summary>
+    [CascadingParameter] public BusyScope? Scope { get; set; }
+
+    private readonly BusyState _own = new();
+
+    private bool IsRunning => _own.IsBusy;
+
+    private bool IsDisabled => Disabled || _own.IsBusy || (Scope?.IsBusy ?? false);
+
+    protected override void OnInitialized()
+    {
+        _own.Changed += OnBusyChanged;
+
+        // Subscribe cả scope: giá trị cascade là `this` của BusyScope nên tham
+        // chiếu không bao giờ đổi, Blazor không có gì để thông báo và cũng không
+        // render lại nút này. Thiếu dòng dưới thì các nút anh em vẫn bị CHẶN
+        // đúng nhưng KHÔNG chuyển sang mờ.
+        if (Scope is not null) Scope.BusyChanged += OnBusyChanged;
+    }
+
+    private void OnBusyChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task HandleClickAsync()
+    {
+        // Chốt chống double-submit. Đặt cờ TRƯỚC MỌI await — kể cả await bên
+        // trong handler của caller — nên lần click thứ hai chắc chắn bị chặn.
+        if (!_own.TryBegin()) return;
+
+        // Khoá cả vùng nếu có. Không giành được thì nhả cờ của chính mình ra,
+        // nếu không nút sẽ kẹt ở trạng thái disabled vĩnh viễn.
+        if (Scope is not null && !Scope.TryBegin())
+        {
+            _own.End();
+            return;
+        }
+
+        try
+        {
+            await OnClick.InvokeAsync();
+        }
+        finally
+        {
+            // finally: handler ném thì nút vẫn phải bật lại, nếu không người
+            // dùng mất luôn khả năng thử lại và phải F5.
+            Scope?.End();
+            _own.End();
+        }
+    }
+
+    public void Dispose()
+    {
+        _own.Changed -= OnBusyChanged;
+        if (Scope is not null) Scope.BusyChanged -= OnBusyChanged;
+    }
+}

@@ -86,21 +86,18 @@
             <div class="d-flex gap-2 flex-wrap">
                 @if (_check.Status == 0)
                 {
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                    <ActionButton Variant="Variant.Filled" Color="Color.Primary"
                                StartIcon="@Icons.Material.Filled.Send"
                                OnClick="HandleSubmit"
-                               Disabled="_isActioning"
                                Style="text-transform: none; border-radius: 8px;">
-                        @if (_isActioning) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
                         Gửi duyệt
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                    </ActionButton>
+                    <ActionButton Variant="Variant.Outlined" Color="Color.Error"
                                StartIcon="@Icons.Material.Filled.Cancel"
                                OnClick="HandleCancel"
-                               Disabled="_isActioning"
                                Style="text-transform: none; border-radius: 8px;">
                         Hủy phiếu
-                    </MudButton>
+                    </ActionButton>
                 }
                 @if (_check.Status == 1)
                 {
@@ -362,6 +359,7 @@
                                             <MudIconButton Icon="@Icons.Material.Filled.ReportProblem"
                                                            Color="Color.Warning"
                                                            Size="Size.Small"
+                                                           Disabled="_isActioning"
                                                            OnClick="@(() => HandleMarkDefective(context.Id))" />
                                         </MudTooltip>
                                     }
@@ -490,29 +488,47 @@
 
     private async Task HandleMarkDefective(int detailSerialId)
     {
-        bool? confirm = await DialogService.ShowMessageBox(
-            "Xác nhận đánh dấu lỗi",
-            "Bạn có chắc muốn đánh dấu serial này là hàng lỗi vật lý?",
-            yesText: "Đánh dấu lỗi", cancelText: "Hủy");
-
-        if (confirm != true) return;
-
+        // Nút này là MudIconButton trong ô của bảng, KHÔNG phải ActionButton, nên
+        // vẫn phải tự quản cờ — nhưng lần này cho đúng:
+        //   - đặt cờ TRƯỚC MỌI await (kể cả await mở dialog xác nhận),
+        //   - và gọi StateHasChanged() để UI thực sự vẽ lại.
+        // Bản cũ đặt cờ SAU await dialog và không StateHasChanged, nên
+        // Disabled="_isActioning" không bao giờ có tác dụng.
+        if (_isActioning) return;
         _isActioning = true;
-        var result = await CheckService.MarkDefectiveAsync(Id, detailSerialId);
-        _isActioning = false;
+        StateHasChanged();
 
-        if (result.Success)
+        try
         {
-            Snackbar.Add("Đã đánh dấu hàng lỗi.", Severity.Success);
-            if (_serialTable != null) await _serialTable.ReloadServerData();
-            var dashResult = await CheckService.GetDashboardAsync(Id);
-            if (dashResult.Success && dashResult.Data != null)
-                _dashboard = dashResult.Data;
-            StateHasChanged();
+            bool? confirm = await DialogService.ShowMessageBox(
+                "Xác nhận đánh dấu lỗi",
+                "Bạn có chắc muốn đánh dấu serial này là hàng lỗi vật lý?",
+                yesText: "Đánh dấu lỗi", cancelText: "Hủy");
+
+            if (confirm != true) return;
+
+            var result = await CheckService.MarkDefectiveAsync(Id, detailSerialId);
+
+            if (result.Success)
+            {
+                Snackbar.Add("Đã đánh dấu hàng lỗi.", Severity.Success);
+                if (_serialTable != null) await _serialTable.ReloadServerData();
+                var dashResult = await CheckService.GetDashboardAsync(Id);
+                if (dashResult.Success && dashResult.Data != null)
+                    _dashboard = dashResult.Data;
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Lỗi khi đánh dấu hàng lỗi.", Severity.Error);
+            }
         }
-        else
+        finally
         {
-            Snackbar.Add(result.Message ?? "Lỗi khi đánh dấu hàng lỗi.", Severity.Error);
+            // finally: kể cả khi người dùng bấm Hủy ở dialog (return sớm) hay khi
+            // lời gọi API ném, nút vẫn phải bật lại — nếu không người dùng mất
+            // luôn khả năng thử lại và phải F5.
+            _isActioning = false;
+            StateHasChanged();
         }
     }
 
@@ -542,9 +558,9 @@
 
         if (confirm != true) return;
 
-        _isActioning = true;
+        // Cờ bận nay do ActionButton sở hữu và đặt TRƯỚC khi handler này chạy,
+        // nên không cần (và không được) tự quản ở đây nữa — xem BusyState.
         var result = await CheckService.SubmitAsync(Id);
-        _isActioning = false;
 
         if (result.Success)
         {
@@ -567,9 +583,9 @@
 
         if (confirm != true) return;
 
-        _isActioning = true;
+        // Cờ bận nay do ActionButton sở hữu và đặt TRƯỚC khi handler này chạy,
+        // nên không cần (và không được) tự quản ở đây nữa — xem BusyState.
         var result = await CheckService.CancelAsync(Id);
-        _isActioning = false;
 
         if (result.Success)
         {

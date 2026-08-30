@@ -232,11 +232,14 @@
                         <MudRadio Value="@((byte)2)" Color="Color.Primary">Quẹt thẻ ngân hàng</MudRadio>
                     </MudRadioGroup>
 
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="py-4 rounded-pill"
-                               Style="text-transform: none; font-weight: 800; font-size: 1.1rem; box-shadow: 0 8px 16px rgba(var(--mud-palette-primary-rgb), 0.3);"
-                               OnClick="ProcessPayment">
+                    @* ActionButton: nút này TRỪ TỒN KHO và ghi nhận thanh toán.
+                       Trước đây là MudButton trần — không cờ, không Disabled, không
+                       hỏi lại — nên bấm hai lần là hai hoá đơn và hai lần trừ kho. *@
+                    <ActionButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="py-4 rounded-pill"
+                                  Style="text-transform: none; font-weight: 800; font-size: 1.1rem; box-shadow: 0 8px 16px rgba(var(--mud-palette-primary-rgb), 0.3);"
+                                  OnClick="ProcessPayment">
                         HOÀN TẤT ĐƠN HÀNG
-                    </MudButton>
+                    </ActionButton>
                 </MudPaper>
             </MudStack>
         </MudItem>
@@ -438,6 +441,16 @@
             Snackbar.Add("Giỏ hàng đang trống!", Severity.Error);
             return;
         }
+        // Hỏi lại trước khi trừ tồn kho. Đây là nút DUY NHẤT trong hệ thống vừa
+        // trừ kho vừa ghi nhận thanh toán mà trước đây không hỏi gì cả — thu ngân
+        // bấm nhầm là mất hàng thật, không phải chỉ sai dữ liệu.
+        var confirm = await DialogService.ShowMessageBox(
+            "Xác nhận thanh toán",
+            $"Hoàn tất đơn hàng với {_cartItems.Count} sản phẩm, tổng tiền {_totalAmount:N0} đ?",
+            yesText: "Hoàn tất", cancelText: "Huỷ");
+
+        if (confirm != true) return;
+
         var request = GetCheckoutRequest();
         var result = await PosService.CheckoutAsync(request);
         if (result.Success)

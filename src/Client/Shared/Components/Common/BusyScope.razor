@@ -1,0 +1,68 @@
+@implements IDisposable
+
+@*
+    Bọc một vùng giao diện để MỘT hành động đang chạy thì khoá CẢ VÙNG.
+
+    Đúng nhu cầu của trang phiếu dịch vụ: ServiceTicketDetail.razor có 14 handler
+    mutation trên cùng một phiếu. Khoá riêng từng nút là chưa đủ — bấm "Duyệt báo
+    giá" rồi bấm ngay "Từ chối báo giá" là hai nút KHÁC NHAU, mỗi nút tự thấy mình
+    rảnh, và cả hai cùng bay lên server.
+
+    Cách dùng:
+
+        <BusyScope>
+            <ActionButton OnClick="Duyet">Duyệt</ActionButton>
+            <ActionButton OnClick="TuChoi">Từ chối</ActionButton>
+        </BusyScope>
+
+    ActionButton bên trong tự tìm thấy scope qua CascadingParameter.
+*@
+
+<CascadingValue Value="this" IsFixed="true">
+    @ChildContent
+</CascadingValue>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private readonly BusyState _state = new();
+
+    public bool IsBusy => _state.IsBusy;
+
+    /// <summary>
+    /// Phát khi vùng đổi trạng thái bận. ActionButton bên trong subscribe để tự
+    /// vẽ lại.
+    ///
+    /// VÌ SAO CẦN SỰ KIỆN RIÊNG, không dựa vào CascadingValue:
+    /// giá trị cascade ở đây là `this`, và tham chiếu đó KHÔNG BAO GIỜ đổi. Dù
+    /// đặt IsFixed="false" thì Blazor cũng không thấy có gì thay đổi để thông
+    /// báo, và ActionButton con cũng không nhận tham số mới nên Blazor bỏ qua
+    /// việc render lại chúng.
+    ///
+    /// Hệ quả nếu thiếu: chốt chặn VẪN chạy đúng (Scope.TryBegin trả false nên
+    /// click thứ hai bị bỏ), nhưng các nút anh em KHÔNG chuyển sang trạng thái
+    /// mờ — người dùng thấy nút vẫn bấm được mà bấm thì không có gì xảy ra.
+    /// Đó là kiểu hỏng khó chịu hơn cả không có gì.
+    /// </summary>
+    public event Action? BusyChanged;
+
+    protected override void OnInitialized()
+    {
+        // Vẽ lại cả vùng khi trạng thái đổi, để mọi ActionButton bên trong cập
+        // nhật thuộc tính Disabled của chúng.
+        _state.Changed += OnBusyChanged;
+    }
+
+    private void OnBusyChanged()
+    {
+        BusyChanged?.Invoke();
+        InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Gọi bởi ActionButton. Trả false nếu vùng đang bận.</summary>
+    public bool TryBegin() => _state.TryBegin();
+
+    public void End() => _state.End();
+
+    public void Dispose() => _state.Changed -= OnBusyChanged;
+}

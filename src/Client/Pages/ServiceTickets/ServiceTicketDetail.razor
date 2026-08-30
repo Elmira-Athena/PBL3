@@ -261,127 +261,133 @@
                             Phiếu đã được giao cho kỹ thuật viên khác.
                         </MudAlert>
                     }
-                    <div Class="d-flex flex-column gap-2">
-                        @if (ticket.Status == 0) // Received — chưa gán, ai cũng có thể gán
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                                       OnClick="AssignTechnician" Size="Size.Small">
-                                Gán Kỹ Thuật Viên
-                            </MudButton>
-                        }
+                    @* BusyScope: 16 nút mutation dưới đây đều tác động lên CÙNG MỘT phiếu.
+                       Khoá riêng từng nút là chưa đủ — bấm "Duyệt báo giá" rồi bấm ngay
+                       "Từ chối báo giá" là hai nút KHÁC NHAU, mỗi nút tự thấy mình rảnh,
+                       và cả hai cùng bay lên server. BusyScope khoá cả vùng. *@
+                    <BusyScope>
+                        <div Class="d-flex flex-column gap-2">
+                            @if (ticket.Status == 0) // Received — chưa gán, ai cũng có thể gán
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                           OnClick="AssignTechnician" Size="Size.Small">
+                                    Gán Kỹ Thuật Viên
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 1) // Diagnosing
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                                       OnClick="RecordDiagnosis" Size="Size.Small">
-                                Ghi Kết Luận
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 1) // Diagnosing
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                           OnClick="RecordDiagnosis" Size="Size.Small">
+                                    Ghi Kết Luận
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 1 && (ticket.WasInWarrantyAtIntake || ticket.ResolutionType == 0))
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                                       OnClick="ChooseBranch" Size="Size.Small">
-                                Chọn Loại Sửa
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 1 && (ticket.WasInWarrantyAtIntake || ticket.ResolutionType == 0))
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                           OnClick="ChooseBranch" Size="Size.Small">
+                                    Chọn Loại Sửa
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 4) // Diagnosing & PaidRepair
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                                       OnClick="CreateQuotation" Size="Size.Small">
-                                Tạo Báo Giá
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 4) // Diagnosing & PaidRepair
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                           OnClick="CreateQuotation" Size="Size.Small">
+                                    Tạo Báo Giá
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 2) // Chờ duyệt báo giá
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
-                                       OnClick="@(() => AcceptQuotation(5))" Size="Size.Small">
-                                Chấp Nhận (Bắt Đầu Sửa)
-                            </MudButton>
-                            <MudButton Variant="Variant.Filled" Color="Color.Error" FullWidth="true"
-                                       OnClick="RejectQuotation" Size="Size.Small">
-                                Từ Chối Báo Giá
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 2) // Chờ duyệt báo giá
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                                           OnClick="@(() => AcceptQuotation(5))" Size="Size.Small">
+                                    Chấp Nhận (Bắt Đầu Sửa)
+                                </ActionButton>
+                                <ActionButton Variant="Variant.Filled" Color="Color.Error" FullWidth="true"
+                                           OnClick="RejectQuotation" Size="Size.Small">
+                                    Từ Chối Báo Giá
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 1) // Warranty internal repair
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
-                                       OnClick="StartRepair" Size="Size.Small">
-                                Bắt Đầu Sửa Chữa
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 1) // Warranty internal repair
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                                           OnClick="StartRepair" Size="Size.Small">
+                                    Bắt Đầu Sửa Chữa
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 2) // RMA
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
-                                       OnClick="CreateRmaShipment" Size="Size.Small">
-                                Tạo Phiếu RMA
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 2) // RMA
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
+                                           OnClick="CreateRmaShipment" Size="Size.Small">
+                                    Tạo Phiếu RMA
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 3) // 1-1 swap
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
-                                       OnClick="PerformSwap" Size="Size.Small">
-                                Đổi Sản phẩm 1-1
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 1 && ticket.ResolutionType == 3) // 1-1 swap
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Warning" FullWidth="true"
+                                           OnClick="PerformSwap" Size="Size.Small">
+                                    Đổi Sản phẩm 1-1
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 5) // InRepair
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
-                                       OnClick="CompleteRepair" Size="Size.Small">
-                                Hoàn Tất
-                            </MudButton>
-                            <MudButton Variant="Variant.Outlined" Color="Color.Warning" FullWidth="true"
-                                       OnClick="MarkWaitingParts" Size="Size.Small">
-                                Chờ Linh Kiện
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 5) // InRepair
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                                           OnClick="CompleteRepair" Size="Size.Small">
+                                    Hoàn Tất
+                                </ActionButton>
+                                <ActionButton Variant="Variant.Outlined" Color="Color.Warning" FullWidth="true"
+                                           OnClick="MarkWaitingParts" Size="Size.Small">
+                                    Chờ Linh Kiện
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 4) // WaitingParts
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                                       OnClick="ResumeRepair" Size="Size.Small">
-                                Tiếp Tục Sửa Chữa
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 4) // WaitingParts
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                           OnClick="ResumeRepair" Size="Size.Small">
+                                    Tiếp Tục Sửa Chữa
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 6) // SentToRMA
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                                       OnClick="RecordRmaResolution" Size="Size.Small">
-                                Ghi Nhận Kết Quả RMA
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 6) // SentToRMA
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                           OnClick="RecordRmaResolution" Size="Size.Small">
+                                    Ghi Nhận Kết Quả RMA
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 7) // ReceivedFromManufacturer
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
-                                       OnClick="CompleteRepair" Size="Size.Small">
-                                Hoàn Thành
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 7) // ReceivedFromManufacturer
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true"
+                                           OnClick="CompleteRepair" Size="Size.Small">
+                                    Hoàn Thành
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status == 9 && ticket.ResolutionType == 4 && ticket.Invoice == null) // Completed & PaidRepair
-                        {
-                            <MudButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
-                                       OnClick="IssueInvoice" Size="Size.Small">
-                                Xuất Hóa Đơn
-                            </MudButton>
-                        }
+                            @if (CanInteract && ticket.Status == 9 && ticket.ResolutionType == 4 && ticket.Invoice == null) // Completed & PaidRepair
+                            {
+                                <ActionButton Variant="Variant.Filled" Color="Color.Secondary" FullWidth="true"
+                                           OnClick="IssueInvoice" Size="Size.Small">
+                                    Xuất Hóa Đơn
+                                </ActionButton>
+                            }
 
-                        @if (CanInteract && ticket.Status < 9 && ticket.Status != 3 && ticket.Status != 10)
-                        {
-                            <MudButton Variant="Variant.Outlined" Color="Color.Error" FullWidth="true"
-                                       OnClick="CancelTicket" Size="Size.Small">
-                                Hủy Phiếu
-                            </MudButton>
-                        }
-                    </div>
+                            @if (CanInteract && ticket.Status < 9 && ticket.Status != 3 && ticket.Status != 10)
+                            {
+                                <ActionButton Variant="Variant.Outlined" Color="Color.Error" FullWidth="true"
+                                           OnClick="CancelTicket" Size="Size.Small">
+                                    Hủy Phiếu
+                                </ActionButton>
+                            }
+                        </div>
+                    </BusyScope>
 
                     <MudDivider Class="my-4" />
 
