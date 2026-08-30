@@ -1,8 +1,26 @@
 # Rà soát ứng dụng trước khi chạy nhiều task — HushStore
 
-> **Trạng thái:** ĐÃ RÀ SOÁT, **CHƯA SỬA**. Tài liệu này là *kết quả điều tra*, không phải nhật ký sửa lỗi.
-> **Quyết định ngày 2026-08-25:** hoãn toàn bộ việc sửa sang sau khi kết thúc dự án hạ tầng AWS (Đề tài 513).
-> Hạ tầng hiện tại chạy **đúng 1 task**, nên phần lớn các lỗi ở nhóm B chưa thể xảy ra. Nhóm A thì **đang xảy ra ngay bây giờ**.
+> **Trạng thái (cập nhật 2026-08-30):** việc sửa **ĐÃ BẮT ĐẦU**. Đợt 1 xong.
+> Xem [`docs/nang-cap-dot-1-ket-qua.md`](nang-cap-dot-1-ket-qua.md) để biết mục nào đã sửa,
+> sửa thế nào, và bằng chứng đã chạy.
+>
+> **Đã sửa ở đợt 1:** A1 (ghi vào entity `AsNoTracking`), A3 (voucher + duyệt/từ chối báo giá),
+> A5 (`.ContinueWith`), cache `IsActive`, seed role Technician, `pageSize` không chặn trần,
+> transaction rò rỉ, sinh mã `{n:D3}`, `InventorySyncService` COUNT-rồi-UPDATE.
+>
+> **Ba đính chính với nội dung bên dưới**, tìm ra lúc sửa:
+> 1. A1 có **4** vị trí, không phải 3.
+> 2. Voucher `UsedCount` có **3** chỗ ghi, không phải 1; và trường giới hạn tên là
+>    `Quantity` (nullable = không giới hạn), không phải `UsageLimit`.
+> 3. Mục A7 mô tả sai bối cảnh: `UseHttpsRedirection()` nằm **trong** `if (!IsProduction())`,
+>    nên production **không có cả redirect lẫn HSTS** — ép HTTPS hoàn toàn do ALB và
+>    Cloudflare gánh, tầng ứng dụng không đóng góp gì.
+>
+> Phần còn lại của tài liệu giữ nguyên như lúc điều tra (2026-08-25), là *kết quả điều tra*
+> chứ không phải nhật ký sửa lỗi.
+>
+> **Quyết định cũ ngày 2026-08-25 (đã thay thế):** hoãn toàn bộ việc sửa sang sau khi kết thúc
+> dự án hạ tầng AWS (Đề tài 513).
 
 ## Vì sao có tài liệu này
 
