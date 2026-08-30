@@ -1,0 +1,99 @@
+@implements IDisposable
+@inject NavigationManager NavigationManager
+
+@*
+    ErrorBoundary dùng chung, có PHỤC HỒI KHI ĐIỀU HƯỚNG.
+
+    ⚠️ BƯỚC Recover() LÀ BẮT BUỘC, KHÔNG PHẢI TÔ ĐIỂM.
+
+    ErrorBoundary của Blazor, khi đã bắt lỗi, sẽ GIỮ NGUYÊN trạng thái lỗi và
+    tiếp tục render ErrorContent cho tới khi có ai đó gọi Recover(). Nó KHÔNG tự
+    reset khi chuyển trang, vì cùng một instance boundary được dùng lại cho route
+    mới.
+
+    Nghĩa là nếu chỉ bọc ErrorBoundary mà không gọi Recover() khi LocationChanged
+    thì ta biến "MỘT TRANG hỏng" thành "CẢ ỨNG DỤNG hỏng cho tới khi người dùng
+    tự F5" — tệ hơn hẳn hiện trạng không có ErrorBoundary nào.
+*@
+
+<ErrorBoundary @ref="_boundary" MaximumErrorCount="5">
+    <ChildContent>
+        @ChildContent
+    </ChildContent>
+    <ErrorContent Context="exception">
+        <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16">
+            <MudPaper Elevation="2" Class="pa-8 rounded-lg">
+                <div class="d-flex align-center mb-4">
+                    <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Size="Size.Large" Class="mr-3" />
+                    <MudText Typo="Typo.h5" Style="font-weight: 700;">Trang này gặp sự cố</MudText>
+                </div>
+
+                <MudText Class="mb-2">
+                    Đã có lỗi ngoài dự kiến khi hiển thị trang. Dữ liệu của bạn không bị mất.
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">
+                    Bạn có thể thử tải lại trang, hoặc quay về trang chủ rồi thao tác lại.
+                </MudText>
+
+                @*
+                    CHỈ hiện chi tiết kỹ thuật ở môi trường phát triển. Trên
+                    production, thông điệp exception có thể chứa tên bảng, câu
+                    truy vấn hay đường dẫn nội bộ — đúng thứ mà UseExceptionHandler
+                    ở tầng API được viết ra để giấu. Rò ở tầng client thì cũng rò.
+                *@
+                @if (ShowDetails)
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-6">
+                        <MudText Typo="Typo.body2" Style="font-family: monospace; word-break: break-word;">
+                            @exception.GetType().Name: @exception.Message
+                        </MudText>
+                    </MudAlert>
+                }
+
+                <div class="d-flex gap-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Refresh"
+                               OnClick="Recover"
+                               Style="text-transform: none;">
+                        Thử lại
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.Home"
+                               OnClick="@(() => NavigationManager.NavigateTo("/"))"
+                               Style="text-transform: none;">
+                        Về trang chủ
+                    </MudButton>
+                </div>
+            </MudPaper>
+        </MudContainer>
+    </ErrorContent>
+</ErrorBoundary>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Hiện chi tiết exception. Chỉ bật ở môi trường phát triển.</summary>
+    [Parameter] public bool ShowDetails { get; set; }
+
+    private ErrorBoundary? _boundary;
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => Recover();
+
+    private void Recover()
+    {
+        // Recover() reset boundary về trạng thái bình thường. Không gọi thì
+        // ErrorContent bám lại vĩnh viễn, kể cả sau khi đã chuyển sang route khác.
+        _boundary?.Recover();
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}

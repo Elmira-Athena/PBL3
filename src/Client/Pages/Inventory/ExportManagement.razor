@@ -3,6 +3,7 @@
 @using PBL3.Shared.DTOs.Sale
 
 @inject IOrderClientService OrderService
+@inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 
 <PageTitle>Quản lý xuất kho - HushStore</PageTitle>
@@ -241,10 +242,16 @@
         _pendingFilter.Status = 1;
 
         var result = await OrderService.GetPagedOrdersAsync(_pendingFilter);
+        if (!result.Success || result.Data is null)
+        {
+            Snackbar.Add(result.Message ?? "Không tải được danh sách đơn hàng.", Severity.Error);
+            return new TableData<OrderSummaryResponse> { TotalItems = 0, Items = new List<OrderSummaryResponse>() };
+        }
+
         return new TableData<OrderSummaryResponse>
         {
-            TotalItems = result.TotalCount,
-            Items = result.Items ?? new List<OrderSummaryResponse>()
+            TotalItems = result.Data.TotalCount,
+            Items = result.Data.Items ?? new List<OrderSummaryResponse>()
         };
     }
 
@@ -254,10 +261,16 @@
         _historyFilter.PageSize = state.PageSize;
 
         var result = await OrderService.GetPagedOrdersAsync(_historyFilter);
+        if (!result.Success || result.Data is null)
+        {
+            Snackbar.Add(result.Message ?? "Không tải được danh sách đơn hàng.", Severity.Error);
+            return new TableData<OrderSummaryResponse> { TotalItems = 0, Items = new List<OrderSummaryResponse>() };
+        }
+
         return new TableData<OrderSummaryResponse>
         {
-            TotalItems = result.TotalCount,
-            Items = result.Items ?? new List<OrderSummaryResponse>()
+            TotalItems = result.Data.TotalCount,
+            Items = result.Data.Items ?? new List<OrderSummaryResponse>()
         };
     }
 

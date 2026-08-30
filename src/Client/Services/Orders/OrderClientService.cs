@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Client.Services.Common;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Sale;
 
@@ -29,9 +30,8 @@ namespace Client.Services.Orders
             }
         }
 
-        public async Task<PagedResult<OrderSummaryResponse>> GetPagedOrdersAsync(OrderFilterRequest request)
+        public async Task<ApiResult<PagedResult<OrderSummaryResponse>>> GetPagedOrdersAsync(OrderFilterRequest request)
         {
-            try
             {
                 var queryString = $"?pageIndex={request.PageIndex}&pageSize={request.PageSize}";
                 if (!string.IsNullOrEmpty(request.Keyword))
@@ -47,15 +47,11 @@ namespace Client.Services.Orders
                 if (request.ToDate.HasValue)
                     queryString += $"&toDate={request.ToDate.Value:yyyy-MM-ddTHH:mm:ss}";
 
-                var response = await _httpClient.GetAsync($"/api/orders{queryString}");
-                if (!response.IsSuccessStatusCode)
-                    return new PagedResult<OrderSummaryResponse>();
-                var result = await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<OrderSummaryResponse>>>();
-                return result?.Data ?? new PagedResult<OrderSummaryResponse>();
-            }
-            catch
-            {
-                return new PagedResult<OrderSummaryResponse>();
+                // ApiCall.SendAsync: không bao giờ ném, và KHÔNG BAO GIỜ giả vờ
+                // thành công bằng một trang rỗng. Xem Client/Services/Common/ApiCall.cs.
+                return await ApiCall.SendAsync<PagedResult<OrderSummaryResponse>>(
+                    () => _httpClient.GetAsync($"/api/orders{queryString}"),
+                    "tải danh sách đơn hàng");
             }
         }
 

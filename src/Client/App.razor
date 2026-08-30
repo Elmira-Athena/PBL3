@@ -10,6 +10,10 @@
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">
+            @* Bọc TRONG Found (không bọc cả Router): lỗi khi render một trang chỉ
+               hỏng trang đó. AppErrorBoundary tự gọi Recover() khi LocationChanged
+               — thiếu bước đó thì một trang hỏng sẽ khoá cả app tới khi F5. *@
+            <AppErrorBoundary ShowDetails="@_isDevelopment">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(StorefrontLayout)">
                 <Authorizing>
                     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Style="position:fixed;top:0;left:0;right:0;z-index:9999;" />
@@ -33,13 +37,20 @@
                     }
                 </NotAuthorized>
             </AuthorizeRouteView>
+            </AppErrorBoundary>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
     </Router>
 </CascadingAuthenticationState>
 
+@inject IWebAssemblyHostEnvironment HostEnvironment
+
 @code {
     private bool _isDarkMode = false;
+
+    // Chỉ hiện chi tiết exception khi chạy Development. Trên production, thông
+    // điệp exception có thể chứa nội tình hệ thống.
+    private bool _isDevelopment => HostEnvironment.IsDevelopment();
 
     private MudTheme _theme = new MudTheme
     {

@@ -2,6 +2,7 @@
 @using Client.Services.Orders
 @using PBL3.Shared.DTOs.Sale
 @inject IOrderClientService OrderService
+@inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
 
 <PageTitle>Danh sách chờ xuất kho - HushStore</PageTitle>
@@ -118,12 +119,19 @@
 
         var result = await OrderService.GetPagedOrdersAsync(_filter);
 
-        if (result.Items != null)
+        // Phân biệt "rỗng thật" với "không lấy được": thất bại thì báo cho người
+        // dùng biết, thay vì im lặng hiện bảng rỗng như thể không có đơn nào.
+        if (!result.Success || result.Data is null)
         {
-            return new TableData<OrderSummaryResponse>() { TotalItems = result.TotalCount, Items = result.Items };
+            Snackbar.Add(result.Message ?? "Không tải được danh sách đơn hàng.", Severity.Error);
+            return new TableData<OrderSummaryResponse>() { TotalItems = 0, Items = new List<OrderSummaryResponse>() };
         }
 
-        return new TableData<OrderSummaryResponse>() { TotalItems = 0, Items = new List<OrderSummaryResponse>() };
+        return new TableData<OrderSummaryResponse>()
+        {
+            TotalItems = result.Data.TotalCount,
+            Items = result.Data.Items ?? new List<OrderSummaryResponse>()
+        };
     }
 
     private async Task LoadDataAsync()
