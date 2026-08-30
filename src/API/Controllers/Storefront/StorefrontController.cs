@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.Storefront;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Storefront;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace PBL3.API.Controllers.Storefront
 {
@@ -10,6 +11,10 @@ namespace PBL3.API.Controllers.Storefront
     [Route("api/storefront")]
     [Produces("application/json")]
     [AllowAnonymous]
+    // Toàn bộ controller này là đường ĐỌC CÔNG KHAI, ẩn danh — tức đường DoS rẻ
+    // nhất trong hệ thống (tìm kiếm sản phẩm, không cần tài khoản). Trần pageSize
+    // đã chặn kích thước mỗi phản hồi; policy này chặn NHỊP.
+    [EnableRateLimiting("PublicReadRateLimit")]
     public class StorefrontController : ControllerBase
     {
         private readonly IStorefrontService _storefrontService;

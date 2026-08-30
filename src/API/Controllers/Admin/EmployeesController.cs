@@ -100,7 +100,16 @@ namespace PBL3.API.Controllers.Admin
             return Ok(result);
         }
 
-        [AllowAnonymous]
+        // Trước đây là [AllowAnonymous]: bất kỳ ai cũng lấy được danh sách họ tên
+        // nhân viên kỹ thuật của cửa hàng — rò rỉ dữ liệu nhân sự, không có lý do
+        // nghiệp vụ nào.
+        //
+        // KHÔNG đơn thuần xoá [AllowAnonymous] để rơi về [Authorize(Roles="Admin")]
+        // của class: caller duy nhất là AssignTicketDialog (mở từ
+        // ServiceTicketDetail.razor), và endpoint gán kỹ thuật viên
+        // PUT {id}/assign là "Admin, Employee". Để Admin-only thì Employee vẫn gán
+        // được nhưng không tải nổi danh sách để chọn — hỏng tính năng một cách khó hiểu.
+        [Authorize(Roles = "Admin, Employee")]
         [HttpGet("technicians")]
         [ProducesResponseType(typeof(ApiResult<List<EmployeeDto>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetTechnicians()

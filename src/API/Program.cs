@@ -240,18 +240,119 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<HushStoreDbContext>("database");
 
-// Rate Limiting: Chống DoS & Brute-force cho Login
+// ══════════════════════════════════════════════════════════════════════════
+// Rate Limiting — viết lại ở đợt 2
+// ══════════════════════════════════════════════════════════════════════════
+//
+// LỖI CỦA BẢN CŨ (đang chạy trên production, không phải chuyện lý thuyết):
+//   options.AddFixedWindowLimiter("LoginRateLimit", ...) — overload này tạo
+//   MỘT limiter DUY NHẤT, KHÔNG PHÂN VÙNG, cho TOÀN BỘ endpoint. Tức 5 lần
+//   đăng nhập mỗi phút cho TẤT CẢ người dùng CỘNG LẠI. Một kẻ tấn công đốt hết
+//   hạn mức là khoá đăng nhập của mọi khách hàng.
+//
+//   Đó là một cuộc DoS TỰ GÂY RA, và nó đang xảy ra ngay bây giờ với 1 task —
+//   tệ hơn hẳn vấn đề "2 task = 2× hạn mức" mà tài liệu cũ lo.
+//
+// Bản mới: mọi policy đều PHÂN VÙNG THEO IP.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    options.AddFixedWindowLimiter("LoginRateLimit", limiter =>
+    // ── Trần chung theo IP: 100 request / 10 giây ──
+    //
+    // 🔴 MIỄN TRỪ /health/* LÀ BẮT BUỘC, KHÔNG PHẢI TỐI ƯU.
+    //
+    // Container chạy bridge network nên source IP mà app thấy là gateway của
+    // docker cho MỌI request. UseForwardedHeaders viết lại thành IP thật cho
+    // traffic đi qua ALB — nhưng HEALTH CHECK CỦA ALB GỌI THẲNG VÀO INSTANCE,
+    // KHÔNG MANG X-Forwarded-For. Nên health check rơi vào cùng phân vùng
+    // "gateway docker" với traffic thật.
+    //
+    // Hậu quả nếu không miễn trừ: một đợt tải làm health check bị 429 → ALB
+    // kết luận unhealthy sau ~45 giây → ECS GIẾT TASK ĐANG CHẠY TỐT, ĐÚNG LÚC
+    // TẢI CAO. Đây là chế độ chết tệ nhất có thể nghĩ ra cho một hệ thống đang
+    // phải chứng minh khả năng chịu tải.
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
     {
-        limiter.PermitLimit = 5;
-        limiter.Window = TimeSpan.FromMinutes(1);
-        limiter.QueueLimit = 0;  // Reject ngay, không queue
+        if (context.Request.Path.StartsWithSegments("/health"))
+        {
+            return RateLimitPartition.GetNoLimiter("health");
+        }
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            GetClientIp(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromSeconds(10),
+                QueueLimit = 0
+            });
     });
+
+    // ── Đăng nhập: 5 lần/phút MỖI IP (bản cũ là 5 lần/phút cho cả thế giới) ──
+    AddPerIpFixedWindow(options, "LoginRateLimit", permitLimit: 5, TimeSpan.FromMinutes(1));
+
+    // ── Đăng ký: 3 lần/giờ mỗi IP. `register` ghi DB không giới hạn là đường
+    //    làm phình bảng AppUsers rẻ nhất. ──
+    AddPerIpFixedWindow(options, "RegisterRateLimit", permitLimit: 3, TimeSpan.FromHours(1));
+
+    // ── Refresh token: 10 lần/phút mỗi IP. Refresh token xoay vòng mỗi lần
+    //    dùng nên nhịp bình thường rất thấp; vượt xa mức này là dấu hiệu dò. ──
+    AddPerIpFixedWindow(options, "RefreshRateLimit", permitLimit: 10, TimeSpan.FromMinutes(1));
+
+    // ── Hai endpoint tra cứu là ORACLE: tra serial và dò mã voucher. Chúng trả
+    //    lời "có tồn tại hay không" cho người chưa đăng nhập, tức cho phép quét
+    //    sạch không gian mã nếu không chặn nhịp. ──
+    AddPerIpFixedWindow(options, "LookupRateLimit", permitLimit: 10, TimeSpan.FromMinutes(1));
+
+    // ── Đọc công khai (catalogue, tìm kiếm): 60 lần/phút mỗi IP. ──
+    AddPerIpFixedWindow(options, "PublicReadRateLimit", permitLimit: 60, TimeSpan.FromMinutes(1));
+
+    // ── Thân phản hồi khi bị chặn ──
+    // Bản cũ trả 429 với THÂN RỖNG, vi phạm quy tắc "mọi thông báo lỗi cho
+    // người dùng phải bằng tiếng Việt có dấu" của CLAUDE.md.
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/json";
+
+        // Gợi ý cho client biết khi nào thử lại được, nếu limiter tính được.
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter =
+                ((int)retryAfter.TotalSeconds).ToString();
+        }
+
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            ApiResult<object>.Fail(
+                "Bạn thao tác quá nhanh. Vui lòng chờ trong giây lát rồi thử lại."),
+            cancellationToken);
+    };
 });
+
+// Phân vùng theo IP client. Đặt SAU UseForwardedHeaders trong pipeline nên
+// RemoteIpAddress đã là IP thật cho traffic qua ALB.
+//
+// Độ tin cậy của toàn bộ cơ chế này phụ thuộc vào ForwardLimit = 1 ở khối
+// ForwardedHeadersOptions ngay bên dưới — đổi nó thành >= 2 là mở đường cho kẻ
+// tấn công tự chọn phân vùng của mình bằng cách bơm X-Forwarded-For, và mọi
+// hạn mức ở đây thành vô nghĩa.
+static string GetClientIp(HttpContext context)
+    => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+static void AddPerIpFixedWindow(
+    RateLimiterOptions options, string policyName, int permitLimit, TimeSpan window)
+{
+    options.AddPolicy(policyName, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientIp(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = window,
+                QueueLimit = 0  // Reject ngay, không queue
+            }));
+}
 
 // ALB terminate TLS rồi forward HTTP xuống container. Không có block này thì
 // app không biết request gốc là HTTPS, khiến mọi URL sinh ra bị sai scheme.
@@ -287,6 +388,24 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     // hệ thống chặn giả mạo X-Forwarded-For — không phải chỗ nên để mặc định
     // ngầm rồi có người đổi mà không biết mình đang mở gì.
     options.ForwardLimit = 1;
+});
+
+// Tham số HSTS (đợt 2). Bắt đầu THẬN TRỌNG, vì HSTS là quyết định KHÓ HOÀN TÁC:
+// trình duyệt đã ghi nhớ thì trong suốt max-age nó TỪ CHỐI mọi kết nối HTTP tới
+// host này, kể cả khi ta đã gỡ header đi.
+builder.Services.AddHsts(options =>
+{
+    // 1 ngày, không phải 1 năm. Nếu cấu hình TLS có vấn đề thì thiệt hại giới hạn
+    // trong 24 giờ. Nâng dần lên sau khi chạy ổn định.
+    options.MaxAge = TimeSpan.FromDays(1);
+
+    // api là host riêng, không phải domain gốc — không được thay mặt các
+    // subdomain khác quyết định thay chúng.
+    options.IncludeSubDomains = false;
+
+    // TUYỆT ĐỐI KHÔNG bật. Vào preload list là bị nhúng cứng vào binary của
+    // trình duyệt; gỡ ra mất hàng tháng và phải qua quy trình bên ngoài.
+    options.Preload = false;
 });
 
 var app = builder.Build();
@@ -373,6 +492,26 @@ app.UseForwardedHeaders();
 if (!app.Environment.IsProduction())
 {
     app.UseHttpsRedirection();
+}
+else
+{
+    // ── HSTS (đợt 2) ──
+    //
+    // Trước đợt 2, production KHÔNG CÓ CẢ redirect LẪN HSTS: khối
+    // UseHttpsRedirection nằm trong `if (!IsProduction())`, và UseHsts chưa từng
+    // được gọi. Việc ép HTTPS hoàn toàn do ALB và Cloudflare gánh, tầng ứng dụng
+    // không đóng góp gì. Đây chính là điều mục A7 của tài liệu rà soát muốn sửa.
+    //
+    // 🔴 VỊ TRÍ QUAN TRỌNG HƠN BẢN THÂN LỜI GỌI: khối này PHẢI đứng SAU
+    // app.UseForwardedHeaders() ở ngay trên. UseHsts() chỉ phát header khi
+    // Request.IsHttps == true, mà container nhận HTTP THUẦN từ ALB — chỉ sau khi
+    // ForwardedHeaders đọc X-Forwarded-Proto thì IsHttps mới thành true.
+    // Đảo thứ tự là một NO-OP HOÀN TOÀN IM LẶNG: không lỗi, không cảnh báo,
+    // không header, và không có cách nào biết ngoài việc tự đi curl kiểm tra.
+    //
+    // KHÔNG thêm UseHttpsRedirection ở nhánh này: ALB đã 301 ở listener, bật
+    // thêm sẽ thành redirect loop.
+    app.UseHsts();
 }
 
 app.UseCors("AllowClient");

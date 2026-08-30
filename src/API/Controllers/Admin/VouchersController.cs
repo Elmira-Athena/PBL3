@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.Vouchers;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Vouchers;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -136,7 +137,10 @@ namespace PBL3.API.Controllers.Admin
         /// AllowAnonymous — nếu đã đăng nhập sẽ kiểm tra MaxUsesPerUser.
         /// </summary>
         [HttpPost("available-for-order")]
-        [AllowAnonymous]
+        // Trước đây [AllowAnonymous]: liệt kê TOÀN BỘ chương trình khuyến mãi cho
+        // người chưa đăng nhập. Đó là rò rỉ kế hoạch kinh doanh, và không phục vụ
+        // nghiệp vụ nào — chỉ khách đang đặt hàng mới cần danh sách này.
+        [Authorize]
         [ProducesResponseType(typeof(ApiResult<List<VoucherAvailabilityDto>>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetAvailableForOrder([FromBody] GetAvailableVouchersRequest request)
         {
@@ -150,7 +154,11 @@ namespace PBL3.API.Controllers.Admin
         }
 
         [HttpPost("validate-code")]
+        // Giữ [AllowAnonymous] vì khách vãng lai vẫn cần thử mã trước khi đăng nhập.
+        // Nhưng đây là một ORACLE: nó trả lời "mã này có tồn tại không" nên cho phép
+        // quét sạch không gian mã nếu không chặn nhịp. Kẹp bằng LookupRateLimit.
         [AllowAnonymous]
+        [EnableRateLimiting("LookupRateLimit")]
         [ProducesResponseType(typeof(ApiResult<ValidateVoucherResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ValidateCode([FromBody] ValidateVoucherRequest request)
         {

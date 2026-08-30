@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.ServiceTickets;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.ServiceTickets;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -36,7 +37,11 @@ namespace PBL3.API.Controllers.Admin
         private bool IsAdmin => User.IsInRole("Admin");
 
         [HttpPost("intake")]
+        // Giữ [AllowAnonymous] vì khách mang máy tới bảo hành chưa chắc có tài khoản.
+        // Nhưng đây là ORACLE LIỆT KÊ SERIAL: nó xác nhận một mã serial có tồn tại
+        // trong hệ thống hay không, tức cho phép dò sạch kho serial. Kẹp nhịp lại.
         [AllowAnonymous]
+        [EnableRateLimiting("LookupRateLimit")]
         public async Task<ApiResult<ServiceTicketIntakeEvaluationDto>> EvaluateIntake([FromBody] string serialNumber)
         {
             try
@@ -53,7 +58,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error evaluating intake");
-                return ApiResult<ServiceTicketIntakeEvaluationDto>.Fail("Lỗi khi kiểm tra Serial: " + ex.Message);
+                return ApiResult<ServiceTicketIntakeEvaluationDto>.Fail("Lỗi khi kiểm tra Serial. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -74,7 +79,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating ticket");
-                return ApiResult<ServiceTicketDetailDto>.Fail("Lỗi khi tạo phiếu: " + ex.Message);
+                return ApiResult<ServiceTicketDetailDto>.Fail("Lỗi khi tạo phiếu. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -112,7 +117,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error listing tickets");
-                return ApiResult<PagedResult<ServiceTicketListDto>>.Fail("Lỗi khi tải danh sách: " + ex.Message);
+                return ApiResult<PagedResult<ServiceTicketListDto>>.Fail("Lỗi khi tải danh sách. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -145,7 +150,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error listing customer tickets");
-                return ApiResult<PagedResult<ServiceTicketListDto>>.Fail("Lỗi khi tải danh sách: " + ex.Message);
+                return ApiResult<PagedResult<ServiceTicketListDto>>.Fail("Lỗi khi tải danh sách. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -169,7 +174,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting ticket detail");
-                return ApiResult<ServiceTicketDetailDto>.Fail("Lỗi khi tải chi tiết: " + ex.Message);
+                return ApiResult<ServiceTicketDetailDto>.Fail("Lỗi khi tải chi tiết. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -190,7 +195,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error assigning technician");
-                return ApiResult<bool>.Fail("Lỗi khi giao phó: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi giao phó. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -215,7 +220,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error recording diagnosis");
-                return ApiResult<bool>.Fail("Lỗi khi ghi nhận: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi ghi nhận. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -240,7 +245,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error choosing branch");
-                return ApiResult<bool>.Fail("Lỗi khi chọn giải pháp: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi chọn giải pháp. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -265,7 +270,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating quotation");
-                return ApiResult<QuotationDetailDto>.Fail("Lỗi khi tạo báo giá: " + ex.Message);
+                return ApiResult<QuotationDetailDto>.Fail("Lỗi khi tạo báo giá. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -290,7 +295,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error accepting quotation");
-                return ApiResult<bool>.Fail("Lỗi khi chấp nhận: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi chấp nhận. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -315,7 +320,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error rejecting quotation");
-                return ApiResult<bool>.Fail("Lỗi khi từ chối: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi từ chối. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -340,7 +345,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating RMA");
-                return ApiResult<RmaShipmentDetailDto>.Fail("Lỗi khi tạo RMA: " + ex.Message);
+                return ApiResult<RmaShipmentDetailDto>.Fail("Lỗi khi tạo RMA. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -365,7 +370,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating RMA resolution");
-                return ApiResult<bool>.Fail("Lỗi khi cập nhật: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi cập nhật. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -390,7 +395,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error starting repair");
-                return ApiResult<bool>.Fail("Lỗi khi bắt đầu sửa chữa: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi bắt đầu sửa chữa. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -415,7 +420,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error performing swap");
-                return ApiResult<bool>.Fail("Lỗi khi đổi 1-1: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi đổi 1-1. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -440,7 +445,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error marking waiting parts");
-                return ApiResult<bool>.Fail("Lỗi khi cập nhật: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi cập nhật. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -465,7 +470,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error resuming repair");
-                return ApiResult<bool>.Fail("Lỗi khi tiếp tục: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi tiếp tục. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -490,7 +495,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error completing ticket");
-                return ApiResult<bool>.Fail("Lỗi khi hoàn tất: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi hoàn tất. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -515,7 +520,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error issuing invoice");
-                return ApiResult<ServiceInvoiceDetailDto>.Fail("Lỗi khi tạo hóa đơn: " + ex.Message);
+                return ApiResult<ServiceInvoiceDetailDto>.Fail("Lỗi khi tạo hóa đơn. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -536,7 +541,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error cancelling ticket");
-                return ApiResult<bool>.Fail("Lỗi khi hủy: " + ex.Message);
+                return ApiResult<bool>.Fail("Lỗi khi hủy. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -552,7 +557,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting ticket history");
-                return ApiResult<List<ServiceTicketStatusHistoryDto>>.Fail("Lỗi khi tải lịch sử: " + ex.Message);
+                return ApiResult<List<ServiceTicketStatusHistoryDto>>.Fail("Lỗi khi tải lịch sử. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
 
@@ -568,7 +573,7 @@ namespace PBL3.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting serial repair history");
-                return ApiResult<List<SerialRepairHistoryDto>>.Fail("Lỗi khi tải lịch sử: " + ex.Message);
+                return ApiResult<List<SerialRepairHistoryDto>>.Fail("Lỗi khi tải lịch sử. Vui lòng thử lại hoặc liên hệ quản trị viên.");
             }
         }
     }

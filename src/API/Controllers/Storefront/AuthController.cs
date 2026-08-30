@@ -43,6 +43,7 @@ namespace PBL3.API.Controllers.Storefront
         /// Làm mới Token: Nhận cặp Access Token (hết hạn) + Refresh Token, trả về cặp Token mới.
         /// </summary>
         [HttpPost("refresh-token")]
+        [EnableRateLimiting("RefreshRateLimit")]
         [ProducesResponseType(typeof(ApiResult<TokenResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResult<TokenResponse>), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
@@ -90,6 +91,7 @@ namespace PBL3.API.Controllers.Storefront
         /// Đăng ký tài khoản (UC001): Khách hàng tự đăng ký. Trả về thông báo thành công (yêu cầu khách tự đăng nhập).
         /// </summary>
         [HttpPost("register")]
+        [EnableRateLimiting("RegisterRateLimit")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status400BadRequest)]
