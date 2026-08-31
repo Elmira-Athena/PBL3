@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.Orders;
 using PBL3.Shared.DTOs.Sale;
+using PBL3.Core.Exceptions;
 using PBL3.Shared.DTOs.Common;
 
 namespace PBL3.API.Controllers.Admin
@@ -15,10 +16,12 @@ namespace PBL3.API.Controllers.Admin
     public class OrdersController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly ILogger<OrdersController> _logger;
 
-        public OrdersController(IOrderService orderService)
+        public OrdersController(IOrderService orderService, ILogger<OrdersController> logger)
         {
             _orderService = orderService;
+            _logger = logger;
         }
 
         [HttpPost("checkout")]
@@ -37,9 +40,18 @@ namespace PBL3.API.Controllers.Admin
                 if (!result.Success) return BadRequest(result);
                 return Ok(result);
             }
+            catch (BusinessRuleException ex)
+            {
+                // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
+                return BadRequest(ApiResult<CheckoutResponse>.Fail(ex.Message));
+            }
             catch (Exception ex)
             {
-                return BadRequest(ApiResult<CheckoutResponse>.Fail(ex.Message));
+                // KHÔNG relay ex.Message: tới đây ex là lỗi hạ tầng (EF Core / SQL Server),
+                // nội dung tiếng Anh và lộ nội tạng ORM. Xem mục 🅴/🅷 của runbook.
+                _logger.LogError(ex, "Checkout thất bại.");
+                return BadRequest(ApiResult<CheckoutResponse>.Fail(
+                    "Không thể hoàn tất đặt hàng do lỗi hệ thống. Vui lòng thử lại sau ít phút; nếu vẫn không được, xin liên hệ bộ phận hỗ trợ."));
             }
         }
 
@@ -91,9 +103,18 @@ namespace PBL3.API.Controllers.Admin
                 if (!result.Success) return BadRequest(result);
                 return Ok(result);
             }
+            catch (BusinessRuleException ex)
+            {
+                // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
+                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
             catch (Exception ex)
             {
-                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+                // KHÔNG relay ex.Message: tới đây ex là lỗi hạ tầng (EF Core / SQL Server),
+                // nội dung tiếng Anh và lộ nội tạng ORM. Xem mục 🅴/🅷 của runbook.
+                _logger.LogError(ex, "Khách tự hủy đơn thất bại.");
+                return BadRequest(ApiResult<bool>.Fail(
+                    "Không thể hủy đơn do lỗi hệ thống. Vui lòng thử lại sau ít phút."));
             }
         }
 
@@ -111,9 +132,18 @@ namespace PBL3.API.Controllers.Admin
                 if (!result.Success) return BadRequest(result);
                 return Ok(result);
             }
+            catch (BusinessRuleException ex)
+            {
+                // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
+                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
             catch (Exception ex)
             {
-                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+                // KHÔNG relay ex.Message: tới đây ex là lỗi hạ tầng (EF Core / SQL Server),
+                // nội dung tiếng Anh và lộ nội tạng ORM. Xem mục 🅴/🅷 của runbook.
+                _logger.LogError(ex, "Khách xác nhận đã nhận hàng thất bại.");
+                return BadRequest(ApiResult<bool>.Fail(
+                    "Không thể xác nhận đã nhận hàng do lỗi hệ thống. Vui lòng thử lại sau ít phút."));
             }
         }
 
@@ -142,9 +172,18 @@ namespace PBL3.API.Controllers.Admin
                 }
                 return Ok(result);
             }
+            catch (BusinessRuleException ex)
+            {
+                // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
+                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
             catch (Exception ex)
             {
-                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+                // KHÔNG relay ex.Message: tới đây ex là lỗi hạ tầng (EF Core / SQL Server),
+                // nội dung tiếng Anh và lộ nội tạng ORM. Xem mục 🅴/🅷 của runbook.
+                _logger.LogError(ex, "Hủy đơn (nhân viên) thất bại.");
+                return BadRequest(ApiResult<bool>.Fail(
+                    "Không thể hủy đơn do lỗi hệ thống. Vui lòng thử lại sau ít phút."));
             }
         }
 
@@ -161,9 +200,18 @@ namespace PBL3.API.Controllers.Admin
                 }
                 return Ok(result);
             }
+            catch (BusinessRuleException ex)
+            {
+                // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
+                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
             catch (Exception ex)
             {
-                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+                // KHÔNG relay ex.Message: tới đây ex là lỗi hạ tầng (EF Core / SQL Server),
+                // nội dung tiếng Anh và lộ nội tạng ORM. Xem mục 🅴/🅷 của runbook.
+                _logger.LogError(ex, "Xác nhận hoàn tất đơn thất bại.");
+                return BadRequest(ApiResult<bool>.Fail(
+                    "Không thể xác nhận hoàn tất đơn do lỗi hệ thống. Vui lòng thử lại sau ít phút."));
             }
         }
 
@@ -178,9 +226,18 @@ namespace PBL3.API.Controllers.Admin
                     return BadRequest(result);
                 return Ok(result);
             }
+            catch (BusinessRuleException ex)
+            {
+                // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
+                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
             catch (Exception ex)
             {
-                return BadRequest(ApiResult<bool>.Fail(ex.Message));
+                // KHÔNG relay ex.Message: tới đây ex là lỗi hạ tầng (EF Core / SQL Server),
+                // nội dung tiếng Anh và lộ nội tạng ORM. Xem mục 🅴/🅷 của runbook.
+                _logger.LogError(ex, "Duyệt đơn thất bại.");
+                return BadRequest(ApiResult<bool>.Fail(
+                    "Không thể duyệt đơn do lỗi hệ thống. Vui lòng thử lại sau ít phút."));
             }
         }
     }

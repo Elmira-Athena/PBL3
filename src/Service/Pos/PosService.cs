@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
 using PBL3.Core.Exceptions;
 using PBL3.Core.Interfaces;
@@ -27,6 +28,7 @@ namespace PBL3.Service.Pos
         private readonly UserManager<AppUser> _userManager;
 
         private readonly IDocumentCodeGenerator _codeGenerator;
+        private readonly ILogger<PosService> _logger;
 
 
         public PosService(
@@ -39,7 +41,8 @@ namespace PBL3.Service.Pos
             IInventorySyncService inventorySyncService,
             HushStoreDbContext dbContext,
             UserManager<AppUser> userManager,
-            IDocumentCodeGenerator codeGenerator)
+            IDocumentCodeGenerator codeGenerator,
+            ILogger<PosService> logger)
         {
             _unitOfWork = unitOfWork;
             _orderRepo = orderRepo;
@@ -51,6 +54,7 @@ namespace PBL3.Service.Pos
             _dbContext = dbContext;
             _userManager = userManager;
             _codeGenerator = codeGenerator;
+            _logger = logger;
         }
 
         // ========================================================
@@ -416,7 +420,10 @@ namespace PBL3.Service.Pos
                         // TIÊU THỤ NGUYÊN TỬ thay cho appliedVoucher.UsedCount++ (lost update).
                         // Kiểm ở ValidateVoucherAsync chỉ là chốt sớm cho UX; chốt THẬT là câu UPDATE này.
                         if (!await _voucherRepo.TryConsumeAsync(appliedVoucherId.Value))
-                            throw new InvalidOperationException(
+                            // BusinessRuleException, KHÔNG phải InvalidOperationException: khối catch
+                            // bên dưới phải phân biệt được "luật nghiệp vụ" với "lỗi hạ tầng", mà
+                            // EF Core cũng ném InvalidOperationException cho chuyện hoàn toàn khác.
+                            throw new BusinessRuleException(
                                 $"Mã '{appliedVoucherCode}' đã hết lượt sử dụng. Vui lòng bỏ mã và thử lại.");
 
                         if (customerId.HasValue)
@@ -455,11 +462,25 @@ namespace PBL3.Service.Pos
             }
             catch (ConcurrentModificationException ex)
             {
+                _logger.LogWarning(ex, "Xung đột đồng thời khi thanh toán POS. Thu ngân: {EmployeeId}.", employeeId);
+                return ApiResult<PosOrderDto>.Fail(ex.Message);
+            }
+            catch (BusinessRuleException ex)
+            {
+                // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN. Nuốt nó thành
+                // câu chung là hồi quy UX: thu ngân mất đúng thông tin cần để xử ("bỏ mã ra").
+                _logger.LogInformation("Chặn thanh toán POS vì luật nghiệp vụ: {Reason}", ex.Message);
                 return ApiResult<PosOrderDto>.Fail(ex.Message);
             }
             catch (Exception ex)
             {
-                return ApiResult<PosOrderDto>.Fail("Lỗi khi quá trình thanh toán: " + ex.Message);
+                // KHÔNG nối ex.Message: ở đây ex thường của EF Core / SQL Server và nội dung là
+                // tiếng Anh, vừa vi phạm quy tắc user-facing message của CLAUDE.md vừa lộ nội
+                // tạng ORM. Cùng lỗi đã sửa ở mục 🅴 cho OrderService.CheckoutAsync.
+                _logger.LogError(ex, "Lỗi hệ thống khi thanh toán POS. Thu ngân: {EmployeeId}.", employeeId);
+                return ApiResult<PosOrderDto>.Fail(
+                    "Không thể hoàn tất thanh toán do lỗi hệ thống. Vui lòng thử lại; "
+                    + "nếu vẫn không được, xin liên hệ bộ phận kỹ thuật.");
             }
         }
 

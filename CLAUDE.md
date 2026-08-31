@@ -140,9 +140,15 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
   ```
   `BusinessRuleException` ở `src/Core/Exceptions/`. Cùng lý lẽ với `ConcurrentModificationException`:
   bắt `InvalidOperationException` thay thế là **không** an toàn vì EF Core dùng chính kiểu đó cho
-  chuyện khác. ⚠️ Lỗi này **còn ở 6 chỗ khác** (`PosService.cs:462`, `InventoryCheckService`,
-  `InventoryExportService`, và ~35 chỗ `ApiResult.Fail(ex.Message)` ở controller) — xem mục 🅷 của
-  runbook. Đừng dọn bằng find-and-replace.
+  chuyện khác — vì vậy `grep -rn 'catch (InvalidOperationException' src/` **phải luôn rỗng**.
+  ✅ Tầng **Service và API đã sạch** (mục 🅷): `0` chỗ chở `ex.Message` của hạ tầng ra cho người dùng.
+  ⚠️ Tầng **Client còn 124 chỗ** `$"Lỗi kết nối: {ex.Message}"` (mục 🅸, chưa sửa).
+- **Chốt chống hồi quy — chạy `devops/scripts/check-error-message-leaks.sh server`** (kỳ vọng
+  `Sạch`, mã thoát `0`; mã thoát `2` = **KHÔNG KẾT LUẬN**, không phải sạch).
+  🚨 **Đừng thay nó bằng `grep 'ex.Message'`.** `grep` không biết dòng đó nằm trong khối `catch`
+  **nào**, nên nó đếm cả **41** chỗ relay **đúng** (từ `catch` nghiệp vụ) thành lỗi. Đã đo: cách
+  đếm bằng grep phóng đại 2 chỗ rò rỉ thật ở tầng Service thành 7. Phân loại phải theo **ngữ cảnh**.
+  Bản mẫu làm đúng từ đầu: `InventoryCheckService` — copy khuôn của nó.
 
 ## Query & Performance Rules
 
@@ -260,11 +266,13 @@ chứng, và **mười ba cái bẫy im lặng** đã gặp. Đọc file đó tr
 tầng Service, auth, hay rate limiting.
 
 Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C + mục D + **mục 🅴** đã xong
-(18/18 call-site transaction retry-safe; 23/23 nút mutation dùng `ActionButton`/`BusyScope`;
-bộ đo `tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số; 10/10 lỗ hổng NuGet High đã vá và
-có cổng chặn ở CI; thông báo lỗi tiếng Anh ở `OrderService` đã chặn lại). Còn lại: **mục 🅷**
-(cùng lỗi `ex.Message` ở 6 chỗ khác), **nửa giao diện** của nợ kiểm thử 🧪, và **đợt 3** — đợt 3
-**bị chặn** tới khi chạy được `Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
++ **mục 🅷** (18/18 call-site transaction retry-safe; 23/23 nút mutation dùng
+`ActionButton`/`BusyScope`, trong đó **6/6 nút hỏng thật đã đo có ca đối chứng âm**; bộ đo
+`tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số ở **cả hai** cấu hình; 10/10 lỗ hổng NuGet
+High đã vá và có cổng chặn ở CI; rò rỉ `ex.Message` ở tầng **Service + API** đã chặn hết, có cổng
+`check-error-message-leaks.sh`). Còn lại: **mục 🅸** (124 chỗ rò rỉ ở tầng **Client**), **nửa tầng
+Service** của nợ kiểm thử 🧪 (POS · xuất/nhập kho · phiếu dịch vụ), và **đợt 3** — đợt 3 **bị chặn**
+tới khi chạy được `Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
 
 🧪 **Nợ kiểm thử — đọc mục 🧪 của runbook trước khi tin dòng "XONG" nào.** `grep` chỉ chứng
 minh **hình dạng code**, không chứng minh hành vi. Nợ của mục D **đã trả** (OpenAPI sinh được

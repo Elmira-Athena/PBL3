@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.ServiceTickets;
+using PBL3.Core.Exceptions;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.ServiceTickets;
 using Microsoft.AspNetCore.RateLimiting;
@@ -72,7 +73,7 @@ namespace PBL3.API.Controllers.Admin
                 var ticket = await _service.CreateTicketFromSerialScanAsync(request, userId);
                 return ApiResult<ServiceTicketDetailDto>.Ok(ticket, "Tạo phiếu sửa chữa thành công.");
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<ServiceTicketDetailDto>.Fail(ex.Message);
             }
@@ -188,7 +189,7 @@ namespace PBL3.API.Controllers.Admin
                 var result = await _service.AssignTechnicianAsync(id, request.EmployeeId, userId);
                 return ApiResult<bool>.Ok(result, "Giao phó kỹ thuật viên thành công.");
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -213,7 +214,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -238,7 +239,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -263,7 +264,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<QuotationDetailDto>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<QuotationDetailDto>.Fail(ex.Message);
             }
@@ -288,7 +289,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -313,7 +314,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -338,7 +339,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<RmaShipmentDetailDto>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<RmaShipmentDetailDto>.Fail(ex.Message);
             }
@@ -363,7 +364,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -388,7 +389,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -413,7 +414,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -438,7 +439,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -463,7 +464,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -488,7 +489,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
@@ -513,7 +514,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<ServiceInvoiceDetailDto>.Fail(ex.Message);
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<ServiceInvoiceDetailDto>.Fail(ex.Message);
             }
@@ -534,7 +535,7 @@ namespace PBL3.API.Controllers.Admin
                 var result = await _service.CancelTicketAsync(id, request.CancelReason, userId);
                 return ApiResult<bool>.Ok(result, "Hủy phiếu thành công.");
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }

@@ -3,9 +3,10 @@
 **Cập nhật:** 2026-08-31 · **Trạng thái repo:** trên `main` (đã merge `feat/retry-safe-call-sites`,
 fast-forward, CI xanh), build `0 Error(s)` / 184 cảnh báo
 · **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C**, **mục D**,
-**nợ kiểm thử 🧪 (cả ưu tiên 1 và nửa giao diện của ưu tiên 2)**, **mục 🅴**
-· **Kế tiếp:** ① **mục 🅷** (cùng lỗi `ex.Message` của mục 🅴 còn ở 6 chỗ khác,
-`PosService.cs:462` là bản sinh đôi y hệt) → ② đợt 3, **vẫn bị chặn** bởi RDS.
+**nợ kiểm thử 🧪 (ưu tiên 1 + nửa giao diện của ưu tiên 2)**, **mục 🅴**, **mục 🅷**
+· **Kế tiếp:** ① **mục 🅸** (124 chỗ rò rỉ `ex.Message` ở tầng **Client** — phạm vi mới phát
+hiện, và là chỗ **an toàn** để sửa bằng script, khác hẳn mục 🅷) → ② nửa **tầng Service** của nợ
+kiểm thử 🧪 (POS · xuất/nhập kho · phiếu dịch vụ) → ③ đợt 3, **vẫn bị chặn** bởi RDS.
 
 > 🧪 **Đừng tin dòng "XONG" nào ở dưới trước khi đọc mục 🧪.** Ranh giới đã dịch hai lần trong
 > phiên 2026-08-31 (chiều): luồng **Checkout đã chạy thật tới DB**, và **cả 6 nút double-submit
@@ -635,26 +636,93 @@ Build sau khi sửa: `0 Error(s)` / **184** cảnh báo — **đúng bằng số
 
 ---
 
-### 🅷 Cùng lỗi của mục 🅴 còn ở 6 chỗ khác — chưa sửa, CỐ Ý
+### ✅ 🅷 Chặn rò rỉ `ex.Message` ở TẦNG SERVER — **XONG (2026-08-31)**
 
-Quét toàn repo tìm `ex.Message` bị chuyển thẳng cho người dùng:
+`0 chỗ rò rỉ` ở cả tầng Service và tầng API. Kiểm bất cứ lúc nào bằng script phân loại ở §6.
 
-| Chỗ | Dòng | Ghi chú |
-|---|---|---|
-| `src/Service/Pos/PosService.cs` | 458, **462** | `"Lỗi khi quá trình thanh toán: " + ex.Message` — **bản sinh đôi y hệt** mục 🅴, chỉ khác luồng (POS tại quầy) |
-| `src/Service/Inventory/InventoryCheckService.cs` | 678, 858, 999 | `ApiResult.Fail(ex.Message)` |
-| `src/Service/Inventory/InventoryExportService.cs` | 192, **198** | `$"Lỗi khi xuất kho: {ex.Message}"` |
-| `src/API/Controllers/…` (`Cart`, `Orders`, `ServiceTickets`, `ServiceInvoices`) | ~35 chỗ | `ApiResult.Fail(ex.Message)` ở tầng controller |
+#### 🚨 Bản trước của mục này ĐẾM QUÁ — và cách đếm sai đáng ghi lại
 
-Không gộp vào mục 🅴 vì runbook khoanh mục đó đúng vào `OrderService.cs:257`; ghi thành mục riêng
-để việc mở rộng phạm vi là **một quyết định**, không phải một tác dụng phụ.
+Bản trước viết *"còn ở **6 chỗ** khác: `PosService` 458/462, `InventoryCheckService` 678/858/999,
+`InventoryExportService` 192/198, và ~35 chỗ `ApiResult.Fail(ex.Message)` ở controller"*. Con số đó
+đến từ `grep 'ex.Message'`, và nó **sai vì grep không biết chỗ đó nằm trong khối `catch` NÀO.**
 
-⚠️ **Đừng làm mục này bằng find-and-replace.** Mỗi chỗ phải phân loại nghiệp vụ / hạ tầng đúng
-như mục 🅴 đã làm, nếu không thì đổi một lỗi (lộ tiếng Anh) thành một lỗi tệ hơn (nuốt thông báo
-nghiệp vụ, người dùng không còn đường tự sửa). Khuôn đã có sẵn: `BusinessRuleException` + `catch`
-hai tầng. Ba luồng liên quan (POS · xuất/nhập kho · phiếu dịch vụ) **cũng đúng là ba luồng chưa
-chạy thật** ở mục 🧪 ưu tiên 2 — nên làm mục 🅷 **sau khi** seed được dữ liệu, để sửa xong có
-đường đo ngay.
+Sự thật sau khi phân loại theo kiểu exception của khối catch bao quanh:
+
+| Tầng | Tổng chỗ dùng `ex.Message` | Nằm trong catch **nghiệp vụ** (ĐÚNG) | 🔴 Rò rỉ thật |
+|---|---|---|---|
+| Service | 8 | 6 | **2** |
+| API (controller) | 45 | 35 | **10** |
+
+`PosService:458`, `InventoryCheckService:678/858/999`, `InventoryExportService:192` đều nằm trong
+`catch (ConcurrentModificationException)` — relay `ex.Message` ở đó là **chủ đích**, vì thông báo
+đã soạn cho người dùng. Tương tự 35/45 chỗ ở controller nằm trong tầng `catch (InvalidOperationException)`
+của một khối catch **vốn đã hai tầng và đã đúng**.
+
+> 💡 **`InventoryCheckService` là bản mẫu, không phải chỗ cần sửa.** Nó đã làm đúng từ trước:
+> `catch (ConcurrentModificationException)` → relay nguyên văn; `catch (Exception)` → `LogError`
+> + câu tiếng Việt cố định. Ai làm việc tương tự về sau thì copy khuôn của nó.
+
+**Bài học đo lường:** đếm lỗi loại này bằng `grep` một dòng là **luôn sai theo hướng phóng đại**.
+Phải phân loại theo *ngữ cảnh* (khối catch bao quanh), và script làm việc đó nằm ở §6.
+
+#### Đã sửa gì
+
+| Chỗ | Sửa |
+|---|---|
+| `PosService:462` | `catch(Exception)` → `LogError` + câu tiếng Việt cố định; thêm `catch (BusinessRuleException)` phía trên |
+| `PosService:419` | `InvalidOperationException` → **`BusinessRuleException`** (thông báo voucher hết lượt) |
+| `InventoryExportService:198` | như trên; **5 chốt nghiệp vụ** (dòng 120–149) đổi sang `BusinessRuleException` để không bị nuốt |
+| `OrdersController` ×6 | thêm tầng `catch (BusinessRuleException)`; tầng `Exception` → `LogError` + câu cố định theo từng action |
+| `CartController` ×4 | như trên (`CartService` **không ném** exception nào, nên 4 khối đó trước khi sửa **chỉ** có thể rò rỉ lỗi hạ tầng) |
+| `OrderService:688` | `Exception` → `BusinessRuleException` ("Đơn hàng đang giao… cấm hủy") |
+| `ServiceTicketService` | **68** `throw new InvalidOperationException` → `BusinessRuleException` |
+| `ServiceTicketsController` ×16 + `ServiceInvoicesController` ×1 | `catch (InvalidOperationException)` → `catch (BusinessRuleException)` |
+
+**Vì sao phải đổi cả 68 chỗ ở `ServiceTicketService` dù controller đã hai tầng đúng.** Vấn đề
+không phải cấu trúc mà là **nhập nhằng kiểu**: `InvalidOperationException` vừa là kiểu mà service
+dùng chở lỗi nghiệp vụ, vừa là kiểu **EF Core ném cho chuyện khác**. Nên một
+`InvalidOperationException` từ EF sẽ rơi vào đúng tầng "nghiệp vụ" và được relay **nguyên văn
+tiếng Anh**. Đổi kiểu là đóng khe đó: EF ném gì cũng rơi xuống tầng `Exception` và bị thay bằng
+câu tiếng Việt. Đã kiểm trước khi đổi: **cả 68 message đều là tiếng Việt có dấu**, và **không ai
+trong repo bắt `InvalidOperationException` theo kiểu** ngoài 17 chỗ đã đổi cùng lúc.
+
+Build sau khi sửa: `0 Error(s)` / **184** cảnh báo — đúng bằng baseline.
+
+---
+
+### 🅸 Rò rỉ tiếng Anh ở TẦNG CLIENT — **124 chỗ, CHƯA SỬA**
+
+Phát hiện lúc làm mục 🅷 và **chưa từng được ghi ở đâu**. Đây là tầng thứ ba của cùng một lỗi:
+
+```csharp
+// src/Client/Services/**/*.cs — 124 chỗ, gần như y hệt nhau
+catch (Exception ex)
+{
+    return ApiResult<T>.Fail($"Lỗi kết nối: {ex.Message}");
+}
+```
+
+`ex.Message` ở đây là chuỗi của `HttpClient` / `JsonSerializer`, nên khi API tắt hoặc mạng đứt,
+người dùng nhận:
+
+```
+Lỗi kết nối: No connection could be made because the target machine
+actively refused it. (localhost:5222)
+```
+
+Nó **có** tới người dùng: 125 chỗ `Snackbar.Add(...Message...)` trong `src/Client/Pages/`.
+
+🎯 **Khác mục 🅷 ở một điểm quyết định: chỗ này an toàn để sửa bằng find-and-replace.** Lý do đã
+kiểm: **`0` chỗ gọi `EnsureSuccessStatusCode` trong toàn bộ `src/Client/`**. Nghĩa là lỗi **nghiệp
+vụ** về qua **thân HTTP** dưới dạng `ApiResult.Fail` theo đường `return` bình thường, **không**
+đi qua exception. Nên 124 khối catch đó **chỉ có thể** thấy lỗi transport/JSON — không có tầng
+nghiệp vụ nào để nuốt, tức bẫy #13 **không áp dụng ở đây**.
+
+⚠️ **Nhưng nếu sau này có ai thêm `EnsureSuccessStatusCode` vào một client service, tiền đề trên
+vỡ** và chỗ đó lập tức cần khuôn hai tầng như mục 🅷. Chốt `grep` ở §6 canh đúng điều đó.
+
+Chưa làm vì nó là **phạm vi mới phát sinh**, không nằm trong mục 🅷 — để việc mở rộng là một
+quyết định, không phải tác dụng phụ. Khối lượng: 124 chỗ, một script, ~10 phút.
 
 ---
 
@@ -959,19 +1027,34 @@ grep -rln "_isSaving\|_isSubmitting\|_isApproving\|_isConfirming" \
 ```
 
 ```bash
-# E — thông báo lỗi user-facing không được nối ex.Message trong OrderService
-grep -n 'ex\.Message' src/Service/Orders/OrderService.cs | grep -v '//'    # kỳ vọng: rỗng
-#   (chi tiết ex CHỈ được đi vào _logger.LogError, không đi vào message trả cho client)
-#   ⚠️ Phải có `| grep -v '//'`: bản thân file có MỘT comment nhắc "KHÔNG nối ex.Message…",
-#      nên bỏ bộ lọc đi thì chốt này báo động giả vĩnh viễn — và một chốt luôn đỏ sẽ bị bỏ qua
-#      y như một chốt luôn xanh (bẫy #11).
+# E + H — không thông báo lỗi nào chở ex.Message của HẠ TẦNG ra cho người dùng
+bash devops/scripts/check-error-message-leaks.sh server
+#   kỳ vọng: "Sạch [server]: 81 file, 0 chỗ…" và mã thoát 0
+#   mã thoát 2 = KHÔNG KẾT LUẬN (quét rỗng, chốt đang hỏng) — KHÔNG phải sạch
 
-# E — 13 throw nghiệp vụ vẫn là BusinessRuleException, không tụt về Exception trần
-grep -c 'throw new BusinessRuleException' src/Service/Orders/OrderService.cs   # kỳ vọng: 13
+bash devops/scripts/check-error-message-leaks.sh client
+#   kỳ vọng HIỆN TẠI: 124 rò rỉ, mã thoát 1 — đó là mục 🅸, CHƯA sửa.
+#   Con số này chỉ được GIẢM. Tăng nghĩa là có client service mới viết theo mẫu cũ.
+
+# ⚠️ ĐỪNG thay script này bằng `grep 'ex.Message'`. grep không biết dòng đó nằm trong
+#    khối catch NÀO, nên nó đếm cả 41 chỗ relay ĐÚNG (từ catch nghiệp vụ) thành lỗi.
+#    Bản trước của mục 🅷 đếm bằng grep và phóng đại: báo 7 chỗ ở tầng Service, thật ra 2.
+
+# E — khuôn hai tầng còn nguyên ở OrderService (nơi mục 🅴 sửa)
+grep -c 'throw new BusinessRuleException' src/Service/Orders/OrderService.cs   # kỳ vọng: 14
 grep -c 'catch (BusinessRuleException)'    src/Service/Orders/OrderService.cs   # kỳ vọng: 2
-#   ⚠️ Con số thứ hai quan trọng hơn con số thứ nhất: thiếu catch thì 13 throw kia
-#      rơi vào catch (Exception) và bị thay bằng câu chung — đúng cái hồi quy mục 🅴 tránh.
-#      Và catch (BusinessRuleException) PHẢI đứng TRƯỚC catch (Exception) trong cùng khối try.
+#   ⚠️ Con số thứ hai quan trọng hơn: thiếu catch thì các throw kia rơi vào catch (Exception)
+#      và bị thay bằng câu chung — đúng cái hồi quy mục 🅴 tránh. Và catch (BusinessRuleException)
+#      PHẢI đứng TRƯỚC catch (Exception) trong cùng khối try.
+
+# H — InvalidOperationException không được dùng lại làm kiểu chở lỗi nghiệp vụ
+grep -rn 'catch (InvalidOperationException' --include='*.cs' src/   # kỳ vọng: rỗng
+#   EF Core cũng ném kiểu này, nên bắt nó = relay nguyên văn tiếng Anh của EF cho người dùng.
+
+# 🅸 — tiền đề của mục 🅸 còn đúng không (client KHÔNG được ném lỗi nghiệp vụ qua exception)
+grep -rn 'EnsureSuccessStatusCode' --include='*.cs' src/Client/    # kỳ vọng: rỗng
+#   Nếu chỗ này KHÔNG còn rỗng thì lỗi nghiệp vụ bắt đầu đi qua exception ở client, và mục 🅸
+#   không còn sửa được bằng find-and-replace nữa — phải dùng khuôn hai tầng như mục 🅷.
 ```
 
 ```bash

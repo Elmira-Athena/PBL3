@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.ServiceInvoices;
+using PBL3.Core.Exceptions;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.ServiceTickets;
 
@@ -67,7 +68,7 @@ namespace PBL3.API.Controllers.Admin
                 await _service.MarkInvoicePaidAsync(id);
                 return ApiResult<bool>.Ok(true, "Đã xác nhận thanh toán hóa đơn.");
             }
-            catch (InvalidOperationException ex)
+            catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }

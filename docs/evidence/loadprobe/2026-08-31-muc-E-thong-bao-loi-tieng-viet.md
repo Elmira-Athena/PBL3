@@ -124,3 +124,54 @@ Quét `ex.Message` bị chuyển thẳng cho người dùng ngoài `OrderService
 thay vì checkout online). Không sửa trong mục 🅴 vì runbook khoanh mục này đúng vào
 `OrderService.cs:257`; ghi lại thành mục 🅷 để người quyết định phạm vi, chứ không mở rộng âm thầm.
 Muốn sửa thì khuôn đã có sẵn: `BusinessRuleException` + `catch` hai tầng.
+
+---
+
+## 7. Mục 🅷 — cùng lỗi này ở tầng server, đo cùng cách (2026-08-31)
+
+Mục 🅷 đóng nốt **2** chỗ rò rỉ ở tầng Service (`PosService:462`, `InventoryExportService:198`) và
+**10** ở tầng API (`OrdersController` ×6, `CartController` ×4), đồng thời đổi **68**
+`throw new InvalidOperationException` của `ServiceTicketService` sang `BusinessRuleException` +
+**17** khối `catch` tương ứng ở controller.
+
+Đo lại đúng ba nhánh như §4–§5 ở trên:
+
+| Nhánh | Kỳ vọng | Nhận được |
+|---|---|---|
+| **Nghiệp vụ** — `POST /api/service-tickets/intake` với serial không tồn tại | thông báo nguyên văn | `"Không tìm thấy Serial trong hệ thống."` ✅ |
+| **Nghiệp vụ** — `POST /api/service-tickets/999999/start-repair` | thông báo nguyên văn | `"Phiếu không tồn tại."` ✅ |
+| **Nghiệp vụ** — checkout với voucher rác (qua `OrdersController` tầng catch MỚI) | thông báo nguyên văn | `"Mã giảm giá không tồn tại: RACRACRAC"` ✅ |
+| **Ca đối chứng** — cùng payload, bỏ voucher | `200` | `200` · `ORD-20260831-000015` ✅ |
+| **Hạ tầng** — S01 đua sinh mã, 50 khách | câu tiếng Việt cố định, **0** chuỗi tiếng Anh | `"Không thể hoàn tất đặt hàng do lỗi hệ thống…"`, **0** ✅ |
+
+Ba nhánh nghiệp vụ đi qua **ba đường khác nhau** (`ServiceTicketService` → controller ·
+`ServiceTicketService` → controller · `OrderService` → controller) nên chúng phủ được cả hai kiểu
+sửa của mục 🅷: đổi kiểu exception, và thêm tầng `catch` ở controller.
+
+**Vì sao phải đổi cả 68 chỗ ở `ServiceTicketService` dù controller vốn đã hai tầng đúng.** Vấn đề
+là **nhập nhằng kiểu**: `InvalidOperationException` vừa là kiểu service dùng chở lỗi nghiệp vụ, vừa
+là kiểu **EF Core ném cho chuyện khác**. Một `InvalidOperationException` từ EF sẽ rơi vào đúng tầng
+"nghiệp vụ" và được relay **nguyên văn tiếng Anh**. Kiểm trước khi đổi: cả 68 message đều tiếng
+Việt có dấu, và **không ai trong repo bắt `InvalidOperationException` theo kiểu** ngoài 17 chỗ đã
+đổi cùng lúc.
+
+### 🚨 Cách ĐẾM lỗi này bằng `grep` luôn sai theo hướng phóng đại
+
+Bản trước của mục 🅷 nói "còn 6 chỗ + ~35 chỗ ở controller". Con số đó từ `grep 'ex.Message'`, và
+grep **không biết dòng đó nằm trong khối `catch` nào**:
+
+| Tầng | Tổng chỗ dùng `ex.Message` | Trong catch **nghiệp vụ** (ĐÚNG) | 🔴 Rò rỉ thật |
+|---|---|---|---|
+| Service | 8 | 6 | **2** |
+| API | 45 | 35 | **10** |
+| Client | 124 | 0 | **124** ← mục 🅸, chưa sửa |
+
+`devops/scripts/check-error-message-leaks.sh` phân loại theo ngữ cảnh, và **fail-closed**: quét
+rỗng → thoát `2` (KHÔNG KẾT LUẬN), không thoát `0`. Đã kiểm cả bốn nhánh:
+
+| Ca | Kỳ vọng | Kết quả |
+|---|---|---|
+| `server` sau khi vá | `0` | ✅ Sạch, 81 file |
+| `client` — **ca đối chứng, chứng minh phép quét không rỗng** | `1` | ✅ bắt đủ **124** |
+| tham số sai | `2` | ✅ |
+| quét rỗng (chạy ngoài repo) | `2` | ✅ "KHÔNG KẾT LUẬN… KHÔNG phải sạch" |

@@ -117,14 +117,14 @@ namespace PBL3.Service.Inventory
                         var orderDetail = order.OrderDetails.FirstOrDefault(od => od.Id == detailReq.OrderDetailId);
                         if (orderDetail == null)
                         {
-                            throw new Exception($"Chi tiết đơn hàng {detailReq.OrderDetailId} không thuộc về đơn hàng này.");
+                            throw new BusinessRuleException($"Chi tiết đơn hàng {detailReq.OrderDetailId} không thuộc về đơn hàng này.");
                         }
 
                         // 2. Kiểm tra Số lượng (Quantity Match)
                         // LƯU Ý NGHIỆP VỤ: Đảm bảo số lượng Serial quét thực tế khớp chính xác tuyệt đối với số lượng đặt hàng
                         if (detailReq.SerialNumbers.Count != orderDetail.Quantity)
                         {
-                            throw new Exception($"Chưa quét đúng số lượng cho sản phẩm {orderDetail.Variant?.VariantName ?? orderDetail.VariantId.ToString()}. " +
+                            throw new BusinessRuleException($"Chưa quét đúng số lượng cho sản phẩm {orderDetail.Variant?.VariantName ?? orderDetail.VariantId.ToString()}. " +
                                                 $"Yêu cầu: {orderDetail.Quantity}, Đã quét: {detailReq.SerialNumbers.Count}");
                         }
 
@@ -133,20 +133,20 @@ namespace PBL3.Service.Inventory
                         {
                             if (!dbSerialsMap.TryGetValue(serialNo, out var productSerial))
                             {
-                                throw new Exception($"Mã Serial '{serialNo}' không tồn tại trong hệ thống.");
+                                throw new BusinessRuleException($"Mã Serial '{serialNo}' không tồn tại trong hệ thống.");
                             }
 
                             // Đảm bảo thiết bị chưa bị xuất bán hoặc bị hỏng hóc từ trước
                             if (productSerial.Status != (byte)SerialStatus.Available)
                             {
-                                throw new Exception($"Mã Serial '{serialNo}' không ở trạng thái trong kho (Available). Trạng thái hiện tại: {productSerial.Status}.");
+                                throw new BusinessRuleException($"Mã Serial '{serialNo}' không ở trạng thái trong kho (Available). Trạng thái hiện tại: {productSerial.Status}.");
                             }
 
                             // LƯU Ý NGHIỆP VỤ (Mismatched Variant Protection):
                             // Ràng buộc cực kỳ quan trọng ngăn chặn nhân viên đóng nhầm mã hàng/phiên bản màu sắc/dung lượng khác đơn đặt
                             if (productSerial.VariantId != orderDetail.VariantId)
                             {
-                                throw new Exception($"Mã Serial '{serialNo}' (thuộc sản phẩm {productSerial.Variant?.VariantName ?? productSerial.VariantId.ToString()}) " +
+                                throw new BusinessRuleException($"Mã Serial '{serialNo}' (thuộc sản phẩm {productSerial.Variant?.VariantName ?? productSerial.VariantId.ToString()}) " +
                                                     $"KHÔNG KHỚP với sản phẩm yêu cầu trong đơn hàng ({orderDetail.Variant?.VariantName ?? orderDetail.VariantId.ToString()}).");
                             }
 
@@ -191,11 +191,26 @@ namespace PBL3.Service.Inventory
                 _logger.LogWarning(ex, "Xung đột đồng thời khi xuất kho đơn hàng {OrderId}", request.OrderId);
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            catch (BusinessRuleException ex)
+            {
+                // 5 chốt nghiệp vụ trong delegate (serial không tồn tại / không ở trạng thái
+                // Available / không thuộc đơn / chưa quét đủ số lượng) ném kiểu này. Thông báo
+                // của chúng ĐÃ soạn cho người dùng và phải đi ra NGUYÊN VĂN — nhân viên kho cần
+                // biết CHÍNH XÁC serial nào sai để quét lại. Nuốt thành câu chung là hồi quy UX
+                // nặng hơn lỗi ban đầu.
+                _logger.LogInformation(
+                    "Chặn xuất kho đơn {OrderId} vì luật nghiệp vụ: {Reason}", request.OrderId, ex.Message);
+                return ApiResult<bool>.Fail(ex.Message);
+            }
             catch (Exception ex)
             {
-                // ROLLBACK TRANSACTION: Reset lại toàn bộ trạng thái nếu xảy ra bất kỳ lỗi quét mã nào
-                _logger.LogError(ex, "Lỗi khi xuất kho cho đơn hàng {OrderId}", request.OrderId);
-                return ApiResult<bool>.Fail($"Lỗi khi xuất kho: {ex.Message}");
+                // ROLLBACK TRANSACTION: Reset lại toàn bộ trạng thái nếu xảy ra bất kỳ lỗi quét mã nào.
+                // KHÔNG nối ex.Message vào thông báo: tới đây ex là lỗi HẠ TẦNG (EF Core / SQL
+                // Server), nội dung tiếng Anh và lộ nội tạng ORM. Cùng lỗi đã sửa ở mục 🅴.
+                _logger.LogError(ex, "Lỗi hệ thống khi xuất kho cho đơn hàng {OrderId}", request.OrderId);
+                return ApiResult<bool>.Fail(
+                    "Không thể hoàn tất xuất kho do lỗi hệ thống. Vui lòng thử lại; "
+                    + "nếu vẫn không được, xin liên hệ bộ phận kỹ thuật.");
             }
         }
 

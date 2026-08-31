@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using PBL3.Core.Entities;
+using PBL3.Core.Exceptions;
 using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Shared.DTOs.ServiceTickets;
@@ -144,18 +145,18 @@ namespace PBL3.Service.ServiceTickets
         {
             var serial = await _serialRepository.GetBySerialNumberAsync(request.SerialNumber);
             if (serial == null)
-                throw new InvalidOperationException("Không tìm thấy Serial trong hệ thống.");
+                throw new BusinessRuleException("Không tìm thấy Serial trong hệ thống.");
 
             if (serial.Status != (byte)SerialStatus.Sold)
-                throw new InvalidOperationException("Sản phẩm không ở trạng thái Sold.");
+                throw new BusinessRuleException("Sản phẩm không ở trạng thái Sold.");
 
             if (await _ticketRepository.HasOpenTicketForSerialAsync(serial.Id))
-                throw new InvalidOperationException("Sản phẩm này đã có phiếu sửa chữa chưa đóng.");
+                throw new BusinessRuleException("Sản phẩm này đã có phiếu sửa chữa chưa đóng.");
 
             var variant = serial.Variant;
             var order = await _orderRepository.GetByIdAsync(serial.OrderId!.Value);
             if (order == null)
-                throw new InvalidOperationException("Không tìm thấy đơn hàng gốc.");
+                throw new BusinessRuleException("Không tìm thấy đơn hàng gốc.");
 
             // Đánh giá bảo hành thời gian thực để chốt snapshot ngay lúc tiếp nhận
             var warranty = await WarrantyEvaluator.EvaluateAsync(serial, variant, _warrantyRepository);
@@ -237,7 +238,7 @@ namespace PBL3.Service.ServiceTickets
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             ValidateTransition(ticket.Status, (byte)1);
 
@@ -263,12 +264,12 @@ namespace PBL3.Service.ServiceTickets
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)1)
-                throw new InvalidOperationException("Phiếu phải ở trạng thái Đang chẩn đoán.");
+                throw new BusinessRuleException("Phiếu phải ở trạng thái Đang chẩn đoán.");
 
             ticket.DiagnosisFindings = request.DiagnosisFindings;
             ticket.DiagnosedAt = DateTime.UtcNow;
@@ -288,12 +289,12 @@ namespace PBL3.Service.ServiceTickets
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)1)
-                throw new InvalidOperationException("Phiếu phải ở trạng thái Đang chẩn đoán.");
+                throw new BusinessRuleException("Phiếu phải ở trạng thái Đang chẩn đoán.");
 
             var resolutionType = request.ResolutionType;
 
@@ -303,10 +304,10 @@ namespace PBL3.Service.ServiceTickets
             // - Nếu tại thời điểm tiếp nhận thiết bị CÒN bảo hành (WasInWarrantyAtIntake = true):
             //   Cấm chọn nhánh Sửa chữa tính phí dịch vụ, bắt buộc đi theo các nhánh bảo hành miễn phí.
             if (!ticket.WasInWarrantyAtIntake && resolutionType != (byte)4)
-                throw new InvalidOperationException("Sản phẩm đã hết bảo hành, chỉ có thể chọn sửa tính phí.");
+                throw new BusinessRuleException("Sản phẩm đã hết bảo hành, chỉ có thể chọn sửa tính phí.");
 
             if (ticket.WasInWarrantyAtIntake && resolutionType == (byte)4)
-                throw new InvalidOperationException("Sản phẩm còn bảo hành, không thể chọn sửa tính phí.");
+                throw new BusinessRuleException("Sản phẩm còn bảo hành, không thể chọn sửa tính phí.");
 
             ticket.ResolutionType = resolutionType;
             ticket.ModifiedDate = DateTime.UtcNow;
@@ -327,19 +328,19 @@ namespace PBL3.Service.ServiceTickets
             // điều kiện 1 của hợp đồng retry ở IUnitOfWork.
             var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
             // RÀNG BUỘC QUY TRÌNH: Báo giá chỉ được lập khi phiếu đang ở trạng thái chẩn đoán lỗi (Diagnosing - 1)
             if (ticket.Status != (byte)1)
-                throw new InvalidOperationException("Phiếu phải ở trạng thái Đang chẩn đoán.");
+                throw new BusinessRuleException("Phiếu phải ở trạng thái Đang chẩn đoán.");
 
             ValidateTransition(ticket.Status, (byte)2);
 
             // RÀNG BUỘC NGHIỆP VỤ: Chỉ các phiếu được định tuyến theo nhánh Sửa chữa tính phí (PaidRepair - 4) mới cần báo giá
             if (ticket.ResolutionType != (byte)4)
-                throw new InvalidOperationException("Chỉ phiếu sửa tính phí mới có báo giá.");
+                throw new BusinessRuleException("Chỉ phiếu sửa tính phí mới có báo giá.");
 
             // Sử dụng Transaction để bảo vệ quy trình lưu trữ báo giá & chi tiết báo giá đồng thời cập nhật phiếu dịch vụ
             try
@@ -358,7 +359,7 @@ namespace PBL3.Service.ServiceTickets
 
                     // Chốt chống race. NÉM chứ không return, để transaction rollback.
                     if (trackedTicket is null || trackedTicket.Status != (byte)1 || trackedTicket.ResolutionType != (byte)4)
-                        throw new InvalidOperationException(
+                        throw new BusinessRuleException(
                             "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
 
                     // NGHIỆP VỤ HỦY BÁO GIÁ CŨ: đánh dấu mọi báo giá "Chờ duyệt" (0) của phiếu này
@@ -436,12 +437,12 @@ namespace PBL3.Service.ServiceTickets
             // trả lỗi sớm. Phiếu được nạp LẠI có tracking bên trong delegate mới ghi.
             var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignmentOrCustomer(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)2)
-                throw new InvalidOperationException("Phiếu phải ở trạng thái Chờ duyệt báo giá.");
+                throw new BusinessRuleException("Phiếu phải ở trạng thái Chờ duyệt báo giá.");
 
             // Báo giá đọc bằng projection AsNoTracking: ở luồng này nó CHỈ được kiểm tra, còn
             // việc ghi do TryDecideAsync (một câu UPDATE set-based) đảm nhiệm. Nạp tracked ở
@@ -452,16 +453,16 @@ namespace PBL3.Service.ServiceTickets
                 .Select(q => new { q.TicketId, q.Status })
                 .FirstOrDefaultAsync();
             if (quotation == null || quotation.TicketId != ticketId)
-                throw new InvalidOperationException("Báo giá không tồn tại.");
+                throw new BusinessRuleException("Báo giá không tồn tại.");
 
             // CHỐT CHẶN BẢO MẬT: Báo giá được chọn bắt buộc phải có trạng thái là Chờ duyệt (0 - Pending)
             // Ngăn chặn duyệt trùng, duyệt đè hoặc thao tác lại trên báo giá đã được xử lý từ trước.
             if (quotation.Status != (byte)0)
-                throw new InvalidOperationException("Chỉ được duyệt báo giá chưa được xử lý.");
+                throw new BusinessRuleException("Chỉ được duyệt báo giá chưa được xử lý.");
 
             var nextStatus = request.NextStatus;
             if (nextStatus != (byte)4 && nextStatus != (byte)5)
-                throw new InvalidOperationException("Trạng thái tiếp theo không hợp lệ.");
+                throw new BusinessRuleException("Trạng thái tiếp theo không hợp lệ.");
 
             ValidateTransition(ticket.Status, nextStatus);
 
@@ -477,7 +478,7 @@ namespace PBL3.Service.ServiceTickets
                     // Nạp LẠI có tracking bên trong delegate — xem giải thích ở CreateQuotationAsync.
                     var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
                     if (trackedTicket is null || trackedTicket.Status != (byte)2)
-                        throw new InvalidOperationException(
+                        throw new BusinessRuleException(
                             "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
 
                     // CỔNG NGUYÊN TỬ: chốt kiểm ở trên chỉ fail-fast cho UX — nó là check-then-act
@@ -486,7 +487,7 @@ namespace PBL3.Service.ServiceTickets
                     if (!await _quotationRepository.TryDecideAsync(
                             quotationId, fromStatus: (byte)0, toStatus: (byte)1,
                             decidedAt: DateTime.UtcNow, note: null))
-                        throw new InvalidOperationException(
+                        throw new BusinessRuleException(
                             "Báo giá này vừa được xử lý ở nơi khác. Vui lòng tải lại trang.");
 
                     // Chuyển dịch trạng thái phiếu dịch vụ sang Đang sửa (5) hoặc Chờ phụ tùng (4) tùy thuộc quyết định
@@ -520,12 +521,12 @@ namespace PBL3.Service.ServiceTickets
             // trả lỗi sớm. Phiếu được nạp LẠI có tracking bên trong delegate mới ghi.
             var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignmentOrCustomer(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)2)
-                throw new InvalidOperationException("Phiếu phải ở trạng thái Chờ duyệt báo giá.");
+                throw new BusinessRuleException("Phiếu phải ở trạng thái Chờ duyệt báo giá.");
 
             // Báo giá đọc bằng projection AsNoTracking — việc ghi do TryDecideAsync đảm nhiệm.
             var quotation = await _dbContext.Quotations
@@ -534,13 +535,13 @@ namespace PBL3.Service.ServiceTickets
                 .Select(q => new { q.TicketId, q.Status })
                 .FirstOrDefaultAsync();
             if (quotation == null || quotation.TicketId != ticketId)
-                throw new InvalidOperationException("Báo giá không tồn tại.");
+                throw new BusinessRuleException("Báo giá không tồn tại.");
 
             // CHỐT CHẶN còn thiếu: trước đây nhánh từ chối KHÔNG kiểm Status gì cả,
             // khác hẳn nhánh duyệt. Hệ quả: từ chối được cả báo giá ĐÃ ĐƯỢC DUYỆT,
             // chỉ cần bấm hai lần — không cần đồng thời mới lộ.
             if (quotation.Status != (byte)0)
-                throw new InvalidOperationException("Chỉ được từ chối báo giá chưa được xử lý.");
+                throw new BusinessRuleException("Chỉ được từ chối báo giá chưa được xử lý.");
 
             ValidateTransition(ticket.Status, (byte)3);
 
@@ -552,14 +553,14 @@ namespace PBL3.Service.ServiceTickets
                     // Nạp LẠI có tracking bên trong delegate — xem giải thích ở CreateQuotationAsync.
                     var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
                     if (trackedTicket is null || trackedTicket.Status != (byte)2)
-                        throw new InvalidOperationException(
+                        throw new BusinessRuleException(
                             "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
 
                     // CỔNG NGUYÊN TỬ — xem giải thích ở nhánh duyệt.
                     if (!await _quotationRepository.TryDecideAsync(
                             quotationId, fromStatus: (byte)0, toStatus: (byte)2,
                             decidedAt: DateTime.UtcNow, note: request.Reason))
-                        throw new InvalidOperationException(
+                        throw new BusinessRuleException(
                             "Báo giá này vừa được xử lý ở nơi khác. Vui lòng tải lại trang.");
 
                     trackedTicket.Status = (byte)3;
@@ -592,20 +593,20 @@ namespace PBL3.Service.ServiceTickets
             // trả lỗi sớm. Phiếu được nạp LẠI có tracking bên trong delegate mới ghi.
             var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.ResolutionType != (byte)2)
-                throw new InvalidOperationException("Phiếu phải chọn nhánh RMA.");
+                throw new BusinessRuleException("Phiếu phải chọn nhánh RMA.");
 
             if (!ticket.WasInWarrantyAtIntake)
-                throw new InvalidOperationException("Sản phẩm đã hết bảo hành, không thể gửi RMA.");
+                throw new BusinessRuleException("Sản phẩm đã hết bảo hành, không thể gửi RMA.");
 
             // Issue #8: Check duplicate RMA
             var existingRma = await _rmaRepository.GetByTicketIdReadOnlyAsync(ticketId);
             if (existingRma != null)
-                throw new InvalidOperationException("Phiếu này đã được gửi hãng rồi.");
+                throw new BusinessRuleException("Phiếu này đã được gửi hãng rồi.");
 
             ValidateTransition(ticket.Status, (byte)6);
 
@@ -621,13 +622,13 @@ namespace PBL3.Service.ServiceTickets
                     // Nạp LẠI có tracking bên trong delegate — xem giải thích ở CreateQuotationAsync.
                     var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
                     if (trackedTicket is null || trackedTicket.ResolutionType != (byte)2)
-                        throw new InvalidOperationException(
+                        throw new BusinessRuleException(
                             "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
 
                     // Chốt chống RMA trùng phải nằm TRONG transaction: bản kiểm ở ngoài chỉ
                     // fail-fast cho UX, và ở lần thử lại nó đã đọc từ trước khi rollback.
                     if (await _rmaRepository.GetByTicketIdReadOnlyAsync(ticketId) != null)
-                        throw new InvalidOperationException("Phiếu này đã được gửi hãng rồi.");
+                        throw new BusinessRuleException("Phiếu này đã được gửi hãng rồi.");
 
                     var rma = new RmaShipment
                     {
@@ -681,11 +682,11 @@ namespace PBL3.Service.ServiceTickets
             // `rma` và `ticket` được nạp LẠI có tracking bên trong delegate mới ghi — bản tracked
             // nạp ở ngoài chính là bẫy mất dữ liệu khi chạy lại (xem hợp đồng ở IUnitOfWork).
             if (await _rmaRepository.GetByTicketIdReadOnlyAsync(ticketId) == null)
-                throw new InvalidOperationException("Không có phiếu RMA cho ticket này.");
+                throw new BusinessRuleException("Không có phiếu RMA cho ticket này.");
 
             var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
@@ -715,7 +716,7 @@ namespace PBL3.Service.ServiceTickets
                     var rma = await _rmaRepository.GetByTicketIdTrackedAsync(ticketId);
                     var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
                     if (rma is null || trackedTicket is null)
-                        throw new InvalidOperationException(
+                        throw new BusinessRuleException(
                             "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
 
                     byte previousStatus = trackedTicket.Status;
@@ -729,7 +730,7 @@ namespace PBL3.Service.ServiceTickets
                     if (request.ManufacturerResolution == (byte)2)
                     {
                         if (!request.ReplacementSerialId.HasValue)
-                            throw new InvalidOperationException("Phải cung cấp Serial thay thế khi hãng đã thay thế.");
+                            throw new BusinessRuleException("Phải cung cấp Serial thay thế khi hãng đã thay thế.");
 
                         var newSerialId = request.ReplacementSerialId.Value;
                         var oldSerial = trackedTicket.Serial;
@@ -737,16 +738,16 @@ namespace PBL3.Service.ServiceTickets
 
                         // Kiểm định độ khả dụng của Serial thay thế mới nhận từ hãng
                         if (newSerial == null || newSerial.Status != (byte)0)
-                            throw new InvalidOperationException("Serial thay thế không sẵn trong kho hoặc đã được giữ chỗ.");
+                            throw new BusinessRuleException("Serial thay thế không sẵn trong kho hoặc đã được giữ chỗ.");
 
                         if (newSerial.VariantId != oldSerial.VariantId)
-                            throw new InvalidOperationException("Serial thay thế phải cùng biến thể với serial hỏng.");
+                            throw new BusinessRuleException("Serial thay thế phải cùng biến thể với serial hỏng.");
 
                         // Truy vấn liên kết xuất kho trong lịch sử để trỏ lại sang Serial mới (Invoice Preservation)
                         var oldOrderSerial = await _dbContext.OrderSerials
                             .FirstOrDefaultAsync(os => os.SerialId == oldSerial.Id);
                         if (oldOrderSerial == null)
-                            throw new InvalidOperationException("Không tìm thấy bản ghi xuất kho gốc của serial này.");
+                            throw new BusinessRuleException("Không tìm thấy bản ghi xuất kho gốc của serial này.");
 
                         // Xác định thời hạn bảo hành gốc để phục vụ kế thừa
                         var oldWarranties = await _warrantyRepository.GetActiveBySerialIdTrackedAsync(oldSerial.Id);  // TRACKED: bên dưới ghi oldWarranties[0].Status = 2
@@ -858,7 +859,7 @@ namespace PBL3.Service.ServiceTickets
             // vốn được `catch { throw; }` trả nguyên vẹn cho tầng gọi.
             var precheckTicket = await _ticketRepository.GetByIdWithDetailsAsync(ticketId);
             if (precheckTicket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(precheckTicket, userId, isAdmin);
 
@@ -878,13 +879,13 @@ namespace PBL3.Service.ServiceTickets
                     // ── Nạp LẠI toàn bộ entity sẽ ghi, BÊN TRONG delegate ──
                     var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
                     if (ticket == null)
-                        throw new InvalidOperationException("Phiếu không tồn tại.");
+                        throw new BusinessRuleException("Phiếu không tồn tại.");
 
                     if (ticket.Status != (byte)1 && ticket.Status != (byte)7)
-                        throw new InvalidOperationException("Trạng thái phiếu không cho phép đổi 1-1.");
+                        throw new BusinessRuleException("Trạng thái phiếu không cho phép đổi 1-1.");
 
                     if (ticket.ResolutionType != (byte)3 && ticket.ResolutionType != (byte)2)
-                        throw new InvalidOperationException("Loại giải pháp không phải đổi 1-1.");
+                        throw new BusinessRuleException("Loại giải pháp không phải đổi 1-1.");
 
                     // NGHIỆP VỤ BẢO VỆ CHỐT CHẶN: Đánh giá bảo hành thời gian thực (Live Warranty Re-evaluation) tại thời điểm đổi máy.
                     // Điều này cực kỳ quan trọng để phòng chống rủi ro thiết bị thực tế đã trôi qua thời hạn bảo hành tối đa trong quãng thời gian dài chẩn đoán hoặc chờ linh kiện.
@@ -894,29 +895,29 @@ namespace PBL3.Service.ServiceTickets
                         _warrantyRepository);
 
                     if (!liveWarranty.IsInWarranty)
-                        throw new InvalidOperationException("Bảo hành đã hết hạn, không thể đổi 1-1.");
+                        throw new BusinessRuleException("Bảo hành đã hết hạn, không thể đổi 1-1.");
 
                     if (ticket.ReplacementSerialId.HasValue)
-                        throw new InvalidOperationException("Phiếu này đã được đổi 1-1 trước đó.");
+                        throw new BusinessRuleException("Phiếu này đã được đổi 1-1 trước đó.");
 
                     ValidateTransition(ticket.Status, (byte)8);
 
                     var oldSerial = await _serialRepository.GetByIdWithTrackingAsync(ticket.SerialId);
                     if (oldSerial == null)
-                        throw new InvalidOperationException("Serial cũ không tồn tại.");
+                        throw new BusinessRuleException("Serial cũ không tồn tại.");
 
                     var newSerial = await _serialRepository.GetByIdWithTrackingAsync(newSerialId);
                     if (newSerial == null || newSerial.Status != (byte)0)
-                        throw new InvalidOperationException("Serial thay thế không sẵn trong kho hoặc đã được giữ chỗ.");
+                        throw new BusinessRuleException("Serial thay thế không sẵn trong kho hoặc đã được giữ chỗ.");
 
                     if (newSerial.VariantId != oldSerial.VariantId)
-                        throw new InvalidOperationException("Serial thay thế phải cùng biến thể với serial hỏng.");
+                        throw new BusinessRuleException("Serial thay thế phải cùng biến thể với serial hỏng.");
 
                     // Hóa đơn lịch sử: Lấy dòng ánh xạ hóa đơn vật lý của máy cũ
                     var oldOrderSerial = await _dbContext.OrderSerials
                         .FirstOrDefaultAsync(os => os.SerialId == oldSerial.Id);
                     if (oldOrderSerial == null)
-                        throw new InvalidOperationException("Không tìm thấy bản ghi xuất kho gốc của serial này.");
+                        throw new BusinessRuleException("Không tìm thấy bản ghi xuất kho gốc của serial này.");
 
                     // Lấy thời hạn kết thúc bảo hành hiện hữu để chuyển tiếp bảo hành kế thừa
                     var oldWarranties = await _warrantyRepository.GetActiveBySerialIdTrackedAsync(oldSerial.Id);  // TRACKED: bên dưới ghi oldWarranties[0].Status = 2
@@ -1003,12 +1004,12 @@ namespace PBL3.Service.ServiceTickets
             // trả lỗi sớm. Phiếu được nạp LẠI có tracking bên trong delegate mới ghi.
             var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
             if (!new[] { (byte)5, (byte)7, (byte)8 }.Contains(ticket.Status))
-                throw new InvalidOperationException("Phiếu phải ở trạng thái sửa chữa hoặc đã nhận từ hãng.");
+                throw new BusinessRuleException("Phiếu phải ở trạng thái sửa chữa hoặc đã nhận từ hãng.");
 
             ValidateTransition(ticket.Status, (byte)9);
 
@@ -1025,7 +1026,7 @@ namespace PBL3.Service.ServiceTickets
                     // Nạp LẠI có tracking bên trong delegate — xem giải thích ở CreateQuotationAsync.
                     var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
                     if (trackedTicket is null || !new[] { (byte)5, (byte)7, (byte)8 }.Contains(trackedTicket.Status))
-                        throw new InvalidOperationException(
+                        throw new BusinessRuleException(
                             "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
 
                     // Issue #4: Capture FromStatus BEFORE changing status
@@ -1074,12 +1075,12 @@ namespace PBL3.Service.ServiceTickets
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)5)
-                throw new InvalidOperationException("Phiếu phải ở trạng thái Đang sửa.");
+                throw new BusinessRuleException("Phiếu phải ở trạng thái Đang sửa.");
 
             ValidateTransition(ticket.Status, (byte)4);
 
@@ -1104,12 +1105,12 @@ namespace PBL3.Service.ServiceTickets
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.Status != (byte)4)
-                throw new InvalidOperationException("Phiếu phải ở trạng thái Chờ phụ tùng.");
+                throw new BusinessRuleException("Phiếu phải ở trạng thái Chờ phụ tùng.");
 
             ValidateTransition(ticket.Status, (byte)5);
 
@@ -1134,12 +1135,12 @@ namespace PBL3.Service.ServiceTickets
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
             if (ticket.ResolutionType != (byte)1)
-                throw new InvalidOperationException("Chỉ áp dụng cho phiếu sửa chữa bảo hành nội bộ.");
+                throw new BusinessRuleException("Chỉ áp dụng cho phiếu sửa chữa bảo hành nội bộ.");
 
             ValidateTransition(ticket.Status, (byte)5);
             byte prev = ticket.Status;
@@ -1169,27 +1170,27 @@ namespace PBL3.Service.ServiceTickets
         {
             var ticket = await _ticketRepository.GetByIdWithDetailsAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             CheckAssignment(ticket, userId, isAdmin);
 
             // RÀNG BUỘC PHÁP LÝ: Hóa đơn chỉ được phép xuất khi Phiếu dịch vụ đã hoàn tất sửa chữa (Completed - 9)
             if (ticket.Status != (byte)9)
-                throw new InvalidOperationException("Phiếu phải ở trạng thái Hoàn tất.");
+                throw new BusinessRuleException("Phiếu phải ở trạng thái Hoàn tất.");
 
             // RÀNG BUỘC NGHIỆP VỤ: Chỉ nhánh Sửa chữa tính phí (PaidRepair - 4) mới sinh hóa đơn tài chính dịch vụ
             if (ticket.ResolutionType != (byte)4)
-                throw new InvalidOperationException("Chỉ sửa tính phí mới tạo hóa đơn.");
+                throw new BusinessRuleException("Chỉ sửa tính phí mới tạo hóa đơn.");
 
             // CHỐT CHẶN TRÁNH TRÙNG LẶP: Mỗi phiếu sửa chữa tính phí chỉ được phép có duy nhất 1 hóa đơn dịch vụ
             if (await _invoiceRepository.InvoiceExistsForTicketAsync(ticketId))
-                throw new InvalidOperationException("Hóa đơn cho phiếu này đã tồn tại.");
+                throw new BusinessRuleException("Hóa đơn cho phiếu này đã tồn tại.");
 
             // Lấy báo giá đã được khách hàng duyệt làm căn cứ áp giá thanh toán
             var quotations = await _quotationRepository.GetByTicketIdReadOnlyAsync(ticketId);
             var acceptedQuote = quotations.FirstOrDefault(q => q.Status == (byte)1);
             if (acceptedQuote == null)
-                throw new InvalidOperationException("Không tìm thấy báo giá được duyệt.");
+                throw new BusinessRuleException("Không tìm thấy báo giá được duyệt.");
 
             // Khởi chạy Transaction để bảo đảm việc sinh hóa đơn và sao chép danh mục phụ tùng diễn ra an toàn
             //
@@ -1263,10 +1264,10 @@ namespace PBL3.Service.ServiceTickets
         {
             var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
             if (ticket == null)
-                throw new InvalidOperationException("Phiếu không tồn tại.");
+                throw new BusinessRuleException("Phiếu không tồn tại.");
 
             if (new[] { (byte)3, (byte)9, (byte)10 }.Contains(ticket.Status))
-                throw new InvalidOperationException("Không thể thay đổi trạng thái phiếu đã đóng.");
+                throw new BusinessRuleException("Không thể thay đổi trạng thái phiếu đã đóng.");
 
             ValidateTransition(ticket.Status, (byte)10);
 
@@ -1422,7 +1423,7 @@ namespace PBL3.Service.ServiceTickets
             };
 
             if (!validTransitions.Contains((currentStatus, targetStatus)))
-                throw new InvalidOperationException($"Không thể chuyển trạng thái từ '{GetStatusLabel(currentStatus)}' sang '{GetStatusLabel(targetStatus)}'.");
+                throw new BusinessRuleException($"Không thể chuyển trạng thái từ '{GetStatusLabel(currentStatus)}' sang '{GetStatusLabel(targetStatus)}'.");
         }
 
         private ServiceTicketDetailDto MapToDetailDto(ServiceTicket ticket)

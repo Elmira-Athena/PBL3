@@ -685,7 +685,9 @@ namespace PBL3.Service.Orders
 
             if (order.Status == 2)
             {
-                throw new Exception("Đơn hàng đang giao (Shipping). Tuyệt đối cấm hủy.");
+                // BusinessRuleException để OrdersController phân biệt được nó với lỗi hạ tầng
+                // và trả NGUYÊN VĂN câu này (xem khối catch hai tầng ở controller).
+                throw new BusinessRuleException("Đơn hàng đang giao (Shipping). Tuyệt đối cấm hủy.");
             }
 
             if (order.Status != 0 && order.Status != 1)
