@@ -1,7 +1,7 @@
 # Bắt đầu phiên mới — đọc file này trước
 
 **Cập nhật:** 2026-08-31 · **Trạng thái repo:** nhánh `feat/retry-safe-call-sites`, build `0 Error(s)`
-· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C** · **Kế tiếp:** mục D, rồi đợt 3
+· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C**, **mục D** · **Kế tiếp:** đợt 3 (đang bị chặn)
 
 Tài liệu này viết cho một phiên **không có ngữ cảnh gì cả**. Nó trả lời đúng ba câu:
 *đang ở đâu*, *làm gì tiếp*, và *chạy/kiểm bằng lệnh nào*.
@@ -35,13 +35,13 @@ luận từ đọc code*. Nay có **số đo**: LoadProbe chạy 9 kịch bản,
 **5/9 bất biến SAI**. Chi tiết ở mục 🅵 bên dưới — đọc trước khi động vào đợt 3, vì nó xếp
 lại thứ tự ưu tiên.
 
-Một thứ **cố ý làm dở**, đã ghi lý do:
-
-1. **3 gói NuGet mức High chưa vá** — cần PR riêng, xem mục 🅳.
+**Không còn thứ nào cố ý làm dở.** Việc duy nhất còn lại là **đợt 3**, và nó bị chặn bởi
+một thứ ở ngoài repo (phải chạy script kiểm tra trên RDS) chứ không phải bởi lựa chọn.
 
 Đã đóng: **18/18 call-site transaction retry-safe** (mục A) · **23/23 nút mutation dùng
 `ActionButton`/`BusyScope`** (mục B) · **`tools/LoadProbe/` 9 kịch bản + `docker-compose`
-2 replica + nginx round-robin** (mục C), tất cả xong 2026-08-31.
+2 replica + nginx round-robin** (mục C) · **10/10 lỗ hổng NuGet High + cổng chặn ở CI**
+(mục D), tất cả xong 2026-08-31.
 
 ---
 
@@ -304,23 +304,76 @@ thuộc thời điểm; muốn kết luận phải chạy lặp nhiều lần. *
 
 ---
 
-### 🅳 Vá 3 gói NuGet mức High — PR riêng
+### ✅ 🅳 Vá 3 gói NuGet mức High + cổng chặn ở CI — **XONG (2026-08-31)**
 
-| Gói | Bản hiện tại | Số advisory |
-|---|---|---|
-| `System.Security.Cryptography.Xml` | 9.0.0 và 10.0.0 | **8** |
-| `AutoMapper` | 16.0.0 | 1 (`GHSA-rvv3-g6hj-g44x`) |
-| `Microsoft.OpenApi` | 2.4.1 | 1 (`GHSA-v5pm-xwqc-g5wc`) |
+`dotnet list package --vulnerable --include-transitive` nay **sạch cho cả 7 project**.
 
-**Vì sao chưa làm:** nâng phiên bản có rủi ro hồi quy riêng (AutoMapper 16 → bản mới có breaking
-change ở cấu hình profile) và repo **không có test tự động nào** để đỡ.
+| Gói | Trước | Sau | Cách |
+|---|---|---|---|
+| `System.Security.Cryptography.Xml` | 9.0.0 và 10.0.0 (8 advisory) | **10.0.10** | ghim transitive ở `Infrastructure` + `Service` |
+| `Microsoft.OpenApi` | 2.4.1 (1 advisory) | **2.7.5** | ghim transitive ở `API` |
+| `AutoMapper` | 16.0.0 (1 advisory) | **gỡ hẳn** | không một dòng code nào dùng |
 
-**Làm cùng lúc với việc quan trọng hơn:** thêm bước cho pipeline **fail** khi có lỗ hổng High —
-đó mới là vấn đề thật, vì cảnh báo `NU1903` đã hiện sẵn ở **mỗi lần build** mà không có chỗ nào
-bắt buộc xử lý:
+#### 🚨 Bản cũ của file này ghi SAI lý do hoãn
+
+Bản trước viết: *"nâng phiên bản có rủi ro hồi quy riêng (AutoMapper 16 → bản mới có breaking
+change ở cấu hình profile)"*. Sai hai lần:
+
+1. **Không cần nhảy major nào cả.** Mọi bản vá đều nằm **trong major hiện tại**: AutoMapper vá
+   ở `16.1.1`, `Microsoft.OpenApi` vá ở `2.7.5` (không cần đụng nhánh 3.x). Advisory nói rõ
+   ngưỡng vá; không ai phải nuốt breaking change nào.
+2. **AutoMapper không hề được dùng.** Kiểm trên toàn repo: **0** `CreateMap`, **0** `IMapper`,
+   **0** `AddAutoMapper`, **0** lớp `: Profile`. Ánh xạ DTO thật sự làm bằng **22 chỗ projection
+   LINQ** thủ công. Nên việc đúng là **gỡ gói**, không phải nâng nó — đóng advisory vĩnh viễn với
+   rủi ro bằng không. (Build sau khi gỡ: `0 Error(s)`, **184** warning — đúng bằng số trước khi
+   gỡ, tức chẳng có gì từng phụ thuộc vào nó.)
+
+Kèm theo: **`CLAUDE.md` đã sai ở ba chỗ** (dòng 50, 69, 106) khi bắt buộc dùng AutoMapper —
+mô tả một cơ chế không tồn tại, và mâu thuẫn với luật *DTO Projection* của chính nó. Đã sửa,
+kèm cảnh báo đừng thêm lại.
+
+**Nguyên tắc chọn phiên bản đã dùng:** bản **nhỏ nhất đóng được hết** advisory của gói đó, không
+phải bản mới nhất — repo không có test tự động nào để đỡ hồi quy. Cẩn thận: một gói có thể dính
+nhiều advisory với **ngưỡng vá khác nhau**. `Cryptography.Xml` dính 8 cái, bốn vá ở `10.0.6` và
+bốn vá tới `10.0.10`; ghim `10.0.6` sẽ **dọn sạch cảnh báo của bốn cái đầu và để lại bốn cái
+kia** — trông như đã xong.
+
+**Hai ghim transitive KHÔNG tương đương nhau về mức phơi nhiễm**, đọc comment tại chỗ trước khi
+đụng: chuỗi ở `Service` đi qua **EPPlus** (chạy trong ảnh production, xuất Excel) — phơi nhiễm
+thật; chuỗi ở `Infrastructure` đi qua `EntityFrameworkCore.Tools` khai `PrivateAssets=all` —
+**công cụ lúc thiết kế, không deploy**. Ghim cái sau chỉ để cổng CI không đỏ vĩnh viễn vì một
+thứ không chạy ở đâu cả.
+
+#### 🔴 Bẫy thứ 11 — `dotnet list package --vulnerable` TRẢ VỀ 0 KHI CÓ LỖ HỔNG
+
+Đây là lý do 10 lỗ hổng sống được lâu đến vậy, và là lý do cổng CI không viết thẳng lệnh đó.
+Đo trên chính repo này lúc 10 advisory còn mở:
 
 ```bash
-dotnet list package --vulnerable --include-transitive
+dotnet list package --vulnerable --include-transitive ; echo $?
+# → in ra đủ 10 advisory High, rồi in ra:  0
+```
+
+Một bước CI dạng `run: dotnet list package --vulnerable` sẽ **luôn xanh, vĩnh viễn**. Cổng phải
+**đọc nội dung báo cáo**, không được tin mã thoát.
+
+`devops/scripts/check-vulnerable-packages.sh` làm đúng thế: đọc JSON, quét **cả**
+`topLevelPackages` lẫn `transitivePackages` (2/3 gói dính lỗi nằm ở nhóm sau), chặn
+High/Critical, chỉ in Low/Moderate. Nó **fail-closed** khi phép quét **rỗng** — restore hỏng,
+JSON đổi schema, không project nào → thoát `2`, không thoát `0`. Cùng lý lẽ với hạng
+`KHÔNG KẾT LUẬN` của LoadProbe.
+
+**Đã kiểm cả bốn nhánh, có ca đối chứng** để chứng minh phép kiểm không rỗng:
+
+| Ca | Kỳ vọng | Kết quả |
+|---|---|---|
+| repo sau khi vá | `0` | ✅ sạch, 7 project |
+| **tạm hoàn tác 3 csproj — ca đối chứng** | `1` | ✅ bắt đủ **19 dòng High**, cả trực tiếp lẫn transitive |
+| `.sln` không tồn tại | `2` | ✅ |
+| JSON hỏng | `2` | ✅ |
+
+```bash
+bash devops/scripts/check-vulnerable-packages.sh      # chạy y hệt ở máy cá nhân
 ```
 
 ---
@@ -522,7 +575,7 @@ Nó tự dọn dữ liệu trước và sau. Mã thoát: `0` đạt hết · `1`
 
 ---
 
-## 5. Mười cái bẫy im lặng đã gặp — đọc trước khi sửa code
+## 5. Mười một cái bẫy im lặng đã gặp — đọc trước khi sửa code
 
 Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ ra khi đo.
 
@@ -555,6 +608,11 @@ Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ
 10. **Tên bảng ≠ tên `DbSet`** — `ServiceTicketStatusHistory` là **số ít** trong DB. Viết SQL
     thô theo tên `DbSet` là lỗi 208 *Invalid object name*. Tra trước bằng
     `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'`.
+11. **`dotnet list package --vulnerable` trả về mã thoát `0` KHI CÓ lỗ hổng** — đã đo lúc repo
+    còn 10 advisory High đang mở: nó in đủ 10 dòng rồi trả về `0`. Một bước CI viết thẳng lệnh
+    đó sẽ **luôn xanh vĩnh viễn**. Cùng họ với bẫy #8: cửa kiểm không bao giờ đỏ trông giống hệt
+    cửa kiểm luôn đạt. Cổng phải **đọc báo cáo**, không tin mã thoát — xem
+    `devops/scripts/check-vulnerable-packages.sh`.
 
 ---
 
@@ -578,6 +636,16 @@ grep -rln "_isSaving\|_isSubmitting\|_isApproving\|_isConfirming" \
 #   WriteReviewDialog.razor  -> chỉ là COMMENT, không phải code
 #   CustomerDialog.razor     -> CỐ Ý giữ: nút ButtonType.Submit, xem cảnh báo 🚨 ở mục B
 #   EmployeeDialog.razor     -> CỐ Ý giữ: lý do như trên
+```
+
+```bash
+# D — không gói nào mức High/Critical quay lại (cần mạng để tải advisory)
+bash devops/scripts/check-vulnerable-packages.sh
+#   kỳ vọng: "Sạch: 7 project, 0 lỗ hổng High/Critical." và mã thoát 0.
+#   Mã thoát 2 nghĩa là KHÔNG KẾT LUẬN (restore hỏng / mất mạng) — KHÔNG phải sạch.
+
+# D — AutoMapper không được thêm lại (repo dùng projection LINQ, xem CLAUDE.md)
+grep -rn "AutoMapper" --include='*.csproj' src/ tools/    # kỳ vọng: rỗng
 ```
 
 ```bash

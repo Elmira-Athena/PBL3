@@ -151,6 +151,14 @@ Bốn quy tắc này sinh ra từ lỗi có thật đã sửa ở đợt 1 — v
   triệu chứng là "lúc được lúc không tuỳ ALB định tuyến" — không tái hiện được.
   (Cache dữ liệu **công khai, ít đổi** như danh mục/menu thì vẫn khuyến khích.)
 
+- **Không thêm gói NuGet dính lỗ hổng High/Critical.** Cổng CI
+  (`devops/scripts/check-vulnerable-packages.sh`) chặn ở bước `dotnet build`. Chạy trước khi
+  mở PR. ⚠️ Đừng "kiểm nhanh" bằng `dotnet list package --vulnerable` rồi tin mã thoát: lệnh
+  đó trả về **`0` kể cả khi tìm thấy lỗ hổng** — đã đo. Gói **transitive** dính lỗi thì vá bằng
+  cách thêm `PackageReference` **ghim thẳng** vào `.csproj`, kèm comment nói rõ chuỗi phụ thuộc
+  và khi nào xoá được (xem `src/Service/Service.csproj` để lấy mẫu). Chọn bản **nhỏ nhất đóng
+  hết** advisory của gói đó — một gói có thể dính nhiều advisory với ngưỡng vá khác nhau.
+
 - **DTO có phân trang — kế thừa `PagedRequest`** (`src/Shared/DTOs/Common/`).
   Nó tự clamp `PageSize` về `[1, 100]` và `PageNumber` về `>= 1` ngay trong setter, nên
   Blazor client dùng chung cũng không gửi nổi số lớn. Tầng API còn có `ClampPageSizeFilter`
@@ -221,14 +229,14 @@ xuất kho (Pending/Confirmed/Shipping)`. Serial chỉ đổi `Available` → `S
 
 🔴 **[`docs/bat-dau-phien-moi.md`](docs/bat-dau-phien-moi.md)** — điểm vào cho một phiên mới.
 Nó ghi: việc kế tiếp (kèm `file:dòng` cụ thể), cách chạy môi trường local, công thức kiểm
-chứng, và **bảy cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
+chứng, và **mười một cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
 tầng Service, auth, hay rate limiting.
 
-Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C đã xong (18/18 call-site
+Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C + mục D đã xong (18/18 call-site
 transaction retry-safe; 23/23 nút mutation dùng `ActionButton`/`BusyScope`; bộ đo
-`tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số). Còn lại: 3 gói NuGet mức High, và
-đợt 3 **bị chặn** tới khi chạy được `Infrastructure/db/checks/pre_migration_checks.sql`
-trên RDS.
+`tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số; 10/10 lỗ hổng NuGet High đã vá và
+có cổng chặn ở CI). Còn lại **duy nhất** đợt 3, và nó **bị chặn** tới khi chạy được
+`Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
 
 🔴 **LoadProbe đã đo: 5/9 bất biến SAI.** Đọc mục 🅵 của runbook trước khi động vào tầng
 Service — nó nói rõ chỗ nào còn check-then-act và chỗ nào đã an toàn. Ba điều rút ra:
