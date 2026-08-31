@@ -1,7 +1,9 @@
 # Bắt đầu phiên mới — đọc file này trước
 
 **Cập nhật:** 2026-08-31 · **Trạng thái repo:** nhánh `feat/retry-safe-call-sites`, build `0 Error(s)`
-· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C**, **mục D** · **Kế tiếp:** đợt 3 (đang bị chặn)
+· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C**, **mục D**
+· **Kế tiếp:** đợt 3 **đang bị chặn** (cần chạy script kiểm tra trên RDS), nên việc duy nhất
+làm được ngay là **mục E** bên dưới — sửa thông báo lỗi tiếng Anh ở `OrderService.cs:257`.
 
 Tài liệu này viết cho một phiên **không có ngữ cảnh gì cả**. Nó trả lời đúng ba câu:
 *đang ở đâu*, *làm gì tiếp*, và *chạy/kiểm bằng lệnh nào*.
@@ -378,7 +380,40 @@ bash devops/scripts/check-vulnerable-packages.sh      # chạy y hệt ở máy 
 
 ---
 
-### 🅴 Đợt 3 — **VẪN BỊ CHẶN CỨNG**
+### 🅴 Sửa thông báo lỗi tiếng Anh ở `OrderService.CheckoutAsync` — việc DUY NHẤT không bị chặn
+
+**Nhỏ, độc lập, không phải chờ đợt 3.** Đây là việc nên làm đầu tiên ở phiên sau.
+
+`src/Service/Orders/OrderService.cs:257`:
+
+```csharp
+throw new Exception("Lỗi hệ thống khi đặt hàng: " + ex.Message, ex);
+```
+
+`ex.Message` ở đây là chuỗi của EF Core, nên thứ người dùng cuối nhận được là:
+
+```
+Lỗi hệ thống khi đặt hàng: An error occurred while saving the entity changes.
+See the inner exception for details.
+```
+
+Hai lỗi trong một dòng: **tiếng Anh** (vi phạm quy tắc user-facing message của `CLAUDE.md`) và
+**lộ nội tạng EF** cho người ngoài. Sửa: trả một câu tiếng Việt cố định, còn chi tiết `ex` thì
+đẩy vào `ILogger<T>`.
+
+> Đã tái hiện lại lần nữa lúc chạy chốt hồi quy sau mục D — xem mẫu phản hồi trong
+> [`2026-08-31-hoi-quy-sau-muc-D.md`](evidence/loadprobe/2026-08-31-hoi-quy-sau-muc-D.md).
+> Nó xuất hiện ở nhánh thua cuộc đua của S02, tức nó bung ra đúng lúc có tải đồng thời —
+> chính là lúc người dùng thật dễ gặp nhất.
+
+⚠️ Nó **không** sửa được nguyên nhân gốc của S01 (sinh mã chứng từ đua nhau). Đó vẫn là việc
+của đợt 3. Sửa chỗ này chỉ để người dùng không phải đọc tiếng Anh.
+
+Đụng tầng Service nên **sửa xong phải chạy lại** `--scenarios S02,S05`.
+
+---
+
+### 🅶 Đợt 3 — **VẪN BỊ CHẶN CỨNG**
 
 Không bắt đầu đợt 3 trước khi có kết quả `Infrastructure/db/checks/pre_migration_checks.sql`
 **chạy trên RDS**. Chạy trên DB local là vô nghĩa: local gần như rỗng (Orders = 0,
