@@ -194,6 +194,21 @@ xuất kho (Pending/Confirmed/Shipping)`. Serial chỉ đổi `Available` → `S
 - **Thông báo** — dùng `ISnackbar` inject vào component để hiện toast Success/Error.
 - **Dialog** — dùng `IDialogService` cho form Thêm/Sửa dạng popup, không chuyển trang.
 - **Loading** — khi API > 2s, phải hiển thị Skeleton Loading hoặc Spinner, không để màn hình trắng.
+- **Nút gọi mutation — dùng `<ActionButton>`, không dùng `<MudButton>`.**
+  (`src/Client/Shared/Components/Common/`.) Nó đặt cờ bận **trước mọi `await`** và tự vẽ lại,
+  nên không tái tạo được lỗi "cờ đặt sau `await`, UI không bao giờ nhận". Đừng thêm
+  `Disabled="_isSaving"` hay spinner thủ công — `ActionButton` lo cả hai; `Disabled` chỉ dành
+  cho lý do **nghiệp vụ** (sai trạng thái, thiếu quyền). Khi nhiều nút cùng tác động lên **một**
+  đối tượng và có thể cùng hiện, bọc chúng trong `<BusyScope>` — khoá riêng từng nút là chưa đủ
+  vì mỗi nút tự thấy mình rảnh. Nút điều hướng / đóng dialog / lọc thì giữ `<MudButton>`.
+  ⚠️ Đây là UX, **không bảo vệ server**: hai tab hay `curl` vẫn double-submit. Phòng tuyến thật
+  là conditional update + unique index ở tầng DB.
+  🚨 **Ngoại lệ — nút `ButtonType="ButtonType.Submit"` bên trong `<EditForm OnValidSubmit="...">`
+  thì `ActionButton` VÔ HIỆU.** Cú click submit form, không đi qua `OnClick` của nút, nên cờ bận
+  `TryBegin()`/`End()` tức thì trong khi handler mới bắt đầu chạy. Đã đo: 3 click → 3 request.
+  Hai chỗ như vậy (`Admin/Customers/CustomerDialog`, `Admin/Employees/EmployeeDialog`) cố ý giữ
+  cờ thủ công. Muốn dùng `ActionButton` thì phải bỏ `ButtonType.Submit` và chuyển handler sang
+  `OnClick` — đó là sửa cấu trúc form, không phải đổi tag.
 
 ## Đang làm dở — đọc trước khi viết code
 
@@ -202,9 +217,38 @@ Nó ghi: việc kế tiếp (kèm `file:dòng` cụ thể), cách chạy môi tr
 chứng, và **bảy cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
 tầng Service, auth, hay rate limiting.
 
-Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A đã xong (18/18 call-site transaction nay
-retry-safe). Còn lại: 23 nút chưa chống double-submit, và đợt 3 **bị chặn** tới khi chạy được
-`Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
+Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C đã xong (18/18 call-site
+transaction retry-safe; 23/23 nút mutation dùng `ActionButton`/`BusyScope`; bộ đo
+`tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số). Còn lại: 3 gói NuGet mức High, và
+đợt 3 **bị chặn** tới khi chạy được `Infrastructure/db/checks/pre_migration_checks.sql`
+trên RDS.
+
+🔴 **LoadProbe đã đo: 5/9 bất biến SAI.** Đọc mục 🅵 của runbook trước khi động vào tầng
+Service — nó nói rõ chỗ nào còn check-then-act và chỗ nào đã an toàn. Ba điều rút ra:
+- Chỗ nào đã chuyển sang **conditional update** (`ExecuteUpdateAsync` có vị từ,
+  `TryDecideAsync`) thì ĐẠT. Chỗ nào còn **check-then-act** thì HỎNG. Không có ngoại lệ.
+- **S04 ĐẠT với 1 instance, HỎNG với 2.** Kết luận từ một cấu hình là kết luận sai.
+- Sinh mã chứng từ vẫn đua nhau: 41/50 đơn đặt hỏng vì đụng `IX_Orders_OrderCode`.
+  Dữ liệu không hỏng (unique index chặn), nhưng tính khả dụng thì có.
+
+## Đo tính đúng đắn dưới tải — dùng `tools/LoadProbe/`
+
+Repo không có test tự động. `tools/LoadProbe/` là thứ thay thế, và nó **không phải công cụ
+đo hiệu năng**: nó bắn request song song rồi khẳng định bất biến bằng LINQ trên DB.
+
+- **Lý do phải kiểm ở DB, không ở mã HTTP:** mọi lỗi đúng đắn dữ liệu tìm thấy ở repo này
+  đều trả **200**. Voucher vượt hạn mức, sổ tổn thất nhân đôi, hai phiếu cùng một serial —
+  tất cả đều "thành công" ở tầng HTTP.
+- **`KHÔNG KẾT LUẬN` ≠ `ĐẠT`.** Kịch bản bị rate limiter chặn sẽ **thoả mọi bất biến** vì
+  code cần đo chưa chạy. Đó là bằng chứng an toàn giả, nguy hiểm hơn không có bằng chứng.
+- **Sửa tầng Service xong thì chạy lại `--scenarios S02,S05`** — hai kịch bản này đo đúng
+  thứ đợt 1 đã sửa, nên chúng là chốt hồi quy rẻ nhất.
+- **Thêm kịch bản mới thì phải bổ sung `ProbeFixture.CleanupAsync`** — đơn hàng và phiếu
+  do API tạo ra trong lúc đo mang mã thật (`ORD-…`), không mang tiền tố `LP-`.
+
+Hạ tầng 2 replica + nginx: `devops/docker/docker-compose.multi.yml`. Dùng nó cho mọi tính
+chất **chỉ sai khi có nhiều hơn một tiến trình** — khoá tài khoản, seed lúc boot, phiên
+đăng nhập nhảy instance.
 
 ## AI Context Files
 

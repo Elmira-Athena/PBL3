@@ -1,7 +1,7 @@
 # Bắt đầu phiên mới — đọc file này trước
 
 **Cập nhật:** 2026-08-31 · **Trạng thái repo:** nhánh `feat/retry-safe-call-sites`, build `0 Error(s)`
-· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A** · **Kế tiếp:** mục B bên dưới
+· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C** · **Kế tiếp:** mục D, rồi đợt 3
 
 Tài liệu này viết cho một phiên **không có ngữ cảnh gì cả**. Nó trả lời đúng ba câu:
 *đang ở đâu*, *làm gì tiếp*, và *chạy/kiểm bằng lệnh nào*.
@@ -15,7 +15,9 @@ Tài liệu này viết cho một phiên **không có ngữ cảnh gì cả**. N
 | 1 | **file này** | việc kế tiếp + cách chạy + cách kiểm |
 | 2 | [`CLAUDE.md`](../CLAUDE.md) | quy ước bắt buộc của repo (có 4 quy tắc sinh ra từ lỗi thật) |
 | 3 | [`docs/nang-cap-dot-1-ket-qua.md`](nang-cap-dot-1-ket-qua.md) | *vì sao* mọi thứ thành ra như hiện tại + bằng chứng đã chạy |
-| 4 | `/Users/ml/.claude/plans/hi-n-t-i-t-i-ang-memoized-quill.md` | kế hoạch gốc đầy đủ (đợt 3→8) |
+| 4 | [`tools/LoadProbe/README.md`](../tools/LoadProbe/README.md) | cách đo tính đúng đắn dưới tải, và **bốn cách đo sai** mà bộ đo cố ý chặn |
+| 5 | [`docs/evidence/loadprobe/`](evidence/loadprobe/) | số đo đã có: 9 kịch bản × 2 cấu hình + bằng chứng đa-instance |
+| 6 | `/Users/ml/.claude/plans/hi-n-t-i-t-i-ang-memoized-quill.md` | kế hoạch gốc đầy đủ (đợt 3→8) |
 
 **Không cần đọc lại toàn bộ diff của 10 commit.** Mọi quyết định khó đều đã được ghi thành
 comment **ngay tại chỗ code**, và commit message ghi lý do.
@@ -25,14 +27,21 @@ comment **ngay tại chỗ code**, và commit message ghi lý do.
 ## 1. Đang ở đâu
 
 Đợt 1 (sửa lỗi đồng thời, transaction, sinh mã), mục 4.1 (`EnableRetryOnFailure`), đợt 2
-(frontend + vá bảo mật) và mục A (rà retry 18/18 call-site) đã xong và đã kiểm chạy thật.
+(frontend + vá bảo mật), mục A (rà retry 18/18 call-site), mục B (23 nút double-submit) và
+mục C (bộ đo `tools/LoadProbe/` + hạ tầng 2 replica) đã xong và đã kiểm chạy thật.
 
-Hai thứ **cố ý làm dở**, đều đã ghi lý do và đều nằm ở mục B/D dưới đây:
+**Mục C vừa đổi bản chất của những việc còn lại.** Trước nó, danh sách lỗi đợt 3 là *suy
+luận từ đọc code*. Nay có **số đo**: LoadProbe chạy 9 kịch bản, `0 KHÔNG KẾT LUẬN`, và
+**5/9 bất biến SAI**. Chi tiết ở mục 🅵 bên dưới — đọc trước khi động vào đợt 3, vì nó xếp
+lại thứ tự ưu tiên.
 
-1. **23 nút gọi mutation chưa chống double-submit** — cơ chế đã có sẵn, chỉ chưa quét hết.
-2. **3 gói NuGet mức High chưa vá** — cần PR riêng, xem mục D.
+Một thứ **cố ý làm dở**, đã ghi lý do:
 
-Đã đóng: **18/18 call-site transaction nay đều retry-safe** (mục A, xong 2026-08-31).
+1. **3 gói NuGet mức High chưa vá** — cần PR riêng, xem mục 🅳.
+
+Đã đóng: **18/18 call-site transaction retry-safe** (mục A) · **23/23 nút mutation dùng
+`ActionButton`/`BusyScope`** (mục B) · **`tools/LoadProbe/` 9 kịch bản + `docker-compose`
+2 replica + nginx round-robin** (mục C), tất cả xong 2026-08-31.
 
 ---
 
@@ -87,61 +96,211 @@ sẽ làm sai. Dữ liệu test đã dọn, `InventoryChecks = 0` như cũ.
 
 ---
 
-### 🅱 Quét nốt chống double-submit — 23 nút
+### ✅ 🅱 Quét nốt chống double-submit — **XONG (2026-08-31)**
 
-Cơ chế **đã có sẵn và đã chạy đúng** (`ActionButton` / `BusyScope` / `BusyState` ở
-`src/Client/Shared/Components/Common/`). Việc còn lại thuần tuý là đổi `<MudButton>` →
-`<ActionButton>` (bỏ luôn `Disabled="_isXxx"` và spinner thủ công nếu có — `ActionButton` tự lo).
+23/23 nút trong danh sách cũ + 1 nút khảo sát cũ bỏ sót nay dùng `ActionButton`; hai chỗ cần
+khoá cả cụm thì bọc `BusyScope`. Tổng cộng 21 file, 25 tag `<MudButton>` đổi thành
+`<ActionButton>` (24 nút mutation + nút "Hủy" của `WriteReviewDialog`, xem bên dưới).
+`<MudButton>` trong `src/Client/Pages/`: 161 → 136; `<ActionButton>`: 21 → 46.
 
-**Ưu tiên cao — nút đụng tới tiền hoặc tồn kho:**
+**⚠️ Đọc kỹ chỗ này — nhan đề cũ của mục B ("23 nút *chưa chống* double-submit") NÓI QUÁ.**
+Đo thực tế cho thấy chỉ **6/23** nút thật sự không có bảo vệ nào; 17 nút còn lại đã có cờ
+thủ công và **cờ đó chạy đúng**. Phân loại này quan trọng vì nó cho biết mục B đã *vá* được
+bao nhiêu, chứ không phải chỉ *dọn* được bao nhiêu:
 
-| File : dòng | Handler | Vì sao ưu tiên |
+| Nhóm | Số nút | Trạng thái trước | Giá trị của việc chuyển |
+|---|---|---|---|
+| Không có cờ nào | **6** | bấm hai lần = hai request | **vá lỗi thật** |
+| Có cờ + `StateHasChanged()` | 16 | đã chạy đúng | thống nhất cơ chế, bớt chỗ để sai |
+| Có cờ, không cần `StateHasChanged()` | 1 | đã chạy đúng (cờ đặt trước mọi `await` nên `ComponentBase` tự vẽ lại) | như trên |
+
+Sáu nút **thật sự** không có bảo vệ: `Orders/OrderDetail` (`ConfirmCompleteOrder`,
+`ConfirmCancelOrder`) · `Storefront/MyOrderDetail` (`ConfirmCancelOrder`) ·
+`ServiceTicketQuotation.SubmitQuotation` · `ServiceTicketIntake.SubmitIntake` ·
+`Pos/Index.SaveDraft`.
+
+**Vì sao 17 nút kia vẫn chạy đúng** — bẫy #5 ở §5 chỉ cắn khi cờ được đặt **sau** một `await`
+**và** không có `StateHasChanged()` theo sau. Các dialog CRUD đều viết
+`_isSaving = true; _errorMessage = null; StateHasChanged();` nên thoát bẫy. Đừng đọc bẫy #5
+rồi suy ra "mọi cờ thủ công đều hỏng".
+
+**Đã kiểm chạy thật** (API + Blazor client local, 2026-08-31) trên `SupplierDialog`, ba cấu
+hình, cùng một kịch bản "bấm 2 lần trong một tick rồi bấm thêm lần thứ 3 lúc request đang bay",
+đếm request bằng hook `window.fetch` và đối chiếu số bản ghi trong DB:
+
+| Cấu hình | Nút khoá ngay sau click 1? | Số POST | Bản ghi tạo ra |
+|---|---|---|---|
+| `ActionButton` (bản mới) | **có** | 1 | **1** |
+| Cờ thủ công (bản cũ) | có | 1 | 1 |
+| Gỡ `Disabled` — ca đối chứng | **không** | **2** | **2 — trùng** |
+
+Ca đối chứng có mặt ở đây là để chứng minh phép kiểm **không rỗng**: nếu thiếu nó thì kết quả
+"1 POST" có thể chỉ nghĩa là kịch bản click không bao giờ chạm tới handler. Dữ liệu test đã
+dọn, `Suppliers` về lại 6 như trước.
+
+> ⚠️ Chưa kiểm chạy thật: Checkout, POS, xuất/nhập kho, phiếu dịch vụ — DB local gần như rỗng
+> (Products = 2, ProductSerials = 0, Orders = 0) nên không dựng nổi kịch bản. Đúng giới hạn đã
+> ghi ở mục A. Các nút này mới chỉ được rà bằng đọc code + build sạch. Trớ trêu là **5 trong 6
+> nút hỏng thật lại nằm đúng nhóm không kiểm được** — muốn kiểm phải seed dữ liệu trước.
+
+**Ba điều cần biết khi đọc diff:**
+
+- **Cờ thủ công đã bị gỡ hẳn** (`_isSaving`, `_isSubmitting`, `_isApproving`, `_isConfirming`)
+  cùng spinner viết tay — `ActionButton` tự lo cả hai. Chỗ nào `StateHasChanged()` còn phục vụ
+  việc khác (xoá banner lỗi trước khi gọi API) thì **giữ nguyên**.
+- **Bỏ cờ có thể làm vỡ `try`.** Ở `ImportReceiptPage.SaveReceipt`, khối `try` tồn tại *chỉ để*
+  nhả cờ trong `finally`; gỡ cờ xong thì còn `try` không `catch`/`finally` → **không biên dịch
+  được**. Đã bỏ luôn khối `try` và lùi thụt lề. Chỗ nào `try` có `catch` thật thì giữ.
+- **`BusyScope` dùng ở 2 nơi mới:** `Orders/OrderDetail` (Duyệt/Hủy cùng hiện khi `Status == 0`
+  — hai nút khác nhau, mỗi nút tự thấy mình rảnh) và `WriteReviewDialog` (nút "Hủy" trước đây
+  bind `Disabled="_isSaving"`; muốn giữ đúng hành vi đó thì nó phải vào chung scope, nên nó
+  cũng thành `ActionButton` — nó là tag thứ 25, không phải nút mutation thứ 25).
+
+#### 🚨 `ActionButton` trên nút `ButtonType.Submit` là VÔ HIỆU — bản cũ của file này khuyên SAI
+
+Bản trước của mục B viết: *"Nút trong `<MudForm>` có `ButtonType="ButtonType.Submit"` thì phải
+giữ nguyên thuộc tính đó — `ActionButton` có truyền `ButtonType` qua."* Truyền qua thì đúng,
+nhưng **cái khoá không hoạt động**, và đây là kiểu hỏng im lặng: build sạch, nút trông vẫn bình thường.
+
+Cơ chế: khi handler nằm ở `<EditForm OnValidSubmit="HandleSubmit">`, cú click **submit form**,
+nó **không** đi qua `OnClick` của nút. `ActionButton.HandleClickAsync` vẫn chạy — nhưng
+`OnClick` của nó rỗng, nên `TryBegin()` rồi `End()` xong **tức thì**, trong khi `HandleSubmit`
+mới bắt đầu chạy bất đồng bộ. Cờ bận đã nhả trước khi việc thật kịp bắt đầu.
+
+**Đã đo trên `Admin/Customers/CustomerDialog`** (2026-08-31), cùng kịch bản ba cú click:
+
+| Cấu hình | Nút khoá ngay? | Số POST |
 |---|---|---|
-| `Storefront/Checkout.razor:215` | `PlaceOrder` | **Cao nhất.** Khách đặt hàng — bấm hai lần là hai đơn |
-| `Warehouse/ImportReceiptPage.razor:190` | `SaveReceipt` | nhập kho hai lần = tồn kho sai |
-| `Inventory/ExportOrder.razor:145` | `SubmitExportAsync` | xuất kho hai lần |
-| `Orders/OrderDetail.razor:31,37,50` | `ConfirmCompleteOrder`, `ConfirmOrderApprove`, `ConfirmCancelOrder` | đổi trạng thái đơn |
-| `Storefront/MyOrderDetail.razor:50,59` | `ConfirmCancelOrder`, `ConfirmReceived` | khách tự huỷ/xác nhận |
-| `ServiceTickets/ServiceTicketQuotation.razor:110` | `SubmitQuotation` | tạo báo giá trùng |
-| `ServiceTickets/ServiceTicketIntake.razor:128` | `SubmitIntake` | tạo phiếu trùng |
+| Bản gốc — `ButtonType.Submit` + cờ thủ công | **có** | **1** |
+| Chuyển sang `ActionButton` theo lời khuyên cũ | **không** | **3** |
 
-**Ưu tiên thường — CRUD admin (đều là nút `Submit` trong dialog):**
+Chuyển hai file này sang `ActionButton` là **hồi quy**, không phải cải tiến. Vì vậy
+`Admin/Customers/CustomerDialog` và `Admin/Employees/EmployeeDialog` **cố ý giữ cờ thủ công** —
+đừng "dọn nốt" chúng. Cờ ở đó đặt **trước mọi `await`** nên chạy đúng.
 
-`Admin/Banners/BannerDialog.razor:161` · `Admin/Manufacturers/ManufacturerDialog.razor:123` ·
-`Admin/Suppliers/SupplierDialog.razor:94` · `Admin/Vouchers/VoucherForm.razor:337` ·
-`Categories/CategoryDialog.razor:128` · `Inventory/Components/CreateInventoryCheckDialog.razor:79` ·
-`Inventory/Components/RejectInventoryCheckDialog.razor:52` ·
-`Inventory/Components/UpdateReasonDialog.razor:49` ·
-`Inventory/Components/UpdateSerialStatusDialog.razor:45` ·
-`Storefront/AddAddressDialog.razor:107` · `Storefront/Profile.razor:125` ·
-`Storefront/WriteReviewDialog.razor:39` · `Pos/Index.razor:23` (`SaveDraft`)
+Muốn dùng `ActionButton` cho nút submit thì phải **bỏ `ButtonType.Submit`** và chuyển handler
+từ `EditForm.OnValidSubmit` sang `OnClick` của nút (tự gọi validate) — đó là việc sửa cấu trúc
+form, không phải đổi tag.
 
-> Lấy lại danh sách bất cứ lúc nào: xem script ở §6.
+`Admin/Products/ProductForm` **chuyển được** và đã chuyển: nút của nó nằm **ngoài** `EditForm`
+và có `OnClick="HandleSubmit"` thật. Đây là nút mutation thứ 24 — khảo sát gốc bỏ sót cả ba file này vì
+nó lọc theo `OnClick=`, mà hai file kia không có thuộc tính đó.
 
-**Hai lưu ý khi làm:**
-
-- Nút trong `<MudForm>` có `ButtonType="ButtonType.Submit"` thì phải giữ nguyên thuộc tính đó —
-  `ActionButton` có truyền `ButtonType` qua.
-- Nút là `MudIconButton` (trong ô bảng) **không** dùng `ActionButton` được. Sửa cờ tại chỗ theo
-  đúng mẫu đã làm ở `InventoryCheckDetailPage.HandleMarkDefective`: đặt cờ **trước mọi `await`**,
-  gọi `StateHasChanged()`, nhả trong `finally`.
+**Nút `MudIconButton`** (trong ô bảng) **không** dùng `ActionButton` được. Không có nút nào
+thuộc diện này trong danh sách 23, nhưng nếu gặp về sau thì sửa cờ tại chỗ theo mẫu ở
+`InventoryCheckDetailPage.HandleMarkDefective`: đặt cờ **trước mọi `await`**, gọi
+`StateHasChanged()`, nhả trong `finally`.
 
 **⚠️ Nhắc lại cho rõ:** cơ chế này **không bảo vệ server**. Hai tab, F5 giữa chừng, hay `curl` —
 vẫn double-submit. Phòng tuyến thật là conditional update + unique index (đợt 1 đã làm cho
 voucher và báo giá; đợt 3 làm nốt). Đừng đọc mục này rồi tưởng nhóm lỗi đồng thời đã xong.
 
+### ✅ 🅲 Đợt 0 — bộ đo + hạ tầng đa instance — **XONG (2026-08-31)**
+
+Ba thứ đã dựng, tất cả $0:
+
+| Đã dựng | Ở đâu |
+|---|---|
+| `tools/LoadProbe/` — console app .NET, 9 kịch bản `IProbeScenario` | [`tools/LoadProbe/README.md`](../tools/LoadProbe/README.md) |
+| `docker-compose` 2 replica API + nginx round-robin | [`devops/docker/docker-compose.multi.yml`](../devops/docker/docker-compose.multi.yml) |
+| Bằng chứng đã chạy (một instance / hai instance / hạ tầng) | [`docs/evidence/loadprobe/`](evidence/loadprobe/) |
+
+Chạy lại bất cứ lúc nào — công thức đầy đủ ở
+[`docs/evidence/loadprobe/2026-08-31-ha-tang-2-replica.md`](evidence/loadprobe/2026-08-31-ha-tang-2-replica.md).
+
+**Ba tính chất đa-instance đã chứng minh được:**
+
+1. **Round-robin có thật** — 10 request qua nginx ra 2 giá trị `X-Upstream` phân biệt.
+2. **Cả hai container sống sót lúc boot** — khối seed role `Technician` không còn giết task.
+3. ⭐ **Khoá tài khoản không kẹt trong RAM một task** — khoá qua replica **A**, gọi ngay qua
+   replica **B** → `403` + `X-Account-Status: locked`, không độ trễ. Đây là bằng chứng
+   before/after thuyết phục nhất của cả báo cáo và nó tốn $0. *(Nửa "TRƯỚC" chưa đo — cần
+   tạm khôi phục `MemoryCache`, việc của đợt 6.)*
+
+**Cảnh báo RAM migrator: con số cũ tính bằng SAI đại lượng.** "api 512 + web 192 +
+migrator 512 = 1216 MiB" là **`memory` (giới hạn cứng)**, nhưng ECS xếp task theo
+**`memoryReservation`**, và `taskdef.tf` khai đủ cho cả bốn container: api **384**, web
+**96**, migrator **256**, seeder **128**. Nhu cầu thật: **480 MiB** thường trực, **736 MiB**
+lúc deploy, **864 MiB** nếu seeder chạy cùng. Đo thật ở local: API đỉnh **~198 MiB** dưới
+tải. → **Việc "hạ migrator 512 → 256" không phải điều kiện cần để chạy 2 task.**
+Còn nửa chưa xác minh: con số ~950–985 MiB khả dụng, cần
+`aws ecs describe-container-instances --query 'containerInstances[0].remainingResources'`.
+
 ---
 
-### 🅲 Đợt 0 còn thiếu (chưa động dòng nào)
+### 🅵 Kết quả đo — **5/9 bất biến SAI**, đọc trước khi làm đợt 3
 
-- `tools/LoadProbe/` — console app .NET, 9 kịch bản `IProbeScenario`, in bảng markdown vào
-  `docs/evidence/`. Giá trị không nằm ở "bắn N request đếm 500" mà ở **khẳng định bất biến sau
-  khi bắn** bằng truy vấn LINQ (app tham chiếu thẳng `HushStoreDbContext` nên assertion là 3 dòng).
-- `docker-compose` 2 replica API + nginx round-robin — hạ tầng tối thiểu để chứng minh tính đúng
-  đắn đa-instance, và **miễn phí**.
-- Đo `remainingResources` của container instance. Cảnh báo RAM chưa xác minh: api 512 + web 192 +
-  migrator 512 = **1216 MiB** vs ~950–985 MiB khả dụng trên t3.micro. Sửa rẻ nhất nếu đúng: hạ
-  `memory` của migrator 512 → 256 ở `infra/tf/modules/ecs/taskdef.tf`.
+`0 KHÔNG KẾT LUẬN` ở cả hai lần chạy, tức không có phép đo nào bị rate limiter làm rỗng.
+
+| # | Kịch bản | 1 instance | 2 instance |
+|---|---|---|---|
+| S01 | 50 khách checkout đồng thời | 🔴 | 🔴 |
+| S02 | Voucher `Quantity=1`, 20 khách | ✅ | ✅ |
+| S03 | Cùng khách, `MaxUsesPerUser=1` | ✅ | ✅ |
+| S04 | 10 lần `intake` cùng serial | ✅ | 🔴 |
+| S05 | 10 lần `accept-quotation` | ✅ | ✅ |
+| S06 | 5 lần `approve` phiếu kiểm kê | 🔴 | 🔴 |
+| S07 | POS bán S xen kẽ kiểm kê đánh S Lost | ✅ | ✅ |
+| S08 | 2 lần `create-quotation` song song | 🔴 | 🔴 |
+| S09 | 2 lần `refresh-token` cùng cặp | 🔴 | 🔴 |
+
+#### 🔴 S01 — sinh mã chứng từ đua nhau, 41/50 đơn KHÔNG đặt được
+
+```
+Cannot insert duplicate key row in object 'dbo.Orders'
+with unique index 'IX_Orders_OrderCode'. The duplicate key value is (ORD-20260831-000011).
+```
+
+Đọc cho đúng: **dữ liệu KHÔNG hỏng** — unique index đã chặn. Hỏng là **tính khả dụng**:
+41/50 khách nhận `400`. `IDocumentCodeGenerator` vẫn là "đọc max rồi +1", tức check-then-act,
+không có retry khi đụng unique index. Kế hoạch gốc đã hẹn *"refactor trước, thay ruột ở đợt
+3"* — **nay có bằng chứng cho cái hẹn đó**.
+
+⚠️ **Kèm một lỗi riêng, nhỏ và độc lập:** thông báo trả cho người dùng là
+`"Lỗi hệ thống khi đặt hàng: An error occurred while saving the entity changes..."` —
+tiếng Anh, lộ nội tạng EF, **vi phạm quy tắc tiếng Việt của CLAUDE.md**. Sửa được ngay,
+không cần chờ đợt 3, ở khối `catch` của `OrderService.CheckoutAsync`.
+
+#### 🔴 S06 — sổ tổn thất nhân **5**
+
+5 lần `approve` song song → **5 bản ghi `InventoryAdjustmentLogs`** cho cùng một
+`(AuditCheckId, SerialId)`, cả 5 request đều `200`. Chốt `check.Status != AwaitingApproval`
+là check-then-act: dưới READ COMMITTED cả 5 đều đọc thấy `1` trước khi ai kịp commit.
+
+**Hệ quả cho đợt 3:** đây đúng là bảng mà kế hoạch định thêm unique index
+`(AuditCheckId, SerialId)` — và kết quả này nói **rất có thể DB production đã có bản ghi
+trùng**, tức phát sinh việc dọn dữ liệu nghiệp vụ. Câu `GROUP BY … HAVING COUNT(*) > 1`
+trong `pre_migration_checks.sql` giờ là câu hỏi **đáng tiền nhất** trong cả script.
+
+#### 🔴 S04 — chỉ vỡ khi có HAI instance
+
+✅ với 1 instance, 🔴 với 2 instance (2 phiếu dịch vụ chưa đóng cho cùng một serial).
+Đúng loại lỗi mà toàn bộ hạ tầng 2 replica sinh ra để bắt: cửa sổ check-then-act của
+`HasOpenTicketForSerialAsync` đủ hẹp để một tiến trình che được, nhưng hai tiến trình thì
+không. **Đừng kết luận từ lần chạy một instance.**
+
+#### 🔴 S08 — 2 báo giá cùng `Pending` trên một phiếu
+
+Khách duyệt cái nào cũng được, cái còn lại treo `Pending` vĩnh viễn.
+
+#### 🔴 S09 — rotation refresh token làm một client bị đăng xuất oan
+
+2 lời gọi song song cùng một cặp → **cả hai đều `200`**, nhưng DB chỉ giữ được một hash.
+Client kia cầm một refresh token **đã chết ngay lúc nhận**. Đây chính là cảnh báo trong
+đợt 2 về việc `JwtAuthenticationStateProvider` và `AuthHeaderHandler` phải dùng **chung**
+`TokenRefreshCoordinator` — single-flight phía client giấu được lỗi này ở đường thường,
+nhưng không đóng được nó ở tầng server.
+
+#### ✅ Bốn cái ĐẠT nói lên điều gì
+
+S02/S03 (voucher) ĐẠT là **đợt 1 đã có tác dụng thật** — `ExecuteUpdateAsync` với vị từ
+trong cùng câu lệnh đóng đúng khe check-then-act. S05 ĐẠT nhờ `TryDecideAsync`. Cùng một
+lớp lỗi: chỗ nào đã chuyển sang conditional update thì ĐẠT, chỗ nào còn check-then-act thì
+HỎNG. Đó là bản đồ cho đợt 3.
+
+⚠️ **S07 ĐẠT nhưng tín hiệu yếu** — lần chạy này POS thua cuộc đua (nhận `400`), nên nhánh
+nguy hiểm "serial đã bán bị ghi đè thành Lost" chưa hề được chạm tới. Kịch bản này phụ
+thuộc thời điểm; muốn kết luận phải chạy lặp nhiều lần. **Đừng đọc nó thành "đã an toàn".**
 
 ---
 
@@ -182,6 +341,15 @@ Hai câu hỏi và hệ quả:
 | | **có** | phát sinh **việc nghiệp vụ**: dọn dữ liệu + đối chiếu sổ tổn thất |
 
 Script **đã sửa cho khớp schema thật** và chạy sạch — chỉ cần trỏ connection string sang RDS.
+
+🔴 **Mục C vừa làm câu hỏi thứ hai nặng hơn hẳn.** LoadProbe S06 tái hiện được lỗi nhân
+bản `InventoryAdjustmentLogs` (5 lần `approve` → **5 bản ghi** cho cùng một
+`(AuditCheckId, SerialId)`) trên DB sạch, ngay lần chạy đầu. Lỗi này đã chạy trên
+production một thời gian, nên xác suất bảng đó **đã có** bản ghi trùng là cao. Nếu đúng,
+việc phát sinh là **dọn dữ liệu + đối chiếu sổ tổn thất — việc nghiệp vụ, không phải kỹ
+thuật**. Biết bây giờ thì còn thời gian xử; biết lúc migration fail thì không.
+
+**Bật RDS một lần rồi chạy script là việc rẻ nhất còn lại trong toàn bộ kế hoạch.**
 
 ---
 
@@ -244,6 +412,29 @@ Và API phải cho CORS: khởi động API kèm `export AllowedOrigins="http://
 ```bash
 dotnet run --project src/Client/Client.csproj --no-launch-profile --urls "http://localhost:5214"
 ```
+
+### Hai replica + nginx (chỉ khi cần kiểm tính chất đa-instance)
+
+```bash
+export SA_PASSWORD=$(grep -o '^SA_PASSWORD=.*' Infrastructure/db/.env | cut -d= -f2-)
+export JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+docker compose -f devops/docker/docker-compose.multi.yml up --build -d
+
+curl -sD- -o /dev/null localhost:8088/health/live | grep -i x-upstream   # xem replica nào trả lời
+docker compose -f devops/docker/docker-compose.multi.yml down
+```
+
+Ba cổng: **8088** qua nginx (round-robin), **8081** thẳng vào replica A, **8082** thẳng
+vào replica B. Hai cổng sau bắt buộc phải có để gửi lệnh vào đúng container A rồi đọc kết
+quả ở đúng container B — qua nginx thì không chọn được đích.
+
+⚠️ Dùng chung DB với môi trường dev (`hushstore_sqlserver_dev`) là **cố ý**: hai instance
+phải nhìn cùng một nguồn sự thật thì bài kiểm mới có nghĩa.
+
+⚠️ `devops/docker/docker-compose.local.yml` (bản một replica có sẵn từ trước) đang **trỏ
+vào một đường dẫn không tồn tại** (`../nginx/nginx.local.conf`). Đừng lấy nó làm mẫu.
+
+---
 
 ### Đăng nhập
 
@@ -308,7 +499,30 @@ rồi bấm một nút bắn nhiều request cùng lúc. Kỳ vọng: **N lời 
 
 ---
 
-## 5. Bảy cái bẫy im lặng đã gặp — đọc trước khi sửa code
+**Đo tính đúng đắn dưới tải đồng thời — dùng `tools/LoadProbe/`, không viết tay.**
+
+```bash
+PW=$(grep -o '^SA_PASSWORD=.*' Infrastructure/db/.env | cut -d= -f2-)
+export ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=HushStoreDb;User Id=sa;Password=${PW};TrustServerCertificate=True;MultipleActiveResultSets=True"
+export JwtSettings__SecretKey="<ĐÚNG khoá API đang chạy đang dùng>"
+
+dotnet run --project tools/LoadProbe -- --out docs/evidence/loadprobe            # 1 instance
+dotnet run --project tools/LoadProbe -- --api http://localhost:8088 --out docs/evidence/loadprobe   # 2 instance
+```
+
+Nó tự dọn dữ liệu trước và sau. Mã thoát: `0` đạt hết · `1` có bất biến sai ·
+`2` có kịch bản **không kết luận được** · `3` lỗi môi trường.
+
+> ⚠️ **`KHÔNG KẾT LUẬN` không được đọc thành "đạt".** Nó nghĩa là phép đo bị rỗng —
+> request ăn 429, seed thiếu, API không phản hồi. Kịch bản bị chặn hết sẽ **thoả mọi bất
+> biến** vì code cần đo chưa từng chạy. Gặp nó thì tăng `--pace` rồi chạy lại.
+
+> ⚠️ **Chạy cả hai cấu hình.** S04 ĐẠT với 1 instance và HỎNG với 2 — kết luận từ một
+> cấu hình là kết luận sai. Xem mục 🅵.
+
+---
+
+## 5. Mười cái bẫy im lặng đã gặp — đọc trước khi sửa code
 
 Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ ra khi đo.
 
@@ -321,28 +535,62 @@ Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ
 3. **`UseHsts()` đặt trước `UseForwardedHeaders()`** — no-op hoàn toàn im lặng. Container nhận HTTP
    thuần từ ALB nên `Request.IsHttps` chỉ đúng **sau khi** đọc `X-Forwarded-Proto`.
 4. **`ClockSkew = 1 phút`** — vòng đời access token thực tế là **15 + 1** phút. Đừng bối rối khi đo.
-5. **Cờ bận đặt SAU `await`** — `ComponentBase` chỉ tự `StateHasChanged()` sau phần **đồng bộ** của
-   handler, nên cờ không bao giờ tới được UI. Bốn người đã viết đúng ý định và vẫn sai.
+5. **Cờ bận đặt SAU `await` mà không có `StateHasChanged()`** — `ComponentBase` chỉ tự
+   `StateHasChanged()` sau phần **đồng bộ** của handler, nên cờ không bao giờ tới được UI.
+   Bốn người đã viết đúng ý định và vẫn sai.
+   ⚠️ **Cần cả hai điều kiện.** Đo ở mục B: cờ đặt sau `await` **nhưng có** `StateHasChanged()`
+   theo sau thì vẫn chạy đúng, và cờ đặt **trước mọi `await`** cũng chạy đúng dù không gọi
+   `StateHasChanged()`. Đừng suy ra "mọi cờ thủ công đều hỏng" — 17/23 nút ở mục B vốn đã đúng.
 6. **`CascadingValue` mang `this`** — tham chiếu không đổi nên Blazor **không** render lại component
    con. Chốt chặn vẫn chạy đúng nhưng nút anh em **không chuyển sang mờ**. Phải phát event riêng.
 7. **`ORDER BY Code DESC` để tìm mã cuối** — so sánh **chuỗi**, nên `-1000` sắp **trước** `-999`.
    Đây là nguyên nhân gốc của quả bom `{n:D3}`. Nay `IDocumentCodeGenerator` lấy max **theo số**.
+8. **Phép đo RỖNG in ra "đạt"** — kịch bản mà 49/50 request ăn 429 **thoả mọi bất biến**,
+   vì code cần đo chưa từng chạy. Đây là lý do LoadProbe có hạng `KHÔNG KẾT LUẬN` và kiểm
+   nó **trước** phần khẳng định. Bằng chứng an toàn giả nguy hiểm hơn không có bằng chứng.
+9. **`upstream` của nginx phân giải DNS ĐÚNG MỘT LẦN lúc khởi động** — với
+   `docker compose --scale api=2`, cái tên đó ra một địa chỉ và nginx gửi 100% traffic vào
+   đúng một container suốt đời. Bài kiểm "đa instance" âm thầm thành bài kiểm một instance,
+   log vẫn đẹp. Phải **liệt kê tường minh** từng host.
+10. **Tên bảng ≠ tên `DbSet`** — `ServiceTicketStatusHistory` là **số ít** trong DB. Viết SQL
+    thô theo tên `DbSet` là lỗi 208 *Invalid object name*. Tra trước bằng
+    `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'`.
 
 ---
 
-## 6. Script lấy lại hai danh sách việc
+## 6. Chốt chống hồi quy (trước đây là "script lấy lại danh sách việc")
 
-Số dòng sẽ trôi khi code đổi. Chạy lại để lấy danh sách chính xác:
+Mục A, B và C đều xong, nên các lệnh dưới không còn là danh sách việc — chúng là **chốt
+chống hồi quy**. Chạy lại sau khi sửa tầng Service hay thêm nút mutation mới:
 
 ```bash
-# A — ĐÃ XONG: hai lệnh này giờ là chốt chống hồi quy, không phải danh sách việc
+# A — transaction retry-safe
 grep -rn "CHƯA RÀ RETRY" --include='*.cs' src/Service/          # kỳ vọng: rỗng
 grep -rc "}, retrySafe: true)" --include='*.cs' src/Service/ | grep -v ':0'   # tổng 18
 
-# B — nút mutation chưa chuyển sang ActionButton
-grep -rn "<MudButton" --include='*.razor' src/Client/Pages/ | wc -l
-grep -rc "<ActionButton" --include='*.razor' src/Client/Pages/ | grep -v ':0'
+# B — chống double-submit
+grep -rn "<ActionButton" --include='*.razor' src/Client/Pages/ | wc -l   # kỳ vọng: 46
+grep -rn "<MudButton"    --include='*.razor' src/Client/Pages/ | wc -l   # kỳ vọng: 136
+
+# B — cờ bận thủ công CHỈ được còn ở 3 file, không thêm file nào khác
+grep -rln "_isSaving\|_isSubmitting\|_isApproving\|_isConfirming" \
+  --include='*.razor' src/Client/Pages/
+#   WriteReviewDialog.razor  -> chỉ là COMMENT, không phải code
+#   CustomerDialog.razor     -> CỐ Ý giữ: nút ButtonType.Submit, xem cảnh báo 🚨 ở mục B
+#   EmployeeDialog.razor     -> CỐ Ý giữ: lý do như trên
 ```
+
+```bash
+# C — bộ đo còn chạy được (cần DB + API đang chạy)
+dotnet build tools/LoadProbe/LoadProbe.csproj      # kỳ vọng: 0 Error(s)
+dotnet run --project tools/LoadProbe -- --scenarios S02,S05 --pace 11
+#   kỳ vọng: 2 ĐẠT, 0 KHÔNG KẾT LUẬN. Hai kịch bản này đo chính thứ đợt 1 đã sửa
+#   (ExecuteUpdateAsync có vị từ + TryDecideAsync) nên chúng là chốt hồi quy của đợt 1.
+#   Nếu chúng chuyển sang HỎNG thì ai đó vừa đưa check-then-act quay lại.
+```
+
+> 137 `<MudButton>` còn lại **không phải việc tồn đọng**: chúng là nút điều hướng, đóng dialog,
+> lọc, chuyển tab — không gọi mutation nên không cần khoá. Đừng chuyển chúng cho "đủ bộ".
 
 ---
 

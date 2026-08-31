@@ -162,6 +162,19 @@ Việc hai lần đo trên hai account cho **cùng kết quả** chính là lậ
 nhất của báo cáo bảo mật: các thuộc tính an toàn nằm trong **code Terraform**,
 không nằm trong một lần cấu hình may mắn.
 
+`evidence/loadprobe/` là loại bằng chứng **khác hẳn**: nó không đo hạ tầng mà đo
+**tính đúng đắn dữ liệu của ứng dụng dưới tải đồng thời**, và nó chạy $0 trên máy local.
+
+| File | Nội dung |
+|---|---|
+| [evidence/loadprobe/2026-08-31-mot-instance.md](evidence/loadprobe/2026-08-31-mot-instance.md) | 9 kịch bản trên 1 instance — 5 đạt, 4 hỏng |
+| [evidence/loadprobe/2026-08-31-hai-instance.md](evidence/loadprobe/2026-08-31-hai-instance.md) | 9 kịch bản qua nginx 2 replica — 4 đạt, **5 hỏng** |
+| [evidence/loadprobe/2026-08-31-ha-tang-2-replica.md](evidence/loadprobe/2026-08-31-ha-tang-2-replica.md) | Round-robin, khoá tài khoản xuyên instance, RAM thật |
+
+Đối chiếu hai file đầu là phần đáng giá nhất: **S04 đạt với một instance và hỏng với
+hai**. Đó là bằng chứng cụ thể cho luận điểm "kết luận từ một tiến trình là kết luận sai",
+và là lý do hạ tầng 2 replica tồn tại.
+
 ---
 
 ## Còn thiếu gì — rà soát ngày 2026-08-25
