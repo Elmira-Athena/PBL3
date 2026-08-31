@@ -195,6 +195,17 @@ xuất kho (Pending/Confirmed/Shipping)`. Serial chỉ đổi `Available` → `S
 - **Dialog** — dùng `IDialogService` cho form Thêm/Sửa dạng popup, không chuyển trang.
 - **Loading** — khi API > 2s, phải hiển thị Skeleton Loading hoặc Spinner, không để màn hình trắng.
 
+## Đang làm dở — đọc trước khi viết code
+
+🔴 **[`docs/bat-dau-phien-moi.md`](docs/bat-dau-phien-moi.md)** — điểm vào cho một phiên mới.
+Nó ghi: việc kế tiếp (kèm `file:dòng` cụ thể), cách chạy môi trường local, công thức kiểm
+chứng, và **bảy cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
+tầng Service, auth, hay rate limiting.
+
+Tóm tắt trạng thái: đợt 1 + đợt 2 đã xong. Còn lại: 14 call-site transaction chưa
+retry-safe, 23 nút chưa chống double-submit, và đợt 3 **bị chặn** tới khi chạy được
+`Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
+
 ## AI Context Files
 
 Detailed specifications in `/AI_context/`:

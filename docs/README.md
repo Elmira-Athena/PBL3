@@ -1,6 +1,6 @@
 # Mục lục tài liệu — HushStore
 
-Thư mục này có 13 tài liệu và bốn thư mục con. Trang này để bạn **không phải mở
+Thư mục này có 14 tài liệu và bốn thư mục con. Trang này để bạn **không phải mở
 từng file ra xem nó nói gì**.
 
 Đọc trang này mất 3 phút. Nó trả lời đúng một câu hỏi: *tôi đang cần gì thì mở
@@ -12,6 +12,7 @@ file nào.*
 
 | Tôi muốn… | Mở | Dài |
 |---|---|---|
+| 🔴 **Tiếp tục viết code — dự án đang làm dở** | [bat-dau-phien-moi.md](bat-dau-phien-moi.md) | **đọc đầu tiên** |
 | **Xem hình để in báo cáo / làm slide** | [diagrams/hushstore-aws-don-gian.drawio](diagrams/hushstore-aws-don-gian.drawio) | 3 trang |
 | **Xem hình để tra cứu khi đọc tài liệu** — đầy đủ mọi resource | [diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio) | 5 trang |
 | Hiểu hệ thống này **là cái gì** và **vì sao thiết kế vậy** | [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) | 1185 dòng |

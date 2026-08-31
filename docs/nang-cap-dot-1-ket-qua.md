@@ -2,6 +2,10 @@
 
 **Ngày:** 2026-08-30 · **Trạng thái:** **đợt 1 xong, mục 4.1 xong, đợt 2 xong**;
 build sạch (`0 Error(s)`); **đã commit thành 9 commit trên `main`**.
+> 👉 **Bắt đầu một phiên mới?** Đọc [`bat-dau-phien-moi.md`](bat-dau-phien-moi.md) trước —
+> nó có việc kế tiếp kèm `file:dòng`, cách chạy môi trường, và công thức kiểm chứng.
+> File này giải thích *vì sao* mọi thứ thành ra như hiện tại; file kia nói *làm gì tiếp*.
+
 **Kế hoạch gốc:** `/Users/ml/.claude/plans/hi-n-t-i-t-i-ang-memoized-quill.md`
 **Trục chính:** sửa lỗi chương trình → autoscale EC2 → mở rộng (PostgreSQL, Redis).
 
