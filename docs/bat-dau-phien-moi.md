@@ -1,9 +1,14 @@
 # Bắt đầu phiên mới — đọc file này trước
 
-**Cập nhật:** 2026-08-31 · **Trạng thái repo:** nhánh `feat/retry-safe-call-sites`, build `0 Error(s)`
+**Cập nhật:** 2026-08-31 · **Trạng thái repo:** trên `main` (đã merge `feat/retry-safe-call-sites`,
+fast-forward, CI xanh), build `0 Error(s)` / 184 cảnh báo
 · **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C**, **mục D**
-· **Kế tiếp:** đợt 3 **đang bị chặn** (cần chạy script kiểm tra trên RDS), nên việc duy nhất
-làm được ngay là **mục E** bên dưới — sửa thông báo lỗi tiếng Anh ở `OrderService.cs:257`.
+· **Kế tiếp:** ① trả **nợ kiểm thử mục 🧪** (2 việc rẻ, là nợ do mục D tự tạo) → ② **mục 🅴**
+(lỗi tiếng Anh ở `OrderService.cs:257`) → ③ đợt 3, **vẫn bị chặn** bởi RDS.
+
+> 🧪 **Đừng tin dòng "XONG" nào ở dưới trước khi đọc mục 🧪.** Mọi mục A–D đều build sạch và
+> `grep` xanh, nhưng bốn luồng (Checkout · POS · xuất/nhập kho · phiếu dịch vụ) **chưa từng chạy
+> thật**, và 5/6 nút hỏng thật của mục B nằm đúng trong số đó.
 
 Tài liệu này viết cho một phiên **không có ngữ cảnh gì cả**. Nó trả lời đúng ba câu:
 *đang ở đâu*, *làm gì tiếp*, và *chạy/kiểm bằng lệnh nào*.
@@ -380,6 +385,83 @@ bash devops/scripts/check-vulnerable-packages.sh      # chạy y hệt ở máy 
 
 ---
 
+### 🧪 NỢ KIỂM THỬ — cái gì đã đo thật, cái gì chưa, và vì sao
+
+**Đọc mục này trước khi tin bất cứ dòng "XONG" nào ở trên.** Mọi mục A–D đều `build 0 Error(s)`
+và có chốt `grep` xanh, nhưng **build sạch không phải bằng chứng chạy đúng**. Dưới đây là ranh
+giới thật, chia theo *ai tạo ra rủi ro*.
+
+#### 🔴 Ưu tiên 1 — rủi ro do mục D tự tạo ra, chưa đo
+
+| Việc | Vì sao đáng lo | Cách đo (rẻ) |
+|---|---|---|
+| **Ghim `Microsoft.OpenApi` 2.7.5 chưa hề chạm tới lúc chạy** | `Swashbuckle.AspNetCore` 10.1.2 **biên dịch với 2.4.1**. Ghim nhảy 2.4.1 → 2.7.5 là **trong cùng major**, nhưng Microsoft.OpenApi có tiền sử đổi API surface giữa các minor. Hỏng kiểu này **build vẫn sạch** và chỉ bung ra khi có ai gọi endpoint sinh tài liệu. | Chạy API rồi `curl -s -o /dev/null -w '%{http_code}' http://localhost:5222/swagger/v1/swagger.json` (và `/openapi/v1.json`). Kỳ vọng `200` + JSON phân giải được. **Chưa ai chạy lệnh này.** |
+| **Chỉ chạy lại S02/S05 sau khi vá gói, không chạy đủ 9 kịch bản** | S02/S05 là chốt hồi quy của *đợt 1*, không phủ luồng POS / xuất kho / phiếu dịch vụ. | `dotnet run --project tools/LoadProbe -- --out docs/evidence/loadprobe` (đủ 9 kịch bản). Kỳ vọng: **vẫn đúng 5/9 HỎNG như trước**, không hơn. Nhiều hơn = việc vá gói gây hồi quy. |
+
+> Hai dòng này là **nợ của mục D**, không phải nợ thừa hưởng. Chúng nên được trả trước mục E.
+
+#### 🟠 Ưu tiên 2 — nợ thừa hưởng từ mục A và B, **bị chặn bởi DB rỗng**
+
+Bốn luồng sau **chỉ được rà bằng đọc code + build sạch**, chưa từng chạy thật:
+**đặt hàng (Checkout) · POS · xuất/nhập kho · phiếu dịch vụ.**
+
+Trớ trêu là **5 trong 6 nút double-submit hỏng thật của mục B nằm đúng trong nhóm này**
+(`Storefront/MyOrderDetail`, `ServiceTicketQuotation`, `ServiceTicketIntake`, `Pos/Index`,
+và `Orders/OrderDetail`) — tức phần *vá lỗi thật* của mục B là phần **ít bằng chứng nhất**.
+Mục A cũng vậy: chỉ luồng kiểm kê được kiểm tới DB, còn `OrderService` / `PosService` /
+`InventoryExportService` / `ServiceTicketService` thì chưa.
+
+**Nguyên nhân gốc không phải "chưa có thời gian" mà là THIẾU SERIAL.** DB local:
+`Products = 2`, **`ProductSerials = 0`**, `Orders = 0`. Và
+`ProductVariant.StockQuantity = COUNT(ProductSerials WHERE Status = Available)`, nên **không có
+serial thì không bán được gì** — cả bốn luồng đều chết ở bước đầu.
+
+⚠️ **Hai script seed hiện có KHÔNG sinh serial.** Đã kiểm: `seed_data.sql` chỉ có
+`AppRoles`/`AppUsers`/`AppUserRoles`/`UserProfiles`; `seed_product_data.sql` chỉ có
+`Categories`/`Manufacturers`/`Products`/`ProductVariants`. **Không file `.sql` nào chạm tới
+`ProductSerials` hay `ImportReceipts`.** Đừng mất thời gian đi tìm — nó không tồn tại.
+
+**Nhưng khả năng seed serial thì ĐÃ CÓ SẴN**, ở chỗ không ai nghĩ tới:
+`tools/LoadProbe/Seeding/ProbeFixture.cs` tự `db.ProductSerials.Add(NewSerial(...))` bằng code
+(gắn tiền tố `LP-`), chỉ có điều mặc định nó **dọn sạch sau khi chạy**. Có cờ để tắt việc dọn:
+
+```bash
+# Seed dữ liệu chạy được (gồm cả ProductSerials) rồi GIỮ LẠI để soi bằng tay
+dotnet run --project tools/LoadProbe -- --scenarios S01 --keep
+#   → in: "--keep: GIỮ LẠI dữ liệu probe trong DB. Dọn bằng cách chạy lại probe."
+#   Sau đó mở Blazor client và bấm tay 4 luồng trên, kèm đếm request bằng hook
+#   window.fetch như cách mục B đã đo trên SupplierDialog.
+#   Dọn: chạy lại probe KHÔNG có --keep (nó dọn đầu vào lẫn đầu ra).
+```
+
+Đây là đường rẻ nhất để tháo chốt chặn này — **không cần viết script seed mới**.
+
+#### ✅ Cái ĐÃ đo thật rồi — đừng làm lại
+
+| Đã đo | Bằng chứng |
+|---|---|
+| Transaction chạy dưới retrying strategy | tạo/gửi/duyệt/từ chối phiếu kiểm kê `200`, **đọc thẳng DB** xác nhận `Status`/`ApprovedAt`/`RejectReason` đã ghi |
+| Chống double-submit thực sự khoá | `SupplierDialog`, 3 cấu hình, đếm bằng hook `window.fetch`; **ca đối chứng** gỡ `Disabled` cho 2 POST → 2 bản ghi trùng |
+| `ActionButton` vô hiệu trên `ButtonType.Submit` | `CustomerDialog`: bản gốc 1 POST, bản đổi sang `ActionButton` **3 POST** |
+| EPPlus vẫn chạy sau khi ghim `Cryptography.Xml` | `POST /api/build-pc/export` → `200`, file `Microsoft Excel 2007+`, **đọc ngược lại bằng `zipfile`** thấy đúng nội dung tiếng Việt |
+| Cổng chặn lỗ hổng không rỗng | 4 nhánh: sạch `0` · **hoàn tác csproj `1` (19 dòng High)** · sln sai `2` · JSON hỏng `2` |
+| Đợt 1 không hồi quy sau mục D | LoadProbe `S02,S05` → **2 ĐẠT, 0 KHÔNG KẾT LUẬN** |
+| Khoá tài khoản không kẹt RAM một task | khoá qua replica A → gọi replica B `403` + `X-Account-Status: locked` |
+
+⚠️ **`S07` ĐẠT nhưng tín hiệu YẾU** — lần chạy đó POS thua cuộc đua (`400`), nên nhánh nguy hiểm
+"serial đã bán bị ghi đè thành Lost" **chưa hề được chạm tới**. Đừng đọc nó thành "đã an toàn";
+muốn kết luận phải chạy lặp nhiều lần.
+
+#### Quy tắc rút ra, áp cho mọi mục sau
+
+1. **`grep` xanh chỉ chứng minh hình dạng code, không chứng minh hành vi.** Chốt ở §6 là chống
+   hồi quy *cấu trúc*, không phải bằng chứng chạy đúng.
+2. **Mọi phép đo phải có ca đối chứng.** Không có nó thì "1 POST" có thể chỉ nghĩa là kịch bản
+   click chưa bao giờ chạm tới handler — xem bẫy #8 và #11.
+3. **Kiểm ở DB, không ở mã HTTP.** Mọi lỗi đúng đắn dữ liệu ở repo này đều trả `200`.
+
+---
+
 ### 🅴 Sửa thông báo lỗi tiếng Anh ở `OrderService.CheckoutAsync` — việc DUY NHẤT không bị chặn
 
 **Nhỏ, độc lập, không phải chờ đợt 3.** Đây là việc nên làm đầu tiên ở phiên sau.
@@ -574,6 +656,20 @@ curl -s -o /dev/null -w "validate-code      %{http_code}\n" -X POST "$B/api/vouc
 # Transaction chạy được dưới retrying strategy — kỳ vọng 200 + sinh mã KK-
 curl -s -X POST "$B/api/inventory-checks" -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"scopeType":0,"note":"smoke"}' | head -c 200
+
+# Sinh tài liệu OpenAPI còn chạy sau khi GHIM Microsoft.OpenApi 2.7.5 — kỳ vọng 200 + JSON hợp lệ
+# ⚠️ CHƯA AI CHẠY LỆNH NÀY. Swashbuckle 10.1.2 biên dịch với 2.4.1; hỏng kiểu này BUILD VẪN SẠCH
+#    và chỉ bung ra lúc có người gọi endpoint sinh tài liệu. Xem mục 🧪 ưu tiên 1.
+for u in /swagger/v1/swagger.json /openapi/v1.json; do
+  printf '%s -> ' "$u"
+  curl -s "$B$u" | python3 -c "import sys,json;d=json.load(sys.stdin);print('OK, openapi',d.get('openapi'),'| paths:',len(d.get('paths',{})))" 2>&1 | head -1
+done
+
+# EPPlus còn xuất được Excel sau khi GHIM Cryptography.Xml 10.0.10 — kỳ vọng 200 + file xlsx thật
+curl -s -X POST "$B/api/build-pc/export" -H 'Content-Type: application/json' \
+  -d '{"items":[{"slotIndex":1,"slotName":"CPU","variantId":1,"productName":"X","variantName":"Y","sku":"S1","warrantyMonth":12,"unitPrice":1000,"quantity":1}]}' \
+  -o /tmp/probe.xlsx -w 'export %{http_code} %{size_download}B\n'
+python3 -c "import zipfile;z=zipfile.ZipFile('/tmp/probe.xlsx');print('xlsx hop le,',len(z.namelist()),'entry')"
 ```
 
 > Nhớ **dọn dữ liệu test** sau khi kiểm (phiếu kiểm kê tạo ra, mô tả sản phẩm đã sửa…).

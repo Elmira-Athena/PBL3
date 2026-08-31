@@ -238,6 +238,15 @@ transaction retry-safe; 23/23 nút mutation dùng `ActionButton`/`BusyScope`; b�
 có cổng chặn ở CI). Còn lại **duy nhất** đợt 3, và nó **bị chặn** tới khi chạy được
 `Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
 
+🧪 **Nợ kiểm thử — đọc mục 🧪 của runbook trước khi tin dòng "XONG" nào.** Mọi mục A–D đều
+build sạch và `grep` xanh, nhưng `grep` chỉ chứng minh **hình dạng code**, không chứng minh
+hành vi. Bốn luồng **chưa từng chạy thật**: Checkout · POS · xuất/nhập kho · phiếu dịch vụ —
+và **5/6 nút double-submit hỏng thật nằm đúng trong số đó**. Nguyên nhân là DB local không có
+`ProductSerials` nào, mà **không script `.sql` nào seed bảng đó**; cách tháo chốt là
+`dotnet run --project tools/LoadProbe -- --scenarios S01 --keep` (nó tự sinh serial rồi giữ lại).
+Hai việc rẻ còn nợ riêng của mục D: chưa ai gọi endpoint sinh tài liệu OpenAPI sau khi ghim
+`Microsoft.OpenApi` 2.7.5, và chưa chạy lại đủ 9 kịch bản LoadProbe.
+
 🔴 **LoadProbe đã đo: 5/9 bất biến SAI.** Đọc mục 🅵 của runbook trước khi động vào tầng
 Service — nó nói rõ chỗ nào còn check-then-act và chỗ nào đã an toàn. Ba điều rút ra:
 - Chỗ nào đã chuyển sang **conditional update** (`ExecuteUpdateAsync` có vị từ,
