@@ -322,7 +322,10 @@ namespace PBL3.Service.ServiceTickets
         /// </summary>
         public async Task<QuotationDetailDto?> CreateQuotationAsync(int ticketId, QuotationCreateDto request, Guid userId, bool isAdmin = false)
         {
-            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+            // Kiểm tra nghiệp vụ NGOÀI transaction: GetByIdAsync là bản AsNoTracking, chỉ để
+            // trả lỗi sớm. Phiếu được nạp LẠI có tracking bên trong delegate mới ghi —
+            // điều kiện 1 của hợp đồng retry ở IUnitOfWork.
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -341,13 +344,23 @@ namespace PBL3.Service.ServiceTickets
             // Sử dụng Transaction để bảo vệ quy trình lưu trữ báo giá & chi tiết báo giá đồng thời cập nhật phiếu dịch vụ
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `ticket` nạp TRACKED ở ngoài (GetByIdWithTrackingAsync) rồi sửa ticket.Status
-                // bên trong. Lần thử 2 gán lại đúng giá trị đó => EF không sinh UPDATE nào.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `trackedTicket`, `Quotation` và `QuotationItem` đều nạp/dựng BÊN TRONG;
+                // (2) IssuedDate và ChangedAt tính bên trong;
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate.
                 var quotation = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    // Nạp LẠI có tracking bên trong delegate. Giữ instance của lần thử trước là
+                    // đúng bẫy mất dữ liệu: EF đã đánh dấu nó Unchanged với snapshot = Status 2,
+                    // nên lần thử này gán lại 2 sẽ KHÔNG sinh UPDATE, trong khi hàng dữ liệu vừa
+                    // bị rollback về 1.
+                    var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+
+                    // Chốt chống race. NÉM chứ không return, để transaction rollback.
+                    if (trackedTicket is null || trackedTicket.Status != (byte)1 || trackedTicket.ResolutionType != (byte)4)
+                        throw new InvalidOperationException(
+                            "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
+
                     // NGHIỆP VỤ HỦY BÁO GIÁ CŨ: đánh dấu mọi báo giá "Chờ duyệt" (0) của phiếu này
                     // thành "Bị thay thế" (3), để bảo đảm chỉ tồn tại duy nhất một bản báo giá
                     // có hiệu lực.
@@ -392,7 +405,7 @@ namespace PBL3.Service.ServiceTickets
                     }
 
                     // Cập nhật trạng thái phiếu dịch vụ sang: Chờ duyệt báo giá (SentQuotation - 2)
-                    ticket.Status = (byte)2;
+                    trackedTicket.Status = (byte)2;
                     await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
                     {
                         TicketId = ticketId,
@@ -406,7 +419,7 @@ namespace PBL3.Service.ServiceTickets
                     await _unitOfWork.SaveChangesAsync();
 
                     return quotation;
-                });
+                }, retrySafe: true);
 
                 var reloadedQuotation = await _quotationRepository.GetByIdWithItemsAsync(quotation.Id);
                 return MapQuotationToDto(reloadedQuotation);
@@ -419,7 +432,9 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> AcceptQuotationAsync(int ticketId, int quotationId, QuotationAcceptDto request, Guid userId, bool isAdmin = false)
         {
-            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+            // Kiểm tra nghiệp vụ NGOÀI transaction: GetByIdAsync là bản AsNoTracking, chỉ để
+            // trả lỗi sớm. Phiếu được nạp LẠI có tracking bên trong delegate mới ghi.
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -428,7 +443,14 @@ namespace PBL3.Service.ServiceTickets
             if (ticket.Status != (byte)2)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Chờ duyệt báo giá.");
 
-            var quotation = await _quotationRepository.GetByIdWithTrackingAsync(quotationId);
+            // Báo giá đọc bằng projection AsNoTracking: ở luồng này nó CHỈ được kiểm tra, còn
+            // việc ghi do TryDecideAsync (một câu UPDATE set-based) đảm nhiệm. Nạp tracked ở
+            // đây chỉ tạo ra một entity lỗi thời ngay sau câu UPDATE đó.
+            var quotation = await _dbContext.Quotations
+                .AsNoTracking()
+                .Where(q => q.Id == quotationId)
+                .Select(q => new { q.TicketId, q.Status })
+                .FirstOrDefaultAsync();
             if (quotation == null || quotation.TicketId != ticketId)
                 throw new InvalidOperationException("Báo giá không tồn tại.");
 
@@ -445,17 +467,22 @@ namespace PBL3.Service.ServiceTickets
 
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `ticket` và `quotation` đều nạp TRACKED ở ngoài rồi sửa bên trong.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `trackedTicket` và bản ghi lịch sử đều nạp/dựng BÊN TRONG delegate;
+                // (2) ModifiedDate / ChangedAt / DecidedAt tính bên trong;
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate —
+                //     TryDecideAsync nằm TRONG transaction nên rollback hoàn tác luôn nó.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    // Nạp LẠI có tracking bên trong delegate — xem giải thích ở CreateQuotationAsync.
+                    var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+                    if (trackedTicket is null || trackedTicket.Status != (byte)2)
+                        throw new InvalidOperationException(
+                            "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
+
                     // CỔNG NGUYÊN TỬ: chốt kiểm ở trên chỉ fail-fast cho UX — nó là check-then-act
                     // và không chặn được hai request đồng thời. Câu UPDATE ... WHERE Status = 0
                     // dưới đây mới là thứ bảo đảm đúng một request duyệt được.
-                    // (Sau khi gọi, entity `quotation` đang track lỗi thời ở cột Status —
-                    //  không được gán quotation.Status ở đây nữa.)
                     if (!await _quotationRepository.TryDecideAsync(
                             quotationId, fromStatus: (byte)0, toStatus: (byte)1,
                             decidedAt: DateTime.UtcNow, note: null))
@@ -463,8 +490,8 @@ namespace PBL3.Service.ServiceTickets
                             "Báo giá này vừa được xử lý ở nơi khác. Vui lòng tải lại trang.");
 
                     // Chuyển dịch trạng thái phiếu dịch vụ sang Đang sửa (5) hoặc Chờ phụ tùng (4) tùy thuộc quyết định
-                    ticket.Status = nextStatus;
-                    ticket.ModifiedDate = DateTime.UtcNow;
+                    trackedTicket.Status = nextStatus;
+                    trackedTicket.ModifiedDate = DateTime.UtcNow;
 
                     await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
                     {
@@ -477,7 +504,7 @@ namespace PBL3.Service.ServiceTickets
                     });
 
                     await _unitOfWork.SaveChangesAsync();
-                });
+                }, retrySafe: true);
 
                 return true;
             }
@@ -489,7 +516,9 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> RejectQuotationAsync(int ticketId, int quotationId, QuotationRejectDto request, Guid userId, bool isAdmin = false)
         {
-            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+            // Kiểm tra nghiệp vụ NGOÀI transaction: GetByIdAsync là bản AsNoTracking, chỉ để
+            // trả lỗi sớm. Phiếu được nạp LẠI có tracking bên trong delegate mới ghi.
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -498,7 +527,12 @@ namespace PBL3.Service.ServiceTickets
             if (ticket.Status != (byte)2)
                 throw new InvalidOperationException("Phiếu phải ở trạng thái Chờ duyệt báo giá.");
 
-            var quotation = await _quotationRepository.GetByIdWithTrackingAsync(quotationId);
+            // Báo giá đọc bằng projection AsNoTracking — việc ghi do TryDecideAsync đảm nhiệm.
+            var quotation = await _dbContext.Quotations
+                .AsNoTracking()
+                .Where(q => q.Id == quotationId)
+                .Select(q => new { q.TicketId, q.Status })
+                .FirstOrDefaultAsync();
             if (quotation == null || quotation.TicketId != ticketId)
                 throw new InvalidOperationException("Báo giá không tồn tại.");
 
@@ -512,12 +546,15 @@ namespace PBL3.Service.ServiceTickets
 
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `ticket` và `quotation` đều nạp TRACKED ở ngoài rồi sửa bên trong.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng (xem nhánh duyệt phía trên).
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    // Nạp LẠI có tracking bên trong delegate — xem giải thích ở CreateQuotationAsync.
+                    var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+                    if (trackedTicket is null || trackedTicket.Status != (byte)2)
+                        throw new InvalidOperationException(
+                            "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
+
                     // CỔNG NGUYÊN TỬ — xem giải thích ở nhánh duyệt.
                     if (!await _quotationRepository.TryDecideAsync(
                             quotationId, fromStatus: (byte)0, toStatus: (byte)2,
@@ -525,8 +562,8 @@ namespace PBL3.Service.ServiceTickets
                         throw new InvalidOperationException(
                             "Báo giá này vừa được xử lý ở nơi khác. Vui lòng tải lại trang.");
 
-                    ticket.Status = (byte)3;
-                    ticket.ModifiedDate = DateTime.UtcNow;
+                    trackedTicket.Status = (byte)3;
+                    trackedTicket.ModifiedDate = DateTime.UtcNow;
 
                     await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
                     {
@@ -539,7 +576,7 @@ namespace PBL3.Service.ServiceTickets
                     });
 
                     await _unitOfWork.SaveChangesAsync();
-                });
+                }, retrySafe: true);
 
                 return true;
             }
@@ -551,7 +588,9 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<RmaShipmentDetailDto?> CreateRmaShipmentAsync(int ticketId, RmaShipmentCreateDto request, Guid userId, bool isAdmin = false)
         {
-            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+            // Kiểm tra nghiệp vụ NGOÀI transaction: GetByIdAsync là bản AsNoTracking, chỉ để
+            // trả lỗi sớm. Phiếu được nạp LẠI có tracking bên trong delegate mới ghi.
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -573,12 +612,23 @@ namespace PBL3.Service.ServiceTickets
             // Issue #13: Use UoW transaction pattern instead of individual SaveChanges
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `ticket` nạp TRACKED ở ngoài rồi sửa bên trong.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `trackedTicket` nạp lại và `RmaShipment` dựng mới BÊN TRONG delegate;
+                // (2) ShippedDate / ModifiedDate / ChangedAt tính bên trong;
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    // Nạp LẠI có tracking bên trong delegate — xem giải thích ở CreateQuotationAsync.
+                    var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+                    if (trackedTicket is null || trackedTicket.ResolutionType != (byte)2)
+                        throw new InvalidOperationException(
+                            "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
+
+                    // Chốt chống RMA trùng phải nằm TRONG transaction: bản kiểm ở ngoài chỉ
+                    // fail-fast cho UX, và ở lần thử lại nó đã đọc từ trước khi rollback.
+                    if (await _rmaRepository.GetByTicketIdReadOnlyAsync(ticketId) != null)
+                        throw new InvalidOperationException("Phiếu này đã được gửi hãng rồi.");
+
                     var rma = new RmaShipment
                     {
                         TicketId = ticketId,
@@ -591,8 +641,8 @@ namespace PBL3.Service.ServiceTickets
 
                     await _rmaRepository.AddAsync(rma);
 
-                    ticket.Status = (byte)6;
-                    ticket.ModifiedDate = DateTime.UtcNow;
+                    trackedTicket.Status = (byte)6;
+                    trackedTicket.ModifiedDate = DateTime.UtcNow;
 
                     await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
                     {
@@ -605,7 +655,7 @@ namespace PBL3.Service.ServiceTickets
                     });
 
                     await _unitOfWork.SaveChangesAsync();
-                });
+                }, retrySafe: true);
 
                 var reloadedRma = await _rmaRepository.GetByTicketIdReadOnlyAsync(ticketId);
                 return MapRmaShipmentToDto(reloadedRma!);
@@ -627,14 +677,13 @@ namespace PBL3.Service.ServiceTickets
         /// </summary>
         public async Task<bool> RecordRmaResolutionAsync(int ticketId, RmaResolutionUpdateDto request, Guid userId, bool isAdmin = false)
         {
-            // TRACKED: bên dưới ghi 4 field lên rma (ManufacturerResolution, ManufacturerNotes,
-            // ReceivedBackDate, ReceivedByEmployeeId). Bản ReadOnly sẽ khiến cả 4 lệnh gán
-            // rơi vào hư vô — kết quả xử lý RMA mất trắng mà không có lỗi nào.
-            var rma = await _rmaRepository.GetByTicketIdTrackedAsync(ticketId);
-            if (rma == null)
+            // Kiểm tra nghiệp vụ NGOÀI transaction: cả hai đều đọc CHỈ-ĐỌC, chỉ để trả lỗi sớm.
+            // `rma` và `ticket` được nạp LẠI có tracking bên trong delegate mới ghi — bản tracked
+            // nạp ở ngoài chính là bẫy mất dữ liệu khi chạy lại (xem hợp đồng ở IUnitOfWork).
+            if (await _rmaRepository.GetByTicketIdReadOnlyAsync(ticketId) == null)
                 throw new InvalidOperationException("Không có phiếu RMA cho ticket này.");
 
-            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -651,14 +700,25 @@ namespace PBL3.Service.ServiceTickets
 
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `rma` và `ticket` đều nạp TRACKED ở ngoài rồi sửa bên trong.
-                await _unitOfWork.ExecuteInTransactionAsync(async () =>
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `rma`, `trackedTicket`, `newSerial`, `oldOrderSerial`, `oldWarranties` và
+                //     các bản ghi mới đều nạp/dựng BÊN TRONG delegate;
+                // (2) `now` tính bên trong; (3) không có tác dụng phụ nào chạy trước delegate.
+                //
+                // Trả về VariantId cần đồng bộ tồn kho thay vì đọc `ticket.Serial` sau transaction:
+                // `ticket` ở ngoài là bản AsNoTracking dùng cho tiền kiểm, không phải bản đã ghi.
+                var syncVariantId = await _unitOfWork.ExecuteInTransactionAsync<int?>(async () =>
                 {
                     var now = DateTime.UtcNow;
-                    byte previousStatus = ticket.Status;
+
+                    // Nạp LẠI có tracking bên trong delegate — xem giải thích ở CreateQuotationAsync.
+                    var rma = await _rmaRepository.GetByTicketIdTrackedAsync(ticketId);
+                    var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+                    if (rma is null || trackedTicket is null)
+                        throw new InvalidOperationException(
+                            "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
+
+                    byte previousStatus = trackedTicket.Status;
 
                     rma.ManufacturerResolution = request.ManufacturerResolution;
                     rma.ManufacturerNotes = request.ManufacturerNotes;
@@ -672,7 +732,7 @@ namespace PBL3.Service.ServiceTickets
                             throw new InvalidOperationException("Phải cung cấp Serial thay thế khi hãng đã thay thế.");
 
                         var newSerialId = request.ReplacementSerialId.Value;
-                        var oldSerial = ticket.Serial;
+                        var oldSerial = trackedTicket.Serial;
                         var newSerial = await _serialRepository.GetByIdWithTrackingAsync(newSerialId);
 
                         // Kiểm định độ khả dụng của Serial thay thế mới nhận từ hãng
@@ -723,8 +783,8 @@ namespace PBL3.Service.ServiceTickets
                         };
                         await _warrantyRepository.AddAsync(newWarranty);
 
-                        ticket.Status = (byte)8;
-                        ticket.ReplacementSerialId = newSerialId;
+                        trackedTicket.Status = (byte)8;
+                        trackedTicket.ReplacementSerialId = newSerialId;
 
                         // Ghi chép lịch sử sửa chữa thiết bị (Serial Repair Log) chi tiết
                         await _logRepository.AddAsync(new SerialRepairLog
@@ -740,14 +800,14 @@ namespace PBL3.Service.ServiceTickets
                     }
                     else
                     {
-                        ticket.Status = request.ManufacturerResolution == (byte)3 ? (byte)1 : (byte)7;
+                        trackedTicket.Status = request.ManufacturerResolution == (byte)3 ? (byte)1 : (byte)7;
                     }
 
                     await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
                     {
                         TicketId = ticketId,
                         FromStatus = previousStatus,
-                        ToStatus = ticket.Status,
+                        ToStatus = trackedTicket.Status,
                         ChangedByEmployeeId = userId,
                         ChangedAt = now,
                         Note = request.ManufacturerResolution switch
@@ -759,12 +819,17 @@ namespace PBL3.Service.ServiceTickets
                     });
 
                     await _unitOfWork.SaveChangesAsync();
-                });
+
+                    // Chỉ cần đồng bộ tồn kho khi có hoán đổi serial vật lý (hãng thay thế).
+                    return request.ManufacturerResolution == (byte)2
+                        ? trackedTicket.Serial.VariantId
+                        : (int?)null;
+                }, retrySafe: true);
 
                 // NGHIỆP VỤ KHO: Tự động kích hoạt đồng bộ hóa số lượng tồn kho của biến thể do có sự biến đổi Serial vật lý thực tế
-                if (request.ManufacturerResolution == (byte)2)
+                if (syncVariantId.HasValue)
                 {
-                    await _inventorySyncService.SyncStockBatchAsync(new[] { ticket.Serial.VariantId });
+                    await _inventorySyncService.SyncStockBatchAsync(new[] { syncVariantId.Value });
                 }
 
                 return true;
@@ -783,66 +848,82 @@ namespace PBL3.Service.ServiceTickets
         /// </summary>
         public async Task<bool> Perform1For1SwapAsync(int ticketId, int newSerialId, Guid userId, bool isAdmin = false)
         {
-            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
-            if (ticket == null)
+            // Kiểm tra QUYỀN chạy ngoài transaction để fail-fast: đọc AsNoTracking
+            // (GetByIdWithDetailsAsync), chỉ dùng để chặn sớm, không ghi gì.
+            //
+            // Toàn bộ kiểm tra NGHIỆP VỤ còn lại đã được chuyển VÀO trong delegate cùng với
+            // phần ghi. Ở call-site này việc tách "kiểm ngoài / ghi trong" không đáng: năm cụm
+            // entity đằng nào cũng phải nạp lại bên trong, nên kiểm ở ngoài sẽ là bản sao thứ
+            // hai của cùng một logic — và mọi kiểm tra đều đã ném InvalidOperationException,
+            // vốn được `catch { throw; }` trả nguyên vẹn cho tầng gọi.
+            var precheckTicket = await _ticketRepository.GetByIdWithDetailsAsync(ticketId);
+            if (precheckTicket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
-            CheckAssignment(ticket, userId, isAdmin);
-
-            if (ticket.Status != (byte)1 && ticket.Status != (byte)7)
-                throw new InvalidOperationException("Trạng thái phiếu không cho phép đổi 1-1.");
-
-            if (ticket.ResolutionType != (byte)3 && ticket.ResolutionType != (byte)2)
-                throw new InvalidOperationException("Loại giải pháp không phải đổi 1-1.");
-
-            // NGHIỆP VỤ BẢO VỆ CHỐT CHẶN: Đánh giá bảo hành thời gian thực (Live Warranty Re-evaluation) tại thời điểm đổi máy.
-            // Điều này cực kỳ quan trọng để phòng chống rủi ro thiết bị thực tế đã trôi qua thời hạn bảo hành tối đa trong quãng thời gian dài chẩn đoán hoặc chờ linh kiện.
-            var liveWarranty = await WarrantyEvaluator.EvaluateAsync(
-                ticket.Serial,
-                ticket.Serial.Variant,
-                _warrantyRepository);
-
-            if (!liveWarranty.IsInWarranty)
-                throw new InvalidOperationException("Bảo hành đã hết hạn, không thể đổi 1-1.");
-
-            if (ticket.ReplacementSerialId.HasValue)
-                throw new InvalidOperationException("Phiếu này đã được đổi 1-1 trước đó.");
-
-            ValidateTransition(ticket.Status, (byte)8);
-
-            var oldSerial = await _serialRepository.GetByIdWithTrackingAsync(ticket.SerialId);
-            if (oldSerial == null)
-                throw new InvalidOperationException("Serial cũ không tồn tại.");
-
-            var newSerial = await _serialRepository.GetByIdWithTrackingAsync(newSerialId);
-            if (newSerial == null || newSerial.Status != (byte)0)
-                throw new InvalidOperationException("Serial thay thế không sẵn trong kho hoặc đã được giữ chỗ.");
-
-            if (newSerial.VariantId != oldSerial.VariantId)
-                throw new InvalidOperationException("Serial thay thế phải cùng biến thể với serial hỏng.");
-
-            // Hóa đơn lịch sử: Lấy dòng ánh xạ hóa đơn vật lý của máy cũ
-            var oldOrderSerial = await _dbContext.OrderSerials
-                .FirstOrDefaultAsync(os => os.SerialId == oldSerial.Id);
-            if (oldOrderSerial == null)
-                throw new InvalidOperationException("Không tìm thấy bản ghi xuất kho gốc của serial này.");
-
-            // Lấy thời hạn kết thúc bảo hành hiện hữu để chuyển tiếp bảo hành kế thừa
-            var oldWarranties = await _warrantyRepository.GetActiveBySerialIdTrackedAsync(oldSerial.Id);  // TRACKED: bên dưới ghi oldWarranties[0].Status = 2
-            var oldEndDate = oldWarranties.FirstOrDefault()?.EndDate
-                ?? oldSerial.SoldDate?.AddMonths(oldSerial.Variant.WarrantyMonth)
-                ?? DateTime.UtcNow;
+            CheckAssignment(precheckTicket, userId, isAdmin);
 
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // Nặng nhất: `ticket`, `oldSerial`, `newSerial`, `oldOrderSerial`, `oldWarranties`
-                // — NĂM cụm entity đều nạp TRACKED ở ngoài rồi sửa bên trong.
-                await _unitOfWork.ExecuteInTransactionAsync(async () =>
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork.
+                // Trước khi rà, đây là call-site nặng nhất: NĂM cụm entity — `ticket`,
+                // `oldSerial`, `newSerial`, `oldOrderSerial`, `oldWarranties` — đều nạp TRACKED
+                // ở ngoài rồi sửa bên trong, tức năm lần dính đúng bẫy mất dữ liệu âm thầm.
+                // Nay cả năm đều nạp LẠI bên trong delegate ở mỗi lần thử.
+                //
+                // Trả về VariantId cần đồng bộ tồn kho thay vì đọc `oldSerial` sau transaction.
+                var syncVariantId = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     var now = DateTime.UtcNow;
+
+                    // ── Nạp LẠI toàn bộ entity sẽ ghi, BÊN TRONG delegate ──
+                    var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+                    if (ticket == null)
+                        throw new InvalidOperationException("Phiếu không tồn tại.");
+
+                    if (ticket.Status != (byte)1 && ticket.Status != (byte)7)
+                        throw new InvalidOperationException("Trạng thái phiếu không cho phép đổi 1-1.");
+
+                    if (ticket.ResolutionType != (byte)3 && ticket.ResolutionType != (byte)2)
+                        throw new InvalidOperationException("Loại giải pháp không phải đổi 1-1.");
+
+                    // NGHIỆP VỤ BẢO VỆ CHỐT CHẶN: Đánh giá bảo hành thời gian thực (Live Warranty Re-evaluation) tại thời điểm đổi máy.
+                    // Điều này cực kỳ quan trọng để phòng chống rủi ro thiết bị thực tế đã trôi qua thời hạn bảo hành tối đa trong quãng thời gian dài chẩn đoán hoặc chờ linh kiện.
+                    var liveWarranty = await WarrantyEvaluator.EvaluateAsync(
+                        ticket.Serial,
+                        ticket.Serial.Variant,
+                        _warrantyRepository);
+
+                    if (!liveWarranty.IsInWarranty)
+                        throw new InvalidOperationException("Bảo hành đã hết hạn, không thể đổi 1-1.");
+
+                    if (ticket.ReplacementSerialId.HasValue)
+                        throw new InvalidOperationException("Phiếu này đã được đổi 1-1 trước đó.");
+
+                    ValidateTransition(ticket.Status, (byte)8);
+
+                    var oldSerial = await _serialRepository.GetByIdWithTrackingAsync(ticket.SerialId);
+                    if (oldSerial == null)
+                        throw new InvalidOperationException("Serial cũ không tồn tại.");
+
+                    var newSerial = await _serialRepository.GetByIdWithTrackingAsync(newSerialId);
+                    if (newSerial == null || newSerial.Status != (byte)0)
+                        throw new InvalidOperationException("Serial thay thế không sẵn trong kho hoặc đã được giữ chỗ.");
+
+                    if (newSerial.VariantId != oldSerial.VariantId)
+                        throw new InvalidOperationException("Serial thay thế phải cùng biến thể với serial hỏng.");
+
+                    // Hóa đơn lịch sử: Lấy dòng ánh xạ hóa đơn vật lý của máy cũ
+                    var oldOrderSerial = await _dbContext.OrderSerials
+                        .FirstOrDefaultAsync(os => os.SerialId == oldSerial.Id);
+                    if (oldOrderSerial == null)
+                        throw new InvalidOperationException("Không tìm thấy bản ghi xuất kho gốc của serial này.");
+
+                    // Lấy thời hạn kết thúc bảo hành hiện hữu để chuyển tiếp bảo hành kế thừa
+                    var oldWarranties = await _warrantyRepository.GetActiveBySerialIdTrackedAsync(oldSerial.Id);  // TRACKED: bên dưới ghi oldWarranties[0].Status = 2
+                    var oldEndDate = oldWarranties.FirstOrDefault()?.EndDate
+                        ?? oldSerial.SoldDate?.AddMonths(oldSerial.Variant.WarrantyMonth)
+                        ?? now;
+
                     byte previousStatus = ticket.Status;
 
                     // 1. Phế thải Serial cũ: Đổi trạng thái sang Hỏng (Defective - 4)
@@ -901,10 +982,12 @@ namespace PBL3.Service.ServiceTickets
                     });
 
                     await _unitOfWork.SaveChangesAsync();
-                });
+
+                    return oldSerial.VariantId;
+                }, retrySafe: true);
 
                 // NGHIỆP VỤ KHO: Tự động kích hoạt đồng bộ hóa số lượng tồn kho khả dụng của biến thể trong RAM
-                await _inventorySyncService.SyncStockBatchAsync(new[] { oldSerial.VariantId });
+                await _inventorySyncService.SyncStockBatchAsync(new[] { syncVariantId });
 
                 return true;
             }
@@ -916,7 +999,9 @@ namespace PBL3.Service.ServiceTickets
 
         public async Task<bool> MarkInternalRepairCompletedAsync(int ticketId, ServiceTicketCompleteDto request, Guid userId, bool isAdmin = false)
         {
-            var ticket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+            // Kiểm tra nghiệp vụ NGOÀI transaction: GetByIdAsync là bản AsNoTracking, chỉ để
+            // trả lỗi sớm. Phiếu được nạp LẠI có tracking bên trong delegate mới ghi.
+            var ticket = await _ticketRepository.GetByIdAsync(ticketId);
             if (ticket == null)
                 throw new InvalidOperationException("Phiếu không tồn tại.");
 
@@ -929,18 +1014,26 @@ namespace PBL3.Service.ServiceTickets
 
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `ticket` nạp TRACKED ở ngoài rồi sửa bên trong.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `trackedTicket` nạp lại và các bản ghi lịch sử/log dựng BÊN TRONG delegate;
+                // (2) CompletedDate / ModifiedDate / ChangedAt / LoggedAt tính bên trong;
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
-                    // Issue #4: Capture FromStatus BEFORE changing status
-                    byte previousStatus = ticket.Status;
+                    var now = DateTime.UtcNow;
 
-                    ticket.Status = (byte)9;
-                    ticket.CompletedDate = DateTime.UtcNow;
-                    ticket.ModifiedDate = DateTime.UtcNow;
+                    // Nạp LẠI có tracking bên trong delegate — xem giải thích ở CreateQuotationAsync.
+                    var trackedTicket = await _ticketRepository.GetByIdWithTrackingAsync(ticketId);
+                    if (trackedTicket is null || !new[] { (byte)5, (byte)7, (byte)8 }.Contains(trackedTicket.Status))
+                        throw new InvalidOperationException(
+                            "Phiếu vừa được thay đổi ở nơi khác. Vui lòng tải lại trang.");
+
+                    // Issue #4: Capture FromStatus BEFORE changing status
+                    byte previousStatus = trackedTicket.Status;
+
+                    trackedTicket.Status = (byte)9;
+                    trackedTicket.CompletedDate = now;
+                    trackedTicket.ModifiedDate = now;
 
                     await _ticketRepository.AddStatusHistoryAsync(new ServiceTicketStatusHistory
                     {
@@ -948,7 +1041,7 @@ namespace PBL3.Service.ServiceTickets
                         FromStatus = previousStatus,
                         ToStatus = (byte)9,
                         ChangedByEmployeeId = userId,
-                        ChangedAt = DateTime.UtcNow,
+                        ChangedAt = now,
                         Note = "Hoàn tất sửa chữa"
                     });
 
@@ -957,17 +1050,17 @@ namespace PBL3.Service.ServiceTickets
                     {
                         await _logRepository.AddAsync(new SerialRepairLog
                         {
-                            SerialId = ticket.SerialId,
+                            SerialId = trackedTicket.SerialId,
                             TicketId = ticketId,
-                            ResolutionType = ticket.ResolutionType,
-                            LoggedAt = DateTime.UtcNow,
+                            ResolutionType = trackedTicket.ResolutionType,
+                            LoggedAt = now,
                             LoggedByEmployeeId = userId,
                             Summary = request.Note ?? "Sửa chữa xong"
                         });
                     }
 
                     await _unitOfWork.SaveChangesAsync();
-                });
+                }, retrySafe: true);
 
                 return true;
             }

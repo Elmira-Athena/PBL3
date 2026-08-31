@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
+using PBL3.Core.Exceptions;
 using PBL3.Core.Interfaces;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
@@ -48,13 +50,21 @@ namespace PBL3.Service.Inventory
         {
             // 1. Xác thực Đơn hàng (Order Validation)
             // LƯU Ý NGHIỆP VỤ: Chỉ xuất kho đối với đơn hàng ở trạng thái Confirmed (Đã xác nhận thanh toán/chốt đơn)
-            var order = await _orderRepo.GetByIdWithDetailsTrackedAsync(request.OrderId);
-            if (order == null)
+            // Kiểm tra NGOÀI transaction bằng projection AsNoTracking: trả lỗi sớm mà không phải
+            // mở transaction, và lấy OrderCode cho log. Cố ý KHÔNG nạp entity tracked ở đây —
+            // xem giải thích tại khối ExecuteInTransactionAsync bên dưới.
+            var precheck = await _orderRepo.GetQueryable()
+                .AsNoTracking()
+                .Where(o => o.Id == request.OrderId)
+                .Select(o => new { o.Status, o.OrderCode })
+                .FirstOrDefaultAsync();
+
+            if (precheck == null)
             {
                 return ApiResult<bool>.Fail("Đơn hàng không tồn tại.");
             }
 
-            if (order.Status != (byte)OrderStatus.Confirmed)
+            if (precheck.Status != (byte)OrderStatus.Confirmed)
             {
                 return ApiResult<bool>.Fail("Đơn hàng không ở trạng thái Đã xác nhận (Confirmed). Không thể xuất kho.");
             }
@@ -69,14 +79,33 @@ namespace PBL3.Service.Inventory
             // BẮT ĐẦU TRANSACTION: Bảo toàn tính toàn vẹn dữ liệu xuất kho hàng loạt
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `order` nạp TRACKED ở ngoài (GetByIdWithDetailsTrackedAsync) rồi đặt
-                // order.Status = Exported bên trong. Thêm nữa: orderDetail.OrderSerials.Add(...)
-                // chạy lại sẽ sinh bản ghi OrderSerial TRÙNG.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `order` (kèm OrderDetails/OrderSerials) và `dbSerials` đều nạp LẠI bên
+                //     trong delegate; (2) `SoldDate = DateTime.UtcNow` tính bên trong;
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate.
+                //
+                // ⚠️ NẠP LẠI `order` BÊN TRONG LÀ BẮT BUỘC, VÌ HAI LÝ DO ĐỘC LẬP:
+                //
+                //   a) `order.Status = Exported` — nếu giữ entity của lần thử trước thì EF đã
+                //      đánh dấu nó Unchanged với snapshot = Exported, nên lần thử này gán lại
+                //      đúng giá trị đó sẽ KHÔNG sinh UPDATE nào, trong khi hàng dữ liệu vừa bị
+                //      rollback về Confirmed. Đơn hàng "xuất kho thành công" mà vẫn Confirmed.
+                //
+                //   b) `orderDetail.OrderSerials.Add(...)` — GetByIdWithDetailsTrackedAsync CÓ
+                //      Include(OrderSerials), nên collection giữ luôn các bản ghi Add của lần
+                //      thử trước. Chạy lại sẽ Add chồng lên và sinh OrderSerial TRÙNG.
+                //
+                // ChangeTracker.Clear() (chạy khi retrySafe: true) + nạp lại xử lý được cả hai.
                 var variantIdsToSync = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    // Nạp LẠI bên trong delegate — mỗi lần thử đọc bản mới từ DB.
+                    var order = await _orderRepo.GetByIdWithDetailsTrackedAsync(request.OrderId);
+
+                    // Chốt chống race. NÉM chứ không return, để transaction rollback.
+                    if (order is null || order.Status != (byte)OrderStatus.Confirmed)
+                        throw new ConcurrentModificationException(
+                            "Đơn hàng vừa được thay đổi bởi thao tác khác. Vui lòng tải lại trang.");
+
                     // Load Serials WITH TRACKING so updates are tracked by DbContext
                     var dbSerials = await _serialRepo.GetSerialsWithTrackingAsync(allSerialNumbers);
                     var dbSerialsMap = dbSerials.ToDictionary(s => s.SerialNumber, s => s, StringComparer.OrdinalIgnoreCase);
@@ -145,7 +174,7 @@ namespace PBL3.Service.Inventory
                     await _unitOfWork.SaveChangesAsync();
 
                     return variantIdsToSync;
-                });
+                }, retrySafe: true);
 
                 // 7. Đồng bộ số lượng tồn kho ảo thực tế (StockQuantity) bên ngoài transaction
                 if (variantIdsToSync.Any())
@@ -153,14 +182,19 @@ namespace PBL3.Service.Inventory
                     await _inventorySyncService.SyncStockBatchAsync(variantIdsToSync);
                 }
 
-                _logger.LogInformation("Xuất kho thành công cho đơn hàng {OrderId} ({OrderCode})", order.Id, order.OrderCode);
+                _logger.LogInformation("Xuất kho thành công cho đơn hàng {OrderId} ({OrderCode})", request.OrderId, precheck.OrderCode);
 
                 return ApiResult<bool>.Ok(true, "Xuất kho thành công. Đơn hàng chuyển sang trạng thái Đã xuất kho.");
+            }
+            catch (ConcurrentModificationException ex)
+            {
+                _logger.LogWarning(ex, "Xung đột đồng thời khi xuất kho đơn hàng {OrderId}", request.OrderId);
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (Exception ex)
             {
                 // ROLLBACK TRANSACTION: Reset lại toàn bộ trạng thái nếu xảy ra bất kỳ lỗi quét mã nào
-                _logger.LogError(ex, "Lỗi khi xuất kho cho đơn hàng {OrderId}", order.Id);
+                _logger.LogError(ex, "Lỗi khi xuất kho cho đơn hàng {OrderId}", request.OrderId);
                 return ApiResult<bool>.Fail($"Lỗi khi xuất kho: {ex.Message}");
             }
         }

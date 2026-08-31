@@ -64,7 +64,6 @@ namespace PBL3.Service.Orders
         {
             // ── BƯỚC 1: XÁC ĐỊNH NGUỒN DỮ LIỆU ĐẶT HÀNG (Cart vs Buy Now) ──
             var checkoutItems = new List<(int VariantId, int Quantity, decimal Price)>();
-            List<PBL3.Core.Entities.Cart>? cartsToRemove = null;
 
             if (request.IsBuyNow)
             {
@@ -84,15 +83,18 @@ namespace PBL3.Service.Orders
             }
             else
             {
-                // Checkout từ giỏ hàng hiện tại của khách hàng
-                var carts = await _cartRepo.GetCartItemsWithTrackingAsync(userId);
+                // Checkout từ giỏ hàng hiện tại của khách hàng.
+                // Đọc AsNoTracking: ở đây chỉ cần GIÁ và SỐ LƯỢNG để dựng đơn. Giỏ sẽ được
+                // nạp LẠI (có tracking) bên trong delegate mới xoá — xem điều kiện 1 của hợp
+                // đồng retry. Giữ instance tracked từ ngoài rồi RemoveRange bên trong là khuôn
+                // hỏng khi chạy lại: sau ChangeTracker.Clear() chúng đã detached.
+                var carts = await _cartRepo.GetCartItemsByUserAsync(userId);
                 if (!carts.Any())
                 {
                     return ApiResult<CheckoutResponse>.Fail("Giỏ hàng của bạn đang trống.");
                 }
 
                 checkoutItems = carts.Select(c => (c.VariantId, c.Quantity, c.Variant.Price)).ToList();
-                cartsToRemove = carts; // Lưu vết để xóa khỏi giỏ sau khi đặt hàng thành công
             }
 
             // ── BƯỚC 2: XÁC THỰC ĐỊA CHỈ & KIỂM TRA TỒN KHO ẢO (Virtual Inventory) ──
@@ -133,7 +135,7 @@ namespace PBL3.Service.Orders
                 : null;
 
             // Thực thi luồng kiểm tra và áp dụng voucher
-            var (usages, totalDiscount) = await ApplyVouchersAsync(
+            var (usagePlans, totalDiscount) = await ApplyVouchersAsync(
                 subTotal, request.VoucherCodes, userId, isOnlineOrder: true, itemCategoryIds);
             
             // Đảm bảo số tiền giảm giá không vượt quá tổng giá trị đơn hàng trước ship
@@ -144,14 +146,14 @@ namespace PBL3.Service.Orders
             // ── BƯỚC 4: TẠO ĐƠN HÀNG (Chạy trong Transaction đảm bảo tính toàn vẹn) ──
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `usages` (VoucherUsage) được DỰNG ở ngoài bởi ApplyVouchersAsync rồi mới
-                // AddUsagesAsync bên trong — lần thử 2 là no-op nên lượt dùng voucher không được
-                // ghi. `carts` cũng nạp TRACKED ở ngoài.
-                // (TryConsumeByCodesAsync thì AN TOÀN: nó nằm trong transaction nên rollback
-                //  hoàn tác luôn phép +1, lần thử 2 tăng lại cho ra đúng net +1.)
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `order`, `VoucherUsage` và giỏ hàng cần xoá đều được dựng/nạp BÊN TRONG;
+                // (2) mã đơn (IDocumentCodeGenerator), OrderDate và UsedDate đều tính bên trong;
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate —
+                //     ApplyVouchersAsync ở trên CHỈ ĐỌC (kiểm tra + tính tiền giảm).
+                //
+                // TryConsumeByCodesAsync vốn đã an toàn: nó nằm trong transaction nên rollback
+                // hoàn tác luôn phép +1, lần thử sau tăng lại cho ra đúng net +1.
                 var order = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // Tự sinh mã đơn hàng định dạng ORD-yyyyMMdd-NNNNNN
@@ -195,13 +197,20 @@ namespace PBL3.Service.Orders
                         });
                     }
 
-                    // Ghi nhận lịch sử sử dụng Voucher (VoucherUsages) và tăng số lượt đã dùng của mã
-                    foreach (var usage in usages)
+                    // Ghi nhận lịch sử sử dụng Voucher (VoucherUsages) và tăng số lượt đã dùng của mã.
+                    // DỰNG MỚI entity ở mỗi lần thử từ `usagePlans` (dữ liệu thuần) — không tái
+                    // dùng instance của lần thử trước, vì chúng đã mang Id bị rollback.
+                    if (usagePlans.Any())
                     {
-                        usage.OrderId = order.Id;
-                    }
-                    if (usages.Any())
-                    {
+                        var usages = usagePlans.Select(u => new VoucherUsage
+                        {
+                            VoucherId       = u.VoucherId,
+                            UserId          = u.UserId,
+                            OrderId         = order.Id,
+                            DiscountApplied = u.DiscountApplied,
+                            UsedDate        = DateTime.UtcNow
+                        }).ToList();
+
                         await _voucherRepo.AddUsagesAsync(usages);
                     
                         if (request.VoucherCodes != null && request.VoucherCodes.Any())
@@ -217,16 +226,19 @@ namespace PBL3.Service.Orders
                         }
                     }
 
-                    // Dọn dẹp giỏ hàng sau khi đặt hàng thành công
-                    if (!request.IsBuyNow && cartsToRemove != null)
+                    // Dọn dẹp giỏ hàng sau khi đặt hàng thành công.
+                    // Nạp LẠI có tracking bên trong delegate — mỗi lần thử lấy instance mới.
+                    if (!request.IsBuyNow)
                     {
-                        _cartRepo.RemoveRange(cartsToRemove);
+                        var cartsToRemove = await _cartRepo.GetCartItemsWithTrackingAsync(userId);
+                        if (cartsToRemove.Any())
+                            _cartRepo.RemoveRange(cartsToRemove);
                     }
 
                     await _unitOfWork.SaveChangesAsync();
 
                     return order;
-                });
+                }, retrySafe: true);
 
                 var response = new CheckoutResponse
                 {
@@ -275,7 +287,7 @@ namespace PBL3.Service.Orders
                 ? await _productRepo.GetCategoryIdsByVariantIdsAsync(placeOrderVariantIds)
                 : null;
 
-            var (usages, totalDiscount) = await ApplyVouchersAsync(
+            var (usagePlans, totalDiscount) = await ApplyVouchersAsync(
                 subTotal, request.VoucherCodes, userId, isOnlineOrder: true, placeOrderCategoryIds);
 
             // 3. Ensure discount <= subtotal
@@ -284,11 +296,11 @@ namespace PBL3.Service.Orders
             // 4. TRANSACTION
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `usages` (VoucherUsage) được DỰNG ở ngoài bởi ApplyVouchersAsync rồi mới
-                // AddUsagesAsync bên trong — lần thử 2 là no-op nên lượt dùng voucher không được ghi.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `order` và `VoucherUsage` đều được dựng BÊN TRONG delegate;
+                // (2) mã đơn (IDocumentCodeGenerator), OrderDate và UsedDate đều tính bên trong;
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate —
+                //     ApplyVouchersAsync ở trên CHỈ ĐỌC.
                 var order = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
                     // Generate OrderCode (ORD-yyyyMMdd-NNNNNN)
@@ -329,12 +341,21 @@ namespace PBL3.Service.Orders
                         });
                     }
 
-                    // 4c. Update Usages with OrderId and Add
-                    foreach (var usage in usages)
+                    // 4c. DỰNG MỚI VoucherUsage ở mỗi lần thử từ `usagePlans` (dữ liệu thuần).
+                    // Không tái dùng instance của lần thử trước: chúng đã mang Id bị rollback.
+                    if (usagePlans.Any())
                     {
-                        usage.OrderId = order.Id;
+                        var usages = usagePlans.Select(u => new VoucherUsage
+                        {
+                            VoucherId       = u.VoucherId,
+                            UserId          = u.UserId,
+                            OrderId         = order.Id,
+                            DiscountApplied = u.DiscountApplied,
+                            UsedDate        = DateTime.UtcNow
+                        }).ToList();
+
+                        await _voucherRepo.AddUsagesAsync(usages);
                     }
-                    await _voucherRepo.AddUsagesAsync(usages);
 
                     // 4d. Increase UsedCount of vouchers
                     if (request.VoucherCodes != null && request.VoucherCodes.Any())
@@ -351,7 +372,7 @@ namespace PBL3.Service.Orders
                     await _unitOfWork.SaveChangesAsync();
 
                     return order;
-                });
+                }, retrySafe: true);
 
                 // 5. Manual Mapping
                 var savedOrderInfo = await _orderRepo.GetByIdWithDetailsAsync(order.Id);
@@ -381,14 +402,29 @@ namespace PBL3.Service.Orders
         /// 4. Tính toán số tiền chiết khấu thực tế: Theo số tiền cố định hoặc tỷ lệ phần trăm (đối với phần trăm có áp dụng khống chế mức trần tối đa MaxDiscountAmount).
         /// 5. Trích xuất danh sách VoucherUsage và tổng tiền giảm giá để cập nhật đơn hàng.
         /// </summary>
-        private async Task<(List<VoucherUsage> Usages, decimal TotalDiscount)> ApplyVouchersAsync(
+        /// <summary>
+        /// Dữ liệu thuần để DỰNG <see cref="VoucherUsage"/> — CỐ Ý không phải entity.
+        /// </summary>
+        /// <remarks>
+        /// Trước đây ApplyVouchersAsync trả thẳng entity <c>VoucherUsage</c> đã <c>new</c> sẵn
+        /// ở NGOÀI transaction, rồi call-site mới <c>AddUsagesAsync</c> ở TRONG. Khuôn đó
+        /// không chạy lại được: sau lần thử 1, các entity ấy đã được EF gán Id và chuyển sang
+        /// Unchanged; lần thử 2 (sau <c>ChangeTracker.Clear()</c>) chúng là object detached
+        /// nhưng Id KHÁC 0 — Add lại thì hoặc EF coi là đã có khoá, hoặc ghi trùng.
+        ///
+        /// Trả về dữ liệu thuần buộc call-site phải <c>new</c> entity MỚI bên trong delegate ở
+        /// mỗi lần thử, đúng điều kiện 1 của hợp đồng retry.
+        /// </remarks>
+        private sealed record VoucherUsagePlan(int VoucherId, Guid UserId, decimal DiscountApplied);
+
+        private async Task<(List<VoucherUsagePlan> Usages, decimal TotalDiscount)> ApplyVouchersAsync(
             decimal subTotal,
             List<string>? voucherCodes,
             Guid userId,
             bool isOnlineOrder,
             List<int>? orderItemCategoryIds = null)
         {
-            var usages = new List<VoucherUsage>();
+            var usages = new List<VoucherUsagePlan>();
             if (voucherCodes == null || !voucherCodes.Any())
                 return (usages, 0);
 
@@ -479,13 +515,9 @@ namespace PBL3.Service.Orders
 
                 totalDiscount += discountApplied;
 
-                usages.Add(new VoucherUsage
-                {
-                    VoucherId       = voucher.Id,
-                    UserId          = userId,
-                    DiscountApplied = discountApplied,
-                    UsedDate        = DateTime.UtcNow
-                });
+                // UsedDate CỐ Ý không tính ở đây: nó là giá trị "sinh một lần để ghi", nên
+                // theo điều kiện 2 của hợp đồng retry phải tính BÊN TRONG delegate.
+                usages.Add(new VoucherUsagePlan(voucher.Id, userId, discountApplied));
             }
 
             return (usages, totalDiscount);

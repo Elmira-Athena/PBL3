@@ -202,8 +202,8 @@ Nó ghi: việc kế tiếp (kèm `file:dòng` cụ thể), cách chạy môi tr
 chứng, và **bảy cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
 tầng Service, auth, hay rate limiting.
 
-Tóm tắt trạng thái: đợt 1 + đợt 2 đã xong. Còn lại: 14 call-site transaction chưa
-retry-safe, 23 nút chưa chống double-submit, và đợt 3 **bị chặn** tới khi chạy được
+Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A đã xong (18/18 call-site transaction nay
+retry-safe). Còn lại: 23 nút chưa chống double-submit, và đợt 3 **bị chặn** tới khi chạy được
 `Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
 
 ## AI Context Files

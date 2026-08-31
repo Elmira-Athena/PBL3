@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
+using PBL3.Core.Exceptions;
 using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Shared.DTOs.Common;
@@ -588,26 +589,50 @@ namespace PBL3.Service.Inventory
         /// </summary>
         public async Task<ApiResult<bool>> SubmitAsync(int checkId, Guid employeeId)
         {
-            var check = await _checkRepo.GetByIdAsync(checkId);
-            if (check == null)
+            // Kiểm tra nghiệp vụ chạy NGOÀI transaction: projection AsNoTracking, chỉ để trả
+            // lỗi đẹp mà không phải mở transaction, và để lấy CheckCode cho log. Không ghi gì.
+            // Dùng projection thay vì nạp cả entity: rẻ hơn, và quan trọng hơn là không có
+            // entity tracked nào lọt ra ngoài delegate để vô tình bị sửa.
+            var precheck = await _context.InventoryChecks
+                .AsNoTracking()
+                .Where(c => c.Id == checkId)
+                .Select(c => new { c.Status, c.EmployeeId, c.CheckCode })
+                .FirstOrDefaultAsync();
+
+            if (precheck == null)
                 return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
 
-            if (check.Status != (byte)InventoryCheckStatus.Draft)
+            if (precheck.Status != (byte)InventoryCheckStatus.Draft)
                 return ApiResult<bool>.Fail("Chỉ có thể gửi duyệt khi phiếu ở trạng thái Nháp.");
 
             // Chỉ người tạo phiếu mới có quyền gửi duyệt
-            if (check.EmployeeId != employeeId)
+            if (precheck.EmployeeId != employeeId)
                 return ApiResult<bool>.Fail("Bạn không có quyền gửi duyệt phiếu này.");
 
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `check` nạp TRACKED ở ngoài — InventoryCheckRepository.GetByIdAsync KHÔNG có
-                // AsNoTracking — rồi sửa bên trong.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `check` và `detail` đều nạp LẠI bên trong delegate;
+                // (2) không sinh mã chứng từ hay mốc thời gian nào để ghi;
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate.
+                //
+                // ⚠️ Ở ĐÂY NẠP LẠI LÀ BẮT BUỘC, KHÔNG PHẢI CHỈ ĐỔI CỜ.
+                // `detail.MissingQuantity += missingCount` là phép tăng TƯƠNG ĐỐI trên entity
+                // tracked. Nếu giữ entity của lần thử trước, lần thử này cộng chồng thành
+                // `cũ + 2×missing` và EF THẤY CÓ THAY ĐỔI nên vẫn sinh UPDATE — với con số
+                // sai. Đó là ghi sai số liệu âm thầm, tệ hơn mất dữ liệu vì kết quả trông
+                // vẫn hợp lệ. ChangeTracker.Clear() (chạy khi retrySafe: true) + nạp lại
+                // mới xử lý được ca này.
                 var pendingRows = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    // Nạp LẠI bên trong delegate — mỗi lần thử đọc bản mới từ DB.
+                    var check = await _checkRepo.GetByIdAsync(checkId);
+
+                    // Chốt chống race. NÉM chứ không return: return thì transaction vẫn commit.
+                    if (check is null || check.Status != (byte)InventoryCheckStatus.Draft)
+                        throw new ConcurrentModificationException(
+                            "Phiếu kiểm kê vừa được thay đổi bởi thao tác khác. Vui lòng tải lại trang.");
+
                     // NGHIỆP VỤ QUAN TRỌNG: Tất cả các mã Serial nằm trong danh sách chốt ban đầu (Pending)
                     // mà không được nhân viên quét barcode thực tế (chưa được tìm thấy tại kho)
                     // sẽ tự động được coi là thất thoát và chuyển sang trạng thái "Thiếu" (Missing).
@@ -637,13 +662,20 @@ namespace PBL3.Service.Inventory
                     await _unitOfWork.SaveChangesAsync();
 
                     return pendingRows;
-                });
+                }, retrySafe: true);
 
                 _logger.LogInformation(
                     "Gửi duyệt phiếu kiểm kê {CheckCode}: {MissingCount} serials thiếu",
-                    check.CheckCode, pendingRows.Count);
+                    precheck.CheckCode, pendingRows.Count);
 
                 return ApiResult<bool>.Ok(true, "Đã gửi phiếu kiểm kê để phê duyệt thành công.");
+            }
+            catch (ConcurrentModificationException ex)
+            {
+                // Bắt TRƯỚC catch(Exception) để giữ nguyên thông báo cụ thể — nếu không,
+                // người dùng nhận "đã xảy ra lỗi, thử lại" và bấm lại cũng hỏng y hệt.
+                _logger.LogWarning(ex, "Xung đột đồng thời khi gửi duyệt phiếu kiểm kê {CheckId}.", checkId);
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (Exception ex)
             {
@@ -665,22 +697,46 @@ namespace PBL3.Service.Inventory
         /// </summary>
         public async Task<ApiResult<bool>> ApproveAsync(int checkId, Guid adminId)
         {
-            var check = await _checkRepo.GetByIdAsync(checkId);
-            if (check == null)
+            // Kiểm tra nghiệp vụ NGOÀI transaction: projection AsNoTracking, trả lỗi sớm và
+            // lấy CheckCode cho log. Không entity tracked nào lọt ra ngoài delegate.
+            var precheck = await _context.InventoryChecks
+                .AsNoTracking()
+                .Where(c => c.Id == checkId)
+                .Select(c => new { c.Status, c.CheckCode })
+                .FirstOrDefaultAsync();
+
+            if (precheck == null)
                 return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
 
             // NGHIỆP VỤ: Chỉ phê duyệt khi phiếu đang ở trạng thái Chờ duyệt (AwaitingApproval).
-            if (check.Status != (byte)InventoryCheckStatus.AwaitingApproval)
+            if (precheck.Status != (byte)InventoryCheckStatus.AwaitingApproval)
                 return ApiResult<bool>.Fail("Chỉ có thể phê duyệt phiếu ở trạng thái Chờ duyệt.");
 
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `check` nạp TRACKED ở ngoài rồi sửa bên trong.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `check`, các `row.Serial` và log điều chỉnh đều nạp/dựng bên trong;
+                // (2) `DateTime.UtcNow` dùng để ghi (AdjustedDate, ApprovedAt) tính bên trong,
+                //     nên lần thử lại lấy mốc mới — đúng ý nghĩa "lúc thực sự ghi được";
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate.
+                //
+                // `adjustmentLogs` được khởi tạo BÊN TRONG (dòng ngay dưới): bắt buộc, vì
+                // nếu dựng ở ngoài thì lần thử lại sẽ Add chồng lên danh sách cũ và ghi
+                // trùng bản ghi tổn thất.
+                //
+                // SyncStockBatchAsync vẫn nằm TRONG delegate một cách có chủ đích: nó đếm lại
+                // Available từ DB (idempotent), nên chạy lại không sai; và để trong thì số
+                // tồn được commit cùng transaction với việc đổi trạng thái serial.
                 var adjustmentLogs = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    // Nạp LẠI bên trong delegate — mỗi lần thử đọc bản mới từ DB.
+                    var check = await _checkRepo.GetByIdAsync(checkId);
+
+                    // Chốt chống race. NÉM chứ không return, để transaction rollback.
+                    if (check is null || check.Status != (byte)InventoryCheckStatus.AwaitingApproval)
+                        throw new ConcurrentModificationException(
+                            "Phiếu kiểm kê vừa được thay đổi bởi thao tác khác. Vui lòng tải lại trang.");
+
                     var adjustmentLogs = new List<InventoryAdjustmentLog>();
                     var affectedVariantIds = new HashSet<int>();
 
@@ -785,16 +841,21 @@ namespace PBL3.Service.Inventory
                         await _inventorySyncService.SyncStockBatchAsync(affectedVariantIds);
 
                     return adjustmentLogs;
-                });
+                }, retrySafe: true);
 
                 _logger.LogInformation(
                     "Phê duyệt phiếu kiểm kê {CheckCode}: {Lost} lost, {Defective} defective. Admin: {AdminId}",
-                    check.CheckCode,
+                    precheck.CheckCode,
                     adjustmentLogs.Count(l => l.AdjustmentType == (byte)InventoryAdjustmentType.Lost),
                     adjustmentLogs.Count(l => l.AdjustmentType == (byte)InventoryAdjustmentType.Defective),
                     adminId);
 
                 return ApiResult<bool>.Ok(true, "Phê duyệt và cân bằng kho thành công.");
+            }
+            catch (ConcurrentModificationException ex)
+            {
+                _logger.LogWarning(ex, "Xung đột đồng thời khi phê duyệt phiếu kiểm kê {CheckId}.", checkId);
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (Exception ex)
             {
@@ -814,21 +875,41 @@ namespace PBL3.Service.Inventory
         /// </summary>
         public async Task<ApiResult<bool>> RejectAsync(int checkId, RejectInventoryCheckRequest request, Guid adminId)
         {
-            var check = await _checkRepo.GetByIdAsync(checkId);
-            if (check == null)
+            // Kiểm tra nghiệp vụ NGOÀI transaction: projection AsNoTracking, trả lỗi sớm và
+            // lấy CheckCode cho log. Không entity tracked nào lọt ra ngoài delegate.
+            var precheck = await _context.InventoryChecks
+                .AsNoTracking()
+                .Where(c => c.Id == checkId)
+                .Select(c => new { c.Status, c.CheckCode })
+                .FirstOrDefaultAsync();
+
+            if (precheck == null)
                 return ApiResult<bool>.Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
 
-            if (check.Status != (byte)InventoryCheckStatus.AwaitingApproval)
+            if (precheck.Status != (byte)InventoryCheckStatus.AwaitingApproval)
                 return ApiResult<bool>.Fail("Chỉ có thể từ chối phiếu ở trạng thái Chờ duyệt.");
 
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // `check` nạp TRACKED ở ngoài rồi sửa bên trong.
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork:
+                // (1) `check`, các dòng Missing/Matched/Defective/Surplus và `details` đều nạp
+                //     LẠI bên trong delegate; (2) không sinh mã chứng từ hay mốc thời gian;
+                // (3) không có tác dụng phụ không-idempotent nào chạy trước delegate.
+                //
+                // ⚠️ Nhánh ReturnToDraft có `row.Detail.ActualQuantity++` — tăng TƯƠNG ĐỐI như
+                // `+=` ở SubmitAsync. Nó chỉ đúng khi chạy lại vì các cột đếm đã được reset về 0
+                // ngay trên đó TRONG CÙNG delegate, và `details` là bản nạp lại của lần thử này.
+                // Đừng tách phần reset ra ngoài delegate.
                 await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    // Nạp LẠI bên trong delegate — mỗi lần thử đọc bản mới từ DB.
+                    var check = await _checkRepo.GetByIdAsync(checkId);
+
+                    // Chốt chống race. NÉM chứ không return, để transaction rollback.
+                    if (check is null || check.Status != (byte)InventoryCheckStatus.AwaitingApproval)
+                        throw new ConcurrentModificationException(
+                            "Phiếu kiểm kê vừa được thay đổi bởi thao tác khác. Vui lòng tải lại trang.");
+
                     check.RejectReason = request.Reason.Trim();
 
                     // NGHIỆP VỤ: Từ chối có 2 hướng đi: Trả về nháp để quét lại hoặc Hủy phiếu hoàn toàn
@@ -903,14 +984,19 @@ namespace PBL3.Service.Inventory
                     }
 
                     await _unitOfWork.SaveChangesAsync();
-                });
+                }, retrySafe: true);
 
                 var action = request.ReturnToDraft ? "trả về Nháp" : "hủy";
                 _logger.LogInformation(
                     "Từ chối phiếu kiểm kê {CheckCode} ({Action}). Admin: {AdminId}. Lý do: {Reason}",
-                    check.CheckCode, action, adminId, request.Reason);
+                    precheck.CheckCode, action, adminId, request.Reason);
 
                 return ApiResult<bool>.Ok(true, $"Đã từ chối và {action} phiếu kiểm kê.");
+            }
+            catch (ConcurrentModificationException ex)
+            {
+                _logger.LogWarning(ex, "Xung đột đồng thời khi từ chối phiếu kiểm kê {CheckId}.", checkId);
+                return ApiResult<bool>.Fail(ex.Message);
             }
             catch (Exception ex)
             {

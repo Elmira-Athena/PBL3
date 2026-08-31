@@ -1,7 +1,7 @@
 # Bắt đầu phiên mới — đọc file này trước
 
-**Cập nhật:** 2026-08-30 · **Trạng thái repo:** `main`, working tree sạch, build `0 Error(s)`
-· **Đã xong:** đợt 1, mục 4.1, đợt 2 · **Kế tiếp:** mục A bên dưới
+**Cập nhật:** 2026-08-31 · **Trạng thái repo:** nhánh `feat/retry-safe-call-sites`, build `0 Error(s)`
+· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A** · **Kế tiếp:** mục B bên dưới
 
 Tài liệu này viết cho một phiên **không có ngữ cảnh gì cả**. Nó trả lời đúng ba câu:
 *đang ở đâu*, *làm gì tiếp*, và *chạy/kiểm bằng lệnh nào*.
@@ -24,122 +24,66 @@ comment **ngay tại chỗ code**, và commit message ghi lý do.
 
 ## 1. Đang ở đâu
 
-10 commit trên `main`. Đợt 1 (sửa lỗi đồng thời, transaction, sinh mã), mục 4.1
-(`EnableRetryOnFailure`), và đợt 2 (frontend + vá bảo mật) đã xong và đã kiểm chạy thật.
+Đợt 1 (sửa lỗi đồng thời, transaction, sinh mã), mục 4.1 (`EnableRetryOnFailure`), đợt 2
+(frontend + vá bảo mật) và mục A (rà retry 18/18 call-site) đã xong và đã kiểm chạy thật.
 
-Ba thứ **cố ý làm dở**, đều đã ghi lý do và đều nằm ở mục A/B dưới đây:
+Hai thứ **cố ý làm dở**, đều đã ghi lý do và đều nằm ở mục B/D dưới đây:
 
-1. **14/18 call-site transaction chưa retry-safe** — có chốt chặn an toàn, không phải bom nổ chậm.
-2. **23 nút gọi mutation chưa chống double-submit** — cơ chế đã có sẵn, chỉ chưa quét hết.
-3. **3 gói NuGet mức High chưa vá** — cần PR riêng, xem mục D.
+1. **23 nút gọi mutation chưa chống double-submit** — cơ chế đã có sẵn, chỉ chưa quét hết.
+2. **3 gói NuGet mức High chưa vá** — cần PR riêng, xem mục D.
+
+Đã đóng: **18/18 call-site transaction nay đều retry-safe** (mục A, xong 2026-08-31).
 
 ---
 
 ## 2. Việc kế tiếp, xếp theo thứ tự nên làm
 
-### 🅰 Rà nốt 14 call-site chưa retry-safe
+### ✅ 🅰 Rà nốt call-site chưa retry-safe — **XONG (2026-08-31)**
 
-**Vì sao đáng làm trước:** đây là nhóm duy nhất còn dính tới **đúng đắn dữ liệu**. Hiện chúng
-an toàn (lỗi transient → ném lỗi rõ ràng, hành vi giống hệt trước khi bật retry), nhưng chúng
-**không được hưởng** khả năng tự phục hồi — đúng thứ cần khi RDS failover và khi rolling deploy,
-tức đúng lúc chạy 2 task.
-
-**Hình dạng việc ở cả 14 chỗ giống hệt nhau:** chuyển phần **nạp entity** vào **bên trong**
-delegate, rồi đổi thành `retrySafe: true`.
-
-| # | File : dòng | Phương thức | Vướng gì |
-|---|---|---|---|
-| 1 | `Inventory/InventoryCheckService.cs:609` | `SubmitAsync` | `check` nạp tracked ở ngoài (+ có `+=`, xem cảnh báo dưới) |
-| 2 | `Inventory/InventoryCheckService.cs:682` | `ApproveAsync` | `check` nạp tracked ở ngoài |
-| 3 | `Inventory/InventoryCheckService.cs:830` | `RejectAsync` | `check` nạp tracked ở ngoài |
-| 4 | `Inventory/InventoryExportService.cs:78` | `ExportOrderAsync` | `order` tracked ở ngoài **+** `OrderSerials.Add` sinh bản ghi trùng khi chạy lại |
-| 5 | `Orders/OrderService.cs:155` | `CheckoutAsync` | `usages` dựng ở ngoài **+** `carts` tracked ở ngoài |
-| 6 | `Orders/OrderService.cs:292` | `PlaceOrderAsync` | `usages` dựng ở ngoài |
-| 7 | `Pos/PosService.cs:319` | `CheckoutAsync` | **3 lý do** — nặng, xem comment tại chỗ |
-| 8 | `ServiceTickets/ServiceTicketService.cs:349` | `CreateQuotationAsync` | `ticket` tracked ở ngoài |
-| 9 | `ServiceTickets/ServiceTicketService.cs:452` | `AcceptQuotationAsync` | `ticket` + `quotation` tracked ở ngoài |
-| 10 | `ServiceTickets/ServiceTicketService.cs:519` | `RejectQuotationAsync` | `ticket` + `quotation` tracked ở ngoài |
-| 11 | `ServiceTickets/ServiceTicketService.cs:580` | `CreateRmaShipmentAsync` | `ticket` tracked ở ngoài |
-| 12 | `ServiceTickets/ServiceTicketService.cs:658` | `RecordRmaResolutionAsync` | `rma` + `ticket` tracked ở ngoài |
-| 13 | `ServiceTickets/ServiceTicketService.cs:843` | `Perform1For1SwapAsync` | **nặng nhất** — 5 cụm entity tracked ở ngoài |
-| 14 | `ServiceTickets/ServiceTicketService.cs:936` | `MarkInternalRepairCompletedAsync` | `ticket` tracked ở ngoài |
-
-> Số dòng có thể trôi sau khi sửa. Lấy lại danh sách bằng:
-> ```bash
-> grep -rn "CHƯA RÀ RETRY" --include='*.cs' src/Service/
-> ```
-
-**Hợp đồng phải thoả (chép từ `IUnitOfWork.ExecuteInTransactionAsync`) — cả ba:**
-
-1. Mọi entity **bị ghi** đều được **nạp bên trong** delegate.
-2. Mọi giá trị **sinh một lần** (mã chứng từ, `DateTime.UtcNow` dùng để ghi) tính **bên trong**.
-3. Không có tác dụng phụ **không idempotent** chạy **trước** delegate mà lại phụ thuộc transaction.
-
-#### Ví dụ làm mẫu — `InventoryCheckService.SubmitAsync`
-
-*Trước* (rút gọn) — `check` nạp ở ngoài, sửa ở trong:
-
-```csharp
-var check = await _checkRepo.GetByIdAsync(checkId);   // ⚠️ TRACKED, ở NGOÀI
-if (check == null) return Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
-if (check.Status != Draft) return Fail("Chỉ có thể gửi duyệt khi phiếu ở trạng thái Nháp.");
-
-var pendingRows = await _unitOfWork.ExecuteInTransactionAsync(async () =>
-{
-    ...
-    detail.MissingQuantity += missingCount;   // ⚠️⚠️ xem cảnh báo dưới
-    check.Status = AwaitingApproval;          // ⚠️ ghi vào entity nạp ở ngoài
-    await _unitOfWork.SaveChangesAsync();
-    return pendingRows;
-});
-```
-
-*Sau* — giữ kiểm tra nghiệp vụ ở ngoài (chỉ đọc, rẻ, trả lỗi sớm), **nạp lại để ghi ở trong**:
-
-```csharp
-// Kiểm tra nghiệp vụ: đọc KHÔNG tracking, chỉ để trả lỗi sớm. Không ghi gì.
-// GetByIdWithDetailsAsync là bản AsNoTracking (đã kiểm) — KHÁC GetByIdAsync vốn CÓ tracking.
-var precheck = await _checkRepo.GetByIdWithDetailsAsync(checkId);
-if (precheck == null) return Fail("Không tìm thấy phiếu kiểm kê yêu cầu.");
-if (precheck.Status != Draft) return Fail("Chỉ có thể gửi duyệt khi phiếu ở trạng thái Nháp.");
-if (precheck.EmployeeId != employeeId) return Fail("Bạn không có quyền gửi duyệt phiếu này.");
-
-var pendingRows = await _unitOfWork.ExecuteInTransactionAsync(async () =>
-{
-    // Nạp LẠI bên trong. Mỗi lần thử lại sẽ đọc bản mới từ DB
-    // (ChangeTracker đã được Clear ở đầu lần thử).
-    var check = await _checkRepo.GetByIdAsync(checkId);
-    if (check is null || check.Status != Draft)
-        throw new InvalidOperationException("Phiếu vừa thay đổi trạng thái. Vui lòng tải lại.");
-    ...
-    check.Status = AwaitingApproval;
-    await _unitOfWork.SaveChangesAsync();
-    return pendingRows;
-}, retrySafe: true);
-```
-
-Lưu ý: kiểm tra ở ngoài **không thừa** — nó trả lỗi nghiệp vụ đẹp mà không phải mở transaction.
-Kiểm lại ở trong là chốt chống race, và nó **ném** chứ không `return`, để transaction rollback.
-
-> ### ⚠️⚠️ Cảnh báo riêng cho chỗ có `+=`
->
-> `SubmitAsync` có `detail.MissingQuantity += missingCount`. Đây là **phép tăng tương đối trên
-> entity tracked**, và nó hỏng theo kiểu **khác** với phần còn lại:
->
-> Khi chạy lại, `detail` trong Change Tracker **đã mang giá trị đã cộng** của lần thử trước.
-> Cộng thêm lần nữa cho ra `cũ + 2×missing`, và EF **thấy có thay đổi** nên nó **sinh `UPDATE`
-> với con số sai**. Đây **không phải** mất dữ liệu âm thầm mà là **ghi sai số liệu âm thầm** —
-> tệ hơn, vì kết quả trông vẫn hợp lệ.
->
-> Nạp lại entity bên trong delegate xử lý được cả ca này (`ChangeTracker.Clear()` chạy ở đầu
-> mỗi lần thử lại khi `retrySafe: true`). **Đừng chỉ đổi cờ mà không nạp lại.**
-
-**Kiểm sau khi sửa từng chỗ:**
+18/18 call-site `ExecuteInTransactionAsync` nay đều `retrySafe: true`. Kiểm lại bất cứ lúc nào:
 
 ```bash
-dotnet build PBL3.sln -v q --nologo 2>&1 | grep -E "^\s+[0-9]+ Error"
+grep -rn "CHƯA RÀ RETRY" --include='*.cs' src/Service/          # kỳ vọng: rỗng
+grep -rc "}, retrySafe: true)" --include='*.cs' src/Service/ | grep -v ':0'   # tổng 18
 ```
-rồi chạy đúng nghiệp vụ đó một lần qua API (xem §4) và xác nhận vẫn 200 + dữ liệu đúng.
+
+**Khuôn đã áp cho cả 14 chỗ** — hữu ích khi viết call-site transaction MỚI:
+
+1. **Kiểm tra nghiệp vụ ở ngoài** bằng đọc **không tracking** (projection hoặc bản
+   `AsNoTracking`), chỉ để trả lỗi đẹp mà không phải mở transaction.
+2. **Nạp lại mọi entity sẽ ghi ở bên trong** delegate.
+3. **Kiểm lại ở trong** làm chốt chống race — và **ném** chứ không `return`, vì `return` thì
+   transaction vẫn commit.
+4. Mọi giá trị **sinh một lần** (mã chứng từ, `DateTime.UtcNow` dùng để ghi) tính **bên trong**.
+
+**Bốn bẫy đã gặp khi làm — đều là "chỉ đổi cờ thì hỏng":**
+
+| Bẫy | Ở đâu | Hỏng thế nào |
+|---|---|---|
+| `+=` / `++` trên entity tracked | `InventoryCheckService.SubmitAsync`, `RejectAsync` | Cộng chồng thành `cũ + 2×missing`. EF **thấy** có thay đổi nên vẫn sinh `UPDATE` — với con số **sai**. Ghi sai số liệu âm thầm, tệ hơn mất dữ liệu vì kết quả trông vẫn hợp lệ. |
+| Collection đã `Include` rồi `.Add` | `InventoryExportService.ExportOrderAsync` | `orderDetail.OrderSerials` giữ luôn bản ghi Add của lần thử trước → sinh `OrderSerial` **trùng**. |
+| Entity `new` sẵn ở ngoài rồi `Add` ở trong | `OrderService` (`VoucherUsage`), `PosService` (`Order`, `OrderDetail`, `Warranty`) | Sau lần thử 1 chúng đã có Id; lần thử 2 `Add` lại là **no-op** hoặc ghi trùng. Đã sửa bằng cách trả **dữ liệu thuần** (`VoucherUsagePlan`, `itemPlan`) rồi mới `new` entity bên trong. |
+| Danh sách tích luỹ khai ở ngoài | `PosService` (`newWarranties`) | Lần thử 2 `Add` chồng lên danh sách cũ → bảo hành nhân đôi. |
+
+**Hai thay đổi kèm theo, cần biết khi đọc code:**
+
+- **`ConcurrentModificationException`** (`src/Core/Exceptions/`) — kiểu riêng cho chốt chống
+  race bên trong transaction. Cần nó vì các call-site trả `ApiResult` đều có
+  `catch (Exception)` bọc ngoài sẽ nuốt mất thông báo cụ thể. Bắt
+  `InvalidOperationException` thay thế thì **không an toàn**: EF Core và `IUnitOfWork` cũng ném
+  đúng kiểu đó cho chuyện khác. Các call-site ở `ServiceTicketService` **không** dùng kiểu này
+  vì chúng `catch { throw; }` — `InvalidOperationException` đã đi ra nguyên vẹn.
+- **`ApplyVouchersAsync` nay trả `VoucherUsagePlan`** (record dữ liệu thuần) chứ không trả
+  entity `VoucherUsage` dựng sẵn. Cả hai call-site tự `new` entity bên trong delegate.
+
+**Đã kiểm chạy thật** (API local, 2026-08-31): tạo → gửi duyệt → phê duyệt → từ chối phiếu
+kiểm kê đều 200, và **truy vấn thẳng DB xác nhận giá trị đã ghi** (`Status = 2` +
+`ApprovedAt`, `Status = 0` + `RejectReason`) — đúng thứ mà chế độ hỏng "không sinh `UPDATE`"
+sẽ làm sai. Dữ liệu test đã dọn, `InventoryChecks = 0` như cũ.
+
+> ⚠️ Còn **chưa** kiểm chạy thật: luồng đặt hàng, POS, xuất kho và phiếu dịch vụ — DB local
+> gần như rỗng (Products = 2, ProductSerials = 0, Orders = 0) nên không dựng nổi kịch bản.
+> Bốn luồng này mới chỉ được rà bằng đọc code + build sạch.
 
 ---
 
@@ -391,11 +335,9 @@ Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ
 Số dòng sẽ trôi khi code đổi. Chạy lại để lấy danh sách chính xác:
 
 ```bash
-# A — call-site chưa retry-safe
-grep -rn "CHƯA RÀ RETRY" --include='*.cs' src/Service/
-
-# A — đếm nhanh đã bật được bao nhiêu
-echo "retrySafe: $(grep -rc 'retrySafe: true' --include='*.cs' src/Service/ | awk -F: '{s+=$2} END {print s}')/18"
+# A — ĐÃ XONG: hai lệnh này giờ là chốt chống hồi quy, không phải danh sách việc
+grep -rn "CHƯA RÀ RETRY" --include='*.cs' src/Service/          # kỳ vọng: rỗng
+grep -rc "}, retrySafe: true)" --include='*.cs' src/Service/ | grep -v ':0'   # tổng 18
 
 # B — nút mutation chưa chuyển sang ActionButton
 grep -rn "<MudButton" --include='*.razor' src/Client/Pages/ | wc -l

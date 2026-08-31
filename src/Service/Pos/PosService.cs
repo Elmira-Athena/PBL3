@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PBL3.Core.Entities;
+using PBL3.Core.Exceptions;
 using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Shared.DTOs.Common;
@@ -214,9 +215,15 @@ namespace PBL3.Service.Pos
             }
 
             decimal subTotal = 0;
-            var serialsToUpdate = new List<ProductSerial>();
-            var newWarranties = new List<Warranty>();
             var variantIdsToSync = new HashSet<int>();
+
+            // KẾ HOẠCH DỮ LIỆU THUẦN (không phải entity) cho phần ghi.
+            // Mọi entity — Order, OrderDetail, OrderSerial, Warranty, ProductSerial — đều được
+            // dựng/nạp LẠI bên trong delegate ở mỗi lần thử. Danh sách entity dựng sẵn ở ngoài
+            // (kiểu `serialsToUpdate` / `newWarranties` cũ) là khuôn hỏng khi chạy lại: nó vừa
+            // giữ instance đã detached sau ChangeTracker.Clear(), vừa cộng dồn bản ghi qua các
+            // lần thử.
+            var itemPlan = new List<(int SerialId, int VariantId, decimal Price)>();
 
             // ── BƯỚC 1: XÁC ĐỊNH KHÁCH HÀNG (Resolve Customer) ──
             // Nghiệp vụ: POS hỗ trợ tra cứu SĐT thành viên để cộng điểm/áp dụng chiết khấu. Nếu không có SĐT, mặc định là "Khách vãng lai"
@@ -236,11 +243,15 @@ namespace PBL3.Service.Pos
             // Gom nhóm các mã Serial quét được theo biến thể VariantId để đưa vào chi tiết đơn hàng (OrderDetail).
             // Ví dụ: Nhân viên quét 3 serial riêng biệt của cùng biến thể 'iPhone 15 Pro Max' -> 
             // Hệ thống chỉ tạo 1 dòng OrderDetail (iPhone 15 Pro Max, Quantity = 3) để hóa đơn gọn gàng, nhưng vẫn liên kết đầy đủ 3 serial đó.
-            var orderDetailsMap = new Dictionary<int, OrderDetail>(); // VariantId -> OrderDetail (gộp lại)
-
+            // Kiểm tra NGOÀI transaction: đọc AsNoTracking để trả lỗi đẹp và tính SubTotal.
+            // Chốt THẬT nằm trong delegate (nạp lại có tracking + kiểm lại Available).
             foreach (var item in request.Items)
             {
-                var dbSerial = await _serialRepo.GetByIdWithTrackingAsync(item.SerialId);
+                var dbSerial = await _dbContext.ProductSerials
+                    .AsNoTracking()
+                    .Where(x => x.Id == item.SerialId)
+                    .Select(x => new { x.Id, x.Status, x.VariantId, Price = x.Variant.Price })
+                    .FirstOrDefaultAsync();
 
                 // Kiểm tra lại lần nữa: Đảm bảo Serial vật lý vẫn ở trạng thái Available trước khi chốt hóa đơn
                 if (dbSerial == null || dbSerial.Status != (byte)SerialStatus.Available)
@@ -248,26 +259,18 @@ namespace PBL3.Service.Pos
                     return ApiResult<PosOrderDto>.Fail($"Sản phẩm có mã SerialId {item.SerialId} không tồn tại hoặc đã bán.");
                 }
 
-                subTotal += dbSerial.Variant.Price;
+                subTotal += dbSerial.Price;
                 variantIdsToSync.Add(dbSerial.VariantId);
-                serialsToUpdate.Add(dbSerial);
-
-                if (!orderDetailsMap.ContainsKey(dbSerial.VariantId))
-                {
-                    orderDetailsMap[dbSerial.VariantId] = new OrderDetail
-                    {
-                        VariantId = dbSerial.VariantId,
-                        Quantity = 0,
-                        UnitPrice = dbSerial.Variant.Price,
-                        // OrderId sẽ gán sau
-                    };
-                }
-                orderDetailsMap[dbSerial.VariantId].Quantity++;
+                itemPlan.Add((dbSerial.Id, dbSerial.VariantId, dbSerial.Price));
             }
 
             // ── BƯỚC 3: ÁP DỤNG MÃ GIẢM GIÁ (Voucher) ──
             decimal discountAmount = 0;
-            Voucher? appliedVoucher = null;
+            // Chỉ giữ Id + Code (dữ liệu thuần), KHÔNG giữ entity Voucher tracked: sau
+            // ChangeTracker.Clear() ở lần thử lại nó đã detached, và ta cũng không ghi thẳng
+            // vào nó — việc trừ lượt do TryConsumeAsync (một câu UPDATE nguyên tử) đảm nhiệm.
+            int? appliedVoucherId = null;
+            string? appliedVoucherCode = null;
             if (!string.IsNullOrEmpty(request.VoucherCode))
             {
                 var validateRes = await ValidateVoucherAsync(request.VoucherCode, subTotal);
@@ -275,89 +278,128 @@ namespace PBL3.Service.Pos
                     return ApiResult<PosOrderDto>.Fail(validateRes.Message);
 
                 discountAmount = validateRes.Data!.DiscountAmount;
-                appliedVoucher = await _dbContext.Vouchers.FirstOrDefaultAsync(v => v.Code == request.VoucherCode);
+
+                var voucherInfo = await _dbContext.Vouchers
+                    .AsNoTracking()
+                    .Where(v => v.Code == request.VoucherCode)
+                    .Select(v => new { v.Id, v.Code })
+                    .FirstOrDefaultAsync();
+
+                appliedVoucherId = voucherInfo?.Id;
+                appliedVoucherCode = voucherInfo?.Code;
             }
 
             discountAmount = Math.Min(discountAmount, subTotal);
             decimal totalAmount = subTotal - discountAmount;
 
-            // ── BƯỚC 4: TỰ SINH MÃ HÓA ĐƠN POS (POS-yyyyMMdd-NNNNNN) ──
-            string newOrderCode = await _codeGenerator.NextAsync(DocumentCodeKind.PosOrder);
-
-            // ── BƯỚC 5: TẠO HÓA ĐƠN & THANH TOÁN (Transaction bảo vệ dữ liệu) ──
-            var order = new Order
-            {
-                OrderCode = newOrderCode,
-                UserId = customerId,
-                EmployeeId = employeeId,
-                OrderDate = DateTime.UtcNow,
-                Status = (byte)OrderStatus.Success, // Nghiệp vụ POS: Đơn hoàn tất ngay tại quầy
-                OrderType = (byte)OrderType.POS,     // Đơn bán tại quầy POS
-                ShipName = customerName ?? "Khách vãng lai",
-                ShipPhone = request.CustomerPhone ?? "",
-                ShipAddress = !string.IsNullOrWhiteSpace(request.ShipAddress) ? request.ShipAddress : "Tại quầy",
-                ShipCity = !string.IsNullOrWhiteSpace(request.ShipCity) ? request.ShipCity : "Tại quầy",
-                SubTotal = subTotal,
-                ShippingFee = 0, // Bán trực tiếp không tính phí vận chuyển
-                DiscountAmount = discountAmount,
-                TotalAmount = totalAmount,
-                PaymentMethod = request.PaymentMethod,
-                PaymentStatus = 1, // Đã thanh toán (Paid)
-                Note = request.EmployeeNote
-            };
-
+            // ── BƯỚC 4+5: SINH MÃ, TẠO HÓA ĐƠN & THANH TOÁN (Transaction bảo vệ dữ liệu) ──
+            // Mã hoá đơn CỐ Ý sinh bên trong delegate (điều kiện 2 của hợp đồng retry) — sinh ở
+            // ngoài thì lần thử lại dùng lại đúng mã cũ.
             try
             {
-                // ⚠️ CHƯA RÀ RETRY (đợt 1 mục 4.1) — mặc định retrySafe = false, nên lỗi transient
-                // ở đây KHÔNG được chạy lại mà ném lỗi rõ ràng. Hành vi người dùng thấy giống hệt
-                // trước khi bật EnableRetryOnFailure. Lý do chưa bật được:
-                // Ba lý do: (a) `order` được DỰNG ở ngoài rồi mới AddAsync bên trong — lần thử 2
-                // gọi AddAsync trên entity đã tracked ở trạng thái Unchanged là NO-OP, nên hoá đơn
-                // KHÔNG BAO GIỜ được chèn và od.OrderId trỏ vào một Order không tồn tại;
-                // (b) `serialsToUpdate` nạp TRACKED ở ngoài rồi đổi Status bên trong;
-                // (c) mã hoá đơn POS sinh ở ngoài nên lần thử 2 dùng lại đúng mã cũ.
-                await _unitOfWork.ExecuteInTransactionAsync(async () =>
+                // ĐÃ RÀ RETRY — thoả cả ba điều kiện của hợp đồng ở IUnitOfWork. Đây là call-site
+                // nặng nhất của nhóm; trước khi rà nó vi phạm cả ba, mỗi cái theo một kiểu khác:
+                //
+                //   (a) `order` DỰNG ở ngoài rồi AddAsync bên trong — lần thử 2 gọi AddAsync trên
+                //       entity đã tracked ở trạng thái Unchanged là NO-OP, nên hoá đơn KHÔNG BAO
+                //       GIỜ được chèn và od.OrderId trỏ vào một Order không tồn tại;
+                //   (b) `serialsToUpdate` / `orderDetailsMap` / `newWarranties` dựng ở ngoài —
+                //       vừa giữ instance đã detached sau Clear(), vừa cộng dồn qua các lần thử;
+                //   (c) mã hoá đơn POS sinh ở ngoài nên lần thử 2 dùng lại đúng mã cũ.
+                //
+                // Cả ba nay đã nằm BÊN TRONG delegate, dựng mới ở mỗi lần thử từ `itemPlan`
+                // (dữ liệu thuần). TryConsumeAsync vốn đã an toàn: nó nằm trong transaction nên
+                // rollback hoàn tác luôn phép +1.
+                var order = await _unitOfWork.ExecuteInTransactionAsync(async () =>
                 {
+                    var now = DateTime.UtcNow;
+
+                    // Mã hoá đơn sinh BÊN TRONG: mỗi lần thử lấy một mã mới.
+                    string newOrderCode = await _codeGenerator.NextAsync(DocumentCodeKind.PosOrder);
+
+                    var order = new Order
+                    {
+                        OrderCode = newOrderCode,
+                        UserId = customerId,
+                        EmployeeId = employeeId,
+                        OrderDate = now,
+                        Status = (byte)OrderStatus.Success, // Nghiệp vụ POS: Đơn hoàn tất ngay tại quầy
+                        OrderType = (byte)OrderType.POS,     // Đơn bán tại quầy POS
+                        ShipName = customerName ?? "Khách vãng lai",
+                        ShipPhone = request.CustomerPhone ?? "",
+                        ShipAddress = !string.IsNullOrWhiteSpace(request.ShipAddress) ? request.ShipAddress : "Tại quầy",
+                        ShipCity = !string.IsNullOrWhiteSpace(request.ShipCity) ? request.ShipCity : "Tại quầy",
+                        SubTotal = subTotal,
+                        ShippingFee = 0, // Bán trực tiếp không tính phí vận chuyển
+                        DiscountAmount = discountAmount,
+                        TotalAmount = totalAmount,
+                        PaymentMethod = request.PaymentMethod,
+                        PaymentStatus = 1, // Đã thanh toán (Paid)
+                        Note = request.EmployeeNote
+                    };
+
                     // Lưu hóa đơn POS
                     await _orderRepo.AddAsync(order);
                     await _unitOfWork.SaveChangesAsync();
 
-                    // Lưu các dòng chi tiết OrderDetail
-                    foreach (var od in orderDetailsMap.Values)
+                    // Gộp Serial theo Variant thành các dòng OrderDetail — dựng MỚI mỗi lần thử.
+                    var orderDetailsMap = new Dictionary<int, OrderDetail>();
+                    foreach (var planned in itemPlan)
                     {
-                        od.OrderId = order.Id;
-                        await _dbContext.OrderDetails.AddAsync(od);
+                        if (!orderDetailsMap.TryGetValue(planned.VariantId, out var od))
+                        {
+                            od = new OrderDetail
+                            {
+                                OrderId = order.Id,
+                                VariantId = planned.VariantId,
+                                Quantity = 0,
+                                UnitPrice = planned.Price
+                            };
+                            orderDetailsMap[planned.VariantId] = od;
+                            await _dbContext.OrderDetails.AddAsync(od);
+                        }
+                        od.Quantity++;
                     }
                     await _unitOfWork.SaveChangesAsync(); // Lưu để lấy Id chi tiết đơn hàng
 
                     // ── BƯỚC 5.1: CẬP NHẬT TRẠNG THÁI SERIAL, ORDER_SERIAL & TẠO PHIẾU BẢO HÀNH (WARRANTY) ──
-                    var now = DateTime.UtcNow;
-                    foreach (var s in serialsToUpdate)
+                    var newWarranties = new List<Warranty>();
+                    foreach (var planned in itemPlan)
                     {
-                        // Chuyển trạng thái Serial sang "Sold" (Đã bán)
-                        s.Status = (byte)SerialStatus.Sold;
-                        s.SoldDate = now;
-                        s.OrderId = order.Id;
+                        // Nạp LẠI có tracking bên trong delegate — mỗi lần thử lấy instance mới.
+                        var serial = await _serialRepo.GetByIdWithTrackingAsync(planned.SerialId);
 
-                        var od = orderDetailsMap[s.VariantId];
+                        // Chốt chống race THẬT (kiểm ở BƯỚC 2 chỉ là chốt sớm cho UX).
+                        // NÉM chứ không return, để transaction rollback.
+                        if (serial is null || serial.Status != (byte)SerialStatus.Available)
+                            throw new ConcurrentModificationException(
+                                $"Mã Serial có SerialId {planned.SerialId} vừa được bán hoặc đổi trạng thái. " +
+                                "Vui lòng quét lại giỏ hàng.");
+
+                        // Chuyển trạng thái Serial sang "Sold" (Đã bán)
+                        serial.Status = (byte)SerialStatus.Sold;
+                        serial.SoldDate = now;
+                        serial.OrderId = order.Id;
+
+                        var od = orderDetailsMap[serial.VariantId];
                         // Liên kết Serial với dòng chi tiết hóa đơn (OrderSerial)
                         await _dbContext.OrderSerials.AddAsync(new OrderSerial
                         {
                             OrderDetailId = od.Id,
-                            SerialId = s.Id
+                            SerialId = serial.Id
                         });
 
                         // NGHIỆP VỤ PHÁT SINH BẢO HÀNH TỰ ĐỘNG:
                         // Nếu sản phẩm đó có cấu hình thời hạn bảo hành (WarrantyMonth > 0), hệ thống tự sinh bản ghi Warranty ở trạng thái Active.
-                        if (s.Variant.WarrantyMonth > 0)
+                        if (serial.Variant.WarrantyMonth > 0)
                         {
                             newWarranties.Add(new Warranty
                             {
-                                SerialId = s.Id,
+                                SerialId = serial.Id,
                                 CustomerId = customerId,
                                 OrderId = order.Id,
                                 StartDate = now,
-                                EndDate = now.AddMonths(s.Variant.WarrantyMonth),
+                                EndDate = now.AddMonths(serial.Variant.WarrantyMonth),
                                 Status = (byte)WarrantyStatus.Active
                             });
                         }
@@ -369,19 +411,19 @@ namespace PBL3.Service.Pos
                     }
 
                     // Ghi nhận Voucher đã dùng
-                    if (appliedVoucher != null)
+                    if (appliedVoucherId.HasValue)
                     {
                         // TIÊU THỤ NGUYÊN TỬ thay cho appliedVoucher.UsedCount++ (lost update).
-                        // Kiểm ở PosService:155 chỉ là chốt sớm cho UX; chốt THẬT là câu UPDATE này.
-                        if (!await _voucherRepo.TryConsumeAsync(appliedVoucher.Id))
+                        // Kiểm ở ValidateVoucherAsync chỉ là chốt sớm cho UX; chốt THẬT là câu UPDATE này.
+                        if (!await _voucherRepo.TryConsumeAsync(appliedVoucherId.Value))
                             throw new InvalidOperationException(
-                                $"Mã '{appliedVoucher.Code}' đã hết lượt sử dụng. Vui lòng bỏ mã và thử lại.");
+                                $"Mã '{appliedVoucherCode}' đã hết lượt sử dụng. Vui lòng bỏ mã và thử lại.");
 
                         if (customerId.HasValue)
                         {
                             await _dbContext.VoucherUsages.AddAsync(new VoucherUsage
                             {
-                                VoucherId = appliedVoucher.Id,
+                                VoucherId = appliedVoucherId.Value,
                                 UserId = customerId.Value,
                                 OrderId = order.Id,
                                 DiscountApplied = discountAmount,
@@ -391,7 +433,9 @@ namespace PBL3.Service.Pos
                     }
 
                     await _unitOfWork.SaveChangesAsync();
-                });
+
+                    return order;
+                }, retrySafe: true);
 
                 // ── BƯỚC 6: ĐỒNG BỘ TỒN KHO THỰC TẾ (StockQuantity) ──
                 // Cập nhật tồn kho (Stock Qty) cho các Variant sau khi đã xuất bán thành công các serial vật lý
@@ -408,6 +452,10 @@ namespace PBL3.Service.Pos
                     CustomerName = order.ShipName,
                     CustomerPhone = order.ShipPhone
                 }, "Thanh toán thành công.");
+            }
+            catch (ConcurrentModificationException ex)
+            {
+                return ApiResult<PosOrderDto>.Fail(ex.Message);
             }
             catch (Exception ex)
             {
