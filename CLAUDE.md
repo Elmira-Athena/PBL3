@@ -47,7 +47,7 @@ Core ← Infrastructure ← Service ← API
 | **Core** | Domain entities (POCOs), repository interfaces. No dependencies on other projects. |
 | **Shared** | DTOs, Enums, `ApiResult<T>`, `PagedResult<T>`, FluentValidation validators. Used by both API and Client. |
 | **Infrastructure** | EF Core `HushStoreDbContext`, migration files, repository implementations. |
-| **Service** | Business logic, AutoMapper profiles, orchestration of repositories. |
+| **Service** | Business logic, ánh xạ entity → DTO bằng projection LINQ, orchestration of repositories. |
 | **API** | ASP.NET Core controllers — receive request → call service → return `ApiResult<T>`. Program.cs wires all DI. |
 | **Client** | Blazor WASM pages, MudBlazor components, HttpClient-based client services. |
 
@@ -66,7 +66,7 @@ Follow this checklist in order:
 1. **Core** — add entity and `IXyzRepository` interface
 2. **Shared** — add request/response DTOs, enums, FluentValidation validator
 3. **Infrastructure** — add `DbSet`, Fluent API config in `HushStoreDbContext`, implement `XyzRepository`
-4. **Service** — add `IXyzService` interface + `XyzService` implementation, register AutoMapper profile
+4. **Service** — add `IXyzService` interface + `XyzService` implementation, ánh xạ sang DTO bằng `.Select(...)` trong LINQ
 5. **API** — add `XyzController`, register `IXyzRepository`→`XyzRepository` and `IXyzService`→`XyzService` in `Program.cs`
 6. **Client** — add client service calling the API, add Blazor pages/components
 
@@ -103,7 +103,14 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
 
 - **Classes/Methods**: `PascalCase`; **variables/params**: `camelCase`; **private fields**: `_camelCase`
 - All async methods end with `Async`
-- Never return entities from API endpoints — always map to DTOs via AutoMapper
+- Never return entities from API endpoints — luôn ánh xạ sang DTO bằng **projection LINQ**
+  (`.Select(p => new ProductDto { ... })`), khớp với luật DTO Projection ở mục Query & Performance.
+  ⚠️ **Repo KHÔNG dùng AutoMapper.** Bản trước của file này ghi "map to DTOs via AutoMapper"
+  ở ba chỗ, nhưng đã kiểm trên toàn repo: **0** `CreateMap`, **0** `IMapper`, **0** `AddAutoMapper`,
+  **0** lớp `: Profile` — trong khi có **22** chỗ projection thủ công. Gói `AutoMapper` từng nằm
+  trong `API.csproj` và `Service.csproj` mà không một dòng code nào dùng; nó đã bị gỡ ở mục D
+  vì đang mang một lỗ hổng High (`GHSA-rvv3-g6hj-g44x`). Đừng thêm lại rồi viết code dựa vào nó
+  mà không đổi quy ước một cách có ý thức.
 - Use `ILogger<T>` (Serilog) for logging; no sensitive data in logs
 - RESTful URLs: `GET /api/products`, `GET /api/products/{id}`, `POST /api/products`, `PUT /api/products/{id}`, `DELETE /api/products/{id}`
 - **Mọi thông báo lỗi trả về cho người dùng (user-facing messages) phải bằng tiếng Việt có dấu.**
