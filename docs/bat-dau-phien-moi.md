@@ -2,13 +2,25 @@
 
 **Cập nhật:** 2026-08-31 · **Trạng thái repo:** trên `main` (đã merge `feat/retry-safe-call-sites`,
 fast-forward, CI xanh), build `0 Error(s)` / 184 cảnh báo
-· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C**, **mục D**
-· **Kế tiếp:** ① trả **nợ kiểm thử mục 🧪** (2 việc rẻ, là nợ do mục D tự tạo) → ② **mục 🅴**
-(lỗi tiếng Anh ở `OrderService.cs:257`) → ③ đợt 3, **vẫn bị chặn** bởi RDS.
+· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C**, **mục D**,
+**nợ kiểm thử 🧪 ưu tiên 1**, **mục 🅴**
+· **Kế tiếp:** ① **nợ kiểm thử 🧪 ưu tiên 2** — nửa *giao diện* còn lại (6 nút double-submit,
+cần trình duyệt; nửa *tầng Service* của luồng Checkout đã đo xong) → ② **mục 🅷** (cùng lỗi
+`ex.Message` của mục 🅴 còn ở 6 chỗ khác, `PosService.cs:462` là bản sinh đôi y hệt)
+→ ③ đợt 3, **vẫn bị chặn** bởi RDS.
 
-> 🧪 **Đừng tin dòng "XONG" nào ở dưới trước khi đọc mục 🧪.** Mọi mục A–D đều build sạch và
-> `grep` xanh, nhưng bốn luồng (Checkout · POS · xuất/nhập kho · phiếu dịch vụ) **chưa từng chạy
-> thật**, và 5/6 nút hỏng thật của mục B nằm đúng trong số đó.
+> 🧪 **Đừng tin dòng "XONG" nào ở dưới trước khi đọc mục 🧪.** Ranh giới đã dịch sau phiên
+> 2026-08-31 (chiều): luồng **Checkout đã chạy thật tới DB** (đặt đơn end-to-end + 50 khách
+> đồng thời), nhưng **POS · xuất/nhập kho · phiếu dịch vụ** vẫn chưa ai bấm tay, và **6 nút
+> double-submit hỏng thật của mục B vẫn chưa nút nào được đo** — đo chúng cần trình duyệt,
+> không có đường tắt bằng `curl`.
+
+> ⚠️ **Đọc con số "5/9 bất biến SAI" cho đúng: đó là HỢP của mọi lần chạy, không phải ảnh
+> chụp một lần.** Phiên này chạy đủ 9 kịch bản ở **cả hai** cấu hình và ra **4 HỎNG mỗi
+> cấu hình** (S01/S06/S08/S09) — vì **S04 không tái hiện**, dù không một dòng
+> `HasOpenTicketForSerialAsync` nào đổi. S04 và S07 **phụ thuộc thời điểm**: một lần ✅ không
+> phải bằng chứng an toàn, còn một lần 🔴 **là** bằng chứng hỏng. Bất đối xứng này áp cho mọi
+> bảng trong `docs/evidence/loadprobe/`.
 
 Tài liệu này viết cho một phiên **không có ngữ cảnh gì cả**. Nó trả lời đúng ba câu:
 *đang ở đâu*, *làm gì tiếp*, và *chạy/kiểm bằng lệnh nào*.
@@ -235,21 +247,32 @@ Còn nửa chưa xác minh: con số ~950–985 MiB khả dụng, cần
 
 ---
 
-### 🅵 Kết quả đo — **5/9 bất biến SAI**, đọc trước khi làm đợt 3
+### 🅵 Kết quả đo — **5/9 bất biến ĐÃ TỪNG SAI**, đọc trước khi làm đợt 3
 
-`0 KHÔNG KẾT LUẬN` ở cả hai lần chạy, tức không có phép đo nào bị rate limiter làm rỗng.
+`0 KHÔNG KẾT LUẬN` ở **cả bốn** lần chạy, tức không có phép đo nào bị rate limiter làm rỗng.
 
-| # | Kịch bản | 1 instance | 2 instance |
-|---|---|---|---|
-| S01 | 50 khách checkout đồng thời | 🔴 | 🔴 |
-| S02 | Voucher `Quantity=1`, 20 khách | ✅ | ✅ |
-| S03 | Cùng khách, `MaxUsesPerUser=1` | ✅ | ✅ |
-| S04 | 10 lần `intake` cùng serial | ✅ | 🔴 |
-| S05 | 10 lần `accept-quotation` | ✅ | ✅ |
-| S06 | 5 lần `approve` phiếu kiểm kê | 🔴 | 🔴 |
-| S07 | POS bán S xen kẽ kiểm kê đánh S Lost | ✅ | ✅ |
-| S08 | 2 lần `create-quotation` song song | 🔴 | 🔴 |
-| S09 | 2 lần `refresh-token` cùng cặp | 🔴 | 🔴 |
+Bốn cột = bốn lần chạy đủ 9 kịch bản. Hai cột đầu là mục C; hai cột sau là phiên
+2026-08-31 (chiều), chạy lại để trả nợ 🧪 ưu tiên 1.
+
+| # | Kịch bản | C: 1 inst | C: 2 inst | Nay: 1 inst | Nay: 2 inst |
+|---|---|---|---|---|---|
+| S01 | 50 khách checkout đồng thời | 🔴 | 🔴 | 🔴 | 🔴 |
+| S02 | Voucher `Quantity=1`, 20 khách | ✅ | ✅ | ✅ | ✅ |
+| S03 | Cùng khách, `MaxUsesPerUser=1` | ✅ | ✅ | ✅ | ✅ |
+| S04 | 10 lần `intake` cùng serial | ✅ | **🔴** | ✅ | **✅** ⚠️ |
+| S05 | 10 lần `accept-quotation` | ✅ | ✅ | ✅ | ✅ |
+| S06 | 5 lần `approve` phiếu kiểm kê | 🔴 | 🔴 | 🔴 | 🔴 |
+| S07 | POS bán S xen kẽ kiểm kê đánh S Lost | ✅ | ✅ | ✅ | ✅ |
+| S08 | 2 lần `create-quotation` song song | 🔴 | 🔴 | 🔴 | 🔴 |
+| S09 | 2 lần `refresh-token` cùng cặp | 🔴 | 🔴 | 🔴 | 🔴 |
+
+> 🔴 **"5/9" là HỢP của bốn lần chạy, không phải kết quả của một lần.** Mỗi lần chạy riêng lẻ
+> cho **4 HỎNG**; cái thứ năm là S04, chỉ hiện ở một trong bốn lần. Ai chạy một lần rồi thấy 4
+> mà kết luận "đã sửa được một cái" là đọc sai — không dòng code liên quan nào đổi.
+>
+> Vì vậy **cách đọc đúng của cả bảng này là "đã từng sai", không phải "đang sai"**: với kịch bản
+> phụ thuộc thời điểm (S04, S07), một lần 🔴 là bằng chứng hỏng, một lần ✅ **không** là bằng
+> chứng an toàn. Không có chuyện một ô ✅ xoá được một ô 🔴 ở cùng hàng.
 
 #### 🔴 S01 — sinh mã chứng từ đua nhau, 41/50 đơn KHÔNG đặt được
 
@@ -279,12 +302,20 @@ là check-then-act: dưới READ COMMITTED cả 5 đều đọc thấy `1` trư�
 trùng**, tức phát sinh việc dọn dữ liệu nghiệp vụ. Câu `GROUP BY … HAVING COUNT(*) > 1`
 trong `pre_migration_checks.sql` giờ là câu hỏi **đáng tiền nhất** trong cả script.
 
-#### 🔴 S04 — chỉ vỡ khi có HAI instance
+#### 🔴 S04 — chỉ vỡ khi có HAI instance, và **không vỡ mỗi lần**
 
-✅ với 1 instance, 🔴 với 2 instance (2 phiếu dịch vụ chưa đóng cho cùng một serial).
+Mục C: ✅ với 1 instance, 🔴 với 2 instance (2 phiếu dịch vụ chưa đóng cho cùng một serial).
 Đúng loại lỗi mà toàn bộ hạ tầng 2 replica sinh ra để bắt: cửa sổ check-then-act của
 `HasOpenTicketForSerialAsync` đủ hẹp để một tiến trình che được, nhưng hai tiến trình thì
 không. **Đừng kết luận từ lần chạy một instance.**
+
+⚠️ **Phiên 2026-08-31 (chiều): 2 instance ra ✅ — KHÔNG tái hiện.** `HasOpenTicketForSerialAsync`
+không đổi một dòng nào giữa hai lần chạy (mục 🅴 chỉ sửa thông báo lỗi trong `OrderService`), nên
+cái ✅ này **không** phải bằng chứng đã sửa — nó là bằng chứng S04 **phụ thuộc thời điểm**, cùng
+loại với S07. Việc hai tiến trình có chen được vào đúng cửa sổ hẹp đó hay không là chuyện xác
+suất, và round-robin của nginx đã được kiểm 5/5 sạch trước khi đo nên không thể quy cho hạ tầng.
+
+**Vẫn phải sửa.** Xem [`2026-08-31-hai-instance-sau-muc-E.md`](evidence/loadprobe/2026-08-31-hai-instance-sau-muc-E.md).
 
 #### 🔴 S08 — 2 báo giá cùng `Pending` trên một phiếu
 
@@ -391,25 +422,50 @@ bash devops/scripts/check-vulnerable-packages.sh      # chạy y hệt ở máy 
 và có chốt `grep` xanh, nhưng **build sạch không phải bằng chứng chạy đúng**. Dưới đây là ranh
 giới thật, chia theo *ai tạo ra rủi ro*.
 
-#### 🔴 Ưu tiên 1 — rủi ro do mục D tự tạo ra, chưa đo
+#### ✅ Ưu tiên 1 — rủi ro do mục D tự tạo ra — **ĐÃ ĐO (2026-08-31)**
 
-| Việc | Vì sao đáng lo | Cách đo (rẻ) |
+| Việc | Kết quả | Bằng chứng |
 |---|---|---|
-| **Ghim `Microsoft.OpenApi` 2.7.5 chưa hề chạm tới lúc chạy** | `Swashbuckle.AspNetCore` 10.1.2 **biên dịch với 2.4.1**. Ghim nhảy 2.4.1 → 2.7.5 là **trong cùng major**, nhưng Microsoft.OpenApi có tiền sử đổi API surface giữa các minor. Hỏng kiểu này **build vẫn sạch** và chỉ bung ra khi có ai gọi endpoint sinh tài liệu. | Chạy API rồi `curl -s -o /dev/null -w '%{http_code}' http://localhost:5222/swagger/v1/swagger.json` (và `/openapi/v1.json`). Kỳ vọng `200` + JSON phân giải được. **Chưa ai chạy lệnh này.** |
-| **Chỉ chạy lại S02/S05 sau khi vá gói, không chạy đủ 9 kịch bản** | S02/S05 là chốt hồi quy của *đợt 1*, không phủ luồng POS / xuất kho / phiếu dịch vụ. | `dotnet run --project tools/LoadProbe -- --out docs/evidence/loadprobe` (đủ 9 kịch bản). Kỳ vọng: **vẫn đúng 5/9 HỎNG như trước**, không hơn. Nhiều hơn = việc vá gói gây hồi quy. |
+| Ghim `Microsoft.OpenApi` 2.7.5 có chạm tới lúc chạy được không | ✅ **`/swagger/v1/swagger.json` và `/openapi/v1.json` đều `200`**, JSON phân giải được, **115 path** + 183/184 schema, `0` exception trong log | xem bên dưới |
+| Chạy đủ 9 kịch bản, không chỉ S02/S05 | ✅ **1 instance: 5 ĐẠT / 4 HỎNG / 0 KHÔNG KẾT LUẬN** · **2 instance: 5 / 4 / 0** — không có hồi quy nào từ việc vá gói | [`2026-08-31-du-9-kich-ban-sau-muc-D.md`](evidence/loadprobe/2026-08-31-du-9-kich-ban-sau-muc-D.md) · [`2026-08-31-hai-instance-sau-muc-E.md`](evidence/loadprobe/2026-08-31-hai-instance-sau-muc-E.md) |
 
-> Hai dòng này là **nợ của mục D**, không phải nợ thừa hưởng. Chúng nên được trả trước mục E.
+**Vì sao "200" ở đây là bằng chứng đủ mạnh.** Nỗi lo là `Swashbuckle.AspNetCore` 10.1.2 **biên
+dịch với `Microsoft.OpenApi` 2.4.1** trong khi ghim nâng lên 2.7.5, và hỏng kiểu đó thì **build
+vẫn sạch** — chỉ bung lúc chạy. Nên phép đo phải chứng minh **hai** điều, không phải một:
 
-#### 🟠 Ưu tiên 2 — nợ thừa hưởng từ mục A và B, **bị chặn bởi DB rỗng**
+1. **Bản 2.7.5 THẬT SỰ được nạp**, chứ không phải NuGet âm thầm trả lại 2.4.1 làm "200" trở nên
+   vô nghĩa. Kiểm ở `API.deps.json` — thứ runtime host thật sự phân giải:
+   ```bash
+   python3 -c "import json;d=json.load(open('src/API/bin/Debug/net10.0/API.deps.json'));\
+   print([k for t in d['targets'].values() for k in t if 'OpenApi' in k or 'Swashbuckle.AspNetCore/' in k])"
+   #   → Microsoft.OpenApi/2.7.5  cùng  Swashbuckle.AspNetCore/10.1.2
+   ```
+   Đây là **ca đối chứng** của phép đo: nếu nó in `2.4.1` thì cái `200` chẳng chứng minh gì.
+2. **Bộ sinh tài liệu đi hết bề mặt API**, chứ không trả về một cái vỏ rỗng. `115 path` +
+   `183 schema` là con số nói điều đó — một tài liệu 0 path cũng là JSON `200` hợp lệ.
 
-Bốn luồng sau **chỉ được rà bằng đọc code + build sạch**, chưa từng chạy thật:
-**đặt hàng (Checkout) · POS · xuất/nhập kho · phiếu dịch vụ.**
+> 💡 `/swagger/v1/swagger.json` trả `openapi 3.0.4` (Swashbuckle) còn `/openapi/v1.json` trả
+> `openapi 3.1.1` (bộ sinh sẵn của .NET). **Hai đường độc lập nhau** và cả hai đều còn chạy —
+> nên nợ này đóng cho cả hai, không chỉ đường Swashbuckle.
 
-Trớ trêu là **5 trong 6 nút double-submit hỏng thật của mục B nằm đúng trong nhóm này**
+#### 🟠 Ưu tiên 2 — nợ thừa hưởng từ mục A và B — **CHỐT CHẶN ĐÃ THÁO, nợ còn một nửa**
+
+**Đọc bảng này thay vì câu "bốn luồng chưa chạy thật" của bản cũ** — ranh giới đã dịch sau
+phiên 2026-08-31 (chiều), và nó dịch **không đều giữa hai nửa**:
+
+| Luồng | Tầng Service (mục A — retry-safe) | Giao diện (mục B — nút double-submit) |
+|---|---|---|
+| Kiểm kê | ✅ đo tới DB từ trước | ✅ `SupplierDialog` + `CustomerDialog` đã đo |
+| **Checkout** | ✅ **đã đo phiên này** — đặt đơn end-to-end (`200` + `ORD-…`, serial thật) và 50 khách đồng thời, `LogError` khớp 1:1 với số 400 | ❌ `Orders/OrderDetail`, `Storefront/MyOrderDetail` chưa đo |
+| POS | ❌ chưa | ❌ `Pos/Index.SaveDraft` chưa đo |
+| Xuất/nhập kho | ❌ chưa | ❌ chưa |
+| Phiếu dịch vụ | ⚠️ *một phần* — S04/S05/S08 chạm `ServiceTicketService` qua API, nhưng chưa ai bấm tay | ❌ `ServiceTicketQuotation`, `ServiceTicketIntake` chưa đo |
+
+Trớ trêu là **5 trong 6 nút double-submit hỏng thật của mục B nằm đúng trong nhóm chưa đo**
 (`Storefront/MyOrderDetail`, `ServiceTicketQuotation`, `ServiceTicketIntake`, `Pos/Index`,
-và `Orders/OrderDetail`) — tức phần *vá lỗi thật* của mục B là phần **ít bằng chứng nhất**.
-Mục A cũng vậy: chỉ luồng kiểm kê được kiểm tới DB, còn `OrderService` / `PosService` /
-`InventoryExportService` / `ServiceTicketService` thì chưa.
+và `Orders/OrderDetail`) — tức phần *vá lỗi thật* của mục B **vẫn** là phần ít bằng chứng nhất,
+và **`curl` không giúp được gì ở đây**: bất biến cần đo là "nút có khoá trong cùng một tick
+render hay không", thứ chỉ tồn tại trong trình duyệt. Đó là việc còn lại của mục này.
 
 **Nguyên nhân gốc không phải "chưa có thời gian" mà là THIẾU SERIAL.** DB local:
 `Products = 2`, **`ProductSerials = 0`**, `Orders = 0`. Và
@@ -434,6 +490,29 @@ dotnet run --project tools/LoadProbe -- --scenarios S01 --keep
 #   Dọn: chạy lại probe KHÔNG có --keep (nó dọn đầu vào lẫn đầu ra).
 ```
 
+✅ **Đường này đã chạy thật ở phiên 2026-08-31 (chiều), nó hoạt động** — không còn là giả
+thuyết: `--scenarios S01 --keep` để lại **60 serial `Available`** trên biến thể `LP-SKU-1`
+(`VariantId` 1008), đủ để đặt đơn thật. Kiểm nhanh sau khi seed:
+
+```bash
+PW=$(grep -o '^SA_PASSWORD=.*' Infrastructure/db/.env | cut -d= -f2-)
+docker exec hushstore_sqlserver_dev /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$PW" -C -I -d HushStoreDb \
+  -Q "SELECT v.Id, v.SKU, COUNT(s.Id) FROM ProductVariants v JOIN ProductSerials s ON s.VariantId=v.Id AND s.Status=0 WHERE v.SKU LIKE 'LP-%' GROUP BY v.Id, v.SKU;"
+```
+
+**Hai chi tiết đã mất thời gian, đừng vấp lại:**
+
+1. **Khách hàng do probe seed KHÔNG đăng nhập được bằng mật khẩu** — token của chúng được
+   *mint* trong RAM (`ProbeEnvironment.MintToken`), không có mật khẩu nào trong DB. Muốn lái tay
+   thì **tự đăng ký một khách mới** qua `POST /api/auth/register` rồi `login` — nhanh hơn hẳn
+   việc đi dựng lại JWT bằng tay, và tránh phải đoán `ClaimTypes` nào bị map thành `nameid`.
+2. **Checkout cần một `UserAddressId` có thật của chính khách đó** — tạo bằng
+   `POST /api/storefront/user-addresses`. Thiếu nó thì trả `"Địa chỉ giao hàng không hợp lệ."`,
+   trông giống lỗi nghiệp vụ nên rất dễ đi tìm sai chỗ.
+
+Nhớ **dọn** dữ liệu lái tay của mình (khách + đơn + địa chỉ) — probe chỉ dọn thứ mang tiền tố
+`LP-` và miền `@loadprobe.local`, nó **không** biết tới tài khoản bạn tự đăng ký.
+
 Đây là đường rẻ nhất để tháo chốt chặn này — **không cần viết script seed mới**.
 
 #### ✅ Cái ĐÃ đo thật rồi — đừng làm lại
@@ -447,10 +526,20 @@ dotnet run --project tools/LoadProbe -- --scenarios S01 --keep
 | Cổng chặn lỗ hổng không rỗng | 4 nhánh: sạch `0` · **hoàn tác csproj `1` (19 dòng High)** · sln sai `2` · JSON hỏng `2` |
 | Đợt 1 không hồi quy sau mục D | LoadProbe `S02,S05` → **2 ĐẠT, 0 KHÔNG KẾT LUẬN** |
 | Khoá tài khoản không kẹt RAM một task | khoá qua replica A → gọi replica B `403` + `X-Account-Status: locked` |
+| **Sinh tài liệu OpenAPI sau khi ghim `Microsoft.OpenApi` 2.7.5** | `/swagger/v1/swagger.json` + `/openapi/v1.json` → `200`, **115 path**, 0 exception; **`API.deps.json` xác nhận `2.7.5` thật sự được nạp** cạnh Swashbuckle 10.1.2 |
+| **Đủ 9 kịch bản ở CẢ HAI cấu hình sau mục D** | 1 instance **5/4/0** · 2 instance **5/4/0** — round-robin kiểm trước khi đo, 5/5 chia đều |
+| **Luồng Checkout chạy thật tới DB** | đặt đơn end-to-end `200` + `ORD-20260831-000014` trên serial thật; **ca đối chứng** cùng payload có mã voucher rác → `400` đúng thông báo nghiệp vụ |
+| **Mục 🅴 không nuốt thông báo nghiệp vụ** | một lần chạy S02 sinh **cả ba** lớp thông báo (2 nghiệp vụ nguyên văn + 1 câu chung); 37 request 400 ↔ **37** `LogError` |
 
-⚠️ **`S07` ĐẠT nhưng tín hiệu YẾU** — lần chạy đó POS thua cuộc đua (`400`), nên nhánh nguy hiểm
-"serial đã bán bị ghi đè thành Lost" **chưa hề được chạm tới**. Đừng đọc nó thành "đã an toàn";
-muốn kết luận phải chạy lặp nhiều lần.
+⚠️ **`S07` VÀ `S04` ĐẠT nhưng tín hiệu YẾU — hai kịch bản này phụ thuộc thời điểm.**
+S07: lần chạy đó POS thua cuộc đua (`400`), nên nhánh nguy hiểm "serial đã bán bị ghi đè thành
+Lost" **chưa hề được chạm tới**. S04: 🔴 với 2 instance ở mục C, nhưng **✅ với 2 instance ở phiên
+này** — mà `HasOpenTicketForSerialAsync` **không đổi một dòng nào**, nên cái ✅ đó là bằng chứng
+*flaky*, không phải bằng chứng *đã sửa*.
+
+**Bất đối xứng cần nhớ:** với kịch bản phụ thuộc thời điểm, một lần 🔴 **là** bằng chứng hỏng,
+còn một lần ✅ **không phải** bằng chứng an toàn. Muốn kết luận phía ✅ thì phải chạy lặp và đếm
+tỉ lệ.
 
 #### Quy tắc rút ra, áp cho mọi mục sau
 
@@ -462,36 +551,101 @@ muốn kết luận phải chạy lặp nhiều lần.
 
 ---
 
-### 🅴 Sửa thông báo lỗi tiếng Anh ở `OrderService.CheckoutAsync` — việc DUY NHẤT không bị chặn
+### ✅ 🅴 Sửa thông báo lỗi tiếng Anh ở `OrderService.CheckoutAsync` — **XONG (2026-08-31)**
 
-**Nhỏ, độc lập, không phải chờ đợt 3.** Đây là việc nên làm đầu tiên ở phiên sau.
-
-`src/Service/Orders/OrderService.cs:257`:
-
-```csharp
-throw new Exception("Lỗi hệ thống khi đặt hàng: " + ex.Message, ex);
-```
-
-`ex.Message` ở đây là chuỗi của EF Core, nên thứ người dùng cuối nhận được là:
+**TRƯỚC** (`OrderService.cs:257`) — `ex.Message` là chuỗi của EF Core, nên người dùng cuối nhận:
 
 ```
 Lỗi hệ thống khi đặt hàng: An error occurred while saving the entity changes.
 See the inner exception for details.
 ```
 
-Hai lỗi trong một dòng: **tiếng Anh** (vi phạm quy tắc user-facing message của `CLAUDE.md`) và
-**lộ nội tạng EF** cho người ngoài. Sửa: trả một câu tiếng Việt cố định, còn chi tiết `ex` thì
-đẩy vào `ILogger<T>`.
+**SAU** — cùng cuộc đua đó, 37/37 request lỗi của S01 đều nhận:
 
-> Đã tái hiện lại lần nữa lúc chạy chốt hồi quy sau mục D — xem mẫu phản hồi trong
-> [`2026-08-31-hoi-quy-sau-muc-D.md`](evidence/loadprobe/2026-08-31-hoi-quy-sau-muc-D.md).
-> Nó xuất hiện ở nhánh thua cuộc đua của S02, tức nó bung ra đúng lúc có tải đồng thời —
-> chính là lúc người dùng thật dễ gặp nhất.
+```
+Không thể hoàn tất đặt hàng do lỗi hệ thống. Vui lòng thử lại sau ít phút;
+nếu vẫn không được, xin liên hệ bộ phận hỗ trợ.
+```
 
-⚠️ Nó **không** sửa được nguyên nhân gốc của S01 (sinh mã chứng từ đua nhau). Đó vẫn là việc
-của đợt 3. Sửa chỗ này chỉ để người dùng không phải đọc tiếng Anh.
+Chi tiết **không mất**, nó chuyển vào `ILogger`: **37 request 400 ↔ 37 bản ghi `LogError`**,
+khớp 1:1, và log giữ nguyên nhân gốc thật (`Cannot insert duplicate key row … unique index
+'IX_Orders_OrderCode'`). Người vận hành vẫn chẩn đoán được; người dùng không phải đọc tiếng Anh.
 
-Đụng tầng Service nên **sửa xong phải chạy lại** `--scenarios S02,S05`.
+Bằng chứng đầy đủ:
+[`2026-08-31-muc-E-thong-bao-loi-tieng-viet.md`](evidence/loadprobe/2026-08-31-muc-E-thong-bao-loi-tieng-viet.md).
+
+#### 🚨 Cái bẫy của mục này: "trả một câu tiếng Việt cố định" là lời khuyên CHƯA ĐỦ
+
+Bản trước của mục này (và của `CLAUDE.md`) viết: *"Sửa: trả một câu tiếng Việt cố định, còn
+chi tiết `ex` thì đẩy vào `ILogger<T>`."* Làm **đúng y như vậy** thì sinh ra một hồi quy im lặng.
+
+Lý do: cùng khối `catch (Exception)` đó **cũng là đường đi của những thông báo nghiệp vụ đúng và
+hữu ích** — `"Mã 'X' đã hết hạn hoặc chưa đến thời gian sử dụng."`, `"Mã 'X' đã hết lượt sử
+dụng."`, `"Mã giảm giá không tồn tại: …"` — **13 chỗ** `throw` như vậy trong chính file này, phần
+lớn nằm trong `ApplyVouchersAsync`. Thay cả khối catch bằng một câu chung sẽ **nuốt sạch 13 thông
+báo đó**, và triệu chứng là: khách nhập mã hết hạn → nhận "lỗi hệ thống, vui lòng thử lại" → bấm
+lại → hỏng y hệt, vĩnh viễn, vì họ không bao giờ biết phải bỏ cái mã ra. Build sạch, `grep` xanh.
+
+**Cách đã làm — phân loại tại nguồn, không phân loại bằng cách đoán chuỗi:**
+
+- Thêm `BusinessRuleException` (`src/Core/Exceptions/`) — hợp đồng của nó là *"message bên trong
+  đã là thông báo soạn cho người dùng cuối"*. 13 `throw` nghiệp vụ đổi sang kiểu này.
+- Khối catch thành hai tầng: `catch (BusinessRuleException) { throw; }` **đứng trước**
+  `catch (Exception ex) { _logger.LogError(…); throw new Exception("<câu tiếng Việt cố định>", ex); }`.
+- **Cấm** phân loại bằng cách kiểm nội dung `ex.Message` (dò tiếng Việt, dò tiền tố "Mã"). Đó là
+  cùng loại sai với `ORDER BY Code DESC` ở bẫy #7 — dùng biểu diễn chuỗi thay cho ngữ nghĩa.
+- Cùng lý lẽ với `ConcurrentModificationException`: bắt `InvalidOperationException` thay thế là
+  **không** an toàn, EF Core dùng chính kiểu đó cho chuyện khác.
+
+`PlaceOrderAsync` (dòng ~385) có **đúng cùng một lỗi** và đã sửa cùng khuôn. Nó hiện **không có
+call-site nào** trong toàn repo (kể cả `IOrderService`) — code chết — nên đừng ngạc nhiên khi
+không đo được nó; sửa vì nó là cùng một dòng lỗi, không phải vì nó đang chạy.
+
+**Cách đo đã dùng — và vì sao S02 là phép đo tốt nhất cho việc này.** Một lần chạy S02 sinh ra
+**cả ba lớp thông báo cùng lúc**, nên nó chứng minh cả hai nửa của bất biến trong một phép đo:
+
+```json
+{"message":"Mã 'LP-VQ1' đã hết lượt sử dụng. Vui lòng bỏ mã này và thử lại."}   ← nghiệp vụ, nguyên văn
+{"message":"Mã 'LP-VQ1' đã hết lượt sử dụng."}                                  ← nghiệp vụ, nguyên văn (chỗ khác)
+{"message":"Không thể hoàn tất đặt hàng do lỗi hệ thống. …"}                    ← hạ tầng, câu chung
+```
+
+Kèm **ca đối chứng lái tay** (đã dọn sau khi đo): mã voucher không tồn tại → `400` +
+`"Mã giảm giá không tồn tại: KHONGCOMANAY"`; **cùng payload bỏ voucher đi** → `200` +
+`ORD-20260831-000014`. Ca thứ hai bắt buộc phải có — thiếu nó thì cái `400` của ca đầu có thể chỉ
+nghĩa là payload sai hay hết tồn kho, tức luật voucher chưa từng chạy tới.
+
+⚠️ Nó **không** sửa nguyên nhân gốc của S01 (sinh mã chứng từ đua nhau) — S01 vẫn 🔴 sau khi sửa,
+số đơn đặt được vẫn dao động theo thời điểm (9/50 · 13/50 · 16/50 · 18/50 qua bốn lần chạy). Đó
+vẫn là việc của đợt 3. Mục 🅴 chỉ đổi **thứ người dùng đọc được** khi cuộc đua đó thua.
+
+Chốt hồi quy đã chạy (bắt buộc vì đụng tầng Service): `--scenarios S02,S05` → **2 ĐẠT, 0 HỎNG,
+0 KHÔNG KẾT LUẬN**, xem
+[`2026-08-31-hoi-quy-sau-muc-E.md`](evidence/loadprobe/2026-08-31-hoi-quy-sau-muc-E.md).
+Build sau khi sửa: `0 Error(s)` / **184** cảnh báo — **đúng bằng số trước khi sửa**.
+
+---
+
+### 🅷 Cùng lỗi của mục 🅴 còn ở 6 chỗ khác — chưa sửa, CỐ Ý
+
+Quét toàn repo tìm `ex.Message` bị chuyển thẳng cho người dùng:
+
+| Chỗ | Dòng | Ghi chú |
+|---|---|---|
+| `src/Service/Pos/PosService.cs` | 458, **462** | `"Lỗi khi quá trình thanh toán: " + ex.Message` — **bản sinh đôi y hệt** mục 🅴, chỉ khác luồng (POS tại quầy) |
+| `src/Service/Inventory/InventoryCheckService.cs` | 678, 858, 999 | `ApiResult.Fail(ex.Message)` |
+| `src/Service/Inventory/InventoryExportService.cs` | 192, **198** | `$"Lỗi khi xuất kho: {ex.Message}"` |
+| `src/API/Controllers/…` (`Cart`, `Orders`, `ServiceTickets`, `ServiceInvoices`) | ~35 chỗ | `ApiResult.Fail(ex.Message)` ở tầng controller |
+
+Không gộp vào mục 🅴 vì runbook khoanh mục đó đúng vào `OrderService.cs:257`; ghi thành mục riêng
+để việc mở rộng phạm vi là **một quyết định**, không phải một tác dụng phụ.
+
+⚠️ **Đừng làm mục này bằng find-and-replace.** Mỗi chỗ phải phân loại nghiệp vụ / hạ tầng đúng
+như mục 🅴 đã làm, nếu không thì đổi một lỗi (lộ tiếng Anh) thành một lỗi tệ hơn (nuốt thông báo
+nghiệp vụ, người dùng không còn đường tự sửa). Khuôn đã có sẵn: `BusinessRuleException` + `catch`
+hai tầng. Ba luồng liên quan (POS · xuất/nhập kho · phiếu dịch vụ) **cũng đúng là ba luồng chưa
+chạy thật** ở mục 🧪 ưu tiên 2 — nên làm mục 🅷 **sau khi** seed được dữ liệu, để sửa xong có
+đường đo ngay.
 
 ---
 
@@ -658,8 +812,12 @@ curl -s -X POST "$B/api/inventory-checks" -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"scopeType":0,"note":"smoke"}' | head -c 200
 
 # Sinh tài liệu OpenAPI còn chạy sau khi GHIM Microsoft.OpenApi 2.7.5 — kỳ vọng 200 + JSON hợp lệ
-# ⚠️ CHƯA AI CHẠY LỆNH NÀY. Swashbuckle 10.1.2 biên dịch với 2.4.1; hỏng kiểu này BUILD VẪN SẠCH
-#    và chỉ bung ra lúc có người gọi endpoint sinh tài liệu. Xem mục 🧪 ưu tiên 1.
+# ✅ ĐÃ CHẠY 2026-08-31: cả hai đều 200, 115 path. Swashbuckle 10.1.2 biên dịch với 2.4.1 nhưng
+#    chạy được với 2.7.5. Hỏng kiểu này BUILD VẪN SẠCH nên vẫn phải chạy lại sau mỗi lần đổi ghim.
+#    ⚠️ Chỉ "200" là CHƯA đủ: phải kèm ca đối chứng xác nhận 2.7.5 thật sự được nạp, nếu không
+#       thì NuGet trả lại 2.4.1 cũng ra 200 và phép đo thành rỗng:
+#       python3 -c "import json;d=json.load(open('src/API/bin/Debug/net10.0/API.deps.json'));\
+#       print([k for t in d['targets'].values() for k in t if 'OpenApi' in k])"   # → Microsoft.OpenApi/2.7.5
 for u in /swagger/v1/swagger.json /openapi/v1.json; do
   printf '%s -> ' "$u"
   curl -s "$B$u" | python3 -c "import sys,json;d=json.load(sys.stdin);print('OK, openapi',d.get('openapi'),'| paths:',len(d.get('paths',{})))" 2>&1 | head -1
@@ -706,7 +864,7 @@ Nó tự dọn dữ liệu trước và sau. Mã thoát: `0` đạt hết · `1`
 
 ---
 
-## 5. Mười một cái bẫy im lặng đã gặp — đọc trước khi sửa code
+## 5. Mười ba cái bẫy im lặng đã gặp — đọc trước khi sửa code
 
 Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ ra khi đo.
 
@@ -736,6 +894,12 @@ Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ
    `docker compose --scale api=2`, cái tên đó ra một địa chỉ và nginx gửi 100% traffic vào
    đúng một container suốt đời. Bài kiểm "đa instance" âm thầm thành bài kiểm một instance,
    log vẫn đẹp. Phải **liệt kê tường minh** từng host.
+   ⚠️ **Biến thể mới, gặp ở phiên 2026-08-31:** đo **quá sớm** sau `compose up` thì header
+   `X-Upstream` trả **hai** địa chỉ mỗi phản hồi (`172.21.0.2:8080, 172.21.0.3:8080`). Đó không
+   phải round-robin — `$upstream_addr` đang liệt kê **chuỗi đã thử**: replica thứ nhất chưa kịp
+   khởi động, nginx thất bại rồi chuyển sang replica thứ hai. Đo trong cửa sổ đó thì mỗi request
+   đi qua **cả hai** container và mọi kết luận đa-instance đều vô nghĩa. **Một địa chỉ mỗi phản
+   hồi = round-robin; hai địa chỉ = retry.** Chờ ấm rồi kiểm lại tới khi ra tỉ lệ chia đều.
 10. **Tên bảng ≠ tên `DbSet`** — `ServiceTicketStatusHistory` là **số ít** trong DB. Viết SQL
     thô theo tên `DbSet` là lỗi 208 *Invalid object name*. Tra trước bằng
     `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'`.
@@ -744,6 +908,22 @@ Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ
     đó sẽ **luôn xanh vĩnh viễn**. Cùng họ với bẫy #8: cửa kiểm không bao giờ đỏ trông giống hệt
     cửa kiểm luôn đạt. Cổng phải **đọc báo cáo**, không tin mã thoát — xem
     `devops/scripts/check-vulnerable-packages.sh`.
+12. **Kịch bản phụ thuộc thời điểm chuyển từ 🔴 sang ✅ mà không ai sửa gì** — S04 HỎNG với 2
+    instance ở mục C, ĐẠT với 2 instance ở phiên sau, `HasOpenTicketForSerialAsync` **không đổi
+    một dòng**. Đọc thành "đã sửa" là mất luôn một lỗi thật. Bất đối xứng phải nhớ: một lần 🔴
+    **là** bằng chứng hỏng; một lần ✅ **không** là bằng chứng an toàn. Cùng họ với bẫy #8 —
+    nhưng nguy hơn, vì ở đây phép đo **không** rỗng, nó chỉ đơn giản là thua xác suất.
+    Hệ quả: **đừng ghi kỳ vọng dạng "vẫn đúng N/9 HỎNG"** mà không nói rõ **cấu hình nào** và
+    rằng N là **hợp của nhiều lần chạy** — chính bản trước của mục 🧪 đã ghi "5/9" cho một lệnh
+    chạy 1 instance, mà 1 instance thì kỳ vọng đúng là 4/9.
+13. **Thay khối `catch` bằng "một câu tiếng Việt cố định" nuốt luôn thông báo NGHIỆP VỤ** —
+    khối `catch (Exception)` của `CheckoutAsync` là đường đi của **cả hai** loại: lỗi hạ tầng EF
+    (tiếng Anh, phải chặn) và **13** thông báo nghiệp vụ đã soạn cho người dùng (`"Mã 'X' đã hết
+    lượt sử dụng."`). Sửa theo lời khuyên hiển nhiên là đúng nửa đầu và **phá nửa sau**: khách
+    nhập mã hết hạn nhận "lỗi hệ thống, vui lòng thử lại", bấm lại hỏng y hệt vĩnh viễn vì không
+    ai nói cho họ biết phải bỏ mã ra. Build sạch, `grep` xanh. Phải phân loại **tại nguồn** bằng
+    một kiểu riêng (`BusinessRuleException`) — **không** bằng cách dò nội dung `ex.Message`, đó
+    lại là dùng biểu diễn chuỗi thay cho ngữ nghĩa như bẫy #7.
 
 ---
 
@@ -767,6 +947,22 @@ grep -rln "_isSaving\|_isSubmitting\|_isApproving\|_isConfirming" \
 #   WriteReviewDialog.razor  -> chỉ là COMMENT, không phải code
 #   CustomerDialog.razor     -> CỐ Ý giữ: nút ButtonType.Submit, xem cảnh báo 🚨 ở mục B
 #   EmployeeDialog.razor     -> CỐ Ý giữ: lý do như trên
+```
+
+```bash
+# E — thông báo lỗi user-facing không được nối ex.Message trong OrderService
+grep -n 'ex\.Message' src/Service/Orders/OrderService.cs | grep -v '//'    # kỳ vọng: rỗng
+#   (chi tiết ex CHỈ được đi vào _logger.LogError, không đi vào message trả cho client)
+#   ⚠️ Phải có `| grep -v '//'`: bản thân file có MỘT comment nhắc "KHÔNG nối ex.Message…",
+#      nên bỏ bộ lọc đi thì chốt này báo động giả vĩnh viễn — và một chốt luôn đỏ sẽ bị bỏ qua
+#      y như một chốt luôn xanh (bẫy #11).
+
+# E — 13 throw nghiệp vụ vẫn là BusinessRuleException, không tụt về Exception trần
+grep -c 'throw new BusinessRuleException' src/Service/Orders/OrderService.cs   # kỳ vọng: 13
+grep -c 'catch (BusinessRuleException)'    src/Service/Orders/OrderService.cs   # kỳ vọng: 2
+#   ⚠️ Con số thứ hai quan trọng hơn con số thứ nhất: thiếu catch thì 13 throw kia
+#      rơi vào catch (Exception) và bị thay bằng câu chung — đúng cái hồi quy mục 🅴 tránh.
+#      Và catch (BusinessRuleException) PHẢI đứng TRƯỚC catch (Exception) trong cùng khối try.
 ```
 
 ```bash

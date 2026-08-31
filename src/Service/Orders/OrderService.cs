@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
+using PBL3.Core.Exceptions;
 using PBL3.Core.Interfaces;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Sale;
@@ -22,6 +24,7 @@ namespace PBL3.Service.Orders
         private readonly IProductSerialRepository _productSerialRepo;
 
         private readonly IDocumentCodeGenerator _codeGenerator;
+        private readonly ILogger<OrderService> _logger;
 
 
         public OrderService(
@@ -32,7 +35,8 @@ namespace PBL3.Service.Orders
             ICartRepository cartRepo,
             IUserAddressRepository userAddressRepo,
             IProductSerialRepository productSerialRepo,
-            IDocumentCodeGenerator codeGenerator)
+            IDocumentCodeGenerator codeGenerator,
+            ILogger<OrderService> logger)
         {
             _unitOfWork = unitOfWork;
             _orderRepo = orderRepo;
@@ -42,6 +46,7 @@ namespace PBL3.Service.Orders
             _userAddressRepo = userAddressRepo;
             _productSerialRepo = productSerialRepo;
             _codeGenerator = codeGenerator;
+            _logger = logger;
         }
 
         /// <summary>
@@ -220,7 +225,7 @@ namespace PBL3.Service.Orders
                             // hai đơn đồng thời chỉ đếm một lượt, voucher dùng vượt số phát hành.
                             var exhausted = await _voucherRepo.TryConsumeByCodesAsync(request.VoucherCodes);
                             if (exhausted.Any())
-                                throw new Exception(
+                                throw new BusinessRuleException(
                                     $"Mã '{string.Join("', '", exhausted)}' đã hết lượt sử dụng. " +
                                     "Vui lòng bỏ mã này và thử lại.");
                         }
@@ -252,9 +257,27 @@ namespace PBL3.Service.Orders
 
                 return ApiResult<CheckoutResponse>.Ok(response, "Đặt hàng thành công!");
             }
+            catch (BusinessRuleException)
+            {
+                // Thông báo nghiệp vụ đã soạn cho người dùng (tiếng Việt, an toàn) — cho đi ra
+                // NGUYÊN VĂN. Nuốt nó thành câu chung là hồi quy UX: người dùng mất đúng thông
+                // tin cần để tự sửa ("bỏ mã hết hạn ra rồi đặt lại").
+                throw;
+            }
             catch (Exception ex)
             {
-                throw new Exception("Lỗi hệ thống khi đặt hàng: " + ex.Message, ex);
+                // KHÔNG nối ex.Message vào thông báo người dùng: ở đây ex thường là của
+                // EF Core / SQL Server và nội dung là tiếng Anh ("An error occurred while
+                // saving the entity changes…"), vừa vi phạm quy tắc tiếng Việt của CLAUDE.md
+                // vừa lộ nội tạng ORM. Chi tiết đi vào log; người dùng nhận một câu chung.
+                _logger.LogError(ex,
+                    "Checkout thất bại cho người dùng {UserId}. IsBuyNow={IsBuyNow}, BuyNowVariantId={BuyNowVariantId}, Vouchers={VoucherCodes}",
+                    userId, request.IsBuyNow, request.BuyNowVariantId,
+                    request.VoucherCodes == null ? "(không có)" : string.Join(",", request.VoucherCodes));
+
+                throw new Exception(
+                    "Không thể hoàn tất đặt hàng do lỗi hệ thống. Vui lòng thử lại sau ít phút; "
+                    + "nếu vẫn không được, xin liên hệ bộ phận hỗ trợ.", ex);
             }
         }
 
@@ -363,7 +386,7 @@ namespace PBL3.Service.Orders
                         // TIÊU THỤ NGUYÊN TỬ — xem giải thích ở nhánh checkout phía trên.
                         var exhausted = await _voucherRepo.TryConsumeByCodesAsync(request.VoucherCodes);
                         if (exhausted.Any())
-                            throw new Exception(
+                            throw new BusinessRuleException(
                                 $"Mã '{string.Join("', '", exhausted)}' đã hết lượt sử dụng. " +
                                 "Vui lòng bỏ mã này và thử lại.");
                     }
@@ -380,9 +403,21 @@ namespace PBL3.Service.Orders
 
                 return ApiResult<OrderDetailDto>.Ok(dto, "Đặt hàng thành công!");
             }
+            catch (BusinessRuleException)
+            {
+                // Thông báo nghiệp vụ đã soạn cho người dùng (tiếng Việt, an toàn) — cho đi ra
+                // NGUYÊN VĂN. Nuốt nó thành câu chung là hồi quy UX: người dùng mất đúng thông
+                // tin cần để tự sửa ("bỏ mã hết hạn ra rồi đặt lại").
+                throw;
+            }
             catch (Exception ex)
             {
-                throw new Exception("Lỗi khi tạo đơn hàng: " + ex.Message, ex);
+                // Cùng lý do như khối catch của CheckoutAsync ở trên.
+                _logger.LogError(ex, "Tạo đơn hàng thất bại cho người dùng {UserId}.", userId);
+
+                throw new Exception(
+                    "Không thể tạo đơn hàng do lỗi hệ thống. Vui lòng thử lại sau ít phút; "
+                    + "nếu vẫn không được, xin liên hệ bộ phận hỗ trợ.", ex);
             }
         }
 
@@ -433,40 +468,40 @@ namespace PBL3.Service.Orders
             var foundCodes = vouchers.Select(v => v.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var invalidCodes = voucherCodes.Where(c => !foundCodes.Contains(c)).ToList();
             if (invalidCodes.Any())
-                throw new Exception($"Mã giảm giá không tồn tại: {string.Join(", ", invalidCodes)}");
+                throw new BusinessRuleException($"Mã giảm giá không tồn tại: {string.Join(", ", invalidCodes)}");
 
             // NGHIỆP VỤ: Kiểm tra khả năng dùng chung (IsStackable).
             // Nếu khách hàng nhập từ 2 voucher trở lên, nhưng có ít nhất 1 voucher cấu hình "Không cho phép cộng dồn", ta từ chối giao dịch.
             if (vouchers.Count > 1 && vouchers.Any(v => !v.IsStackable))
-                throw new Exception("Một hoặc nhiều mã giảm giá không thể được sử dụng cùng lúc với mã khác.");
+                throw new BusinessRuleException("Một hoặc nhiều mã giảm giá không thể được sử dụng cùng lúc với mã khác.");
 
             var now = DateTime.UtcNow;
             foreach (var voucher in vouchers)
             {
                 // 1. Kiểm tra trạng thái hoạt động của Voucher
                 if (!voucher.IsActive)
-                    throw new Exception($"Mã '{voucher.Code}' đã bị vô hiệu hóa.");
+                    throw new BusinessRuleException($"Mã '{voucher.Code}' đã bị vô hiệu hóa.");
 
                 // 2. Kiểm tra hiệu lực thời gian
                 if (now < voucher.StartDate || now > voucher.EndDate)
-                    throw new Exception($"Mã '{voucher.Code}' đã hết hạn hoặc chưa đến thời gian sử dụng.");
+                    throw new BusinessRuleException($"Mã '{voucher.Code}' đã hết hạn hoặc chưa đến thời gian sử dụng.");
 
                 // 3. Kiểm tra số lượng phát hành của hệ thống
                 if (voucher.Quantity.HasValue && voucher.UsedCount >= voucher.Quantity.Value)
-                    throw new Exception($"Mã '{voucher.Code}' đã hết lượt sử dụng.");
+                    throw new BusinessRuleException($"Mã '{voucher.Code}' đã hết lượt sử dụng.");
 
                 // 4. Kiểm tra giá trị đơn hàng tối thiểu để được áp dụng mã
                 if (subTotal < voucher.MinOrderValue)
-                    throw new Exception(
+                    throw new BusinessRuleException(
                         $"Mã '{voucher.Code}' yêu cầu đơn hàng tối thiểu {voucher.MinOrderValue:#,0}đ " +
                         $"(đơn hiện tại: {subTotal:#,0}đ).");
 
                 // 5. Kiểm tra kênh áp dụng (Kênh Online vs Kênh Tại quầy POS)
                 // ApplyFor = 1: Chỉ áp dụng Online, ApplyFor = 2: Chỉ áp dụng tại quầy POS, ApplyFor = 0: Áp dụng cả hai
                 if (isOnlineOrder && voucher.ApplyFor == 2)
-                    throw new Exception($"Mã '{voucher.Code}' chỉ áp dụng tại quầy, không áp dụng cho đơn online.");
+                    throw new BusinessRuleException($"Mã '{voucher.Code}' chỉ áp dụng tại quầy, không áp dụng cho đơn online.");
                 if (!isOnlineOrder && voucher.ApplyFor == 1)
-                    throw new Exception($"Mã '{voucher.Code}' chỉ áp dụng cho đơn online, không áp dụng tại quầy.");
+                    throw new BusinessRuleException($"Mã '{voucher.Code}' chỉ áp dụng cho đơn online, không áp dụng tại quầy.");
 
                 // 6. Kiểm tra danh mục sản phẩm được áp dụng
                 // Nếu voucher có cấu hình danh sách Category, thì đơn hàng bắt buộc phải chứa ít nhất một sản phẩm thuộc các danh mục đó.
@@ -474,7 +509,7 @@ namespace PBL3.Service.Orders
                 {
                     var voucherCategoryIds = voucher.VoucherCategories.Select(vc => vc.CategoryId).ToHashSet();
                     if (!orderItemCategoryIds.Any(catId => voucherCategoryIds.Contains(catId)))
-                        throw new Exception($"Mã '{voucher.Code}' không áp dụng cho danh mục sản phẩm trong đơn hàng này.");
+                        throw new BusinessRuleException($"Mã '{voucher.Code}' không áp dụng cho danh mục sản phẩm trong đơn hàng này.");
                 }
             }
 
@@ -485,13 +520,13 @@ namespace PBL3.Service.Orders
             {
                 var currentCount = usageCounts.GetValueOrDefault(voucher.Id, 0);
                 if (voucher.MaxUsesPerUser.HasValue && currentCount >= voucher.MaxUsesPerUser.Value)
-                    throw new Exception(
+                    throw new BusinessRuleException(
                         $"Bạn đã sử dụng mã '{voucher.Code}' {currentCount} lần " +
                         $"(tối đa {voucher.MaxUsesPerUser} lần/khách).");
 
                 // Tương thích ngược: nếu MaxUsesPerUser null và không stackable, giữ mặc định mỗi khách chỉ dùng tối đa 1 lần
                 if (!voucher.MaxUsesPerUser.HasValue && !voucher.IsStackable && currentCount >= 1)
-                    throw new Exception(
+                    throw new BusinessRuleException(
                         $"Bạn đã sử dụng mã giảm giá '{voucher.Code}'. Mỗi mã chỉ được sử dụng 1 lần.");
             }
 

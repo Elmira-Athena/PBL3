@@ -116,6 +116,33 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
 - **Mọi thông báo lỗi trả về cho người dùng (user-facing messages) phải bằng tiếng Việt có dấu.**
   - Sai: `return BadRequest("Product not found");`
   - Đúng: `return BadRequest("Không tìm thấy sản phẩm yêu cầu.");`
+- **Không bao giờ nối `ex.Message` của hạ tầng vào thông báo cho người dùng.**
+  Chuỗi của EF Core / SQL Server là **tiếng Anh** và lộ nội tạng ORM, nên
+  `throw new Exception("Lỗi hệ thống: " + ex.Message, ex)` **vi phạm luật ngay trên** dù nửa đầu
+  câu là tiếng Việt. Đây là lỗi đã có thật ở `OrderService`, đã sửa ở mục 🅴; LoadProbe tái hiện
+  được nó ở nhánh thua cuộc đua sinh mã chứng từ. Chi tiết `ex` đi vào `ILogger<T>`, người dùng
+  nhận một câu tiếng Việt cố định.
+  🚨 **Nhưng "thay cả khối `catch` bằng một câu cố định" là sai — đó là cái bẫy.** Cùng khối
+  `catch (Exception)` đó thường **cũng** là đường đi của thông báo **nghiệp vụ** đã soạn cho
+  người dùng (`"Mã 'X' đã hết lượt sử dụng."`). Nuốt chúng thành câu chung là hồi quy UX nặng
+  hơn lỗi ban đầu: người dùng mất đúng thông tin cần để tự sửa, bấm lại thì hỏng y hệt.
+  Khuôn đúng — phân loại **tại nguồn**, không bằng cách dò nội dung chuỗi:
+  ```csharp
+  // throw nghiệp vụ: message BẮT BUỘC là tiếng Việt, an toàn để hiển thị
+  throw new BusinessRuleException($"Mã '{code}' đã hết lượt sử dụng.");
+  …
+  catch (BusinessRuleException) { throw; }            // PHẢI đứng trước catch (Exception)
+  catch (Exception ex)
+  {
+      _logger.LogError(ex, "Checkout thất bại cho người dùng {UserId}.", userId);
+      throw new Exception("Không thể hoàn tất đặt hàng do lỗi hệ thống. …", ex);
+  }
+  ```
+  `BusinessRuleException` ở `src/Core/Exceptions/`. Cùng lý lẽ với `ConcurrentModificationException`:
+  bắt `InvalidOperationException` thay thế là **không** an toàn vì EF Core dùng chính kiểu đó cho
+  chuyện khác. ⚠️ Lỗi này **còn ở 6 chỗ khác** (`PosService.cs:462`, `InventoryCheckService`,
+  `InventoryExportService`, và ~35 chỗ `ApiResult.Fail(ex.Message)` ở controller) — xem mục 🅷 của
+  runbook. Đừng dọn bằng find-and-replace.
 
 ## Query & Performance Rules
 
@@ -229,30 +256,41 @@ xuất kho (Pending/Confirmed/Shipping)`. Serial chỉ đổi `Available` → `S
 
 🔴 **[`docs/bat-dau-phien-moi.md`](docs/bat-dau-phien-moi.md)** — điểm vào cho một phiên mới.
 Nó ghi: việc kế tiếp (kèm `file:dòng` cụ thể), cách chạy môi trường local, công thức kiểm
-chứng, và **mười một cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
+chứng, và **mười ba cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
 tầng Service, auth, hay rate limiting.
 
-Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C + mục D đã xong (18/18 call-site
-transaction retry-safe; 23/23 nút mutation dùng `ActionButton`/`BusyScope`; bộ đo
-`tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số; 10/10 lỗ hổng NuGet High đã vá và
-có cổng chặn ở CI). Còn lại **duy nhất** đợt 3, và nó **bị chặn** tới khi chạy được
-`Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
+Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C + mục D + **mục 🅴** đã xong
+(18/18 call-site transaction retry-safe; 23/23 nút mutation dùng `ActionButton`/`BusyScope`;
+bộ đo `tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số; 10/10 lỗ hổng NuGet High đã vá và
+có cổng chặn ở CI; thông báo lỗi tiếng Anh ở `OrderService` đã chặn lại). Còn lại: **mục 🅷**
+(cùng lỗi `ex.Message` ở 6 chỗ khác), **nửa giao diện** của nợ kiểm thử 🧪, và **đợt 3** — đợt 3
+**bị chặn** tới khi chạy được `Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
 
-🧪 **Nợ kiểm thử — đọc mục 🧪 của runbook trước khi tin dòng "XONG" nào.** Mọi mục A–D đều
-build sạch và `grep` xanh, nhưng `grep` chỉ chứng minh **hình dạng code**, không chứng minh
-hành vi. Bốn luồng **chưa từng chạy thật**: Checkout · POS · xuất/nhập kho · phiếu dịch vụ —
-và **5/6 nút double-submit hỏng thật nằm đúng trong số đó**. Nguyên nhân là DB local không có
-`ProductSerials` nào, mà **không script `.sql` nào seed bảng đó**; cách tháo chốt là
-`dotnet run --project tools/LoadProbe -- --scenarios S01 --keep` (nó tự sinh serial rồi giữ lại).
-Hai việc rẻ còn nợ riêng của mục D: chưa ai gọi endpoint sinh tài liệu OpenAPI sau khi ghim
-`Microsoft.OpenApi` 2.7.5, và chưa chạy lại đủ 9 kịch bản LoadProbe.
+🧪 **Nợ kiểm thử — đọc mục 🧪 của runbook trước khi tin dòng "XONG" nào.** `grep` chỉ chứng
+minh **hình dạng code**, không chứng minh hành vi. Nợ của mục D **đã trả** (OpenAPI sinh được
+sau khi ghim `Microsoft.OpenApi` 2.7.5; đủ 9 kịch bản LoadProbe chạy lại ở **cả hai** cấu hình,
+không hồi quy). Nợ còn lại chia **không đều giữa hai nửa**:
+- **Tầng Service:** Checkout **đã chạy thật tới DB**; POS · xuất/nhập kho · phiếu dịch vụ chưa.
+- **Giao diện:** **cả 6 nút double-submit hỏng thật của mục B vẫn chưa nút nào được đo** — bất
+  biến cần đo là "nút có khoá trong cùng một tick render", chỉ tồn tại trong trình duyệt, `curl`
+  không đo được.
 
-🔴 **LoadProbe đã đo: 5/9 bất biến SAI.** Đọc mục 🅵 của runbook trước khi động vào tầng
-Service — nó nói rõ chỗ nào còn check-then-act và chỗ nào đã an toàn. Ba điều rút ra:
+Chốt chặn "DB local không có `ProductSerials`" **đã tháo** và đường tháo đã chạy thật:
+`dotnet run --project tools/LoadProbe -- --scenarios S01 --keep` để lại **60 serial `Available`**
+(không script `.sql` nào seed bảng đó — đừng đi tìm). Lưu ý khách hàng do probe seed **không**
+đăng nhập được bằng mật khẩu (token mint trong RAM) — muốn lái tay thì tự `POST /api/auth/register`
+rồi thêm địa chỉ qua `POST /api/storefront/user-addresses`, và **tự dọn** sau khi đo.
+
+🔴 **LoadProbe đã đo: 5/9 bất biến ĐÃ TỪNG SAI** (hợp của 4 lần chạy; mỗi lần chạy riêng lẻ
+cho 4). Đọc mục 🅵 của runbook trước khi động vào tầng Service — nó nói rõ chỗ nào còn
+check-then-act và chỗ nào đã an toàn. Bốn điều rút ra:
 - Chỗ nào đã chuyển sang **conditional update** (`ExecuteUpdateAsync` có vị từ,
   `TryDecideAsync`) thì ĐẠT. Chỗ nào còn **check-then-act** thì HỎNG. Không có ngoại lệ.
 - **S04 ĐẠT với 1 instance, HỎNG với 2.** Kết luận từ một cấu hình là kết luận sai.
-- Sinh mã chứng từ vẫn đua nhau: 41/50 đơn đặt hỏng vì đụng `IX_Orders_OrderCode`.
+- **S04 và S07 phụ thuộc thời điểm:** một lần 🔴 **là** bằng chứng hỏng, một lần ✅ **không** là
+  bằng chứng an toàn. S04 ra ✅ với 2 instance ở lần chạy sau mà không ai sửa gì — đừng đọc
+  thành "đã sửa".
+- Sinh mã chứng từ vẫn đua nhau: 32–41/50 đơn đặt hỏng vì đụng `IX_Orders_OrderCode`.
   Dữ liệu không hỏng (unique index chặn), nhưng tính khả dụng thì có.
 
 ## Đo tính đúng đắn dưới tải — dùng `tools/LoadProbe/`
