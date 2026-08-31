@@ -3,17 +3,15 @@
 **Cập nhật:** 2026-08-31 · **Trạng thái repo:** trên `main` (đã merge `feat/retry-safe-call-sites`,
 fast-forward, CI xanh), build `0 Error(s)` / 184 cảnh báo
 · **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C**, **mục D**,
-**nợ kiểm thử 🧪 ưu tiên 1**, **mục 🅴**
-· **Kế tiếp:** ① **nợ kiểm thử 🧪 ưu tiên 2** — nửa *giao diện* còn lại (6 nút double-submit,
-cần trình duyệt; nửa *tầng Service* của luồng Checkout đã đo xong) → ② **mục 🅷** (cùng lỗi
-`ex.Message` của mục 🅴 còn ở 6 chỗ khác, `PosService.cs:462` là bản sinh đôi y hệt)
-→ ③ đợt 3, **vẫn bị chặn** bởi RDS.
+**nợ kiểm thử 🧪 (cả ưu tiên 1 và nửa giao diện của ưu tiên 2)**, **mục 🅴**
+· **Kế tiếp:** ① **mục 🅷** (cùng lỗi `ex.Message` của mục 🅴 còn ở 6 chỗ khác,
+`PosService.cs:462` là bản sinh đôi y hệt) → ② đợt 3, **vẫn bị chặn** bởi RDS.
 
-> 🧪 **Đừng tin dòng "XONG" nào ở dưới trước khi đọc mục 🧪.** Ranh giới đã dịch sau phiên
-> 2026-08-31 (chiều): luồng **Checkout đã chạy thật tới DB** (đặt đơn end-to-end + 50 khách
-> đồng thời), nhưng **POS · xuất/nhập kho · phiếu dịch vụ** vẫn chưa ai bấm tay, và **6 nút
-> double-submit hỏng thật của mục B vẫn chưa nút nào được đo** — đo chúng cần trình duyệt,
-> không có đường tắt bằng `curl`.
+> 🧪 **Đừng tin dòng "XONG" nào ở dưới trước khi đọc mục 🧪.** Ranh giới đã dịch hai lần trong
+> phiên 2026-08-31 (chiều): luồng **Checkout đã chạy thật tới DB**, và **cả 6 nút double-submit
+> hỏng thật của mục B đã được đo — 6/6 khoá đúng, kèm ca đối chứng âm cho 3 dialog**
+> ([bằng chứng](evidence/ui/2026-08-31-6-nut-double-submit.md)). Còn lại: **POS · xuất/nhập kho ·
+> phiếu dịch vụ** chưa ai bấm tay hết luồng nghiệp vụ (nút thì đã đo, *luồng* thì chưa).
 
 > ⚠️ **Đọc con số "5/9 bất biến SAI" cho đúng: đó là HỢP của mọi lần chạy, không phải ảnh
 > chụp một lần.** Phiên này chạy đủ 9 kịch bản ở **cả hai** cấu hình và ra **4 HỎNG mỗi
@@ -448,24 +446,34 @@ vẫn sạch** — chỉ bung lúc chạy. Nên phép đo phải chứng minh **
 > `openapi 3.1.1` (bộ sinh sẵn của .NET). **Hai đường độc lập nhau** và cả hai đều còn chạy —
 > nên nợ này đóng cho cả hai, không chỉ đường Swashbuckle.
 
-#### 🟠 Ưu tiên 2 — nợ thừa hưởng từ mục A và B — **CHỐT CHẶN ĐÃ THÁO, nợ còn một nửa**
+#### 🟠 Ưu tiên 2 — nợ thừa hưởng từ mục A và B — **nửa GIAO DIỆN đã trả xong**
 
-**Đọc bảng này thay vì câu "bốn luồng chưa chạy thật" của bản cũ** — ranh giới đã dịch sau
+**Đọc bảng này thay vì câu "bốn luồng chưa chạy thật" của bản cũ** — ranh giới đã dịch trong
 phiên 2026-08-31 (chiều), và nó dịch **không đều giữa hai nửa**:
 
 | Luồng | Tầng Service (mục A — retry-safe) | Giao diện (mục B — nút double-submit) |
 |---|---|---|
-| Kiểm kê | ✅ đo tới DB từ trước | ✅ `SupplierDialog` + `CustomerDialog` đã đo |
-| **Checkout** | ✅ **đã đo phiên này** — đặt đơn end-to-end (`200` + `ORD-…`, serial thật) và 50 khách đồng thời, `LogError` khớp 1:1 với số 400 | ❌ `Orders/OrderDetail`, `Storefront/MyOrderDetail` chưa đo |
-| POS | ❌ chưa | ❌ `Pos/Index.SaveDraft` chưa đo |
-| Xuất/nhập kho | ❌ chưa | ❌ chưa |
-| Phiếu dịch vụ | ⚠️ *một phần* — S04/S05/S08 chạm `ServiceTicketService` qua API, nhưng chưa ai bấm tay | ❌ `ServiceTicketQuotation`, `ServiceTicketIntake` chưa đo |
+| Kiểm kê | ✅ đo tới DB từ trước | ✅ `SupplierDialog` + `CustomerDialog` |
+| **Checkout** | ✅ **đã đo** — đặt đơn end-to-end (`200` + `ORD-…`, serial thật) và 50 khách đồng thời, `LogError` khớp 1:1 với số 400 | ✅ **đã đo** — `Orders/OrderDetail` ×2 (kèm `BusyScope`), `Storefront/MyOrderDetail` |
+| POS | ❌ chưa chạy hết luồng nghiệp vụ | ✅ **đã đo** — `Pos/Index.SaveDraft` |
+| Xuất/nhập kho | ❌ chưa | — không có nút nào trong nhóm 6 |
+| Phiếu dịch vụ | ⚠️ *một phần* — S04/S05/S08 chạm `ServiceTicketService` qua API, chưa bấm tay hết luồng | ✅ **đã đo** — `ServiceTicketIntake`, `ServiceTicketQuotation` |
 
-Trớ trêu là **5 trong 6 nút double-submit hỏng thật của mục B nằm đúng trong nhóm chưa đo**
-(`Storefront/MyOrderDetail`, `ServiceTicketQuotation`, `ServiceTicketIntake`, `Pos/Index`,
-và `Orders/OrderDetail`) — tức phần *vá lỗi thật* của mục B **vẫn** là phần ít bằng chứng nhất,
-và **`curl` không giúp được gì ở đây**: bất biến cần đo là "nút có khoá trong cùng một tick
-render hay không", thứ chỉ tồn tại trong trình duyệt. Đó là việc còn lại của mục này.
+🎯 **6/6 nút double-submit hỏng thật đã đo, tất cả khoá đúng** — kèm **ca đối chứng âm**: tạm đổi
+`ActionButton` → `MudButton` trần ở một nút thì 3 cú click cùng tick mở **3 dialog**. Không có ca
+đó thì "1 dialog" không chứng minh gì (có thể chỉ nghĩa là cách bắn click bao giờ cũng chỉ ăn cú
+đầu). Chi tiết + ba cái bẫy khi dựng phép đo:
+[`evidence/ui/2026-08-31-6-nut-double-submit.md`](evidence/ui/2026-08-31-6-nut-double-submit.md).
+
+**Còn nợ ở mục này: nửa *tầng Service* của POS · xuất/nhập kho · phiếu dịch vụ** — tức mục A ở
+những luồng đó vẫn chỉ được rà bằng đọc code + build sạch. Nút đã đo ≠ luồng đã chạy.
+
+> 💡 **Cách đo lại nếu cần** (không cần Chrome DevTools MCP, và đừng tranh chấp profile của phiên
+> Claude khác): tự bật Chrome headless với `--user-data-dir` riêng + `--remote-debugging-port=9333`,
+> rồi lái bằng CDP qua `WebSocket` **built-in của Node 23** — không phải cài gói nào. Driver ~73
+> dòng. Ba cái bẫy bắt buộc phải biết trước khi viết lại (điều hướng bằng `Page.navigate` tới trang
+> cần quyền **không tới được**; `innerText` của MudBlazor bị uppercase; đặt `input.value` bằng JS
+> **không** kích hoạt `@bind-Value`) — cả ba ghi trong file bằng chứng.
 
 **Nguyên nhân gốc không phải "chưa có thời gian" mà là THIẾU SERIAL.** DB local:
 `Products = 2`, **`ProductSerials = 0`**, `Orders = 0`. Và
@@ -530,6 +538,7 @@ Nhớ **dọn** dữ liệu lái tay của mình (khách + đơn + địa chỉ)
 | **Đủ 9 kịch bản ở CẢ HAI cấu hình sau mục D** | 1 instance **5/4/0** · 2 instance **5/4/0** — round-robin kiểm trước khi đo, 5/5 chia đều |
 | **Luồng Checkout chạy thật tới DB** | đặt đơn end-to-end `200` + `ORD-20260831-000014` trên serial thật; **ca đối chứng** cùng payload có mã voucher rác → `400` đúng thông báo nghiệp vụ |
 | **Mục 🅴 không nuốt thông báo nghiệp vụ** | một lần chạy S02 sinh **cả ba** lớp thông báo (2 nghiệp vụ nguyên văn + 1 câu chung); 37 request 400 ↔ **37** `LogError` |
+| **6/6 nút double-submit hỏng thật của mục B** | 3 click trong **một tick** → đúng 1 dialog (3 nút mở dialog) / đúng 1 POST (3 nút gọi API thẳng); **ca đối chứng âm** `MudButton` trần → **3 dialog** |
 
 ⚠️ **`S07` VÀ `S04` ĐẠT nhưng tín hiệu YẾU — hai kịch bản này phụ thuộc thời điểm.**
 S07: lần chạy đó POS thua cuộc đua (`400`), nên nhánh nguy hiểm "serial đã bán bị ghi đè thành
