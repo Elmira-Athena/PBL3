@@ -17,6 +17,20 @@
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         <PrivateAssets>all</PrivateAssets>
       </PackageReference>
+      <!-- GHIM TRANSITIVE — không có `using System.Security.Cryptography.Xml` nào
+           trong code. Chuỗi: EntityFrameworkCore.Tools -> EntityFrameworkCore.Design
+           -> Microsoft.Build.Tasks.Core -> Cryptography.Xml 9.0.0, dính đúng 8
+           advisory High như ở Service.
+
+           KHÁC Ở SERVICE: gói cha khai PrivateAssets=all, tức chuỗi này là công cụ
+           LÚC THIẾT KẾ (`dotnet ef migrations`), KHÔNG đi vào ảnh production. Phơi
+           nhiễm thực tế gần bằng không — ghim ở đây là để bước quét lỗ hổng của
+           `dotnet list package` sạch, nếu không cổng CI mới thêm sẽ đỏ vĩnh viễn vì
+           một thứ không deploy. Đừng đọc dòng này thành "đã vá một lỗ hổng production".
+
+           Nâng 9.0.0 -> 10.0.10 (không phải 9.0.18) vì project TargetFramework là
+           net10.0; ở lại nhánh 9.x là giữ một runtime lib lệch band với framework. -->
+      <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
     </ItemGroup>
 
 </Project>

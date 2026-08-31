@@ -237,3 +237,26 @@ jobs:
         run: |
           dotnet restore PBL3.sln
           dotnet build PBL3.sln -c Release --no-restore --nologo
+
+      # ───────────────────────────────────────────────────────────────
+      # Cổng chặn lỗ hổng NuGet.
+      #
+      # KHÔNG viết thẳng `dotnet list package --vulnerable` vào đây. Lệnh đó
+      # TRẢ VỀ MÃ THOÁT 0 KỂ CẢ KHI TÌM THẤY LỖ HỔNG — đã đo trên chính repo
+      # này lúc còn 10 advisory High đang mở: nó in đủ 10 dòng rồi trả về 0.
+      # Một bước `run:` gọi thẳng lệnh đó sẽ LUÔN XANH, vĩnh viễn. Cảnh báo
+      # NU1903 cũng đã hiện sẵn ở MỖI lần build từ trước tới nay mà không có
+      # chỗ nào bắt buộc xử lý — đó chính là lý do 10 lỗ hổng sống được lâu
+      # đến vậy.
+      #
+      # Script bên dưới đọc JSON của báo cáo thay vì tin mã thoát, và fail-closed
+      # khi phép quét RỖNG (restore hỏng, đổi schema JSON) — vì "không thấy lỗ
+      # hổng nào" lúc chưa quét được là kết luận SAI, không phải kết quả tốt.
+      # Cùng lý lẽ với hạng KHÔNG KẾT LUẬN của tools/LoadProbe.
+      #
+      # Mã thoát: 0 sạch · 1 có High/Critical · 2 KHÔNG KẾT LUẬN (cũng là đỏ).
+      # Chạy được y hệt ở máy cá nhân:
+      #     bash devops/scripts/check-vulnerable-packages.sh
+      # ───────────────────────────────────────────────────────────────
+      - name: Chặn lỗ hổng NuGet mức High/Critical
+        run: bash devops/scripts/check-vulnerable-packages.sh PBL3.sln

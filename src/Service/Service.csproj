@@ -13,13 +13,24 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="AutoMapper" Version="16.0.0" />
+      <PackageReference Include="AutoMapper" Version="16.1.1" />
       <PackageReference Include="AWSSDK.S3" Version="4.0.23" />
       <PackageReference Include="EPPlus" Version="8.4.2" />
       <PackageReference Include="FluentValidation" Version="12.1.1" />
       <PackageReference Include="HtmlSanitizer" Version="9.2.1039" />
       <PackageReference Include="MediatR" Version="14.0.0" />
       <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.16.0" />
+      <!-- GHIM TRANSITIVE — không có `using System.Security.Cryptography.Xml` nào
+           trong code. EPPlus 8.4.2 kéo bản 10.0.0, dính 8 advisory High cùng lúc
+           (GHSA-37gx-xxp4-5rgx, -w3x6-4m5h-cxqf, -cvvh-rhrc-wg4q, -g8r8-53c2-pm3f,
+           -23rf-6693-g89p, -8q5v-6pqq-x66h, -mmjf-rqrv-855v, -6588-8gv4-xfgh).
+           Ngưỡng vá KHÔNG đồng nhất: bốn cái vá ở 10.0.6, bốn cái còn lại tới
+           10.0.10 mới vá. Lấy cái MUỘN NHẤT — ghim 10.0.6 sẽ dọn sạch cảnh báo của
+           bốn advisory đầu và để lại bốn cái kia, trông như đã xong.
+
+           Đây là đường phơi nhiễm THẬT (EPPlus chạy trong ảnh production, dùng cho
+           xuất Excel), khác với chuỗi cùng tên ở Infrastructure. -->
+      <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
     </ItemGroup>
 
 </Project>

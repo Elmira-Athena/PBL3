@@ -7,13 +7,26 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="AutoMapper" Version="16.0.0" />
+        <PackageReference Include="AutoMapper" Version="16.1.1" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.3" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.1">
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <!-- GHIM TRANSITIVE — không có `using Microsoft.OpenApi` nào trong code.
+             Microsoft.AspNetCore.OpenApi 10.0.1 và Swashbuckle.AspNetCore 10.1.2 đều
+             kéo Microsoft.OpenApi 2.4.1, dính GHSA-v5pm-xwqc-g5wc (High). Bản vá sớm
+             nhất trong nhánh 2.x là 2.7.5.
+
+             CỐ Ý Ở LẠI 2.x. Advisory cũng liệt kê nhánh 3.x (patched 3.5.4), nhưng
+             Swashbuckle 10.1.2 biên dịch với API surface của 2.x — nhảy sang 3.x là
+             đổi major dưới chân một gói không hề yêu cầu điều đó. Ghim bản vá nhỏ
+             nhất, không phải bản mới nhất: repo chưa có test tự động nào để đỡ hồi quy.
+
+             XOÁ DÒNG NÀY khi cả hai gói cha tự nâng lên >= 2.7.5 — lúc đó nó thành
+             ghim thừa và sẽ âm thầm GIỮ TỤT phiên bản nếu cha đi lên cao hơn. -->
+        <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
         <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.11" />
         <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.2" />
