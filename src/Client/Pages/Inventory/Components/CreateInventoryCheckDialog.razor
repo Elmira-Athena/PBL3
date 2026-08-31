@@ -76,15 +76,11 @@
         <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default" Style="text-transform: none;">
             Hủy
         </MudButton>
-        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
-                   Disabled="@(_isSaving || _isLoadingCategories)"
-                   Style="text-transform: none; border-radius: 8px;">
-            @if (_isSaving)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-            }
+        <ActionButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                      Disabled="@_isLoadingCategories"
+                      Style="text-transform: none; border-radius: 8px;">
             Tạo phiếu &amp; chốt snapshot
-        </MudButton>
+        </ActionButton>
     </DialogActions>
 </MudDialog>
 
@@ -96,7 +92,6 @@
 
     private MudForm _form = null!;
     private FormModel _model = new();
-    private bool _isSaving;
     private bool _isLoadingCategories = true;
     private string? _errorMessage;
     private List<FlatCategoryItem> _flatCategories = new();
@@ -133,7 +128,6 @@
             return;
         }
 
-        _isSaving = true;
         _errorMessage = null;
         StateHasChanged();
 
@@ -159,7 +153,6 @@
         }
         finally
         {
-            _isSaving = false;
             StateHasChanged();
         }
     }

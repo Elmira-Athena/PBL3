@@ -22,18 +22,13 @@
                        Style="text-transform: none; border-radius: 8px;">
                 Hủy
             </MudButton>
-            <MudButton Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Save"
-                       OnClick="HandleSubmit"
-                       Disabled="_isSaving"
-                       Style="text-transform: none; border-radius: 8px; font-weight: 500;">
-                @if (_isSaving)
-                {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
-                }
+            <ActionButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Save"
+                          OnClick="HandleSubmit"
+                          Style="text-transform: none; border-radius: 8px; font-weight: 500;">
                 @(_isEditMode ? "Cập nhật" : "Tạo sản phẩm")
-            </MudButton>
+            </ActionButton>
         </MudStack>
     </MudPaper>
 
@@ -329,7 +324,6 @@
     // ===== STATE =====
     private bool _isEditMode => Id.HasValue;
     private bool _isLoadingDetail;
-    private bool _isSaving;
 
     private CreateProductRequest _model = new()
     {
@@ -527,7 +521,6 @@
             return;
         }
 
-        _isSaving = true;
         StateHasChanged();
 
         try
@@ -543,7 +536,6 @@
         }
         finally
         {
-            _isSaving = false;
             StateHasChanged();
         }
     }

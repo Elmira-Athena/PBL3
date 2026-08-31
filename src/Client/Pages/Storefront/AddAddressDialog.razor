@@ -104,15 +104,10 @@
                    Style="text-transform: none;">
             Hủy
         </MudButton>
-        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
-                   Disabled="_isSaving"
-                   Style="text-transform: none; border-radius: 8px;">
-            @if (_isSaving)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-            }
+        <ActionButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                      Style="text-transform: none; border-radius: 8px;">
             Lưu địa chỉ
-        </MudButton>
+        </ActionButton>
     </DialogActions>
 </MudDialog>
 
@@ -124,7 +119,6 @@
 
     private MudForm _form = null!;
     private AddressFormModel _model = new();
-    private bool _isSaving;
     private string? _errorMessage;
 
     private List<ProvinceItem> _provinces = new();
@@ -200,7 +194,6 @@
             return;
         }
 
-        _isSaving = true;
         _errorMessage = null;
         StateHasChanged();
 
@@ -229,7 +222,6 @@
         }
         finally
         {
-            _isSaving = false;
             StateHasChanged();
         }
     }

@@ -35,15 +35,16 @@
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_isSaving">Hủy</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled"
-                   OnClick="SubmitAsync" Disabled="_isSaving || _rating == 0">
-            @if (_isSaving)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-            }
-            Gửi đánh giá
-        </MudButton>
+        @* BusyScope để giữ đúng hành vi cũ: lúc đang gửi thì nút "Hủy" cũng phải mờ
+           (trước đây nó bind Disabled="_isSaving"). ActionButton đơn lẻ chỉ tự khoá
+           chính nó, không khoá nút anh em. *@
+        <BusyScope>
+            <ActionButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default">Hủy</ActionButton>
+            <ActionButton Color="Color.Primary" Variant="Variant.Filled"
+                          OnClick="SubmitAsync" Disabled="@(_rating == 0)">
+                Gửi đánh giá
+            </ActionButton>
+        </BusyScope>
     </DialogActions>
 </MudDialog>
 
@@ -56,7 +57,6 @@
     private string? _title;
     private string? _content;
     private string? _errorMessage;
-    private bool _isSaving;
 
     private void Cancel() => MudDialog.Cancel();
 
@@ -64,7 +64,6 @@
     {
         if (_rating == 0) return;
 
-        _isSaving = true;
         _errorMessage = null;
 
         var request = new CreateReviewRequest
@@ -76,8 +75,6 @@
         };
 
         var result = await ReviewClientService.CreateAsync(request);
-
-        _isSaving = false;
 
         if (result == null || !result.Success)
         {

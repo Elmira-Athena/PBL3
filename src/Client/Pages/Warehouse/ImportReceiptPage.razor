@@ -187,18 +187,13 @@
 
                 @* --- Save Button --- *@
                 <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd">
-                    <MudButton Variant="Variant.Filled"
-                               Color="Color.Error"
-                               Size="Size.Medium"
-                               OnClick="SaveReceipt"
-                               Disabled="@_isSaving"
-                               Style="text-transform: none; border-radius: 8px; font-weight: 600; min-width: 180px;">
-                        @if (_isSaving)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                        }
+                    <ActionButton Variant="Variant.Filled"
+                                  Color="Color.Error"
+                                  Size="Size.Medium"
+                                  OnClick="SaveReceipt"
+                                  Style="text-transform: none; border-radius: 8px; font-weight: 600; min-width: 180px;">
                         Lưu phiếu nhập hàng
-                    </MudButton>
+                    </ActionButton>
                 </MudStack>
             </MudPaper>
         </MudItem>
@@ -369,7 +364,6 @@
     private string _scannedCode = string.Empty;
     private bool _isScanning;
     private string _today = DateTime.Now.ToString("dd/MM/yyyy");
-    private bool _isSaving;
     private bool _showScanPanel = true;
     private MudTextField<string>? _serialInput;
 
@@ -651,39 +645,28 @@
             return;
         }
 
-        _isSaving = true;
-        StateHasChanged();
-
-        try
+        var request = new CreateImportReceiptRequest
         {
-            var request = new CreateImportReceiptRequest
+            SupplierId = _selectedSupplierId.Value,
+            Details = _details.Select(d => new ImportReceiptDetailRequest
             {
-                SupplierId = _selectedSupplierId.Value,
-                Details = _details.Select(d => new ImportReceiptDetailRequest
-                {
-                    VariantId = d.VariantId,
-                    Quantity = d.Quantity,
-                    ImportPrice = d.ImportPrice,
-                    SerialNumbers = d.SerialNumbers
-                }).ToList()
-            };
+                VariantId = d.VariantId,
+                Quantity = d.Quantity,
+                ImportPrice = d.ImportPrice,
+                SerialNumbers = d.SerialNumbers
+            }).ToList()
+        };
 
-            var result = await ImportReceiptService.CreateAsync(request);
+        var result = await ImportReceiptService.CreateAsync(request);
 
-            if (result.Success)
-            {
-                Snackbar.Add("Lưu phiếu nhập kho thành công!", Severity.Success);
-                Navigation.NavigateTo("/warehouse/import-receipts");
-            }
-            else
-            {
-                Snackbar.Add(result.Message, Severity.Error);
-            }
+        if (result.Success)
+        {
+            Snackbar.Add("Lưu phiếu nhập kho thành công!", Severity.Success);
+            Navigation.NavigateTo("/warehouse/import-receipts");
         }
-        finally
+        else
         {
-            _isSaving = false;
-            StateHasChanged();
+            Snackbar.Add(result.Message, Severity.Error);
         }
     }
 

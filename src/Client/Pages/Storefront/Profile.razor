@@ -122,18 +122,10 @@
             </MudCardContent>
 
             <MudCardActions Class="pa-6 pt-0 d-flex justify-end">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
-                           Class="px-8 fw-bold" OnClick="SaveAsync" Disabled="@_isSaving">
-                    @if (_isSaving)
-                    {
-                        <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
-                        <span>Đang lưu...</span>
-                    }
-                    else
-                    {
-                        <span>Lưu thay đổi</span>
-                    }
-                </MudButton>
+                <ActionButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                              Class="px-8 fw-bold" OnClick="SaveAsync">
+                    <span>Lưu thay đổi</span>
+                </ActionButton>
             </MudCardActions>
         </MudCard>
     }
@@ -146,7 +138,6 @@
 
 @code {
     private bool _isLoading = true;
-    private bool _isSaving = false;
     private bool _isUploadingAvatar = false;
 
     private CustomerDto? _profile;
@@ -199,7 +190,6 @@
         }
 
         _model.DateOfBirth = _dateOfBirth;
-        _isSaving = true;
 
         var result = await CustomerService.UpdateMyProfileAsync(_model);
         if (result.Success && result.Data != null)
@@ -213,6 +203,5 @@
             Snackbar.Add(result.Message ?? "Cập nhật thất bại.", Severity.Error);
         }
 
-        _isSaving = false;
     }
 }

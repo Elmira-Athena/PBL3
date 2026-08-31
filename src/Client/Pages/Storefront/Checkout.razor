@@ -212,24 +212,16 @@
                             <MudText Typo="Typo.h5" Color="Color.Error" Class="fw-bold">@Total.ToString("N0") đ</MudText>
                         </div>
 
-                        <MudButton Variant="Variant.Filled" 
-                                   Color="Color.Error" 
-                                   Size="Size.Large" 
-                                   FullWidth="true" 
-                                   Class="rounded-lg py-3 fw-bold text-white"
-                                   OnClick="PlaceOrder"
-                                   Disabled="@(!CanPlaceOrder)"
-                                   StartIcon="@(_isSubmitting ? null : Icons.Material.Filled.ShoppingCartCheckout)">
-                            @if (_isSubmitting)
-                            {
-                                <MudProgressCircular Class="ms-n1 mr-2" Size="Size.Small" Indeterminate="true" />
-                                <MudText>Đang xử lý...</MudText>
-                            }
-                            else
-                            {
-                                <MudText>ĐẶT HÀNG</MudText>
-                            }
-                        </MudButton>
+                        <ActionButton Variant="Variant.Filled"
+                                      Color="Color.Error"
+                                      Size="Size.Large"
+                                      FullWidth="true"
+                                      Class="rounded-lg py-3 fw-bold text-white"
+                                      OnClick="PlaceOrder"
+                                      Disabled="@(!CanPlaceOrder)"
+                                      StartIcon="@Icons.Material.Filled.ShoppingCartCheckout">
+                            <MudText>ĐẶT HÀNG</MudText>
+                        </ActionButton>
                     </MudCardContent>
                 </MudCard>
             </MudItem>
@@ -259,7 +251,6 @@
 
 @code {
     private bool _isLoading = true;
-    private bool _isSubmitting = false;
     private int _selectedAddressId = 0;
     private int _selectedPaymentMethod = 0; // 0: COD, 1: MoMo
 
@@ -271,7 +262,7 @@
     private decimal ShippingFee => 30000;
     private decimal DiscountAmount => _appliedVouchers.Sum(v => v.DiscountAmount);
     private decimal Total => SubTotal + ShippingFee - DiscountAmount;
-    private bool CanPlaceOrder => _selectedAddressId > 0 && !_isSubmitting;
+    private bool CanPlaceOrder => _selectedAddressId > 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -375,8 +366,6 @@
             return;
         }
 
-        _isSubmitting = true;
-
         try
         {
             var request = new CheckoutRequest
@@ -404,10 +393,6 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Lỗi khi đặt hàng: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _isSubmitting = false;
         }
     }
 }

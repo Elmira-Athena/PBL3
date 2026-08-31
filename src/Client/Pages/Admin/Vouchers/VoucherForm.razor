@@ -334,17 +334,12 @@
                                        Style="text-transform: none;">
                                 Hủy
                             </MudButton>
-                            <MudButton Variant="Variant.Filled"
-                                       Color="Color.Primary"
-                                       OnClick="Submit"
-                                       Disabled="_isSaving"
-                                       Style="text-transform: none; border-radius: 8px; min-width: 120px;">
-                                @if (_isSaving)
-                                {
-                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                                }
+                            <ActionButton Variant="Variant.Filled"
+                                          Color="Color.Primary"
+                                          OnClick="Submit"
+                                          Style="text-transform: none; border-radius: 8px; min-width: 120px;">
                                 @(IsEditMode ? "Cập nhật" : "Tạo mới")
-                            </MudButton>
+                            </ActionButton>
                         </MudStack>
 
                     </MudStack>
@@ -499,7 +494,6 @@
     // Form state
     private MudForm _form = null!;
     private bool _isLoadingDetail;
-    private bool _isSaving;
     private string? _errorMessage;
 
     // Field values
@@ -690,7 +684,6 @@
             return;
         }
 
-        _isSaving = true;
         _errorMessage = null;
         StateHasChanged();
 
@@ -765,7 +758,6 @@
         }
         finally
         {
-            _isSaving = false;
             StateHasChanged();
         }
     }

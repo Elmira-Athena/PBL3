@@ -42,17 +42,9 @@
         <MudButton OnClick="Cancel">Hủy</MudButton>
         @if (_allowedStatuses.Count > 0)
         {
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@_isSubmitting">
-                @if (_isSubmitting)
-                {
-                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
-                    <MudText Class="ms-2">Đang xử lý...</MudText>
-                }
-                else
-                {
-                    <MudText>Xác nhận</MudText>
-                }
-            </MudButton>
+            <ActionButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">
+                <MudText>Xác nhận</MudText>
+            </ActionButton>
         }
     </DialogActions>
 </MudDialog>
@@ -72,7 +64,6 @@
 
     private byte _newStatus;
     private string? _note;
-    private bool _isSubmitting;
     private List<(byte Value, string Label)> _allowedStatuses = new();
 
     protected override void OnInitialized()
@@ -95,7 +86,6 @@
 
     private async Task Submit()
     {
-        _isSubmitting = true;
         var request = new UpdateSerialStatusRequest { NewStatus = _newStatus, Note = _note };
         var result = await SerialService.UpdateStatusAsync(SerialId, request);
 
@@ -108,7 +98,6 @@
         {
             Snackbar.Add(result.Message ?? "Lỗi khi cập nhật trạng thái.", Severity.Error);
         }
-        _isSubmitting = false;
     }
 
     private Color GetStatusColor(byte status) => status switch

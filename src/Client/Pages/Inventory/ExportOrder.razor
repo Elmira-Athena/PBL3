@@ -142,17 +142,13 @@
                     <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd">
                         @if (!_isExported && _currentOrder?.Status == 1)
                         {
-                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Medium"
-                                       OnClick="SubmitExportAsync"
-                                       Disabled="@(!IsAllScanned || _isSubmitting)"
-                                       StartIcon="@Icons.Material.Filled.LocalShipping"
-                                       Style="text-transform: none; border-radius: 8px; font-weight: 600; min-width: 180px;">
-                                @if (_isSubmitting)
-                                {
-                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                                }
+                            <ActionButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Medium"
+                                          OnClick="SubmitExportAsync"
+                                          Disabled="@(!IsAllScanned)"
+                                          StartIcon="@Icons.Material.Filled.LocalShipping"
+                                          Style="text-transform: none; border-radius: 8px; font-weight: 600; min-width: 180px;">
                                 Lưu phiếu xuất hàng
-                            </MudButton>
+                            </ActionButton>
                         }
                         else if (_isExported)
                         {
@@ -260,7 +256,6 @@
     private string _scannedCode = string.Empty;
     private bool _isScanning;
     private MudTextField<string>? _serialInput;
-    private bool _isSubmitting;
     private bool _isExported;
 
     private decimal TotalAmount => _currentOrder?.TotalAmount ?? 0;
@@ -428,9 +423,6 @@
             return;
         }
 
-        _isSubmitting = true;
-        StateHasChanged();
-
         try
         {
             var request = new ExportOrderRequest
@@ -463,11 +455,6 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _isSubmitting = false;
-            StateHasChanged();
         }
     }
 

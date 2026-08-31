@@ -26,31 +26,31 @@
         <div class="d-flex align-center justify-space-between mb-4">
             <MudText Typo="Typo.h5" Style="font-weight: 700;">Đơn hàng @_order.OrderCode</MudText>
             <div class="d-flex gap-2">
-                @if (_order.Status == 2) // Exported — đã xuất kho
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" OnClick="ConfirmCompleteOrder">
-                        Xác nhận đã giao
-                    </MudButton>
-                }
-                @if (_order.Status == 0) // Pending — chờ duyệt
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.CheckCircle"
-                               OnClick="ConfirmOrderApprove"
-                               Disabled="_isApproving">
-                        @if (_isApproving)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
-                        }
-                        Duyệt đơn
-                    </MudButton>
-                }
-                @if (_order.Status == 0 || _order.Status == 1) // Pending or Confirmed
-                {
-                    <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small" OnClick="ConfirmCancelOrder">
-                        Hủy đơn
-                    </MudButton>
-                }
+                @* BusyScope: "Duyệt đơn" và "Hủy đơn" CÙNG hiện khi Status == 0. Khoá riêng
+                   từng nút là chưa đủ — bấm Duyệt rồi bấm ngay Hủy là hai nút KHÁC NHAU, mỗi
+                   nút tự thấy mình rảnh, và cả hai cùng bay lên server. *@
+                <BusyScope>
+                    @if (_order.Status == 2) // Exported — đã xuất kho
+                    {
+                        <ActionButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" OnClick="ConfirmCompleteOrder">
+                            Xác nhận đã giao
+                        </ActionButton>
+                    }
+                    @if (_order.Status == 0) // Pending — chờ duyệt
+                    {
+                        <ActionButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                      StartIcon="@Icons.Material.Filled.CheckCircle"
+                                      OnClick="ConfirmOrderApprove">
+                            Duyệt đơn
+                        </ActionButton>
+                    }
+                    @if (_order.Status == 0 || _order.Status == 1) // Pending or Confirmed
+                    {
+                        <ActionButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small" OnClick="ConfirmCancelOrder">
+                            Hủy đơn
+                        </ActionButton>
+                    }
+                </BusyScope>
                 <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_order.Status)" Variant="Variant.Filled">
                     @GetStatusText(_order.Status)
                 </MudChip>
@@ -260,7 +260,6 @@
 
     private OrderDetailDto? _order;
     private bool _isLoading = true;
-    private bool _isApproving = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -322,10 +321,7 @@
 
         if (confirmed != true) return;
 
-        _isApproving = true;
-        StateHasChanged();
         var result = await OrderService.ConfirmOrderAsync(Id);
-        _isApproving = false;
         if (result.Success)
         {
             Snackbar.Add("Đã duyệt đơn hàng thành công.", Severity.Success);

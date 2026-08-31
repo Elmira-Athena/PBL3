@@ -46,15 +46,10 @@
         <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default" Style="text-transform: none;">
             Hủy
         </MudButton>
-        <MudButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
-                   Disabled="_isSaving"
-                   Style="text-transform: none; border-radius: 8px;">
-            @if (_isSaving)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-            }
+        <ActionButton OnClick="Submit" Variant="Variant.Filled" Color="Color.Primary"
+                      Style="text-transform: none; border-radius: 8px;">
             Lưu lý do
-        </MudButton>
+        </ActionButton>
     </DialogActions>
 </MudDialog>
 
@@ -71,7 +66,6 @@
 
     private string _reason = string.Empty;
     private string? _proposedActionNote;
-    private bool _isSaving;
     private string? _errorMessage;
 
     protected override void OnInitialized()
@@ -88,7 +82,6 @@
             return;
         }
 
-        _isSaving = true;
         _errorMessage = null;
         StateHasChanged();
 
@@ -113,7 +106,6 @@
         }
         finally
         {
-            _isSaving = false;
             StateHasChanged();
         }
     }

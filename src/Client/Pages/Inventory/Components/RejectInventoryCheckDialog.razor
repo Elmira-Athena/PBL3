@@ -49,16 +49,11 @@
         <MudButton OnClick="Cancel" Variant="Variant.Text" Color="Color.Default" Style="text-transform: none;">
             Quay lại
         </MudButton>
-        <MudButton OnClick="Submit" Variant="Variant.Filled"
-                   Color="@(_returnToDraft ? Color.Warning : Color.Error)"
-                   Disabled="_isSaving"
-                   Style="text-transform: none; border-radius: 8px;">
-            @if (_isSaving)
-            {
-                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-            }
+        <ActionButton OnClick="Submit" Variant="Variant.Filled"
+                      Color="@(_returnToDraft ? Color.Warning : Color.Error)"
+                      Style="text-transform: none; border-radius: 8px;">
             @(_returnToDraft ? "Trả về Nháp" : "Hủy phiếu")
-        </MudButton>
+        </ActionButton>
     </DialogActions>
 </MudDialog>
 
@@ -72,7 +67,6 @@
 
     private string _reason = string.Empty;
     private bool _returnToDraft = true;
-    private bool _isSaving;
     private string? _errorMessage;
 
     private async Task Submit()
@@ -83,7 +77,6 @@
             return;
         }
 
-        _isSaving = true;
         _errorMessage = null;
         StateHasChanged();
 
@@ -109,7 +102,6 @@
         }
         finally
         {
-            _isSaving = false;
             StateHasChanged();
         }
     }

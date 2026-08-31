@@ -47,26 +47,21 @@ else if (_order != null)
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                     @if (_order.Status == 0)
                     {
-                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Outlined.Cancel"
-                                   Style="font-weight:700; font-size:0.78rem; letter-spacing:0.04em; border-radius:8px;"
-                                   OnClick="ConfirmCancelOrder">
+                        <ActionButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                      StartIcon="@Icons.Material.Outlined.Cancel"
+                                      Style="font-weight:700; font-size:0.78rem; letter-spacing:0.04em; border-radius:8px;"
+                                      OnClick="ConfirmCancelOrder">
                             HỦY ĐƠN HÀNG
-                        </MudButton>
+                        </ActionButton>
                     }
                     @if (_order.Status == 2)
                     {
-                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.CheckCircle"
-                                   Style="font-weight:700; font-size:0.78rem; letter-spacing:0.04em; border-radius:8px;"
-                                   OnClick="ConfirmReceived"
-                                   Disabled="_isConfirming">
-                            @if (_isConfirming)
-                            {
-                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
-                            }
+                        <ActionButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                      StartIcon="@Icons.Material.Filled.CheckCircle"
+                                      Style="font-weight:700; font-size:0.78rem; letter-spacing:0.04em; border-radius:8px;"
+                                      OnClick="ConfirmReceived">
                             ĐÃ NHẬN HÀNG
-                        </MudButton>
+                        </ActionButton>
                     }
                     <MudChip T="string" Size="Size.Medium"
                              Color="@GetStatusColor(_order.Status)" Variant="Variant.Filled"
@@ -304,7 +299,6 @@ else if (_order != null)
 
     private OrderDetailDto? _order;
     private bool _isLoading = true;
-    private bool _isConfirming = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -370,10 +364,7 @@ else if (_order != null)
 
         if (confirmed != true) return;
 
-        _isConfirming = true;
-        StateHasChanged();
         var result = await OrderService.ConfirmReceivedAsync(Id);
-        _isConfirming = false;
 
         if (result.Success)
         {
