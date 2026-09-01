@@ -1,3 +1,5 @@
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -44,6 +46,29 @@ namespace PBL3.API.Controllers.Admin
             {
                 // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
                 return BadRequest(ApiResult<CheckoutResponse>.Fail(ex.Message));
+            }
+            // 🔴 XUNG ĐỘT ĐỒNG THỜI PHẢI THOÁT KHỎI CONTROLLER, không được nuốt ở đây.
+            //
+            // Đây là mảnh ghép mà cả kế hoạch và tôi đều bỏ sót một vòng. `ConflictExceptionHandler`
+            // là `IExceptionHandler`, nên nó CHỈ thấy exception ĐÃ THOÁT khỏi action. Khối
+            // catch (Exception) ở ngay dưới bắt trước middleware, nên dù tầng Service đã `throw;`
+            // đúng thì 409 vẫn KHÔNG BAO GIỜ tới — và người dùng nhận "lỗi hệ thống" cho một
+            // tình huống hoàn toàn bình thường.
+            //
+            // Đo được, không suy luận: LoadProbe S03 cho `400×9` với câu "…do lỗi hệ thống", trong
+            // khi log server ghi rõ `SqlException 2601 … UQ_VoucherUsages_UserId_VoucherId_SeqPerUser`.
+            // Chốt ở tầng Service ĐÃ chạy đúng (nó log "trùng khoá duy nhất" rồi `throw;`) — chỗ
+            // mất câu trả lời là ĐÂY.
+            //
+            // Chỉ thêm vào action MUTATION. Endpoint GET không sinh được hai loại này, nhét chốt
+            // vào đó là rác.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -108,6 +133,17 @@ namespace PBL3.API.Controllers.Admin
                 // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
                 return BadRequest(ApiResult<bool>.Fail(ex.Message));
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 // KHÔNG relay ex.Message: tới đây ex là lỗi hạ tầng (EF Core / SQL Server),
@@ -136,6 +172,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
                 return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -177,6 +224,17 @@ namespace PBL3.API.Controllers.Admin
                 // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
                 return BadRequest(ApiResult<bool>.Fail(ex.Message));
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 // KHÔNG relay ex.Message: tới đây ex là lỗi hạ tầng (EF Core / SQL Server),
@@ -205,6 +263,17 @@ namespace PBL3.API.Controllers.Admin
                 // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
                 return BadRequest(ApiResult<bool>.Fail(ex.Message));
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 // KHÔNG relay ex.Message: tới đây ex là lỗi hạ tầng (EF Core / SQL Server),
@@ -230,6 +299,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
                 return BadRequest(ApiResult<bool>.Fail(ex.Message));
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {

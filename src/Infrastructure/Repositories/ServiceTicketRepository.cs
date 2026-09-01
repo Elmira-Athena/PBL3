@@ -127,6 +127,14 @@ namespace PBL3.Infrastructure.Repositories
         public async Task<bool> HasOpenTicketForSerialAsync(int serialId)
         {
             // Terminal states: 3 = QuoteRejected, 8 = Swapped, 9 = Completed, 10 = Cancelled
+            //
+            // 🚨 DANH SÁCH NÀY PHẢI LUÔN KHỚP với vị từ của filtered unique index
+            // UQ_ServiceTickets_SerialId_Open, khai ở HushStoreDbContext.OnModelCreating
+            // (khối modelBuilder.Entity<ServiceTicket>). Thêm một trạng thái terminal ở đây mà
+            // quên sửa index thì bất biến "mỗi serial tối đa 1 phiếu chưa đóng" ÂM THẦM NỚI RA:
+            // code coi phiếu đã đóng, index vẫn coi nó đang mở → chặn oan; hoặc ngược lại.
+            // Đổi một chỗ thì sang chỗ kia — chúng comment chéo nhau vì không cách nào để
+            // trình biên dịch kiểm hộ.
             var terminalStates = new[] { (byte)3, (byte)8, (byte)9, (byte)10 };
             return await _dbContext.ServiceTickets
                 .Where(t => t.SerialId == serialId && !terminalStates.Contains(t.Status))

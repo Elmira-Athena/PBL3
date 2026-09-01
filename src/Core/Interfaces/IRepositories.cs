@@ -342,6 +342,28 @@ namespace PBL3.Core.Interfaces
         Task<Dictionary<int, int>> GetUserVoucherUsageCountsAsync(Guid userId, List<int> voucherIds);
 
         /// <summary>
+        /// Số thứ tự lần dùng TIẾP THEO của <paramref name="userId"/> cho từng voucher:
+        /// <c>MAX(SeqPerUser) + 1</c>, hoặc <c>1</c> nếu chưa dùng lần nào.
+        /// Chỉ trả về voucher đã có ít nhất một lần dùng.
+        /// </summary>
+        /// <remarks>
+        /// 🔴 <b>PHẢI gọi BÊN TRONG delegate của <c>ExecuteInTransactionAsync</c>.</b> Gọi ở
+        /// ngoài rồi mang giá trị vào là vi phạm điều 2 của hợp đồng retry: lần thử lại sẽ dùng
+        /// lại số cũ, đụng <c>UQ_VoucherUsages_UserId_VoucherId_SeqPerUser</c> và hỏng VĨNH VIỄN
+        /// thay vì hỏng một lần rồi qua.
+        ///
+        /// ⚠️ <b>Dùng <c>MAX</c> chứ không <c>COUNT</c></b> (đã có
+        /// <see cref="GetUserVoucherUsageCountsAsync"/> trả về COUNT — đừng dùng nó cho việc này).
+        /// Hai số này chỉ bằng nhau khi dãy liền mạch; ngày nào có ai xoá một hàng thì <c>COUNT</c>
+        /// sinh ra số ĐÃ DÙNG và mọi lần dùng sau đó của khách đó chết cứng.
+        ///
+        /// ⚠️ Đây <b>không phải</b> chốt an toàn — nó là phỏng đoán lạc quan. Chốt thật là unique
+        /// index; hai request đồng thời cùng nhận một số, một cái đụng index → <c>2601</c> →
+        /// <c>409</c>. Xem <c>VoucherUsage.SeqPerUser</c>.
+        /// </remarks>
+        Task<Dictionary<int, int>> GetNextSeqPerUserAsync(Guid userId, List<int> voucherIds);
+
+        /// <summary>
         /// Kiểm tra danh sách cặp (UserId, VoucherId) đã tồn tại trong VoucherUsages chưa.
         /// Trả về danh sách VoucherId mà User này đã dùng.
         /// </summary>

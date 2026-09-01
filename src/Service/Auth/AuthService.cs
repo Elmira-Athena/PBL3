@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PBL3.Core.Entities;
@@ -19,12 +20,18 @@ namespace PBL3.Service.Auth
         private readonly UserManager<AppUser> _userManager;
         private readonly IConfiguration _configuration;
         private readonly HushStoreDbContext _context;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(UserManager<AppUser> userManager, IConfiguration configuration, HushStoreDbContext context)
+        public AuthService(
+            UserManager<AppUser> userManager,
+            IConfiguration configuration,
+            HushStoreDbContext context,
+            ILogger<AuthService> logger)
         {
             _userManager = userManager;
             _configuration = configuration;
             _context = context;
+            _logger = logger;
         }
 
         // =====================================================================
@@ -169,12 +176,51 @@ namespace PBL3.Service.Auth
             var newAccessToken = await GenerateJwtTokenAsync(user);
             var newRefreshToken = GenerateRefreshToken();
 
-            // 6. Lưu Refresh Token mới vào DB (Vô hiệu hóa cái cũ)
-            // LƯU Ý NGHIỆP VỤ: Xoay vòng Token liên tục sau mỗi lượt refresh giúp bảo vệ tài khoản khách hàng khỏi nguy cơ bị nghe lén và sử dụng lại token cũ
+            // 6. Lưu Refresh Token mới vào DB (Vô hiệu hóa cái cũ) — BẰNG CONDITIONAL UPDATE.
+            //
+            // 🔴 VÌ SAO KHÔNG PHẢI `_userManager.UpdateAsync(user)` NHƯ TRƯỚC.
+            // LoadProbe S09 đo được: 2 lời gọi refresh song song cùng một cặp token → **cả hai
+            // đều 200**, mỗi bên nhận một refresh token khác nhau, nhưng DB chỉ giữ được MỘT
+            // hash. Client thua cuộc cầm một token **đã chết ngay lúc nhận** và bị đá về trang
+            // đăng nhập ở lần refresh kế tiếp — không ai thấy lỗi ở đâu cả.
+            //
+            // Đây là bối cảnh thật, không phải giả định: trang vừa tải,
+            // `JwtAuthenticationStateProvider` và `AuthHeaderHandler` cùng phát hiện token hết
+            // hạn. Single-flight phía client (`TokenRefreshCoordinator`, đợt 2) GIẤU được lỗi
+            // này ở đường thường, nhưng không đóng được nó ở tầng server — hai tab, hai thiết
+            // bị, hay `curl` vẫn đi vào đúng khe này.
+            //
+            // Câu UPDATE có vị từ `RefreshToken == hashedToken` đóng khe đó: kẻ thắng đổi hash,
+            // kẻ thua khớp 0 dòng và **không được cấp token nào**. Một câu lệnh, không đọc lại,
+            // không khoá tường minh — cùng khuôn với `ExecuteUpdateAsync` đã làm S02/S05 ĐẠT ở
+            // đợt 1.
+            //
+            // ⚠️ Cố ý đi thẳng DbContext thay vì qua UserManager. `UpdateAsync` của Identity ghi
+            // TOÀN BỘ entity và chốt bằng `ConcurrencyStamp` — mà mã cũ **bỏ luôn giá trị trả về
+            // `IdentityResult`**, nên ngay cả chốt có sẵn đó cũng bị vứt đi trong im lặng. Ở đây
+            // ta chỉ sửa hai cột của riêng ứng dụng (`RefreshToken`, `RefreshTokenExpiryTime`),
+            // không phải cột nào của Identity, nên không có gì bị vượt qua.
             var refreshTokenExpirationDays = _configuration.GetValue<int>("JwtSettings:RefreshTokenExpirationDays");
-            user.RefreshToken = HashToken(newRefreshToken);
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(refreshTokenExpirationDays);
-            await _userManager.UpdateAsync(user);
+            var newRefreshTokenHash = HashToken(newRefreshToken);
+            var newRefreshTokenExpiry = DateTime.UtcNow.AddDays(refreshTokenExpirationDays);
+
+            var rotated = await _context.Users
+                .Where(u => u.Id == user.Id && u.RefreshToken == hashedToken)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(u => u.RefreshToken, newRefreshTokenHash)
+                    .SetProperty(u => u.RefreshTokenExpiryTime, newRefreshTokenExpiry));
+
+            if (rotated == 0)
+            {
+                // Một lời gọi khác đã xoay vòng token trước ta trong đúng khoảnh khắc này.
+                // Trả lỗi RÕ RÀNG thay vì cấp một token đã chết: câu trả lời đúng cho client là
+                // "đừng dùng token này", và đó chính là điều thông báo dưới đây nói.
+                _logger.LogWarning(
+                    "Xoay vòng refresh token thất bại do có lời gọi song song. UserId: {UserId}.",
+                    user.Id);
+                return ApiResult<TokenResponse>.Fail(
+                    "Phiên đăng nhập vừa được làm mới bởi một yêu cầu khác. Vui lòng thử lại; nếu vẫn không được, hãy đăng nhập lại.");
+            }
 
             return ApiResult<TokenResponse>.Ok(new TokenResponse
             {

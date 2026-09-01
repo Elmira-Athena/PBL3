@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,6 +29,7 @@ namespace PBL3.Service.ServiceTickets
         private readonly IInventorySyncService _inventorySyncService;
 
         private readonly IDocumentCodeGenerator _codeGenerator;
+        private readonly ILogger<ServiceTicketService> _logger;
 
 
         public ServiceTicketService(
@@ -41,7 +44,8 @@ namespace PBL3.Service.ServiceTickets
             IUnitOfWork unitOfWork,
             HushStoreDbContext dbContext,
             IInventorySyncService inventorySyncService,
-            IDocumentCodeGenerator codeGenerator)
+            IDocumentCodeGenerator codeGenerator,
+            ILogger<ServiceTicketService> logger)
         {
             _ticketRepository = ticketRepository;
             _quotationRepository = quotationRepository;
@@ -55,6 +59,7 @@ namespace PBL3.Service.ServiceTickets
             _dbContext = dbContext;
             _inventorySyncService = inventorySyncService;
             _codeGenerator = codeGenerator;
+            _logger = logger;
         }
 
         /// <summary>
@@ -228,9 +233,26 @@ namespace PBL3.Service.ServiceTickets
 
                 return await GetTicketByIdAsync(ticket.Id, userId, false);
             }
-            catch
+            // 🔴 Kẻ THUA cuộc đua tiếp nhận. Chốt thật là filtered unique index
+            // UQ_ServiceTickets_SerialId_Open, không phải câu HasOpenTicketForSerialAsync ở
+            // trên — LoadProbe S04 đo được 2 phiếu chưa đóng trên cùng một serial, và nó chỉ
+            // vỡ khi có HAI instance: cửa sổ check-then-act đủ hẹp để một tiến trình che được.
+            //
+            // ⚠️ Vì sao BẮT ở đây chứ không để ConflictExceptionHandler lo. Handler chỉ biết
+            // "trùng khoá" nên nó buộc phải nói một câu chung ("Dữ liệu này vừa được người khác
+            // tạo hoặc thay đổi…"). Chỗ này biết CHÍNH XÁC chuyện gì xảy ra và đã có sẵn đúng
+            // câu đó ở nhánh kiểm tra sớm — dùng lại nguyên văn để người dùng thấy CÙNG một
+            // thông báo dù họ thua cuộc đua hay bị chặn từ đầu. Đó là lý do kế hoạch đợt 3 ghi
+            // "để service call-site cung cấp thông báo theo ngữ cảnh".
+            //
+            // 🚨 Nhận diện bằng SỐ LỖI (2601/2627), KHÔNG dò nội dung ex.Message. Chuỗi đó là
+            // tiếng Anh, đổi theo phiên bản SQL Server, và dò chuỗi là đúng cái bẫy #7.
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
             {
-                throw;
+                _logger.LogWarning(ex,
+                    "Tiếp nhận trùng cho serial {SerialNumber} — unique index đã chặn.",
+                    request.SerialNumber);
+                throw new BusinessRuleException("Sản phẩm này đã có phiếu sửa chữa chưa đóng.");
             }
         }
 

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
@@ -206,6 +207,13 @@ namespace PBL3.Service.ImportReceipts
                 };
 
                 return ApiResult<ImportReceiptDto>.Ok(resultDto, "Tạo phiếu nhập kho thành công.");
+            }
+            // PHẢI đứng trước catch (Exception), nếu không nó nuốt xung đột đồng thời thành
+            // một câu chung. throw; để ConflictExceptionHandler ánh xạ sang 409.
+            // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

@@ -202,6 +202,13 @@ namespace PBL3.Service.Inventory
                     "Chặn xuất kho đơn {OrderId} vì luật nghiệp vụ: {Reason}", request.OrderId, ex.Message);
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            // PHẢI đứng trước catch (Exception), nếu không nó nuốt xung đột đồng thời thành
+            // một câu chung. throw; để ConflictExceptionHandler ánh xạ sang 409.
+            // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 // ROLLBACK TRANSACTION: Reset lại toàn bộ trạng thái nếu xảy ra bất kỳ lỗi quét mã nào.

@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -207,11 +208,63 @@ namespace PBL3.Service.Orders
                     // dùng instance của lần thử trước, vì chúng đã mang Id bị rollback.
                     if (usagePlans.Any())
                     {
+                        // 🔴 SeqPerUser đọc BÊN TRONG delegate — bắt buộc. Lần thử lại phải
+                        // lấy số MỚI; mang số từ ngoài vào thì retry đụng lại đúng
+                        // UQ_VoucherUsages_UserId_VoucherId_SeqPerUser và không bao giờ qua được.
+                        //
+                        // Đây là phỏng đoán lạc quan, KHÔNG phải chốt an toàn: hai request đồng
+                        // thời cùng đọc ra một số. Chốt là unique index — kẻ thua nhận 2601 →
+                        // 409 qua ConflictExceptionHandler. LoadProbe S03 đo được cái giá của
+                        // việc KHÔNG có chốt: 1 khách dùng 10 lần một mã MaxUsesPerUser=1.
+                        var nextSeq = await _voucherRepo.GetNextSeqPerUserAsync(
+                            userId, usagePlans.Select(u => u.VoucherId).ToList());
+
+                        // ════════════════════════════════════════════════════════════════
+                        // 🔴 KIỂM LẠI HẠN MỨC Ở ĐÂY. Chốt ở bước 7 của ApplyVouchersAsync
+                        // KHÔNG ĐỦ, và lý do đáng đọc vì nó không hiển nhiên.
+                        //
+                        // Unique index UQ_VoucherUsages_UserId_VoucherId_SeqPerUser chỉ chặn
+                        // được HAI INSERT CÙNG MỘT SỐ THỨ TỰ. Nó KHÔNG biết MaxUsesPerUser.
+                        // Nên có đúng hai thứ tự xảy ra, và index chỉ đóng được một:
+                        //
+                        //   (a) Hai request ĐỌC CHỒNG NHAU → cùng ra seq = 1 → index chặn ✅
+                        //   (b) Hai request bị TUẦN TỰ HOÁ → kẻ sau đọc MAX = 1 → seq = 2 →
+                        //       index CHO QUA, và chốt ngoài transaction đã đọc count = 0 từ
+                        //       trước khi kẻ trước commit → khách dùng được 2 lượt 🔴
+                        //
+                        // Đo được thật, không suy luận: LoadProbe S03 ra ✅ ở lần chạy đầu
+                        // (rơi vào (a)) rồi 🔴 `200×2` ở lần chạy sau (rơi vào (b)) mà KHÔNG
+                        // một dòng code nào đổi giữa hai lần. Đúng bất đối xứng của runbook:
+                        // một lần ✅ không phải bằng chứng an toàn.
+                        //
+                        // Câu MAX ở trên đọc BÊN TRONG transaction nên nó thấy dữ liệu mới
+                        // nhất đã commit; ghép với index, hai thứ phủ kín cả (a) và (b).
+                        //
+                        // ⚠️ Chốt ở bước 7 vẫn PHẢI giữ: nó cho câu thông báo tử tế trong
+                        // trường hợp thường (không có ai đua) và trả lỗi trước khi tạo đơn.
+                        // Khối này chỉ là lưới cuối cho đúng khoảnh khắc đua nhau.
+                        // ════════════════════════════════════════════════════════════════
+                        foreach (var plan in usagePlans)
+                        {
+                            var seq = nextSeq.GetValueOrDefault(plan.VoucherId, 1);
+
+                            // Khớp CHÍNH XÁC luật ở bước 7: MaxUsesPerUser null + không
+                            // stackable ⇒ mặc định 1 lần/khách; null + stackable ⇒ không giới hạn.
+                            var limit = plan.MaxUsesPerUser
+                                        ?? (plan.IsStackable ? int.MaxValue : 1);
+
+                            if (seq > limit)
+                                throw new BusinessRuleException(
+                                    $"Bạn đã sử dụng mã '{plan.Code}' đủ số lần cho phép " +
+                                    $"(tối đa {limit} lần/khách).");
+                        }
+
                         var usages = usagePlans.Select(u => new VoucherUsage
                         {
                             VoucherId       = u.VoucherId,
                             UserId          = u.UserId,
                             OrderId         = order.Id,
+                            SeqPerUser      = nextSeq.GetValueOrDefault(u.VoucherId, 1),
                             DiscountApplied = u.DiscountApplied,
                             UsedDate        = DateTime.UtcNow
                         }).ToList();
@@ -262,6 +315,35 @@ namespace PBL3.Service.Orders
                 // Thông báo nghiệp vụ đã soạn cho người dùng (tiếng Việt, an toàn) — cho đi ra
                 // NGUYÊN VĂN. Nuốt nó thành câu chung là hồi quy UX: người dùng mất đúng thông
                 // tin cần để tự sửa ("bỏ mã hết hạn ra rồi đặt lại").
+                throw;
+            }
+            // PHẢI đứng trước catch (Exception), nếu không nó nuốt xung đột đồng thời thành
+            // một câu chung. throw; để ConflictExceptionHandler ánh xạ sang 409.
+            // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
+            // 🔴 Vi phạm unique index PHẢI đi qua, không được biến thành "lỗi hệ thống".
+            //
+            // Đo được: sau khi thêm UQ_VoucherUsages_UserId_VoucherId_SeqPerUser, dữ liệu đã
+            // đúng (S03: COUNT = 1) nhưng 9 kẻ thua nhận câu "Không thể hoàn tất đặt hàng do
+            // lỗi hệ thống" — vì khối catch (Exception) ngay dưới nuốt DbUpdateException trước
+            // khi ConflictExceptionHandler kịp nhìn thấy nó. Đó là ĐÚNG cái bẫy CLAUDE.md ghi:
+            // "Nuốt chúng thành câu chung là hồi quy UX nặng hơn lỗi ban đầu" — người dùng
+            // tưởng server hỏng, trong khi thật ra họ vừa chạm một hạn mức hợp lệ.
+            //
+            // throw; → 409 + "Dữ liệu này vừa được người khác tạo hoặc thay đổi. Vui lòng tải
+            // lại trang và thử lại." Đó là ĐÚNG lớp thông báo cho tình huống này, và client đã
+            // có ánh xạ 409 từ đợt 2.
+            //
+            // ⚠️ Cố ý KHÔNG cố đoán index nào bị vi phạm. SqlException không có thuộc tính tên
+            // constraint, nên cách duy nhất là dò ex.Message — chuỗi tiếng Anh, đổi theo phiên
+            // bản SQL Server, đúng bẫy #7. Câu 409 chung ở trên đủ đúng cho MỌI index ở đường
+            // này nên không cần phân biệt.
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                _logger.LogWarning(ex, "Đặt hàng thất bại do trùng khoá duy nhất. Người dùng {UserId}.", userId);
+                throw;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
                 throw;
             }
             catch (Exception ex)
@@ -368,11 +450,63 @@ namespace PBL3.Service.Orders
                     // Không tái dùng instance của lần thử trước: chúng đã mang Id bị rollback.
                     if (usagePlans.Any())
                     {
+                        // 🔴 SeqPerUser đọc BÊN TRONG delegate — bắt buộc. Lần thử lại phải
+                        // lấy số MỚI; mang số từ ngoài vào thì retry đụng lại đúng
+                        // UQ_VoucherUsages_UserId_VoucherId_SeqPerUser và không bao giờ qua được.
+                        //
+                        // Đây là phỏng đoán lạc quan, KHÔNG phải chốt an toàn: hai request đồng
+                        // thời cùng đọc ra một số. Chốt là unique index — kẻ thua nhận 2601 →
+                        // 409 qua ConflictExceptionHandler. LoadProbe S03 đo được cái giá của
+                        // việc KHÔNG có chốt: 1 khách dùng 10 lần một mã MaxUsesPerUser=1.
+                        var nextSeq = await _voucherRepo.GetNextSeqPerUserAsync(
+                            userId, usagePlans.Select(u => u.VoucherId).ToList());
+
+                        // ════════════════════════════════════════════════════════════════
+                        // 🔴 KIỂM LẠI HẠN MỨC Ở ĐÂY. Chốt ở bước 7 của ApplyVouchersAsync
+                        // KHÔNG ĐỦ, và lý do đáng đọc vì nó không hiển nhiên.
+                        //
+                        // Unique index UQ_VoucherUsages_UserId_VoucherId_SeqPerUser chỉ chặn
+                        // được HAI INSERT CÙNG MỘT SỐ THỨ TỰ. Nó KHÔNG biết MaxUsesPerUser.
+                        // Nên có đúng hai thứ tự xảy ra, và index chỉ đóng được một:
+                        //
+                        //   (a) Hai request ĐỌC CHỒNG NHAU → cùng ra seq = 1 → index chặn ✅
+                        //   (b) Hai request bị TUẦN TỰ HOÁ → kẻ sau đọc MAX = 1 → seq = 2 →
+                        //       index CHO QUA, và chốt ngoài transaction đã đọc count = 0 từ
+                        //       trước khi kẻ trước commit → khách dùng được 2 lượt 🔴
+                        //
+                        // Đo được thật, không suy luận: LoadProbe S03 ra ✅ ở lần chạy đầu
+                        // (rơi vào (a)) rồi 🔴 `200×2` ở lần chạy sau (rơi vào (b)) mà KHÔNG
+                        // một dòng code nào đổi giữa hai lần. Đúng bất đối xứng của runbook:
+                        // một lần ✅ không phải bằng chứng an toàn.
+                        //
+                        // Câu MAX ở trên đọc BÊN TRONG transaction nên nó thấy dữ liệu mới
+                        // nhất đã commit; ghép với index, hai thứ phủ kín cả (a) và (b).
+                        //
+                        // ⚠️ Chốt ở bước 7 vẫn PHẢI giữ: nó cho câu thông báo tử tế trong
+                        // trường hợp thường (không có ai đua) và trả lỗi trước khi tạo đơn.
+                        // Khối này chỉ là lưới cuối cho đúng khoảnh khắc đua nhau.
+                        // ════════════════════════════════════════════════════════════════
+                        foreach (var plan in usagePlans)
+                        {
+                            var seq = nextSeq.GetValueOrDefault(plan.VoucherId, 1);
+
+                            // Khớp CHÍNH XÁC luật ở bước 7: MaxUsesPerUser null + không
+                            // stackable ⇒ mặc định 1 lần/khách; null + stackable ⇒ không giới hạn.
+                            var limit = plan.MaxUsesPerUser
+                                        ?? (plan.IsStackable ? int.MaxValue : 1);
+
+                            if (seq > limit)
+                                throw new BusinessRuleException(
+                                    $"Bạn đã sử dụng mã '{plan.Code}' đủ số lần cho phép " +
+                                    $"(tối đa {limit} lần/khách).");
+                        }
+
                         var usages = usagePlans.Select(u => new VoucherUsage
                         {
                             VoucherId       = u.VoucherId,
                             UserId          = u.UserId,
                             OrderId         = order.Id,
+                            SeqPerUser      = nextSeq.GetValueOrDefault(u.VoucherId, 1),
                             DiscountApplied = u.DiscountApplied,
                             UsedDate        = DateTime.UtcNow
                         }).ToList();
@@ -408,6 +542,20 @@ namespace PBL3.Service.Orders
                 // Thông báo nghiệp vụ đã soạn cho người dùng (tiếng Việt, an toàn) — cho đi ra
                 // NGUYÊN VĂN. Nuốt nó thành câu chung là hồi quy UX: người dùng mất đúng thông
                 // tin cần để tự sửa ("bỏ mã hết hạn ra rồi đặt lại").
+                throw;
+            }
+            // PHẢI đứng trước catch (Exception), nếu không nó nuốt xung đột đồng thời thành
+            // một câu chung. throw; để ConflictExceptionHandler ánh xạ sang 409.
+            // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
+            // Cùng lý do như khối catch của CheckoutAsync ở trên: để 2601/2627 đi qua thành
+            // 409, đừng biến hạn mức voucher thành "lỗi hệ thống".
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                _logger.LogWarning(ex, "Tạo đơn hàng thất bại do trùng khoá duy nhất. Người dùng {UserId}.", userId);
+                throw;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
                 throw;
             }
             catch (Exception ex)
@@ -450,7 +598,22 @@ namespace PBL3.Service.Orders
         /// Trả về dữ liệu thuần buộc call-site phải <c>new</c> entity MỚI bên trong delegate ở
         /// mỗi lần thử, đúng điều kiện 1 của hợp đồng retry.
         /// </remarks>
-        private sealed record VoucherUsagePlan(int VoucherId, Guid UserId, decimal DiscountApplied);
+        /// <summary>
+        /// Dữ liệu THUẦN (không phải entity) để dựng <c>VoucherUsage</c> bên trong delegate.
+        /// </summary>
+        /// <remarks>
+        /// 🔴 <c>Code</c>, <c>MaxUsesPerUser</c>, <c>IsStackable</c> có mặt ở đây vì hạn mức
+        /// mỗi-khách phải được kiểm LẠI <b>bên trong</b> transaction, và mang entity
+        /// <c>Voucher</c> vào trong đó là vi phạm điều 1 của hợp đồng retry.
+        /// Xem chỗ dùng để biết vì sao kiểm một lần ở ngoài là KHÔNG đủ.
+        /// </remarks>
+        private sealed record VoucherUsagePlan(
+            int VoucherId,
+            Guid UserId,
+            decimal DiscountApplied,
+            string Code,
+            int? MaxUsesPerUser,
+            bool IsStackable);
 
         private async Task<(List<VoucherUsagePlan> Usages, decimal TotalDiscount)> ApplyVouchersAsync(
             decimal subTotal,
@@ -552,7 +715,9 @@ namespace PBL3.Service.Orders
 
                 // UsedDate CỐ Ý không tính ở đây: nó là giá trị "sinh một lần để ghi", nên
                 // theo điều kiện 2 của hợp đồng retry phải tính BÊN TRONG delegate.
-                usages.Add(new VoucherUsagePlan(voucher.Id, userId, discountApplied));
+                usages.Add(new VoucherUsagePlan(
+                    voucher.Id, userId, discountApplied,
+                    voucher.Code, voucher.MaxUsesPerUser, voucher.IsStackable));
             }
 
             return (usages, totalDiscount);

@@ -81,9 +81,17 @@ Phần lớn entity có `IsDeleted` (+ một phần có `DeletedDate`, `CreatedD
 Global EF query filter loại bỏ bản ghi soft-deleted tự động **cho những entity có khai filter**.
 
 ⚠️ **KHÔNG phải mọi entity đều có `IsDeleted`.** Đã kiểm trên schema thật:
-`Orders`, `InventoryChecks`, `OrderSerials`, `VoucherUsages`, `ProductSerials` **không có** cột này;
+`Orders`, `OrderSerials`, `VoucherUsages`, `ProductSerials` **không có** cột này;
 `ImportReceipts` không có `CreatedDate`. Viết truy vấn hay script SQL thì kiểm cột trước,
 đừng giả định — chính giả định này làm bản đầu của `Infrastructure/db/checks/pre_migration_checks.sql` chạy lỗi.
+
+🚨 **Bản trước của chính dòng trên ghi SAI: nó xếp `InventoryChecks` vào nhóm "không có".**
+Đã đo lại bằng `INFORMATION_SCHEMA.COLUMNS` ở gói 3: **`InventoryChecks.IsDeleted` CÓ tồn tại**
+(cùng với `ServiceTickets.IsDeleted`; và đó là hai bảng duy nhất trong nhóm này có nó). Sai
+đúng chiều nguy hiểm: nếu tin nó mà bỏ `IsDeleted = 0` ra khỏi vị từ của
+`UQ_ServiceTickets_SerialId_Open` thì filtered index lệch khỏi
+`HasOpenTicketForSerialAsync` và bất biến âm thầm nới ra. **Kiểm cột, đừng tin bảng liệt kê
+này — kể cả bảng vừa được sửa.**
 
 ### Validation
 FluentValidation validators live in `/src/Shared/Validators/`. The same validator class is used on both the API (server) and Blazor client (via Blazored.FluentValidation).
@@ -211,6 +219,37 @@ Bốn quy tắc này sinh ra từ lỗi có thật đã sửa ở đợt 1 — v
   triệu chứng là "lúc được lúc không tuỳ ALB định tuyến" — không tái hiện được.
   (Cache dữ liệu **công khai, ít đổi** như danh mục/menu thì vẫn khuyến khích.)
 
+- **Controller KHÔNG được nuốt `DbUpdateConcurrencyException` / vi phạm unique index.**
+  `ConflictExceptionHandler` là `IExceptionHandler`, nên nó **chỉ thấy exception ĐÃ THOÁT khỏi
+  action**. Mọi `catch (Exception)` trong controller là một bức tường trước middleware — và
+  **trước gói 3 nó làm handler 409 thành code chết cho MỌI đường nghiệp vụ.**
+  🚨 **Sửa ở tầng Service là KHÔNG ĐỦ** — đã đo: chốt `throw;` ở `OrderService` chạy đúng (log
+  ghi "trùng khoá duy nhất") mà 409 vẫn không tới, vì `OrdersController` bắt trước. Khuôn, chỉ
+  đặt ở action **mutation** (GET không sinh được hai loại này):
+  ```csharp
+  catch (BusinessRuleException ex) { return ApiResult<T>.Fail(ex.Message); }
+  catch (DbUpdateConcurrencyException) { throw; }                    // → 409
+  catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+  { throw; }                                                        // → 409
+  catch (Exception ex) { … }                                        // PHẢI đứng cuối
+  ```
+  Hiện có **27 chốt** ở 4 controller. Nhận diện bằng **số lỗi** (2601/2627), tuyệt đối không dò
+  `ex.Message` — chuỗi đó tiếng Anh và đổi theo phiên bản SQL Server.
+
+- **Unique index KHÔNG tự bảo vệ một hạn mức đếm được.** Nó chỉ chặn hai bản ghi cùng khoá.
+  `UQ_VoucherUsages_UserId_VoucherId_SeqPerUser` chặn được hai insert cùng `SeqPerUser`, nhưng
+  **không biết `Voucher.MaxUsesPerUser`** — kẻ thua bị tuần tự hoá sẽ đọc `MAX = 1`, dùng
+  `SeqPerUser = 2` và **đi qua index**. Vì vậy hạn mức phải được kiểm **LẠI bên trong
+  transaction**, sau câu `MAX`, chứ không chỉ ở chốt ngoài. Đã đo: S03 ✅ ở lần chạy đầu rồi
+  🔴 `200×2` ở lần sau mà không dòng code nào đổi. Giữ **cả hai** chốt — chốt ngoài cho thông
+  báo tử tế ở đường thường, chốt trong là lưới cuối.
+
+- **`RowVersion` (`[Timestamp]`) có trên 6 entity** — `ProductSerial`, `ServiceTicket`,
+  `Quotation`, `InventoryCheck`, `Order`, `RmaShipment`. **`ExecuteUpdateAsync` BỎ QUA HOÀN TOÀN
+  token này** (nó không qua Change Tracker), nên chuyển một đường ghi từ tracked-write sang
+  `ExecuteUpdate` là **âm thầm gỡ mất** lớp bảo vệ — phải tự đưa vị từ trạng thái vào `Where`.
+  Không đặt lên `Voucher` (đã dùng atomic increment) và `AppUser` (Identity có `ConcurrencyStamp`).
+
 - **Không thêm gói NuGet dính lỗ hổng High/Critical.** Cổng CI
   (`devops/scripts/check-vulnerable-packages.sh`) chặn ở bước `dotnet build`. Chạy trước khi
   mở PR. ⚠️ Đừng "kiểm nhanh" bằng `dotnet list package --vulnerable` rồi tin mã thoát: lệnh
@@ -293,15 +332,31 @@ chứng, và **mười ba cái bẫy im lặng** đã gặp. Đọc file đó tr
 tầng Service, auth, hay rate limiting.
 
 Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C + mục D + mục 🅴 + mục 🅷 +
-**mục 🅸** đã xong (18/18 call-site transaction retry-safe; 23/23 nút mutation dùng
+mục 🅸 + **đợt 3 (gói 2 + gói 3)** đã xong — **LoadProbe 9/9 ĐẠT ở CẢ HAI cấu hình**,
+`0 KHÔNG KẾT LUẬN`, và bốn kịch bản phụ thuộc thời điểm (S03/S04/S07/S08) được quan sát
+**5 lần** ở cấu hình 2 instance
+([bằng chứng](docs/evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md)) (18/18 call-site transaction retry-safe; 23/23 nút mutation dùng
 `ActionButton`/`BusyScope`, trong đó **6/6 nút hỏng thật đã đo có ca đối chứng âm**; bộ đo
 `tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số ở **cả hai** cấu hình; 10/10 lỗ hổng NuGet
 High đã vá và có cổng chặn ở CI; rò rỉ `ex.Message` đã chặn hết ở **cả ba tầng**, có cổng
 `check-error-message-leaks.sh`), và **nợ kiểm thử 🧪 ưu tiên 1 + 2 đã trả** — bốn luồng cuối
 (POS · nhập kho · xuất kho · phiếu dịch vụ) **đã chạy thật tới DB**, 4/4 ĐẠT, 0 bản ghi nhân đôi.
 
-Còn lại: **mục 🅹** (35 lời gọi GET chuyển sang `ApiCall.SendAsync`) và **đợt 3** — đợt 3 **bị
-chặn** tới khi chạy được `Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
+Còn lại: **mục 🅹** (35 lời gọi GET chuyển sang `ApiCall.SendAsync`) và **đợt 4 → 6**.
+
+✅ **Chốt chặn đợt 3 đã tháo, và tháo bằng cách đo thứ đáng đo.** `pre_migration_checks.sql`
+chạy được — nhưng trên **DB local có dữ liệu bẩn thật** do LoadProbe tạo, không trên RDS.
+Lý do: RDS đó dựng mới từ Terraform + seeder nên chưa luồng nghiệp vụ nào từng chạy, kết quả
+"rỗng" ở đó nghĩa là *"chưa ai dùng"*, **không** nghĩa *"dữ liệu sạch"*. Cách làm ở local trả
+lời được câu mà RDS không trả lời nổi: **migration xử lý xung đột ra sao khi thật sự có
+xung đột.** Đo được: `Error 1505` và **rollback SẠCH HOÀN TOÀN** (0 cột, 0 index,
+`__EFMigrationsHistory` không ghi nhận) — EF bọc cả migration trong một transaction.
+
+⚠️ **Migration đợt 3 có HAI CHỐT CHẶN sẽ `THROW` nếu DB đích có dữ liệu xung đột**, kèm câu
+chỉ thẳng script phải chạy: `Infrastructure/db/fixes/dedupe_inventory_adjustment_logs.sql`.
+Đó là **cố ý**: xoá bản ghi kế toán là quyết định nghiệp vụ, migration không quyết thay người
+chịu trách nhiệm. Ngược lại, backfill `SeqPerUser` thì migration **tự làm** — nó không xoá gì
+và `ROW_NUMBER` bảo đảm tính duy nhất tự thân cấu trúc.
 
 🧪 **Nợ kiểm thử — đọc mục 🧪 của runbook trước khi tin dòng "XONG" nào.** `grep` chỉ chứng
 minh **hình dạng code**, không chứng minh hành vi. Nợ của mục D **đã trả** (OpenAPI sinh được

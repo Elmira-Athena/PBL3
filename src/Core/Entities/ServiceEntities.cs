@@ -63,6 +63,13 @@ public class ServiceTicket
     public DateTime? CancelledAt { get; set; }
     public bool IsDeleted { get; set; }
 
+    /// <summary>
+    /// Concurrency token do SQL Server tự sinh. Xem giải thích đầy đủ + <b>hai giới hạn</b>
+    /// ở <see cref="ProductSerial.RowVersion"/> — đặc biệt: <c>ExecuteUpdateAsync</c> bỏ qua nó.
+    /// </summary>
+    [Timestamp]
+    public byte[]? RowVersion { get; set; }
+
     [ForeignKey("SerialId")]
     public virtual ProductSerial Serial { get; set; } = null!;
 
@@ -121,6 +128,13 @@ public class Quotation
 
     public DateTime? CustomerDecidedAt { get; set; }
 
+    /// <summary>
+    /// Concurrency token do SQL Server tự sinh. Xem giải thích đầy đủ + <b>hai giới hạn</b>
+    /// ở <see cref="ProductSerial.RowVersion"/> — đặc biệt: <c>ExecuteUpdateAsync</c> bỏ qua nó.
+    /// </summary>
+    [Timestamp]
+    public byte[]? RowVersion { get; set; }
+
     [ForeignKey("TicketId")]
     public virtual ServiceTicket Ticket { get; set; } = null!;
 
@@ -177,6 +191,13 @@ public class RmaShipment
 
     [MaxLength(1000)]
     public string? ManufacturerNotes { get; set; }
+
+    /// <summary>
+    /// Concurrency token do SQL Server tự sinh. Xem giải thích đầy đủ + <b>hai giới hạn</b>
+    /// ở <see cref="ProductSerial.RowVersion"/> — đặc biệt: <c>ExecuteUpdateAsync</c> bỏ qua nó.
+    /// </summary>
+    [Timestamp]
+    public byte[]? RowVersion { get; set; }
 
     [ForeignKey("TicketId")]
     public virtual ServiceTicket Ticket { get; set; } = null!;

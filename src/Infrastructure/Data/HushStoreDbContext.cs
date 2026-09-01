@@ -282,6 +282,19 @@ namespace PBL3.Infrastructure.Data
                 entity.HasIndex(l => l.AdjustedDate);
                 entity.HasIndex(l => l.SerialId);
 
+                // 🔴 Một serial chỉ được ghi tổn thất ĐÚNG MỘT LẦN trong một phiếu kiểm kê.
+                // Trước đây chỉ có 3 index ĐƠN ở trên, không có unique tổ hợp — LoadProbe S06
+                // đo được sổ tổn thất nhân 5 (5 lần approve song song, cả 5 đều 200), và
+                // pre_migration_checks.sql CHECK 1b định lượng được thiệt hại: CostImpact bị
+                // tính THỪA 3.200.000₫ trên đúng một cặp (phiếu, serial).
+                //
+                // Đây là phòng tuyến THỨ HAI. Phòng tuyến thứ nhất là conditional update ở
+                // InventoryCheckService.ApproveAsync. Giữ cả hai: cái thứ nhất cho thông báo
+                // tử tế, cái thứ hai để dữ liệu không hỏng được kể cả khi ai đó viết đường ghi mới.
+                entity.HasIndex(l => new { l.AuditCheckId, l.SerialId })
+                      .IsUnique()
+                      .HasDatabaseName("UQ_InventoryAdjustmentLogs_AuditCheckId_SerialId");
+
                 entity.Property(e => e.CostImpact).HasColumnType("decimal(18,2)");
 
                 // FK: AuditCheckId → InventoryChecks (NoAction: log phải tồn tại độc lập với phiếu)
@@ -361,9 +374,22 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<VoucherUsage>(entity =>
             {
                 entity.HasQueryFilter(vu => !vu.Voucher.IsDeleted);
-                // Non-unique index: MaxUsesPerUser cho phép dùng nhiều lần; check bằng count trong service
-                entity.HasIndex(vu => new { vu.UserId, vu.VoucherId })
-                      .HasDatabaseName("IX_VoucherUsages_UserId_VoucherId");
+
+                // 🔴 UNIQUE, và cột thứ ba là thứ làm nó ĐÚNG với mọi MaxUsesPerUser.
+                // Bản cũ là index THƯỜNG với comment "check bằng count trong service" — chính
+                // cái "check bằng count" đó là check-then-act mà LoadProbe S03 đã bắt: 1 khách
+                // dùng 10 lần một mã MaxUsesPerUser=1, cả 10 request đều 200.
+                //
+                // ⚠️ Vì sao KHÔNG phải unique (UserId, VoucherId): xem VoucherUsage.SeqPerUser.
+                // Tóm lại — validator cho phép MaxUsesPerUser = 3, nên index 2 cột sẽ chặn oan
+                // lần dùng thứ hai của một voucher hoàn toàn hợp lệ.
+                //
+                // 🚨 HasQueryFilter ở trên KHÔNG áp cho index: unique index sống ở tầng DB và
+                // không biết gì về voucher đã soft-delete. Đó là hành vi ĐÚNG ở đây (một lần
+                // dùng đã xảy ra thì vẫn đã xảy ra), nhưng đừng suy rộng sang index khác.
+                entity.HasIndex(vu => new { vu.UserId, vu.VoucherId, vu.SeqPerUser })
+                      .IsUnique()
+                      .HasDatabaseName("UQ_VoucherUsages_UserId_VoucherId_SeqPerUser");
 
                 // Index cho truy vấn theo OrderId
                 entity.HasIndex(vu => vu.OrderId);
@@ -463,6 +489,23 @@ namespace PBL3.Infrastructure.Data
                 entity.HasQueryFilter(t => !t.IsDeleted);
                 entity.HasIndex(t => t.TicketCode).IsUnique();
                 entity.HasIndex(t => t.SerialId);
+
+                // 🔴 Mỗi serial tối đa MỘT phiếu chưa đóng. LoadProbe S04 đo được 2 phiếu chưa
+                // đóng trên cùng một serial — và nó chỉ vỡ khi có HAI instance, nên đây đúng là
+                // loại lỗi mà hạ tầng 2 replica sinh ra để bắt. Cửa sổ check-then-act của
+                // HasOpenTicketForSerialAsync đủ hẹp để một tiến trình che được.
+                //
+                // 🚨 VỊ TỪ NÀY PHẢI LUÔN KHỚP VỚI ServiceTicketRepository.HasOpenTicketForSerialAsync
+                // (terminalStates = 3, 8, 9, 10 + query filter !IsDeleted). Thêm một trạng thái
+                // terminal ở đó mà quên ở đây thì bất biến ÂM THẦM NỚI RA — không có gì báo lỗi.
+                // Hai chỗ này comment chéo nhau; đọc một chỗ thì sang chỗ kia.
+                //
+                // ⚠️ Trên SQL Server phải BUNG `NOT IN` thành chuỗi `<>`: HasFilter nhận SQL thô,
+                // và filtered index không cho phép `NOT IN`.
+                entity.HasIndex(t => t.SerialId)
+                      .IsUnique()
+                      .HasFilter("[Status] <> 3 AND [Status] <> 8 AND [Status] <> 9 AND [Status] <> 10 AND [IsDeleted] = 0")
+                      .HasDatabaseName("UQ_ServiceTickets_SerialId_Open");
                 entity.HasIndex(t => t.Status);
                 entity.HasIndex(t => t.CustomerId);
                 entity.HasIndex(t => t.AssignedEmployeeId);

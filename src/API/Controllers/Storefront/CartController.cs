@@ -1,3 +1,5 @@
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -84,6 +86,17 @@ namespace PBL3.API.Controllers.Storefront
                 // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
                 return BadRequest(ApiResult<CartResponse>.Fail(ex.Message));
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 // KHÔNG relay ex.Message: lỗi hạ tầng (EF Core / SQL Server) là tiếng Anh và
@@ -115,6 +128,17 @@ namespace PBL3.API.Controllers.Storefront
                 // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
                 return BadRequest(ApiResult<CartResponse>.Fail(ex.Message));
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 // KHÔNG relay ex.Message: lỗi hạ tầng (EF Core / SQL Server) là tiếng Anh và
@@ -145,6 +169,17 @@ namespace PBL3.API.Controllers.Storefront
             {
                 // Thông báo nghiệp vụ đã soạn cho người dùng — trả NGUYÊN VĂN.
                 return BadRequest(ApiResult<CartResponse>.Fail(ex.Message));
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {

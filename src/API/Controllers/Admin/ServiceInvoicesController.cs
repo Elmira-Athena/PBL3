@@ -1,3 +1,5 @@
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -71,6 +73,17 @@ namespace PBL3.API.Controllers.Admin
             catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {

@@ -1,3 +1,5 @@
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Security.Claims;
@@ -56,6 +58,17 @@ namespace PBL3.API.Controllers.Admin
 
                 return ApiResult<ServiceTicketIntakeEvaluationDto>.Ok(result);
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error evaluating intake");
@@ -76,6 +89,17 @@ namespace PBL3.API.Controllers.Admin
             catch (BusinessRuleException ex)
             {
                 return ApiResult<ServiceTicketDetailDto>.Fail(ex.Message);
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -193,6 +217,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error assigning technician");
@@ -217,6 +252,17 @@ namespace PBL3.API.Controllers.Admin
             catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -243,6 +289,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error choosing branch");
@@ -267,6 +324,17 @@ namespace PBL3.API.Controllers.Admin
             catch (BusinessRuleException ex)
             {
                 return ApiResult<QuotationDetailDto>.Fail(ex.Message);
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -293,6 +361,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error accepting quotation");
@@ -317,6 +396,17 @@ namespace PBL3.API.Controllers.Admin
             catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -343,6 +433,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<RmaShipmentDetailDto>.Fail(ex.Message);
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating RMA");
@@ -367,6 +468,17 @@ namespace PBL3.API.Controllers.Admin
             catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -393,6 +505,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error starting repair");
@@ -417,6 +540,17 @@ namespace PBL3.API.Controllers.Admin
             catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -443,6 +577,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error marking waiting parts");
@@ -468,6 +613,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error resuming repair");
@@ -483,7 +639,7 @@ namespace PBL3.API.Controllers.Admin
             {
                 var userId = GetCurrentUserId();
                 var result = await _service.MarkInternalRepairCompletedAsync(id, request, userId, IsAdmin);
-                return ApiResult<bool>.Ok(result, "Hoàn tát sửa chữa thành công.");
+                return ApiResult<bool>.Ok(result, "Hoàn tất sửa chữa thành công.");
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -492,6 +648,17 @@ namespace PBL3.API.Controllers.Admin
             catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -518,6 +685,17 @@ namespace PBL3.API.Controllers.Admin
             {
                 return ApiResult<ServiceInvoiceDetailDto>.Fail(ex.Message);
             }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error issuing invoice");
@@ -538,6 +716,17 @@ namespace PBL3.API.Controllers.Admin
             catch (BusinessRuleException ex)
             {
                 return ApiResult<bool>.Fail(ex.Message);
+            }
+            // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
+            // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
+            // action đầu tiên có chốt này trong OrdersController.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                throw;
             }
             catch (Exception ex)
             {

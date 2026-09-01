@@ -428,11 +428,18 @@ namespace PBL3.Service.Pos
 
                         if (customerId.HasValue)
                         {
+                            // SeqPerUser đọc BÊN TRONG delegate — xem giải thích đầy đủ ở
+                            // OrderService.CheckoutAsync. Chốt thật là unique index, không phải
+                            // câu MAX này.
+                            var nextSeq = await _voucherRepo.GetNextSeqPerUserAsync(
+                                customerId.Value, new List<int> { appliedVoucherId.Value });
+
                             await _dbContext.VoucherUsages.AddAsync(new VoucherUsage
                             {
                                 VoucherId = appliedVoucherId.Value,
                                 UserId = customerId.Value,
                                 OrderId = order.Id,
+                                SeqPerUser = nextSeq.GetValueOrDefault(appliedVoucherId.Value, 1),
                                 DiscountApplied = discountAmount,
                                 UsedDate = now
                             });
@@ -471,6 +478,13 @@ namespace PBL3.Service.Pos
                 // câu chung là hồi quy UX: thu ngân mất đúng thông tin cần để xử ("bỏ mã ra").
                 _logger.LogInformation("Chặn thanh toán POS vì luật nghiệp vụ: {Reason}", ex.Message);
                 return ApiResult<PosOrderDto>.Fail(ex.Message);
+            }
+            // PHẢI đứng trước catch (Exception), nếu không nó nuốt xung đột đồng thời thành
+            // một câu chung. throw; để ConflictExceptionHandler ánh xạ sang 409.
+            // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

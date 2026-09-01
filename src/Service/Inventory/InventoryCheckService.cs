@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
@@ -167,6 +168,13 @@ namespace PBL3.Service.Inventory
 
                 var dto = await BuildCheckDtoAsync(check.Id);
                 return ApiResult<InventoryCheckDto>.Ok(dto!, "Tạo phiếu kiểm kê thành công.");
+            }
+            // PHẢI đứng trước catch (Exception), nếu không nó nuốt xung đột đồng thời thành
+            // một câu chung. throw; để ConflictExceptionHandler ánh xạ sang 409.
+            // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -677,6 +685,13 @@ namespace PBL3.Service.Inventory
                 _logger.LogWarning(ex, "Xung đột đồng thời khi gửi duyệt phiếu kiểm kê {CheckId}.", checkId);
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            // PHẢI đứng trước catch (Exception), nếu không nó nuốt xung đột đồng thời thành
+            // một câu chung. throw; để ConflictExceptionHandler ánh xạ sang 409.
+            // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Lỗi khi gửi duyệt phiếu kiểm kê {CheckId}.", checkId);
@@ -857,6 +872,48 @@ namespace PBL3.Service.Inventory
                 _logger.LogWarning(ex, "Xung đột đồng thời khi phê duyệt phiếu kiểm kê {CheckId}.", checkId);
                 return ApiResult<bool>.Fail(ex.Message);
             }
+            // 🔴 Kẻ thua ở unique index UQ_InventoryAdjustmentLogs_AuditCheckId_SerialId.
+            //
+            // Đo được sau khi thêm index: dữ liệu đã đúng (S06: 1 bản ghi thay vì 5) nhưng 4 kẻ
+            // thua nhận "Đã xảy ra lỗi khi phê duyệt. Vui lòng thử lại." — khối catch (Exception)
+            // ở dưới nuốt DbUpdateException. Người dùng đọc thành "server hỏng" rồi bấm lại,
+            // trong khi sự thật là phiếu ĐÃ được phê duyệt thành công bởi thao tác song song.
+            // Câu sai đó nguy hiểm hơn không có câu nào: nó rủ người ta phê duyệt lại.
+            //
+            // Ở ĐÂY dùng câu theo ngữ cảnh chứ không để rơi xuống 409 chung, vì trong PHẠM VI
+            // hàm này 2601 chỉ có MỘT nguồn duy nhất (không unique index nào khác bị chạm), nên
+            // ta biết chắc chuyện gì đã xảy ra — và đã có sẵn đúng câu cần nói ở chốt chống race
+            // bên trong transaction. Dùng lại nguyên văn để người dùng thấy CÙNG một thông báo
+            // dù họ thua ở chốt trong transaction hay thua ở index.
+            //
+            // 🚨 Lập luận "chỉ một nguồn" là LẬP LUẬN CỤC BỘ — nó đúng vì phạm vi hẹp. Thêm một
+            // unique index nào nữa vào đường phê duyệt thì phải xem lại khối này, đừng copy
+            // khuôn này sang hàm có nhiều index.
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                _logger.LogWarning(ex,
+                    "Phê duyệt trùng cho phiếu kiểm kê {CheckId} — unique index đã chặn.", checkId);
+                return ApiResult<bool>.Fail(
+                    "Phiếu kiểm kê vừa được thao tác khác phê duyệt xong. Vui lòng tải lại trang để xem kết quả.");
+            }
+            // 🔴 PHẢI ĐỨNG TRƯỚC catch (Exception). Đây là chỗ kế hoạch đợt 3 gọi là
+            // "phần người ta quên": thêm concurrency token nghĩa là MỌI SaveChanges nay có
+            // thể ném DbUpdateConcurrencyException — và nếu khối catch (Exception) ở dưới
+            // nuốt nó thành "Đã xảy ra lỗi… Vui lòng thử lại" thì ta chỉ đổi hỏng dữ liệu
+            // âm thầm thành MỘT CÂU CHUNG âm thầm. Người dùng không biết chuyện gì xảy ra,
+            // và LoadProbe vẫn thấy 200/400 nên bảng kết quả vẫn xanh.
+            //
+            // throw; để ConflictExceptionHandler (src/API/Middleware) ánh xạ sang 409 kèm
+            // câu tiếng Việt. 409 chứ không 500: hai người sửa cùng một bản ghi là chuyện
+            // BÌNH THƯỜNG, và client đã có ánh xạ 409 sẵn từ đợt 2 (ApiCall.ToUserMessage).
+            //
+            // ⚠️ ExecuteInTransactionAsync(retrySafe: true) KHÔNG thử lại loại này —
+            // EnableRetryOnFailure chỉ thử lại lỗi transient. Đúng như vậy: xung đột ghi
+            // không tự hết khi thử lại bằng cùng dữ liệu cũ, phải để người dùng tải lại.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Lỗi khi phê duyệt phiếu kiểm kê {CheckId}.", checkId);
@@ -997,6 +1054,13 @@ namespace PBL3.Service.Inventory
             {
                 _logger.LogWarning(ex, "Xung đột đồng thời khi từ chối phiếu kiểm kê {CheckId}.", checkId);
                 return ApiResult<bool>.Fail(ex.Message);
+            }
+            // PHẢI đứng trước catch (Exception), nếu không nó nuốt xung đột đồng thời thành
+            // một câu chung. throw; để ConflictExceptionHandler ánh xạ sang 409.
+            // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

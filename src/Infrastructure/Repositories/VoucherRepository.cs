@@ -140,6 +140,16 @@ namespace PBL3.Infrastructure.Repositories
                 .ToDictionaryAsync(x => x.VoucherId, x => x.Count);
         }
 
+        /// <inheritdoc/>
+        public async Task<Dictionary<int, int>> GetNextSeqPerUserAsync(Guid userId, List<int> voucherIds)
+        {
+            return await _dbContext.VoucherUsages
+                .Where(vu => vu.UserId == userId && voucherIds.Contains(vu.VoucherId))
+                .GroupBy(vu => vu.VoucherId)
+                .Select(g => new { VoucherId = g.Key, Next = g.Max(vu => vu.SeqPerUser) + 1 })
+                .ToDictionaryAsync(x => x.VoucherId, x => x.Next);
+        }
+
         public async Task<List<int>> GetUsedVoucherIdsByUserAsync(Guid userId, List<int> voucherIds)
         {
             return await _dbContext.VoucherUsages

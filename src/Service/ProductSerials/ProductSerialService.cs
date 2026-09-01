@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Interfaces;
 using PBL3.Service.Inventory;
@@ -164,6 +165,13 @@ namespace PBL3.Service.ProductSerials
                 await _inventorySyncService.SyncStockAsync(variantId);
 
                 return ApiResult<bool>.Ok(true, "Cập nhật trạng thái Serial thành công.");
+            }
+            // PHẢI đứng trước catch (Exception), nếu không nó nuốt xung đột đồng thời thành
+            // một câu chung. throw; để ConflictExceptionHandler ánh xạ sang 409.
+            // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
+            catch (DbUpdateConcurrencyException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

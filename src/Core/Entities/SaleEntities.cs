@@ -101,6 +101,13 @@ namespace PBL3.Core.Entities
         public byte PaymentMethod { get; set; } // 0: COD, 1: Banking, 2: VNPay
         public byte PaymentStatus { get; set; } // 0: Unpaid, 1: Paid, 2: Refunded
 
+        /// <summary>
+        /// Concurrency token do SQL Server tự sinh. Xem giải thích đầy đủ + <b>hai giới hạn</b>
+        /// ở <see cref="ProductSerial.RowVersion"/> — đặc biệt: <c>ExecuteUpdateAsync</c> bỏ qua nó.
+        /// </summary>
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         public byte OrderType { get; set; } // 0: Online, 1: POS
 
         [MaxLength(500)]
@@ -194,6 +201,32 @@ namespace PBL3.Core.Entities
         public decimal DiscountApplied { get; set; }
 
         public DateTime UsedDate { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Số thứ tự lần dùng của <b>chính khách này</b> với <b>chính voucher này</b>: 1, 2, 3…
+        /// Cùng với unique index <c>UQ_VoucherUsages_UserId_VoucherId_SeqPerUser</c>, đây là thứ
+        /// thực sự chặn việc dùng vượt <c>Voucher.MaxUsesPerUser</c>.
+        /// </summary>
+        /// <remarks>
+        /// 🔴 <b>VÌ SAO CẦN CỘT NÀY, thay vì unique <c>(UserId, VoucherId)</c> cho gọn.</b>
+        /// LoadProbe S03 đo được 1 khách dùng <b>10 lần</b> một mã có <c>MaxUsesPerUser = 1</c>,
+        /// cả 10 request <c>200</c>: <c>GetUserVoucherUsageCountsAsync</c> rồi mới so sánh là
+        /// check-then-act, cả 10 đều đọc thấy <c>0</c> trước khi ai kịp commit.
+        ///
+        /// Unique <c>(UserId, VoucherId)</c> chặn được S03, nhưng nó **cứng hoá** giả định
+        /// "mỗi khách 1 lần". Validator chỉ yêu cầu <c>MaxUsesPerUser > 0</c>
+        /// (<c>VoucherValidators</c>), tức app <b>cho phép</b> đặt 3 — và index đó sẽ chặn ngay
+        /// lần dùng thứ hai, một hồi quy chỉ hiện ra khi có người thật dùng tính năng đó.
+        /// Dữ liệu hiện toàn <c>NULL</c> là <em>ngẫu nhiên</em>, không phải hợp đồng.
+        ///
+        /// <b>Cách bất biến được giữ:</b> <c>SeqPerUser = (số lần đã dùng) + 1</c> tính bằng một
+        /// câu <c>MAX</c>, và <b>unique index mới là thứ chốt</b> — hai request đồng thời cùng
+        /// tính ra một số, một request đụng index và nhận <c>2601</c> → <c>409</c> qua
+        /// <c>ConflictExceptionHandler</c>. Bấm lại thì đọc được số mới. Ở đây "bắt lỗi rồi thử
+        /// lại" là công cụ ĐÚNG, khác hẳn chuyện sinh mã chứng từ: va chạm ở đây <em>hiếm</em>
+        /// (một người bấm hai lần), còn ở đó va chạm là <em>chắc chắn</em> với mọi request.
+        /// </remarks>
+        public int SeqPerUser { get; set; } = 1;
 
         [ForeignKey("VoucherId")]
         public virtual Voucher Voucher { get; set; } = null!;

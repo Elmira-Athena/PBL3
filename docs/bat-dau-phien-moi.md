@@ -1,17 +1,17 @@
 # Bắt đầu phiên mới — đọc file này trước
 
 **Cập nhật:** 2026-09-01 · **Trạng thái repo:** nhánh `fix/muc-I-client-error-leaks`, build
-`0 Error(s)` / 184 cảnh báo · **RDS đã bật rồi TẮT LẠI trong phiên này**
+`0 Error(s)`
 · **Đã xong:** đợt 1, mục 4.1, đợt 2, **A**, **B**, **C**, **D**, **🅴**, **🅷**, **🅸**,
-**nợ 🧪 ưu tiên 1 + 2** (**gói 1 XONG**), và **phần CODE của gói 2** — SEQUENCE (**S01 🔴 → ✅,
-50/50 đơn**) + ánh xạ 409 (đã đo, có ca đối chứng âm)
-· 🔴 **Kế tiếp: một QUYẾT ĐỊNH, không phải một việc.** Nửa AWS của gói 2 —
-`pre_migration_checks.sql` trên RDS — **dừng lại vì tiền đề của nó SAI**: RDS này không có lịch
-sử production (dựng mới 2026-08-24 từ Terraform + seeder), nên câu trả lời sẽ rỗng vì *chưa luồng
-nghiệp vụ nào từng chạy*, **không** vì dữ liệu sạch. Ba lựa chọn ở mục 🅶 — **khuyến nghị lựa chọn
-1 hoặc 3, cả hai $0.**
-· 🚨 **Và đọc §"S03" ở mục 🅶 trước khi xem bảng 9 kịch bản:** sửa S01 đã **tháo mất một tấm lưới
-an toàn tình cờ**, làm lộ một lỗi có sẵn. `4 đạt / 5 hỏng` **không** phải hồi quy.
+**nợ 🧪 ưu tiên 1 + 2**, **gói 2**, và **gói 3 — đợt 3 XONG TRỌN VẸN**
+· ✅ **LoadProbe 9/9 ĐẠT ở CẢ HAI cấu hình**, `0 KHÔNG KẾT LUẬN`. Bốn kịch bản phụ thuộc thời
+điểm (S03 · S04 · S07 · S08) được quan sát **5 lần** ở cấu hình 2 instance —
+[bằng chứng](evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md)
+· 🔴 **Kế tiếp: gói 4** (đợt 4 — DataProtection → SSM · connection pool · bộ số shutdown ·
+`ICacheService`). Local + `terraform plan`, **$0**.
+· 🚨 **Ba phát hiện của gói 3 đáng đọc trước khi viết code mới** — xem mục 🅶: (1) `RowVersion`
+đóng S08 chứ không phải index; (2) **unique index KHÔNG tự bảo vệ một hạn mức đếm được**;
+(3) **`ConflictExceptionHandler` bị CONTROLLER nuốt** — sửa ở tầng Service là không đủ.
 
 > 🚦 **Nếu bạn chỉ đọc được một khối, đọc §2.** Nó nói phiên này làm gì, dừng ở đâu, và bàn
 > giao cái gì. Mọi mục chữ cái (🅰…🅸) ở §2bis là **hồ sơ tra cứu**, không phải danh sách việc.
@@ -72,15 +72,22 @@ lại thứ tự ưu tiên.
 `ILogger<T>`; và bốn luồng nghiệp vụ cuối (POS · nhập kho · xuất kho · phiếu dịch vụ) **đã chạy
 thật tới DB**, 4/4 ĐẠT.
 
-**Không còn thứ nào cố ý làm dở, và cũng không còn việc nào chạy được ở local mà chưa làm.**
-Việc duy nhất còn lại là **đợt 3**, và nó bị chặn bởi một thứ ở ngoài repo (phải chạy script
-kiểm tra trên RDS) chứ không phải bởi lựa chọn. **Mọi việc tiếp theo đều cần một cửa sổ RDS
-hoặc AWS** — đó là lý do gói 1 kết thúc ở đúng đây.
+**Gói 2 và gói 3 đã xong (2026-09-01) — đợt 3 XONG TRỌN VẸN.** `RowVersion` trên 6 entity,
+3 unique index, `SeqPerUser` cho `VoucherUsage`, và **27 chốt `throw;` ở tầng Controller** —
+mảnh ghép mà nếu thiếu thì `ConflictExceptionHandler` là code chết. **LoadProbe 9/9 ĐẠT ở CẢ
+HAI cấu hình.**
+
+**Chốt chặn đợt 3 đã tháo, và tháo bằng cách đo thứ đáng đo, ở local, $0** — LoadProbe tạo dữ
+liệu bẩn thật rồi áp migration lên chính nó, thay vì chạy script trên một RDS chưa có luồng
+nghiệp vụ nào từng chạy. Chi tiết ở mục 🅶.
+
+**Từ đây trở đi không còn gì bị chặn.** Gói 4 chạy local + `terraform plan`, **$0**.
 
 Đã đóng: **18/18 call-site transaction retry-safe** (mục A) · **23/23 nút mutation dùng
 `ActionButton`/`BusyScope`** (mục B) · **`tools/LoadProbe/` 9 kịch bản + `docker-compose`
 2 replica + nginx round-robin** (mục C) · **10/10 lỗ hổng NuGet High + cổng chặn ở CI**
-(mục D), tất cả xong 2026-08-31.
+(mục D), xong 2026-08-31 · **rò rỉ `ex.Message` sạch cả ba tầng** (🅴 · 🅷 · 🅸) ·
+**đợt 3** (gói 2 + gói 3), xong 2026-09-01.
 
 ---
 
@@ -94,9 +101,9 @@ khác nhau.
 | Gói | Nội dung | Chạy ở đâu | Tiền | Gói coi là XONG khi |
 |---|---|---|---|---|
 | ~~**1**~~ ✅ **XONG 2026-09-01** | ~~mục 🅸 (124 chỗ, tầng Client) + nửa tầng Service của nợ 🧪~~ — cả hai đã xong, có ca đối chứng ([🅸](evidence/ui/2026-09-01-muc-I-ro-ri-tang-client.md) · [🧪](evidence/ui/2026-09-01-no-kiem-thu-nua-tang-service.md)) | local | $0 | ✅ đạt cả hai điều kiện |
-| **2** ⬅ *nửa code XONG, nửa AWS DỪNG* | **tháo chặn đợt 3** (`pre_migration_checks.sql` trên RDS) + **đợt 3 phần 1**: SEQUENCE thay ruột `IDocumentCodeGenerator` + `IExceptionHandler` → 409 | local + **một** cửa sổ RDS | **< $0.01** | ✅ **S01 đã chuyển 🔴 → ✅** · ⚠️ hai câu hỏi nghiệp vụ: **một trả lời được, một KHÔNG** — xem mục 🅶 |
-| **3** | **đợt 3 phần 2**: `RowVersion` 6 entity + 3 unique index + bắt `DbUpdateConcurrencyException` | local | **$0** | **S04 · S06 · S08 chuyển 🔴 → ✅ ở CẢ HAI cấu hình** |
-| **4** | **đợt 4**: DataProtection → SSM · connection pool · bộ số shutdown 30/45/90 · `ICacheService` | local + `terraform plan` | **$0** | `plan` sạch, build sạch, 6 file `.tftest.hcl` chưa đụng tới |
+| ~~**2**~~ ✅ **XONG 2026-09-01** | ~~**đợt 3 phần 1**: SEQUENCE thay ruột `IDocumentCodeGenerator` + `IExceptionHandler` → 409~~ · **S01 🔴 → ✅** (50/50 đơn) | local | **$0** | ✅ đạt |
+| ~~**3**~~ ✅ **XONG 2026-09-01** | ~~**đợt 3 phần 2**: `RowVersion` 6 entity + 3 unique index + bắt `DbUpdateConcurrencyException`~~ · **S03 · S04 · S06 · S08 · S09 đều 🔴 → ✅** ([bằng chứng](evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md)) | local | **$0** | ✅ **vượt tiêu chí** — 9/9 ở cả hai cấu hình, không chỉ 3 kịch bản yêu cầu |
+| **4** ⬅ **kế tiếp** | **đợt 4**: DataProtection → SSM · connection pool · bộ số shutdown 30/45/90 · `ICacheService` | local + `terraform plan` | **$0** | `plan` sạch, build sạch, 6 file `.tftest.hcl` chưa đụng tới |
 | **5** | **đợt 5**: Terraform scale-out + autoscale hai tầng + sửa 6 file test | AWS | ~$1 | 2 task trên 2 instance khác nhau, deploy 0 downtime |
 | **6** | **đợt 6**: đo tải + 7 hình + báo cáo | AWS | vài $ | báo cáo xong |
 
@@ -480,7 +487,16 @@ Còn nửa chưa xác minh: con số ~950–985 MiB khả dụng, cần
 
 ---
 
-### 🅵 Kết quả đo — **5/9 bất biến ĐÃ TỪNG SAI**, đọc trước khi làm đợt 3
+### ✅ 🅵 Kết quả đo — **6/9 bất biến ĐÃ TỪNG SAI, nay 9/9 ĐẠT**
+
+> ✅ **Cập nhật 2026-09-01, sau gói 3: cả 9 kịch bản ĐẠT ở CẢ HAI cấu hình,** `0 KHÔNG KẾT LUẬN`.
+> Bảng bốn cột bên dưới là **hồ sơ lịch sử** — nó ghi lại *chỗ nào từng sai và vì sao*, và vẫn
+> đáng đọc trước khi động vào tầng Service. Kết quả hiện tại + cái gì đóng từng lỗi: xem
+> [mục 🅶](#-🅶-đợt-3--xong-trọn-vẹn-2026-09-01-gói-2--gói-3) và
+> [bằng chứng gói 3](evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md).
+>
+> 🔴 **Con số đổi từ 5 thành 6** vì S03 lộ ra ở gói 2: nó xanh trước đó **chỉ vì lỗi S01 giết
+> 9/10 request trước khi logic voucher kịp chạy** (bẫy #17).
 
 `0 KHÔNG KẾT LUẬN` ở **cả bốn** lần chạy, tức không có phép đo nào bị rate limiter làm rỗng.
 
@@ -1058,124 +1074,95 @@ thay chuỗi. Nhét vào gói 1 là làm gói 1 tràn. Ứng viên cho gói 4 ho
 
 ---
 
-### 🅶 Đợt 3 — **nửa CODE xong, nửa AWS dừng vì tiền đề SAI**
+### ✅ 🅶 Đợt 3 — **XONG TRỌN VẸN 2026-09-01** (gói 2 + gói 3)
 
-#### ✅ Phần 1 phần code — XONG 2026-09-01, đã đo
+**Kết quả: LoadProbe 9/9 ĐẠT ở CẢ HAI cấu hình, `0 KHÔNG KẾT LUẬN`.** Năm bất biến từng sai
+(S01 · S03 · S04 · S06 · S08 · S09 — sáu, tính cả S03 lộ ra ở gói 2) nay đều xanh.
+[Bằng chứng đầy đủ](evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md).
 
-Bằng chứng đầy đủ: [`evidence/loadprobe/2026-09-01-muc-G-sequence-va-409.md`](evidence/loadprobe/2026-09-01-muc-G-sequence-va-409.md)
-
-| Việc | Kết quả |
-|---|---|
-| **SEQUENCE thay ruột `IDocumentCodeGenerator`** | **S01: 🔴 → ✅** · `200×50`, 50 mã phân biệt (trước: `200×12, 400×38`) |
-| Xoá 5 `GetCodesByDatePrefixAsync` | `grep` → **0**. Xoá chứ không để lại. |
-| Migration `AddDocumentCodeSequences` | 5 `CreateSequence`, **không đổi bảng nào**; đã kiểm **đảo được cả hai chiều** (`0 → 5`) |
-| **`ConflictExceptionHandler` → 409** | đã đo 3 ca, **kèm ca đối chứng âm** (exception không phải xung đột → vẫn 500) |
-
-Hai điểm thiết kế cần biết trước khi động vào:
-
-- **Sequence TOÀN CỤC, không reset theo ngày.** Chính yêu cầu "reset mỗi ngày" là thứ bắt buộc
-  phải có `SELECT MAX`, tức **là** nguyên nhân của race. Bỏ reset = bỏ nguyên nhân.
-  Hệ quả: dãy mã **có lỗ** (`NEXT VALUE FOR` không mang tính giao dịch), và số trong mã **không**
-  còn là "chứng từ thứ N". Trần: cột `nvarchar(20)` ⇒ tiền tố 3 ký tự chịu tối đa **7 chữ số**.
-- **`ConflictExceptionHandler` HIỆN chưa với tới được từ đường nghiệp vụ nào** — mọi service đều
-  `catch (Exception)` và nuốt `DbUpdateException` trước khi nó thoát ra middleware. Đây **đúng
-  như kế hoạch sắp xếp** (việc `throw;` lại nằm ở phần 2 cùng `RowVersion`), và là cùng khuôn
-  "dựng bên nhận trước" đã dùng ở đợt 2 với ánh xạ 409 phía client. Giá trị của việc đo hôm nay:
-  gói 3 gắn `RowVersion` vào và **biết chắc dây nối đã sống**.
-
-#### 🚨 Đọc bảng 9 kịch bản cho đúng — sửa S01 đã THÁO MẤT một tấm lưới an toàn
-
-Sau khi sửa: **4 đạt / 5 hỏng / 0 không kết luận** (1 instance). Lần trước: **5 đạt / 4 hỏng**.
-Trông như đi lùi. **Không phải.**
-
-| # | Trước | Sau | |
+| # | Trước đợt 3 | Nay | Cái gì đóng nó |
 |---|---|---|---|
-| S01 | 🔴 | **✅** | đã sửa bằng SEQUENCE |
-| S03 | ✅ | **🔴** | **lộ ra**, không phải mới hỏng |
-| S04 | ✅ | 🔴 | phụ thuộc thời điểm, đã trong hợp "đã từng sai" |
-| S06 · S08 · S09 | 🔴 | 🔴 | đã biết — việc của gói 3 |
-| S02 · S05 · S07 | ✅ | ✅ | không đổi |
+| S01 | 🔴 12/50 đơn | ✅ 50/50 | SQL SEQUENCE (gói 2) |
+| S03 | 🔴 10 lượt | ✅ 1 | unique index **+ kiểm lại hạn mức TRONG transaction** |
+| S04 | 🔴 2 phiếu mở | ✅ 1 | filtered unique index |
+| S06 | 🔴 sổ nhân 5 | ✅ 1 | unique index tổ hợp |
+| S08 | 🔴 2 báo giá Pending | ✅ 1 | **`RowVersion`**, không phải index |
+| S09 | 🔴 client bị đá | ✅ | conditional update trên rotation |
 
-**Bằng chứng S03 là "lộ ra" chứ không phải "mới hỏng"** — so mã HTTP của chính nó:
+> ⚠️ **S03 · S04 · S07 · S08 phụ thuộc thời điểm** nên được chạy **5 lần** ở cấu hình 2
+> instance, không phải một. Lý do ở ngay dưới — nó không phải cẩn thận thừa.
 
-| | Mã HTTP | `COUNT(VoucherUsages)` | |
-|---|---|---|---|
-| Trước SEQUENCE | **`200×1, 400×9`** | 1 | ✅ |
-| Sau SEQUENCE | **`200×10`** | **10** | 🔴 |
+#### 🔴 Ba phát hiện — đọc trước khi viết code mới
 
-S03 bắn 10 checkout của **cùng một khách** với `MaxUsesPerUser = 1`. Trước đây **9/10 request
-chết ngay ở bước sinh mã đơn** — tức đúng lỗi S01 — nên chỉ 1 request tới được logic voucher và
-bất biến đúng **một cách tình cờ**. Sửa S01 xong, cả 10 tới được, và check-then-act ở đường
-"số lượt mỗi người" hiện nguyên hình.
+**1. `RowVersion` đóng S08, KHÔNG phải unique index.** Kế hoạch chỉ liệt kê ba index, không
+có cái nào cho `Quotations`, và cược rằng `RowVersion` trên `ServiceTicket` là đủ vì hai lời
+gọi `create-quotation` đều ghi `ticket.Status = 2`. Cược đúng, và mã HTTP chứng minh:
+`200×2` → **`200×1, 409×1`**, câu của kẻ thua là nhánh `DbUpdateConcurrencyException`.
+Không thêm index nào.
 
-> 🔴 **Và đây là phần đáng lo nhất: chốt `KHÔNG KẾT LUẬN` KHÔNG bắt được ca này.** Bộ đo báo
-> `0 KHÔNG KẾT LUẬN` ở **cả hai** lần chạy, đúng — 9 request kia **thật sự đã chạy** và **thật
-> sự trả `400`**. Bộ đo không có cách nào biết `400` đó đến từ **một lỗi khác** chứ không từ bất
-> biến đang đo. Đã ghi thành **bẫy #17**.
+**2. 🚨 Unique index KHÔNG tự bảo vệ một hạn mức ĐẾM ĐƯỢC.** Đây là chỗ tôi sai và phải
+sửa lại. `UQ_VoucherUsages_UserId_VoucherId_SeqPerUser` chỉ chặn **hai insert cùng một số
+thứ tự** — nó **không biết** `MaxUsesPerUser`:
 
-#### 🔴 Phần AWS — DỪNG, và lý do thứ hai mới là lý do thật
+| | Diễn biến | Index |
+|---|---|---|
+| (a) | hai request **đọc chồng nhau** → cùng `seq = 1` | chặn ✅ |
+| (b) | hai request **bị tuần tự hoá** → kẻ sau đọc `MAX = 1` → `seq = 2` | **cho qua** 🔴 |
 
-RDS đã bật (`available` sau **~16 phút**, hơi lâu hơn con số ~14 phút đã ghi) và **đã tắt lại
-ngay** khi rõ cửa sổ này không dùng được — theo đúng **dấu hiệu dừng #2**.
+Ở (b), chốt `MaxUsesPerUser` nằm ngoài transaction nên đã đọc `count = 0` từ trước khi kẻ
+trước commit → khách dùng 2 lượt. **Lần chạy 1: ✅. Lần chạy 2: 🔴 `200×2`. Không một dòng
+code nào đổi giữa hai lần.** Sửa: kiểm lại hạn mức **bên trong** delegate, ngay sau câu
+`MAX`. Giữ **cả hai** chốt.
 
-**Lý do 1 — RDS không với tới được từ máy local, có chủ đích.**
+> 🔴 **Nếu tôi dừng ở lần chạy đầu, tôi đã ghi "S03 XONG" cho một lỗi còn nguyên.** Luật bất
+> đối xứng của tài liệu này gặp ngoài đời, không phải lý thuyết.
 
-| Kiểm | Kết quả |
+**3. 🚨 `ConflictExceptionHandler` bị CONTROLLER nuốt — sửa ở Service là KHÔNG ĐỦ.**
+Sau khi thêm index, dữ liệu S03 đúng nhưng 9 kẻ thua nhận *"Không thể hoàn tất đặt hàng do
+lỗi hệ thống"*, trong khi log ghi rõ `SqlException 2601`. Chẩn đoán đầu của tôi sai: chốt
+`throw;` ở tầng Service **đã chạy đúng** mà 409 vẫn không tới. Nguyên nhân thật là
+[`OrdersController.cs:52`](../src/API/Controllers/Admin/OrdersController.cs#L52) — controller có
+`catch (Exception)` riêng, và `IExceptionHandler` **chỉ thấy exception ĐÃ THOÁT khỏi action**.
+
+Đã thêm **27 chốt `throw;`** ở action **mutation** trong 4 controller (cố ý bỏ 8 action GET).
+Kết quả: S03 `400×9` → **`409×9`**.
+
+> 🔴 **Phiên trước ghi *"handler chưa với tới được vì service nuốt `DbUpdateException`"* —
+> chẩn đoán đó CHƯA ĐỦ.** Service **và** controller, và controller mới là tường cuối. Trước
+> hôm nay `ConflictExceptionHandler` là **code chết cho mọi đường nghiệp vụ**.
+
+#### ✅ Chốt chặn đợt 3 — đã tháo bằng **lựa chọn 3**, ở local, $0
+
+Không chạy `pre_migration_checks.sql` trên RDS. Lý do vẫn đúng nguyên: RDS đó dựng mới từ
+Terraform + seeder nên chưa luồng nghiệp vụ nào từng chạy — kết quả "rỗng" ở đó nghĩa là
+*"chưa ai dùng"*, **không** nghĩa *"dữ liệu sạch"*. Thay vào đó: LoadProbe tạo **dữ liệu bẩn
+thật**, rồi áp migration lên chính nó.
+
+| Bước | Kết quả |
 |---|---|
-| `PubliclyAccessible` | **`false`** |
-| SG RDS inbound 1433 | **chỉ từ `hushstore-web-sg`**, **0 dải CIDR** |
-| EC2 đang chạy · SSM node · NAT gateway · ECS container instance | **0 · 0 · 0 · 0** |
+| 1. `--scenarios S06 --keep` trên code chưa sửa | 5 bản ghi trùng `(18, 1915)`, **cả 5 request `200`** |
+| 2. `pre_migration_checks.sql` CHECK 1 + 1b | 1 cặp trùng, 4 thừa, **`CostImpact` thừa 3.200.000 ₫** |
+| 3. `dotnet ef database update` | 🔴 `Error 1505`, nêu thẳng khoá trùng |
+| 4. **rollback có sạch không?** | ✅ **SẠCH HOÀN TOÀN** — 0 cột, 0 index, `__EFMigrationsHistory` không ghi nhận, 2 index cũ còn nguyên |
+| 5. script dọn + migration lại | 4 lưu trữ + xoá, `CostImpact` 4.000.000 → 800.000 ₫, migration xanh |
 
-Đây là **thành quả bảo mật đã nghiệm thu** (`evidence/acc-551897327153/kb03-rds-tu-internet.txt`).
-🚨 **Đừng mở CIDR cho IP máy local** — đó là tự tay tháo một deliverable.
-`hushstore-seeder` có sẵn `sqlcmd` và đã nối `DB_PASSWORD` từ SSM, nhưng task definition đó là
-**`EC2` + `bridge`**, cần container instance mà hiện có 0. Đăng ký một task definition **Fargate**
-tạm (dùng lại đúng image + execution role + secret) là đường đi đúng, nhưng nó **tạo hạ tầng AWS**
-nên cần bạn cho phép.
+Bước 4 là thứ đáng tiền nhất và là câu mà RDS rỗng **không thể** trả lời. EF bọc cả migration
+trong một transaction — biết trước điều này khác hẳn phát hiện nó lúc production hỏng dở dang.
 
-**Lý do 2 — câu trả lời sẽ gần như vô nghĩa. Đây mới là lý do thật.**
+⚠️ **Migration có HAI CHỐT CHẶN sẽ `THROW`** nếu DB đích có dữ liệu xung đột, kèm câu chỉ
+thẳng `Infrastructure/db/fixes/dedupe_inventory_adjustment_logs.sql`. Cố ý: xoá bản ghi kế
+toán là **quyết định nghiệp vụ**. Ngược lại backfill `SeqPerUser` thì migration **tự làm** —
+ranh giới là *"có xoá gì / có mất thông tin gì không"*, không phải *"khó hay dễ"*.
 
-Tiền đề của mục này là *"chạy trên DB local là vô nghĩa: local gần như rỗng"*, hàm ý **RDS có dữ
-liệu thật**. **Tiền đề đó SAI.** `evidence/acc-551897327153/kb00-migration-va-seed.txt` ghi RDS này
-dựng **mới hoàn toàn 2026-08-24** bằng `efbundle` + seeder, nội dung sau seed:
+#### Hai câu hỏi nghiệp vụ của kế hoạch gốc — nay trả lời được cả hai
 
-```
-AppRoles = 3 · AppUsers = 1 · Categories = 18 · Manufacturers = 21
-Products = 49 · ProductVariants = 52
-```
-
-**Không có** `Orders`, `ProductSerials`, `InventoryChecks`, `InventoryAdjustmentLogs`,
-`VoucherUsages`, `ServiceTickets`. Ba bảng script cần soi chỉ sinh ra khi **chạy luồng nghiệp vụ
-qua API**, mà trên account này chỉ có 13 kịch bản kiểm **bảo mật/hạ tầng** (KB01–KB13) từng chạy.
-Đã kiểm nốt: `408194747451` **không có RDS nào**; `667836586836` là account cũ đã bỏ, token SSO
-hết hạn. **Không account nào trong dự án có database mang lịch sử production.**
-
-**Hệ quả: blocker của đợt 3 không phải cái mục này vẫn ghi.**
-
-| Vẫn ghi | Thực tế |
-|---|---|
-| "Chưa chạy `pre_migration_checks.sql` trên RDS" | "**Không tồn tại** database có lịch sử production để chạy nó" |
-
-| Câu hỏi | Trả lời được? |
-|---|---|
-| *"Migration thêm unique index có FAIL trên DB đích không?"* | ✅ **Được** — gần chắc chắn **không fail**, vì DB đích không có dữ liệu xung đột |
-| *"Dữ liệu đã bị lỗi nhân bản `InventoryAdjustmentLogs` làm bẩn chưa?"* | ❌ **Không** — cần lịch sử production, thứ không tồn tại |
-
-🚨 **Ghi "✅ rỗng ⇒ an toàn tạo unique index" vào tài liệu là chế tạo niềm tin giả.** Rỗng ở đây
-nghĩa là *"chưa luồng nghiệp vụ nào từng chạy trên DB này"*, **không** nghĩa là *"lỗi chưa gây
-thiệt hại"*. Cùng họ với bẫy #8 và #17 — và là lý do phép đo bị **dừng** thay vì chạy cho có số.
-
-#### Ba lựa chọn — cần bạn quyết trước khi bắt đầu gói 3
-
-1. **Tuyên bố blocker vô hiệu** *(khuyến nghị, $0)* — DB đích không có dữ liệu xung đột nên
-   migration không thể fail; ghi thẳng rằng câu hỏi thứ hai **không trả lời được trong phạm vi dự
-   án này**, rồi đi tiếp gói 3.
-2. **Vẫn chạy script để có số cho báo cáo** — cần bạn cho phép đăng ký một ECS task definition tạm
-   + một cửa sổ RDS nữa. Kết quả **biết trước là rỗng**; giá trị duy nhất là "đã chạy trên RDS thật".
-3. **Đo thứ thực sự đáng đo, ở local, $0** *(khuyến nghị nếu muốn số có sức nặng)* — dùng LoadProbe
-   tạo dữ liệu bẩn **thật** (S06 tái hiện lỗi nhân bản `InventoryAdjustmentLogs` ngay lần chạy đầu),
-   rồi thử áp migration unique index lên **chính** dữ liệu bẩn đó. Cái này kiểm được điều mà cả hai
-   lựa chọn trên không kiểm: **migration xử lý xung đột ra sao khi thật sự có xung đột.**
+1. **`MaxUsesPerUser` có dùng giá trị > 1 không?** — **Câu trả lời không nằm ở dữ liệu.**
+   Validator chỉ yêu cầu `> 0` ([`VoucherValidators.cs:48`](../src/Shared/Validators/Vouchers/VoucherValidators.cs#L48)),
+   tức app **cho phép** đặt 3. Dữ liệu toàn `NULL` là *ngẫu nhiên*, không phải hợp đồng — nên
+   unique `(UserId, VoucherId)` là **sai**: nó sẽ chặn oan lần dùng thứ hai của một voucher
+   hợp lệ, và lỗi chỉ hiện khi có người thật dùng tính năng đó. Đã đi nhánh `SeqPerUser`.
+2. **`InventoryAdjustmentLog` có bản ghi trùng sẵn không?** — trên DB **có lịch sử** thì rất
+   có thể **CÓ**: lỗi này tái hiện được ngay lần chạy đầu. Script dọn đã có và đã chạy thật.
 
 ---
 
@@ -1366,7 +1353,7 @@ Nó tự dọn dữ liệu trước và sau. Mã thoát: `0` đạt hết · `1`
 
 ---
 
-## 5. Mười bảy cái bẫy im lặng đã gặp — đọc trước khi sửa code
+## 5. Hai mươi cái bẫy im lặng đã gặp — đọc trước khi sửa code
 
 Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ ra khi đo.
 
@@ -1461,6 +1448,26 @@ Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ
     voucher và bất biến "đúng 1 lượt" đúng **một cách tình cờ**. Sửa S01 xong → `200×10` →
     `COUNT(VoucherUsages) = 10`. Lỗi check-then-act đó **đã có từ trước**, chỉ bị một lỗi khác che.
 
+18. 🚨 **Unique index KHÔNG bảo vệ một hạn mức ĐẾM ĐƯỢC.** Nó chặn hai bản ghi cùng khoá, thế
+    thôi. `UQ_VoucherUsages_UserId_VoucherId_SeqPerUser` chặn hai insert cùng `SeqPerUser`, nhưng
+    **không biết `MaxUsesPerUser`** — hai request bị *tuần tự hoá* thì kẻ sau đọc `MAX = 1`, dùng
+    `seq = 2` và **đi qua index**. Chỉ cặp *đọc chồng nhau* mới bị chặn. Hạn mức phải kiểm **lại
+    bên trong transaction**. Đã đo: S03 ✅ lần chạy đầu, 🔴 `200×2` lần sau, **không dòng code nào
+    đổi**.
+
+19. 🚨 **`IExceptionHandler` chỉ thấy exception ĐÃ THOÁT khỏi action — `catch (Exception)` trong
+    controller là một bức tường trước middleware.** Sửa ở tầng Service là **không đủ**: chốt
+    `throw;` ở `OrderService` chạy đúng (log ghi "trùng khoá duy nhất") mà 409 vẫn không tới, vì
+    `OrdersController` bắt trước. Triệu chứng đánh lừa hoàn hảo — người dùng nhận "lỗi hệ thống",
+    log server ghi đúng `SqlException 2601`, và tầng Service *trông như* đã đúng.
+
+20. **`SELECT TOP(0) * INTO bang_moi FROM bang_cu` KẾ THỪA cả thuộc tính IDENTITY.** Câu
+    `INSERT … SELECT l.*` sau đó chết với `Msg 8101 — An explicit value for the identity column…`.
+    Bảng lưu trữ phải khai `CREATE TABLE` tường minh. Hai họ hàng gặp cùng lúc: **subquery trong
+    `PRINT`** → `Msg 1046`; và **CTE `UPDATE` phải chiếu cột đích**, nếu không SQL Server báo
+    `Invalid column name 'X'` — nghe y hệt "cột chưa được tạo" dù nó đã tạo rồi, nên rất dễ đi
+    điều tra sai hướng.
+
     Phần nguy hiểm: bộ đo báo **`0 KHÔNG KẾT LUẬN`** ở **cả hai** lần chạy, và báo **đúng** — 9
     request kia thật sự đã chạy và thật sự trả `400`, không hề bị rate limiter chặn. Chốt của bẫy
     #8 chỉ phân biệt được "phép đo rỗng" với "phép đo chạy"; nó **không** phân biệt được `400` đến
@@ -1512,6 +1519,35 @@ grep -rlc 'ILogger<' --include='*ClientService.cs' src/Client/Services/ | wc -l 
 # ⚠️ ĐỪNG thay script này bằng `grep 'ex.Message'`. grep không biết dòng đó nằm trong
 #    khối catch NÀO, nên nó đếm cả 41 chỗ relay ĐÚNG (từ catch nghiệp vụ) thành lỗi.
 #    Bản trước của mục 🅷 đếm bằng grep và phóng đại: báo 7 chỗ ở tầng Service, thật ra 2.
+
+# 🅶 — ĐỢT 3: concurrency token + unique index + chốt controller
+grep -rc '\[Timestamp\]' --include='*.cs' src/Core/Entities/ | grep -v ':0'
+#   kỳ vọng tổng 6: InventoryEntities=2 · ServiceEntities=3 · SaleEntities=1
+#   (ProductSerial · InventoryCheck · ServiceTicket · Quotation · RmaShipment · Order)
+
+grep -c 'IsUnique()' src/Infrastructure/Data/HushStoreDbContext.cs        # >= 3 index mới
+grep -c 'UQ_ServiceTickets_SerialId_Open\|UQ_InventoryAdjustmentLogs_AuditCheckId_SerialId\|UQ_VoucherUsages_UserId_VoucherId_SeqPerUser' \
+  src/Infrastructure/Data/HushStoreDbContext.cs                          # kỳ vọng 3
+
+# 🚨 CHỐT QUAN TRỌNG NHẤT của đợt 3, và là chốt DUY NHẤT không suy ra được từ tầng Service.
+#    ConflictExceptionHandler là IExceptionHandler nên nó CHỈ thấy exception ĐÃ THOÁT khỏi
+#    action. Thiếu nhóm chốt này thì handler 409 là CODE CHẾT — và không có gì báo lỗi.
+grep -rc 'catch (DbUpdateConcurrencyException)' --include='*.cs' src/API/Controllers/ | grep -v ':0'
+#   kỳ vọng tổng 27, ở ĐÚNG 4 file:
+#     OrdersController=6 · ServiceTicketsController=17 · CartController=3 · ServiceInvoicesController=1
+#   Cố ý KHÔNG có ở 8 action GET — endpoint đọc không sinh được hai loại exception này.
+
+grep -rc 'catch (DbUpdateConcurrencyException)' --include='*.cs' src/Service/ | grep -v ':0'
+#   kỳ vọng tổng 10 (6 file). AnalyticsService cố ý KHÔNG có: 6 chỗ catch của nó là read-only.
+
+# 🅶 — vị từ filtered index PHẢI khớp HasOpenTicketForSerialAsync. Không có cách nào để trình
+#      biên dịch kiểm hộ, nên đây là chốt bằng mắt: hai lệnh dưới phải ra CÙNG một tập trạng thái.
+grep -n 'HasFilter' src/Infrastructure/Data/HushStoreDbContext.cs
+grep -n 'terminalStates = ' src/Infrastructure/Repositories/ServiceTicketRepository.cs
+
+# 🅶 — chốt chặn dữ liệu của migration còn nguyên (đừng "dọn cho gọn")
+grep -c 'THROW 5000' src/Infrastructure/Migrations/*_AddConcurrencyTokensAndUniqueIndexes.cs  # 2
+test -f Infrastructure/db/fixes/dedupe_inventory_adjustment_logs.sql && echo "script dọn: CÓ"
 
 # E — khuôn hai tầng còn nguyên ở OrderService (nơi mục 🅴 sửa)
 grep -c 'throw new BusinessRuleException' src/Service/Orders/OrderService.cs   # kỳ vọng: 14
