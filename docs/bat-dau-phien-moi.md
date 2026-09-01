@@ -1,20 +1,28 @@
 # Bắt đầu phiên mới — đọc file này trước
 
-**Cập nhật:** 2026-09-01 · **Trạng thái repo:** trên `main` (sạch, `d179663`), build
+**Cập nhật:** 2026-09-01 · **Trạng thái repo:** nhánh `fix/muc-I-client-error-leaks`, build
 `0 Error(s)` / 184 cảnh báo · **RDS đang TẮT**
-· **Đã xong:** đợt 1, mục 4.1, đợt 2, **A**, **B**, **C**, **D**, **🅴**, **🅷**,
-**nợ 🧪 ưu tiên 1 + nửa giao diện của ưu tiên 2**
-· **Kế tiếp:** **gói 1** — xem bảng gói ở §2. Việc còn lại đã được **gộp thành 6 gói, mỗi gói
-vừa một phiên**; đừng làm theo thứ tự mục chữ cái, làm theo thứ tự gói.
+· **Đã xong:** đợt 1, mục 4.1, đợt 2, **A**, **B**, **C**, **D**, **🅴**, **🅷**, **🅸**,
+**nợ 🧪 ưu tiên 1 + 2 (cả nửa giao diện lẫn nửa tầng Service)** — tức **gói 1 XONG**
+· **Kế tiếp:** **gói 2** — tháo chặn đợt 3 (`pre_migration_checks.sql` trên RDS) + SEQUENCE.
+Đây là **điểm quyết định**: gói 2 cần một cửa sổ RDS (~14 phút bật, < $0.01).
+Việc còn lại vẫn gộp thành **6 gói, mỗi gói một phiên** — xem bảng ở §2.
 
 > 🚦 **Nếu bạn chỉ đọc được một khối, đọc §2.** Nó nói phiên này làm gì, dừng ở đâu, và bàn
 > giao cái gì. Mọi mục chữ cái (🅰…🅸) ở §2bis là **hồ sơ tra cứu**, không phải danh sách việc.
 
-> 🧪 **Đừng tin dòng "XONG" nào ở dưới trước khi đọc mục 🧪.** Ranh giới đã dịch hai lần trong
-> phiên 2026-08-31 (chiều): luồng **Checkout đã chạy thật tới DB**, và **cả 6 nút double-submit
-> hỏng thật của mục B đã được đo — 6/6 khoá đúng, kèm ca đối chứng âm cho 3 dialog**
-> ([bằng chứng](evidence/ui/2026-08-31-6-nut-double-submit.md)). Còn lại: **POS · xuất/nhập kho ·
-> phiếu dịch vụ** chưa ai bấm tay hết luồng nghiệp vụ (nút thì đã đo, *luồng* thì chưa).
+> 🧪 **Đừng tin dòng "XONG" nào ở dưới trước khi đọc mục 🧪.** Ranh giới đã dịch lần thứ ba
+> trong phiên 2026-09-01: **POS · nhập kho · xuất kho · phiếu dịch vụ nay đã chạy thật tới DB**,
+> 4/4 luồng ĐẠT, 0 bản ghi nhân đôi
+> ([bằng chứng](evidence/ui/2026-09-01-no-kiem-thu-nua-tang-service.md)). Cùng với Checkout
+> (2026-08-31) và 6/6 nút double-submit
+> ([bằng chứng](evidence/ui/2026-08-31-6-nut-double-submit.md)), **nợ 🧪 ưu tiên 1 và 2 đã trả**.
+>
+> ⚠️ **Hai giới hạn còn lại, đừng đọc rộng hơn:** (1) bốn luồng trên đo bằng **gọi API với JWT
+> admin thật**, không click qua Blazor — nên nó chứng minh **tầng Service** (mục 🅰), không
+> chứng minh trang Razor bind đúng DTO; (2) chưa ép được **retry** thật, nên chế độ hỏng
+> *"`Add` hai lần sau retry"* mới bị bác bỏ trong phạm vi các lần chạy đã thực hiện, chưa bác bỏ
+> tuyệt đối. Muốn đóng hẳn phải bơm lỗi transient của SQL Server.
 
 > ⚠️ **Đọc con số "5/9 bất biến SAI" cho đúng: đó là HỢP của mọi lần chạy, không phải ảnh
 > chụp một lần.** Phiên này chạy đủ 9 kịch bản ở **cả hai** cấu hình và ra **4 HỎNG mỗi
@@ -55,8 +63,14 @@ luận từ đọc code*. Nay có **số đo**: LoadProbe chạy 9 kịch bản,
 **5/9 bất biến SAI**. Chi tiết ở mục 🅵 bên dưới — đọc trước khi động vào đợt 3, vì nó xếp
 lại thứ tự ưu tiên.
 
-**Không còn thứ nào cố ý làm dở.** Việc duy nhất còn lại là **đợt 3**, và nó bị chặn bởi
-một thứ ở ngoài repo (phải chạy script kiểm tra trên RDS) chứ không phải bởi lựa chọn.
+**Gói 1 đã xong (2026-09-01).** Mục 🅸 sạch 124/124 chỗ ở tầng Client, 18/18 file có
+`ILogger<T>`; và bốn luồng nghiệp vụ cuối (POS · nhập kho · xuất kho · phiếu dịch vụ) **đã chạy
+thật tới DB**, 4/4 ĐẠT.
+
+**Không còn thứ nào cố ý làm dở, và cũng không còn việc nào chạy được ở local mà chưa làm.**
+Việc duy nhất còn lại là **đợt 3**, và nó bị chặn bởi một thứ ở ngoài repo (phải chạy script
+kiểm tra trên RDS) chứ không phải bởi lựa chọn. **Mọi việc tiếp theo đều cần một cửa sổ RDS
+hoặc AWS** — đó là lý do gói 1 kết thúc ở đúng đây.
 
 Đã đóng: **18/18 call-site transaction retry-safe** (mục A) · **23/23 nút mutation dùng
 `ActionButton`/`BusyScope`** (mục B) · **`tools/LoadProbe/` 9 kịch bản + `docker-compose`
@@ -74,8 +88,8 @@ khác nhau.
 
 | Gói | Nội dung | Chạy ở đâu | Tiền | Gói coi là XONG khi |
 |---|---|---|---|---|
-| **1** ⬅ *kế tiếp* | **mục 🅸** (124 chỗ, tầng Client) + **nửa tầng Service của nợ 🧪** (POS · xuất/nhập kho · phiếu dịch vụ) | local | **$0** | không còn việc nào **không bị chặn**; và bạn đã quyết định có bật RDS hay không |
-| **2** | **tháo chặn đợt 3** (`pre_migration_checks.sql` trên RDS) + **đợt 3 phần 1**: SEQUENCE thay ruột `IDocumentCodeGenerator` + `IExceptionHandler` → 409 | local + **một** cửa sổ RDS | **< $0.01** | **S01 chuyển 🔴 → ✅** và hai câu hỏi nghiệp vụ đã có câu trả lời |
+| ~~**1**~~ ✅ **XONG 2026-09-01** | ~~mục 🅸 (124 chỗ, tầng Client) + nửa tầng Service của nợ 🧪~~ — cả hai đã xong, có ca đối chứng ([🅸](evidence/ui/2026-09-01-muc-I-ro-ri-tang-client.md) · [🧪](evidence/ui/2026-09-01-no-kiem-thu-nua-tang-service.md)) | local | $0 | ✅ đạt cả hai điều kiện |
+| **2** ⬅ *kế tiếp* | **tháo chặn đợt 3** (`pre_migration_checks.sql` trên RDS) + **đợt 3 phần 1**: SEQUENCE thay ruột `IDocumentCodeGenerator` + `IExceptionHandler` → 409 | local + **một** cửa sổ RDS | **< $0.01** | **S01 chuyển 🔴 → ✅** và hai câu hỏi nghiệp vụ đã có câu trả lời |
 | **3** | **đợt 3 phần 2**: `RowVersion` 6 entity + 3 unique index + bắt `DbUpdateConcurrencyException` | local | **$0** | **S04 · S06 · S08 chuyển 🔴 → ✅ ở CẢ HAI cấu hình** |
 | **4** | **đợt 4**: DataProtection → SSM · connection pool · bộ số shutdown 30/45/90 · `ICacheService` | local + `terraform plan` | **$0** | `plan` sạch, build sạch, 6 file `.tftest.hcl` chưa đụng tới |
 | **5** | **đợt 5**: Terraform scale-out + autoscale hai tầng + sửa 6 file test | AWS | ~$1 | 2 task trên 2 instance khác nhau, deploy 0 downtime |
@@ -102,9 +116,22 @@ hai bước thay vì một. Nếu bạn muốn giữ đúng một migration, nó
 
 ---
 
-### 📋 Gói 1 — công thức đầy đủ, chạy từ trên xuống
+### ✅ 📋 Gói 1 — **ĐÃ CHẠY XONG 2026-09-01**, giữ lại làm công thức dựng môi trường
 
-Đây là gói kế tiếp. Ba phần, làm đúng thứ tự này vì phần sau dùng lại môi trường của phần trước.
+> Gói 1 xong. Công thức dưới đây **vẫn còn giá trị** vì Phần 0 là cách dựng môi trường local $0
+> nhanh nhất, và **gói 2 cần đúng môi trường đó**. Phần 1 và Phần 2 giữ lại để tra cách đo.
+>
+> **Kết quả:** 🅸 sạch 124/124 + 18/18 file có `ILogger<T>` (2 ca đối chứng ĐẠT) · nợ 🧪 nửa tầng
+> Service 4/4 luồng ĐẠT · chốt `S02,S05` 2 ĐẠT / 0 KHÔNG KẾT LUẬN · nguyên trạng DB đã trả về đủ.
+> Bằng chứng: [🅸](evidence/ui/2026-09-01-muc-I-ro-ri-tang-client.md) ·
+> [🧪](evidence/ui/2026-09-01-no-kiem-thu-nua-tang-service.md)
+>
+> ⚠️ **Một chệch khỏi công thức, cố ý, cần biết:** Phần 2 ghi *"bấm tay trên giao diện"*; phép đo
+> thật chạy là **gọi API bằng JWT admin thật**. Lý do + cái nó không chứng minh: §"⚠️ Phép đo này
+> đo TẦNG SERVICE" trong file bằng chứng 🧪. Đổi lại, toàn bộ phép đo là `curl` + `sqlcmd` nên
+> **chạy lại được**, khác một phiên click tay chỉ dùng được một lần.
+
+Ba phần, làm đúng thứ tự này vì phần sau dùng lại môi trường của phần trước.
 
 #### Phần 0 — dựng môi trường một lần (~10 phút)
 
@@ -233,6 +260,9 @@ lsof -ti tcp:5222 -ti tcp:5214 | xargs -r kill -9
 
 Rồi cập nhật chính file này: đánh dấu 🅸 xong, dịch ranh giới bảng 🟠, ghi bằng chứng vào
 `docs/evidence/`, và **hỏi bạn có bật RDS cho gói 2 không** (đó là điểm dừng của gói 1).
+
+✅ **Đã làm hết, 2026-09-01.** Điểm dừng đã tới: mọi việc còn lại cần một cửa sổ RDS/AWS.
+Câu hỏi đang chờ bạn trả lời: **bật RDS cho gói 2 hay chưa?**
 
 ---
 
@@ -646,18 +676,20 @@ vẫn sạch** — chỉ bung lúc chạy. Nên phép đo phải chứng minh **
 > `openapi 3.1.1` (bộ sinh sẵn của .NET). **Hai đường độc lập nhau** và cả hai đều còn chạy —
 > nên nợ này đóng cho cả hai, không chỉ đường Swashbuckle.
 
-#### 🟠 Ưu tiên 2 — nợ thừa hưởng từ mục A và B — **nửa GIAO DIỆN đã trả xong**
+#### ✅ Ưu tiên 2 — nợ thừa hưởng từ mục A và B — **ĐÃ TRẢ XONG CẢ HAI NỬA (2026-09-01)**
 
-**Đọc bảng này thay vì câu "bốn luồng chưa chạy thật" của bản cũ** — ranh giới đã dịch trong
-phiên 2026-08-31 (chiều), và nó dịch **không đều giữa hai nửa**:
+**Đọc bảng này thay vì câu "bốn luồng chưa chạy thật" của bản cũ.** Ranh giới đã dịch **hai
+lần**: nửa giao diện xong 2026-08-31, nửa tầng Service xong 2026-09-01. Nay **cả hai cột đều
+xanh**:
 
 | Luồng | Tầng Service (mục A — retry-safe) | Giao diện (mục B — nút double-submit) |
 |---|---|---|
 | Kiểm kê | ✅ đo tới DB từ trước | ✅ `SupplierDialog` + `CustomerDialog` |
 | **Checkout** | ✅ **đã đo** — đặt đơn end-to-end (`200` + `ORD-…`, serial thật) và 50 khách đồng thời, `LogError` khớp 1:1 với số 400 | ✅ **đã đo** — `Orders/OrderDetail` ×2 (kèm `BusyScope`), `Storefront/MyOrderDetail` |
-| POS | ❌ chưa chạy hết luồng nghiệp vụ | ✅ **đã đo** — `Pos/Index.SaveDraft` |
-| Xuất/nhập kho | ❌ chưa | — không có nút nào trong nhóm 6 |
-| Phiếu dịch vụ | ⚠️ *một phần* — S04/S05/S08 chạm `ServiceTicketService` qua API, chưa bấm tay hết luồng | ✅ **đã đo** — `ServiceTicketIntake`, `ServiceTicketQuotation` |
+| POS | ✅ **đã đo (2026-09-01)** — bán 1 serial → `POS-…`, `OrderSerials` +1, serial `Sold`, `Warranties` +1, **0 nhân đôi** | ✅ **đã đo** — `Pos/Index.SaveDraft` |
+| Nhập kho | ✅ **đã đo (2026-09-01)** — `ImportReceipts` +1, +3 serial `Available`, `StockQuantity == COUNT` ở **4/4** variant | — không có nút nào trong nhóm 6 |
+| Xuất kho | ✅ **đã đo (2026-09-01)** — serial → `Sold`, **đúng 1** `OrderSerial` cho `OrderDetail` `Quantity=1`, kèm ca đối chứng âm (xuất khi chưa `Confirmed` → bị chặn bằng câu tiếng Việt) | — |
+| Phiếu dịch vụ | ✅ **đã đo (2026-09-01)** — **hai** nhánh (bảo hành `InternalRepair` + tính phí `PaidRepair`), đúng **1** `Quotation` `Accepted` kèm `CustomerDecidedAt`, lịch sử **0 bước lặp** | ✅ **đã đo** — `ServiceTicketIntake`, `ServiceTicketQuotation` |
 
 🎯 **6/6 nút double-submit hỏng thật đã đo, tất cả khoá đúng** — kèm **ca đối chứng âm**: tạm đổi
 `ActionButton` → `MudButton` trần ở một nút thì 3 cú click cùng tick mở **3 dialog**. Không có ca
@@ -665,9 +697,20 @@ phiên 2026-08-31 (chiều), và nó dịch **không đều giữa hai nửa**:
 đầu). Chi tiết + ba cái bẫy khi dựng phép đo:
 [`evidence/ui/2026-08-31-6-nut-double-submit.md`](evidence/ui/2026-08-31-6-nut-double-submit.md).
 
-**Còn nợ ở mục này: nửa *tầng Service* của POS · xuất/nhập kho · phiếu dịch vụ** — tức mục A ở
-những luồng đó vẫn chỉ được rà bằng đọc code + build sạch. Nút đã đo ≠ luồng đã chạy.
-👉 **Đây là phần 2 của gói 1** — công thức đầy đủ (bấm gì, kiểm cột nào ở DB) ở §2.
+🎯 **Nửa tầng Service: 4/4 luồng ĐẠT, 0 bản ghi nhân đôi, 0 chỗ lệch tồn kho** — chi tiết từng
+bất biến + lệnh chạy lại được ở
+[`evidence/ui/2026-09-01-no-kiem-thu-nua-tang-service.md`](evidence/ui/2026-09-01-no-kiem-thu-nua-tang-service.md).
+Chốt hồi quy `S02,S05` sau khi đo: **2 ĐẠT, 0 KHÔNG KẾT LUẬN**.
+
+⚠️ **Hai giới hạn — đừng đọc bảng trên rộng hơn nó chứng minh:**
+1. Nửa tầng Service đo bằng **gọi API với JWT admin thật**, không click qua Blazor. Đường
+   `Controller → Service → Repository → DB` là một, nên nó chứng minh **mục 🅰**; nó **không**
+   chứng minh trang `Pos/Index`, `Inventory/*`, `ServiceTickets/*` bind đúng DTO. Nợ đó vẫn còn,
+   nhưng nó là nợ **giao diện**, không còn là nợ **tầng Service**.
+2. **Chưa ép được retry thật.** Bốn luồng chạy đường thuận. Điều này bác bỏ chắc chắn chế độ hỏng
+   *"`SaveChanges` không sinh `UPDATE`"*, nhưng chế độ hỏng *"`Add` hai lần sau retry"* mới bị bác
+   bỏ **trong phạm vi các lần chạy đã thực hiện** — muốn đóng tuyệt đối phải bơm lỗi transient của
+   SQL Server để execution strategy thật sự retry.
 
 > 💡 **Cách đo lại nếu cần** (không cần Chrome DevTools MCP, và đừng tranh chấp profile của phiên
 > Claude khác): tự bật Chrome headless với `--user-data-dir` riêng + `--remote-debugging-port=9333`,
@@ -890,7 +933,35 @@ Build sau khi sửa: `0 Error(s)` / **184** cảnh báo — đúng bằng baseli
 
 ---
 
-### 🅸 Rò rỉ tiếng Anh ở TẦNG CLIENT — **124 chỗ / 18 file, CHƯA SỬA** → *gói 1*
+### ✅ 🅸 Rò rỉ tiếng Anh ở TẦNG CLIENT — **XONG (2026-09-01)**
+
+**124/124 chỗ đã thay bằng câu tiếng Việt cố định có tính hành động; 18/18 file nay inject
+`ILogger<T>` nên `ex` đi vào console trình duyệt thay vì bốc hơi.**
+Chốt `check-error-message-leaks.sh client` → `Sạch [client]: 58 file, 0 chỗ`, mã thoát `0`.
+Build vẫn `0 Error(s) / 184 cảnh báo` — không thêm cảnh báo nào.
+
+**Đã đo hai ca đối chứng ngược chiều nhau trên cùng một nút** (`Login.razor` · Đăng nhập) —
+xem [bằng chứng đầy đủ](evidence/ui/2026-09-01-muc-I-ro-ri-tang-client.md):
+
+| Ca | Điều kiện | Người dùng thấy | |
+|---|---|---|---|
+| **A** | API **tắt** | `"Không thực hiện được đăng nhập do lỗi kết nối. Vui lòng kiểm tra đường truyền rồi thử lại."` — 0 chuỗi tiếng Anh | ✅ |
+| **B** | API **bật**, server trả `400` nghiệp vụ | `"Tài khoản hoặc mật khẩu không đúng."` — **câu của server**, không bị câu cố định đè lên | ✅ |
+
+Ca B là ca quan trọng hơn: nó chứng minh **bẫy #13 không cắn** — sửa 124 chỗ mà không nuốt mất
+một câu nghiệp vụ nào. Chỉ đo ca A thì không phân biệt được "đã sửa" với "đã nuốt sạch".
+
+`ex` cũng đã được xác nhận tới console thật (`fail: Client.Services.Auth.AuthClientService[0]`
+kèm stack trace) — kể cả ở hai file lệch khuôn ctor (`AuthClientService` 6 tham số,
+`StorefrontClientService` primary constructor). Build sạch **không** chứng minh điều này:
+`ILogger<T>` chưa resolve được sẽ hỏng **lúc chạy**.
+
+⚠️ **35 lời gọi `GetFromJsonAsync` vẫn vứt thân phản hồi** — mục 🅸 làm chúng đỡ hơn (câu tiếng
+Việt thay chuỗi EF) nhưng **không** đóng được; đó là **mục 🅹**. Xem §7 của file bằng chứng.
+
+<details>
+<summary>Hồ sơ gốc của mục 🅸 (trước khi sửa) — giữ lại để tra vì sao code thành ra như vậy</summary>
+
 
 Phát hiện lúc làm mục 🅷. Đây là tầng thứ ba của cùng một lỗi:
 
@@ -956,6 +1027,8 @@ Câu thay thế phải **nói người dùng nên làm gì**, không phải ch�
 ⚠️ **Nếu sau này có ai thêm `EnsureSuccessStatusCode` tường minh vào một client service**, tiền đề
 "nhóm 90 không chở lỗi nghiệp vụ" vỡ và chỗ đó lập tức cần khuôn hai tầng như mục 🅷. Chốt ở §6
 canh cả hai đường — `EnsureSuccessStatusCode` **và** số lời gọi `GetFromJsonAsync`.
+
+</details>
 
 ---
 
@@ -1195,7 +1268,7 @@ Nó tự dọn dữ liệu trước và sau. Mã thoát: `0` đạt hết · `1`
 
 ---
 
-## 5. Mười bốn cái bẫy im lặng đã gặp — đọc trước khi sửa code
+## 5. Mười sáu cái bẫy im lặng đã gặp — đọc trước khi sửa code
 
 Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ ra khi đo.
 
@@ -1267,6 +1340,23 @@ Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ
     lấy một `grep` rỗng làm tiền đề cho một quyết định, hỏi: *"thứ tôi đang tìm có thể xảy ra mà
     không xuất hiện thành chữ trong repo này không?"*
 
+15. **Dụng cụ đo tự sinh ra "phát hiện" của chính nó.** Đo ca đối chứng của mục 🅸 phải gắn một
+    `MutationObserver` vào `#mud-snackbar-container`, vì snackbar tự tắt sau ~5s và biến mất
+    trước khi kịp chụp. Console lập tức có thêm
+    `Uncaught TypeError: Cannot read properties of undefined (reading 'trim')` — trông y hệt một
+    lỗi sản phẩm vừa lòi ra. Nó là lỗi của **chính observer**. Xác minh bằng cách **tải lại trang
+    để gỡ dụng cụ đo rồi bấm lại**: lỗi biến mất, hai dòng `fail:` của `ILogger` vẫn còn.
+    Quy tắc: **ca đo cuối cùng phải chạy trên trang sạch, không còn dụng cụ đo cắm vào** — nếu
+    không, bạn đang đọc dấu vết của mình và tưởng là dấu vết của sản phẩm.
+
+16. **`SELECT TOP n` khi kiểm "nguyên trạng" làm bạn suýt xoá dữ liệu người khác.** Lúc chụp
+    baseline cho nợ 🧪, lệnh đếm `Suppliers` dùng `TOP 3` và in ra `1, 2, 1001`. Sau khi đo xong,
+    bảng có `1, 2, 1001, 1002, 1003, 1004` — đọc thành "4 dòng rác probe vừa tạo, xoá đi".
+    Kiểm `CreatedDate` mới lộ ra cả bốn sinh **2026-04-20**, tồn dư của một phiên **nhiều tháng
+    trước**, và 3/4 đã `IsDeleted=1`; `TOP 3` chỉ đơn giản là đã giấu chúng. Quy tắc: **ảnh chụp
+    "trước" phải là `COUNT(*)` hoặc danh sách đầy đủ, không bao giờ là `TOP n`** — và trước khi
+    xoá bất cứ gì để "trả nguyên trạng", kiểm **dấu thời gian**, đừng suy từ chênh lệch.
+
 ---
 
 ## 6. Chốt chống hồi quy (trước đây là "script lấy lại danh sách việc")
@@ -1298,8 +1388,12 @@ bash devops/scripts/check-error-message-leaks.sh server
 #   mã thoát 2 = KHÔNG KẾT LUẬN (quét rỗng, chốt đang hỏng) — KHÔNG phải sạch
 
 bash devops/scripts/check-error-message-leaks.sh client
-#   kỳ vọng HIỆN TẠI: 124 rò rỉ, mã thoát 1 — đó là mục 🅸, CHƯA sửa.
-#   Con số này chỉ được GIẢM. Tăng nghĩa là có client service mới viết theo mẫu cũ.
+#   kỳ vọng: "Sạch [client]: 58 file, 0 chỗ…" và mã thoát 0.  (mục 🅸 XONG 2026-09-01)
+#   Trước 2026-09-01 chốt này ra 124 rò rỉ. Nay phải là 0 — mọi con số > 0 là hồi quy.
+
+# 🅸 — 18/18 client service PHẢI có ILogger<T>: khối catch thay chuỗi mà không log
+#      là vứt sạch chẩn đoán (trước mục 🅸 có ĐÚNG 0/18 file inject logger).
+grep -rlc 'ILogger<' --include='*ClientService.cs' src/Client/Services/ | wc -l   # kỳ vọng: 18
 
 # ⚠️ ĐỪNG thay script này bằng `grep 'ex.Message'`. grep không biết dòng đó nằm trong
 #    khối catch NÀO, nên nó đếm cả 41 chỗ relay ĐÚNG (từ catch nghiệp vụ) thành lỗi.
@@ -1324,6 +1418,9 @@ grep -rn 'GetFromJsonAsync'        --include='*.cs' src/Client/Services/ | wc -l
 #   phản hồi: câu tiếng Việt server soạn mất trắng, người dùng nhận message tiếng Anh của
 #   HttpRequestException. Con số 35 chỉ được GIẢM (giảm khi làm mục 🅹 — chuyển sang
 #   ApiCall.SendAsync). Tăng nghĩa là có GET mới viết theo mẫu vứt-thân-phản-hồi.
+#   ⚠️ Mục 🅸 KHÔNG đụng tới con số này: nó thay chuỗi tiếng Anh bằng câu tiếng Việt cố định,
+#      nên 35 chỗ này nay hiện câu cố định thay vì chuỗi EF — đỡ hơn, nhưng VẪN mất câu
+#      server soạn. Đóng hẳn là việc của mục 🅹.
 ```
 
 ```bash

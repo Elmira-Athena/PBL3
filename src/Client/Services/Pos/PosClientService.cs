@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -10,10 +11,12 @@ namespace Client.Services.Pos
     public class PosClientService : IPosClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<PosClientService> _logger;
 
-        public PosClientService(HttpClient httpClient)
+        public PosClientService(HttpClient httpClient, ILogger<PosClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PosScanResponse>> ScanBarcodeAsync(string serialNumber)
@@ -32,7 +35,8 @@ namespace Client.Services.Pos
             }
             catch (Exception ex)
             {
-                return ApiResult<PosScanResponse>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "quét mã vạch tại quầy");
+                return ApiResult<PosScanResponse>.Fail("Không quét được mã vạch. Vui lòng thử lại.");
             }
         }
 
@@ -68,7 +72,8 @@ namespace Client.Services.Pos
             }
             catch (Exception ex)
             {
-                return ApiResult<PosOrderDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "thanh toán tại quầy");
+                return ApiResult<PosOrderDto>.Fail("Không hoàn tất được thanh toán do lỗi kết nối. Vui lòng kiểm tra danh sách đơn tại quầy trước khi thu tiền lại.");
             }
         }
 
@@ -84,7 +89,8 @@ namespace Client.Services.Pos
             }
             catch (Exception ex)
             {
-                return ApiResult<int>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "lưu đơn nháp tại quầy");
+                return ApiResult<int>.Fail("Không lưu được đơn nháp. Vui lòng thử lại.");
             }
         }
 

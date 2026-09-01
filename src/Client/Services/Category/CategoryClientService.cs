@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Categories;
 using PBL3.Shared.DTOs.Common;
@@ -7,11 +8,13 @@ namespace Client.Services.Category
     public class CategoryClientService : ICategoryClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<CategoryClientService> _logger;
         private const string BaseUrl = "api/categories";
 
-        public CategoryClientService(HttpClient httpClient)
+        public CategoryClientService(HttpClient httpClient, ILogger<CategoryClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<List<CategoryTreeDto>>> GetTreeAsync()
@@ -24,7 +27,8 @@ namespace Client.Services.Category
             }
             catch (Exception ex)
             {
-                return ApiResult<List<CategoryTreeDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải cây danh mục");
+                return ApiResult<List<CategoryTreeDto>>.Fail("Không tải được cây danh mục. Vui lòng tải lại trang.");
             }
         }
 
@@ -38,7 +42,8 @@ namespace Client.Services.Category
             }
             catch (Exception ex)
             {
-                return ApiResult<CategoryDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin danh mục");
+                return ApiResult<CategoryDto>.Fail("Không tải được thông tin danh mục. Vui lòng thử lại.");
             }
         }
 
@@ -52,7 +57,8 @@ namespace Client.Services.Category
             }
             catch (Exception ex)
             {
-                return ApiResult<CategoryDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo danh mục");
+                return ApiResult<CategoryDto>.Fail("Không tạo được danh mục. Vui lòng thử lại.");
             }
         }
 
@@ -66,7 +72,8 @@ namespace Client.Services.Category
             }
             catch (Exception ex)
             {
-                return ApiResult<CategoryDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật danh mục");
+                return ApiResult<CategoryDto>.Fail("Không cập nhật được danh mục. Vui lòng thử lại.");
             }
         }
 
@@ -80,7 +87,8 @@ namespace Client.Services.Category
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "xoá danh mục");
+                return ApiResult<bool>.Fail("Không xoá được danh mục. Vui lòng thử lại.");
             }
         }
     }

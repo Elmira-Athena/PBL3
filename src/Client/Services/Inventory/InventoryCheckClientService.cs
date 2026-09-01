@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
@@ -7,11 +8,13 @@ namespace Client.Services.Inventory
     public class InventoryCheckClientService : IInventoryCheckClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<InventoryCheckClientService> _logger;
         private const string BaseUrl = "api/inventory-checks";
 
-        public InventoryCheckClientService(HttpClient httpClient)
+        public InventoryCheckClientService(HttpClient httpClient, ILogger<InventoryCheckClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<InventoryCheckDto>> CreateAsync(CreateInventoryCheckRequest request)
@@ -24,7 +27,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<InventoryCheckDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo phiếu kiểm kê");
+                return ApiResult<InventoryCheckDto>.Fail("Không tạo được phiếu kiểm kê. Vui lòng thử lại.");
             }
         }
 
@@ -61,7 +65,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<InventoryCheckListItemDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách phiếu kiểm kê");
+                return ApiResult<PagedResult<InventoryCheckListItemDto>>.Fail("Không tải được danh sách phiếu kiểm kê. Vui lòng thử lại.");
             }
         }
 
@@ -74,7 +79,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<InventoryCheckDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết phiếu kiểm kê");
+                return ApiResult<InventoryCheckDto>.Fail("Không tải được chi tiết phiếu kiểm kê. Vui lòng thử lại.");
             }
         }
 
@@ -87,7 +93,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<InventoryCheckDashboardDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải bảng theo dõi kiểm kê");
+                return ApiResult<InventoryCheckDashboardDto>.Fail("Không tải được bảng theo dõi kiểm kê. Vui lòng thử lại.");
             }
         }
 
@@ -114,7 +121,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<InventoryCheckSerialDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách serial của phiếu kiểm kê");
+                return ApiResult<PagedResult<InventoryCheckSerialDto>>.Fail("Không tải được danh sách serial của phiếu kiểm kê. Vui lòng thử lại.");
             }
         }
 
@@ -128,7 +136,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<ScanResultDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "quét serial vào phiếu kiểm kê");
+                return ApiResult<ScanResultDto>.Fail("Không ghi nhận được serial vừa quét. Vui lòng quét lại.");
             }
         }
 
@@ -142,7 +151,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "đánh dấu serial lỗi");
+                return ApiResult<bool>.Fail("Không đánh dấu được serial lỗi. Vui lòng thử lại.");
             }
         }
 
@@ -156,7 +166,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật lý do lệch kiểm kê");
+                return ApiResult<bool>.Fail("Không cập nhật được lý do lệch. Vui lòng thử lại.");
             }
         }
 
@@ -170,7 +181,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "gửi duyệt phiếu kiểm kê");
+                return ApiResult<bool>.Fail("Không gửi duyệt được phiếu kiểm kê. Vui lòng tải lại trang để xem trạng thái hiện tại rồi thử lại.");
             }
         }
 
@@ -184,7 +196,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "phê duyệt phiếu kiểm kê");
+                return ApiResult<bool>.Fail("Không phê duyệt được phiếu kiểm kê. Vui lòng tải lại trang để xem trạng thái hiện tại rồi thử lại.");
             }
         }
 
@@ -198,7 +211,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "từ chối phiếu kiểm kê");
+                return ApiResult<bool>.Fail("Không từ chối được phiếu kiểm kê. Vui lòng tải lại trang để xem trạng thái hiện tại rồi thử lại.");
             }
         }
 
@@ -212,7 +226,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "huỷ phiếu kiểm kê");
+                return ApiResult<bool>.Fail("Không huỷ được phiếu kiểm kê. Vui lòng thử lại.");
             }
         }
     }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Products;
@@ -8,11 +9,13 @@ namespace Client.Services.Supplier
     public class SupplierClientService : ISupplierClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<SupplierClientService> _logger;
         private const string BaseUrl = "api/suppliers";
 
-        public SupplierClientService(HttpClient httpClient)
+        public SupplierClientService(HttpClient httpClient, ILogger<SupplierClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PagedResult<SupplierDto>>> GetListAsync(SupplierFilterRequest request)
@@ -40,7 +43,8 @@ namespace Client.Services.Supplier
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<SupplierDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách nhà cung cấp");
+                return ApiResult<PagedResult<SupplierDto>>.Fail("Không tải được danh sách nhà cung cấp. Vui lòng thử lại.");
             }
         }
 
@@ -54,7 +58,8 @@ namespace Client.Services.Supplier
             }
             catch (Exception ex)
             {
-                return ApiResult<SupplierDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin nhà cung cấp");
+                return ApiResult<SupplierDto>.Fail("Không tải được thông tin nhà cung cấp. Vui lòng thử lại.");
             }
         }
 
@@ -68,7 +73,8 @@ namespace Client.Services.Supplier
             }
             catch (Exception ex)
             {
-                return ApiResult<SupplierDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo nhà cung cấp");
+                return ApiResult<SupplierDto>.Fail("Không tạo được nhà cung cấp. Vui lòng thử lại.");
             }
         }
 
@@ -82,7 +88,8 @@ namespace Client.Services.Supplier
             }
             catch (Exception ex)
             {
-                return ApiResult<SupplierDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật nhà cung cấp");
+                return ApiResult<SupplierDto>.Fail("Không cập nhật được nhà cung cấp. Vui lòng thử lại.");
             }
         }
 
@@ -96,7 +103,8 @@ namespace Client.Services.Supplier
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "xoá nhà cung cấp");
+                return ApiResult<bool>.Fail("Không xoá được nhà cung cấp. Vui lòng thử lại.");
             }
         }
     }

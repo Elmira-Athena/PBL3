@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Employees;
@@ -10,11 +11,13 @@ namespace Client.Services.Employee
     public class EmployeeClientService : IEmployeeClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<EmployeeClientService> _logger;
         private const string BaseUrl = "api/employees";
 
-        public EmployeeClientService(HttpClient httpClient)
+        public EmployeeClientService(HttpClient httpClient, ILogger<EmployeeClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PagedResult<EmployeeListDto>>> GetListAsync(EmployeeFilterRequest request)
@@ -47,7 +50,8 @@ namespace Client.Services.Employee
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<EmployeeListDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách nhân viên");
+                return ApiResult<PagedResult<EmployeeListDto>>.Fail("Không tải được danh sách nhân viên. Vui lòng thử lại.");
             }
         }
 
@@ -60,7 +64,8 @@ namespace Client.Services.Employee
             }
             catch (Exception ex)
             {
-                return ApiResult<EmployeeListDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin nhân viên");
+                return ApiResult<EmployeeListDto>.Fail("Không tải được thông tin nhân viên. Vui lòng thử lại.");
             }
         }
 
@@ -74,7 +79,8 @@ namespace Client.Services.Employee
             }
             catch (Exception ex)
             {
-                return ApiResult<EmployeeListDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo nhân viên");
+                return ApiResult<EmployeeListDto>.Fail("Không tạo được nhân viên. Vui lòng thử lại.");
             }
         }
 
@@ -88,7 +94,8 @@ namespace Client.Services.Employee
             }
             catch (Exception ex)
             {
-                return ApiResult<EmployeeListDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật nhân viên");
+                return ApiResult<EmployeeListDto>.Fail("Không cập nhật được nhân viên. Vui lòng thử lại.");
             }
         }
 
@@ -105,7 +112,8 @@ namespace Client.Services.Employee
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "khoá tài khoản nhân viên");
+                return ApiResult<bool>.Fail("Không khoá được tài khoản nhân viên. Vui lòng thử lại.");
             }
         }
 
@@ -119,7 +127,8 @@ namespace Client.Services.Employee
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "mở khoá tài khoản nhân viên");
+                return ApiResult<bool>.Fail("Không mở khoá được tài khoản nhân viên. Vui lòng thử lại.");
             }
         }
 
@@ -132,7 +141,8 @@ namespace Client.Services.Employee
             }
             catch (Exception ex)
             {
-                return ApiResult<List<EmployeeDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách kỹ thuật viên");
+                return ApiResult<List<EmployeeDto>>.Fail("Không tải được danh sách kỹ thuật viên. Vui lòng thử lại.");
             }
         }
     }

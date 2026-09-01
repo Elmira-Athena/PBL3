@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
@@ -7,11 +8,13 @@ namespace Client.Services.Inventory
     public class ProductSerialClientService : IProductSerialClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<ProductSerialClientService> _logger;
         private const string BaseUrl = "api/product-serials";
 
-        public ProductSerialClientService(HttpClient httpClient)
+        public ProductSerialClientService(HttpClient httpClient, ILogger<ProductSerialClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<bool>> CheckExistAsync(string serialNumber, int variantId)
@@ -27,7 +30,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "kiểm tra serial đã tồn tại");
+                return ApiResult<bool>.Fail("Không kiểm tra được serial. Vui lòng thử lại.");
             }
         }
 
@@ -63,7 +67,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<ProductSerialListDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách serial");
+                return ApiResult<PagedResult<ProductSerialListDto>>.Fail("Không tải được danh sách serial. Vui lòng thử lại.");
             }
         }
 
@@ -89,7 +94,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<ProductSerialStatisticsDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thống kê serial");
+                return ApiResult<ProductSerialStatisticsDto>.Fail("Không tải được thống kê serial. Vui lòng thử lại.");
             }
         }
 
@@ -106,7 +112,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<ProductSerialDetailDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết serial");
+                return ApiResult<ProductSerialDetailDto>.Fail("Không tải được chi tiết serial. Vui lòng thử lại.");
             }
         }
 
@@ -126,7 +133,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật trạng thái serial");
+                return ApiResult<bool>.Fail("Không cập nhật được trạng thái serial. Vui lòng thử lại.");
             }
         }
     }

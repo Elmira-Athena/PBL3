@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -10,10 +11,12 @@ namespace Client.Services.Orders
     public class OrderClientService : IOrderClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<OrderClientService> _logger;
 
-        public OrderClientService(HttpClient httpClient)
+        public OrderClientService(HttpClient httpClient, ILogger<OrderClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<OrderDetailDto>> GetByIdAsync(int id)
@@ -26,7 +29,8 @@ namespace Client.Services.Orders
             }
             catch (Exception ex)
             {
-                return ApiResult<OrderDetailDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết đơn hàng");
+                return ApiResult<OrderDetailDto>.Fail("Không tải được chi tiết đơn hàng. Vui lòng thử lại.");
             }
         }
 
@@ -71,7 +75,8 @@ namespace Client.Services.Orders
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<OrderSummaryResponse>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách đơn hàng của tôi");
+                return ApiResult<PagedResult<OrderSummaryResponse>>.Fail("Không tải được danh sách đơn hàng. Vui lòng thử lại.");
             }
         }
 
@@ -101,7 +106,8 @@ namespace Client.Services.Orders
             }
             catch (Exception ex)
             {
-                return ApiResult<CheckoutResponse>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "đặt hàng");
+                return ApiResult<CheckoutResponse>.Fail("Không hoàn tất được đặt hàng do lỗi kết nối. Vui lòng kiểm tra danh sách đơn hàng của bạn trước khi đặt lại.");
             }
         }
 
@@ -150,7 +156,8 @@ namespace Client.Services.Orders
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "huỷ đơn hàng");
+                return ApiResult<bool>.Fail("Không huỷ được đơn hàng. Vui lòng tải lại trang để xem trạng thái hiện tại rồi thử lại.");
             }
         }
 
@@ -164,7 +171,8 @@ namespace Client.Services.Orders
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "xác nhận đã nhận hàng");
+                return ApiResult<bool>.Fail("Không xác nhận được đã nhận hàng. Vui lòng thử lại.");
             }
         }
     }

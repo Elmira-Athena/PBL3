@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Banners;
 using PBL3.Shared.DTOs.Common;
@@ -7,11 +8,13 @@ namespace Client.Services.Banner
     public class BannerClientService : IBannerClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<BannerClientService> _logger;
         private const string BaseUrl = "api/banners";
 
-        public BannerClientService(HttpClient httpClient)
+        public BannerClientService(HttpClient httpClient, ILogger<BannerClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PagedResult<BannerDto>>> GetListAsync(BannerFilterRequest request)
@@ -38,7 +41,8 @@ namespace Client.Services.Banner
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<BannerDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách banner");
+                return ApiResult<PagedResult<BannerDto>>.Fail("Không tải được danh sách banner. Vui lòng thử lại.");
             }
         }
 
@@ -51,7 +55,8 @@ namespace Client.Services.Banner
             }
             catch (Exception ex)
             {
-                return ApiResult<BannerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin banner");
+                return ApiResult<BannerDto>.Fail("Không tải được thông tin banner. Vui lòng thử lại.");
             }
         }
 
@@ -65,7 +70,8 @@ namespace Client.Services.Banner
             }
             catch (Exception ex)
             {
-                return ApiResult<BannerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo banner");
+                return ApiResult<BannerDto>.Fail("Không tạo được banner. Vui lòng thử lại.");
             }
         }
 
@@ -79,7 +85,8 @@ namespace Client.Services.Banner
             }
             catch (Exception ex)
             {
-                return ApiResult<BannerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật banner");
+                return ApiResult<BannerDto>.Fail("Không cập nhật được banner. Vui lòng thử lại.");
             }
         }
 
@@ -93,7 +100,8 @@ namespace Client.Services.Banner
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "xoá banner");
+                return ApiResult<bool>.Fail("Không xoá được banner. Vui lòng thử lại.");
             }
         }
 
@@ -106,7 +114,8 @@ namespace Client.Services.Banner
             }
             catch (Exception ex)
             {
-                return ApiResult<List<BannerPublicDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải banner đang hiển thị");
+                return ApiResult<List<BannerPublicDto>>.Fail("Không tải được banner trang chủ. Vui lòng tải lại trang.");
             }
         }
     }

@@ -141,14 +141,26 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
   `BusinessRuleException` ở `src/Core/Exceptions/`. Cùng lý lẽ với `ConcurrentModificationException`:
   bắt `InvalidOperationException` thay thế là **không** an toàn vì EF Core dùng chính kiểu đó cho
   chuyện khác — vì vậy `grep -rn 'catch (InvalidOperationException' src/` **phải luôn rỗng**.
-  ✅ Tầng **Service và API đã sạch** (mục 🅷): `0` chỗ chở `ex.Message` của hạ tầng ra cho người dùng.
-  ⚠️ Tầng **Client còn 124 chỗ / 18 file** (mục 🅸, chưa sửa) — và ở đó có một biến thể riêng:
-  **`GetFromJsonAsync` tự gọi `EnsureSuccessStatusCode` bên trong**, nên 35 lời gọi GET đang
-  **vứt thân phản hồi**: câu tiếng Việt server soạn mất trắng, người dùng nhận message tiếng Anh
-  của `HttpRequestException`. Viết client service mới thì dùng `ApiCall.SendAsync`
-  (`src/Client/Services/Common/`) — nó đọc thân phản hồi để lấy đúng câu đó.
-- **Chốt chống hồi quy — chạy `devops/scripts/check-error-message-leaks.sh server`** (kỳ vọng
-  `Sạch`, mã thoát `0`; mã thoát `2` = **KHÔNG KẾT LUẬN**, không phải sạch).
+  ✅ **Cả ba tầng đã sạch:** Service + API (mục 🅷) và **Client** (mục 🅸, xong 2026-09-01) —
+  `0` chỗ chở `ex.Message` của hạ tầng ra cho người dùng. Ở tầng Client, 124 chỗ đã đổi sang câu
+  tiếng Việt cố định **có tính hành động**, và **18/18 client service nay inject `ILogger<T>`**
+  (trước đó là `0/18`) — vì "thay chuỗi" mà không log là **vứt sạch chẩn đoán**. Khuôn:
+  ```csharp
+  catch (Exception ex)
+  {
+      _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách nhà cung cấp");
+      return ApiResult<T>.Fail("Không tải được danh sách nhà cung cấp. Vui lòng thử lại.");
+  }
+  ```
+  ⚠️ **Còn một biến thể CHƯA đóng ở tầng Client** (mục 🅹): **`GetFromJsonAsync` tự gọi
+  `EnsureSuccessStatusCode` bên trong**, nên **35** lời gọi GET vẫn **vứt thân phản hồi** — câu
+  tiếng Việt server soạn mất trắng. Mục 🅸 chỉ làm chúng đỡ hơn (câu cố định thay chuỗi EF), không
+  đóng được. **Viết client service mới thì dùng `ApiCall.SendAsync`**
+  (`src/Client/Services/Common/`) — nó đọc thân phản hồi để lấy đúng câu đó, phân biệt
+  `HttpRequestException` với `TaskCanceledException`, và có sẵn ánh xạ `409`.
+- **Chốt chống hồi quy — chạy `devops/scripts/check-error-message-leaks.sh`** cho **cả ba tầng**
+  (kỳ vọng `Sạch [all]: 139 file, 0 chỗ`, mã thoát `0`; mã thoát `2` = **KHÔNG KẾT LUẬN**, không
+  phải sạch). Tham số `server` / `client` để soi từng tầng — **cả hai nay đều phải ra `0`**.
   🚨 **Đừng thay nó bằng `grep 'ex.Message'`.** `grep` không biết dòng đó nằm trong khối `catch`
   **nào**, nên nó đếm cả **41** chỗ relay **đúng** (từ `catch` nghiệp vụ) thành lỗi. Đã đo: cách
   đếm bằng grep phóng đại 2 chỗ rò rỉ thật ở tầng Service thành 7. Phân loại phải theo **ngữ cảnh**.
@@ -269,14 +281,16 @@ Nó ghi: việc kế tiếp (kèm `file:dòng` cụ thể), cách chạy môi tr
 chứng, và **mười ba cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
 tầng Service, auth, hay rate limiting.
 
-Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C + mục D + **mục 🅴** đã xong
-+ **mục 🅷** (18/18 call-site transaction retry-safe; 23/23 nút mutation dùng
+Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C + mục D + mục 🅴 + mục 🅷 +
+**mục 🅸** đã xong (18/18 call-site transaction retry-safe; 23/23 nút mutation dùng
 `ActionButton`/`BusyScope`, trong đó **6/6 nút hỏng thật đã đo có ca đối chứng âm**; bộ đo
 `tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số ở **cả hai** cấu hình; 10/10 lỗ hổng NuGet
-High đã vá và có cổng chặn ở CI; rò rỉ `ex.Message` ở tầng **Service + API** đã chặn hết, có cổng
-`check-error-message-leaks.sh`). Còn lại: **mục 🅸** (124 chỗ rò rỉ ở tầng **Client**), **nửa tầng
-Service** của nợ kiểm thử 🧪 (POS · xuất/nhập kho · phiếu dịch vụ), và **đợt 3** — đợt 3 **bị chặn**
-tới khi chạy được `Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
+High đã vá và có cổng chặn ở CI; rò rỉ `ex.Message` đã chặn hết ở **cả ba tầng**, có cổng
+`check-error-message-leaks.sh`), và **nợ kiểm thử 🧪 ưu tiên 1 + 2 đã trả** — bốn luồng cuối
+(POS · nhập kho · xuất kho · phiếu dịch vụ) **đã chạy thật tới DB**, 4/4 ĐẠT, 0 bản ghi nhân đôi.
+
+Còn lại: **mục 🅹** (35 lời gọi GET chuyển sang `ApiCall.SendAsync`) và **đợt 3** — đợt 3 **bị
+chặn** tới khi chạy được `Infrastructure/db/checks/pre_migration_checks.sql` trên RDS.
 
 🧪 **Nợ kiểm thử — đọc mục 🧪 của runbook trước khi tin dòng "XONG" nào.** `grep` chỉ chứng
 minh **hình dạng code**, không chứng minh hành vi. Nợ của mục D **đã trả** (OpenAPI sinh được

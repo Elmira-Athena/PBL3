@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -9,10 +10,12 @@ namespace Client.Services.ServiceTickets
     public class ServiceInvoiceClientService : IServiceInvoiceClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<ServiceInvoiceClientService> _logger;
 
-        public ServiceInvoiceClientService(HttpClient httpClient)
+        public ServiceInvoiceClientService(HttpClient httpClient, ILogger<ServiceInvoiceClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PagedResult<ServiceInvoiceListDto>>> GetPagedListAsync(
@@ -49,7 +52,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách hoá đơn dịch vụ");
+                return new ApiResult<PagedResult<ServiceInvoiceListDto>> { Message = "Không tải được danh sách hoá đơn dịch vụ. Vui lòng thử lại." };
             }
         }
 
@@ -73,7 +77,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceInvoiceDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết hoá đơn dịch vụ");
+                return new ApiResult<ServiceInvoiceDetailDto> { Message = "Không tải được chi tiết hoá đơn dịch vụ. Vui lòng thử lại." };
             }
         }
 
@@ -97,7 +102,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "xác nhận hoá đơn dịch vụ đã thanh toán");
+                return new ApiResult<bool> { Message = "Không xác nhận được hoá đơn đã thanh toán. Vui lòng tải lại trang để kiểm tra hoá đơn trước khi thử lại." };
             }
         }
     }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
@@ -8,11 +9,13 @@ namespace Client.Services.Inventory
     public class ImportReceiptClientService : IImportReceiptClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<ImportReceiptClientService> _logger;
         private const string BaseUrl = "api/import-receipts";
 
-        public ImportReceiptClientService(HttpClient httpClient)
+        public ImportReceiptClientService(HttpClient httpClient, ILogger<ImportReceiptClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<ImportReceiptDto>> CreateAsync(CreateImportReceiptRequest request)
@@ -25,7 +28,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<ImportReceiptDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo phiếu nhập kho");
+                return ApiResult<ImportReceiptDto>.Fail("Không tạo được phiếu nhập kho. Vui lòng thử lại.");
             }
         }
 
@@ -62,7 +66,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<ImportReceiptDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách phiếu nhập kho");
+                return ApiResult<PagedResult<ImportReceiptDto>>.Fail("Không tải được danh sách phiếu nhập kho. Vui lòng thử lại.");
             }
         }
 
@@ -75,7 +80,8 @@ namespace Client.Services.Inventory
             }
             catch (Exception ex)
             {
-                return ApiResult<ImportReceiptDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết phiếu nhập kho");
+                return ApiResult<ImportReceiptDto>.Fail("Không tải được chi tiết phiếu nhập kho. Vui lòng thử lại.");
             }
         }
     }

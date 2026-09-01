@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using Blazored.LocalStorage;
 using Client.Auth;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Components.Authorization;
 using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
@@ -17,6 +18,7 @@ namespace Client.Services.Auth
         private readonly NavigationManager _navigationManager;
         private readonly SessionEndedNotifier _sessionEndedNotifier;
         private readonly TokenRefreshCoordinator _refreshCoordinator;
+        private readonly ILogger<AuthClientService> _logger;
         private const string BaseUrl = "api/auth";
         private const string TokenKey = "authToken";
         private const string RefreshTokenKey = "refreshToken";
@@ -27,7 +29,8 @@ namespace Client.Services.Auth
             AuthenticationStateProvider authStateProvider,
             NavigationManager navigationManager,
             SessionEndedNotifier sessionEndedNotifier,
-            TokenRefreshCoordinator refreshCoordinator)
+            TokenRefreshCoordinator refreshCoordinator,
+            ILogger<AuthClientService> logger)
         {
             _httpClient = httpClient;
             _localStorage = localStorage;
@@ -35,6 +38,7 @@ namespace Client.Services.Auth
             _navigationManager = navigationManager;
             _sessionEndedNotifier = sessionEndedNotifier;
             _refreshCoordinator = refreshCoordinator;
+            _logger = logger;
         }
 
         public async Task<ApiResult<TokenResponse>> LoginAsync(LoginRequest request)
@@ -64,7 +68,8 @@ namespace Client.Services.Auth
             }
             catch (Exception ex)
             {
-                return ApiResult<TokenResponse>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "đăng nhập");
+                return ApiResult<TokenResponse>.Fail("Không thực hiện được đăng nhập do lỗi kết nối. Vui lòng kiểm tra đường truyền rồi thử lại.");
             }
         }
 
@@ -92,7 +97,8 @@ namespace Client.Services.Auth
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "đăng ký tài khoản");
+                return ApiResult<bool>.Fail("Không hoàn tất được đăng ký do lỗi kết nối. Vui lòng thử lại.");
             }
         }
 
@@ -107,7 +113,8 @@ namespace Client.Services.Auth
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "đổi mật khẩu");
+                return ApiResult<bool>.Fail("Không đổi được mật khẩu do lỗi kết nối. Vui lòng thử lại.");
             }
         }
 

@@ -1,12 +1,16 @@
+using Microsoft.Extensions.Logging;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Storefront;
 using System.Net.Http.Json;
 
 namespace Client.Services.Storefront
 {
-    public class StorefrontClientService(HttpClient httpClient) : IStorefrontClientService
+    public class StorefrontClientService(
+        HttpClient httpClient,
+        ILogger<StorefrontClientService> logger) : IStorefrontClientService
     {
         private readonly HttpClient _httpClient = httpClient;
+        private readonly ILogger<StorefrontClientService> _logger = logger;
 
         public async Task<ApiResult<List<CategoryMenuResponse>>> GetActiveCategoriesAsync()
         {
@@ -20,7 +24,8 @@ namespace Client.Services.Storefront
             }
             catch (Exception ex)
             {
-                return ApiResult<List<CategoryMenuResponse>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải menu danh mục");
+                return ApiResult<List<CategoryMenuResponse>>.Fail("Không tải được menu danh mục. Vui lòng tải lại trang.");
             }
         }
 
@@ -42,7 +47,8 @@ namespace Client.Services.Storefront
             }
             catch (Exception ex)
             {
-                return ApiResult<List<ProductCardResponse>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải sản phẩm nổi bật");
+                return ApiResult<List<ProductCardResponse>>.Fail("Không tải được sản phẩm nổi bật. Vui lòng tải lại trang.");
             }
         }
 
@@ -58,7 +64,8 @@ namespace Client.Services.Storefront
             }
             catch (Exception ex)
             {
-                return ApiResult<ProductDetailResponse>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải trang chi tiết sản phẩm");
+                return ApiResult<ProductDetailResponse>.Fail("Không tải được thông tin sản phẩm. Vui lòng tải lại trang.");
             }
         }
 
@@ -74,7 +81,8 @@ namespace Client.Services.Storefront
             }
             catch (Exception ex)
             {
-                return ApiResult<List<ProductCardResponse>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải sản phẩm liên quan");
+                return ApiResult<List<ProductCardResponse>>.Fail("Không tải được sản phẩm liên quan. Vui lòng tải lại trang.");
             }
         }
 
@@ -90,7 +98,8 @@ namespace Client.Services.Storefront
             }
             catch (Exception ex)
             {
-                return ApiResult<CategoryDetailResponse>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin danh mục");
+                return ApiResult<CategoryDetailResponse>.Fail("Không tải được thông tin danh mục. Vui lòng tải lại trang.");
             }
         }
 
@@ -108,7 +117,8 @@ namespace Client.Services.Storefront
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<ProductCardResponse>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải sản phẩm theo danh mục");
+                return ApiResult<PagedResult<ProductCardResponse>>.Fail("Không tải được sản phẩm của danh mục. Vui lòng thử lại.");
             }
         }
 
@@ -141,7 +151,8 @@ namespace Client.Services.Storefront
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<ProductCardResponse>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tìm kiếm sản phẩm");
+                return ApiResult<PagedResult<ProductCardResponse>>.Fail("Không tìm kiếm được sản phẩm. Vui lòng thử lại.");
             }
         }
     }

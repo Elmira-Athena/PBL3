@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
@@ -8,11 +9,13 @@ namespace Client.Services.Customer
     public class CustomerClientService : ICustomerClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<CustomerClientService> _logger;
         private const string BaseUrl = "api/customers";
 
-        public CustomerClientService(HttpClient httpClient)
+        public CustomerClientService(HttpClient httpClient, ILogger<CustomerClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PagedResult<CustomerDto>>> GetListAsync(CustomerFilterRequest request)
@@ -45,7 +48,8 @@ namespace Client.Services.Customer
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<CustomerDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách khách hàng");
+                return ApiResult<PagedResult<CustomerDto>>.Fail("Không tải được danh sách khách hàng. Vui lòng thử lại.");
             }
         }
 
@@ -58,7 +62,8 @@ namespace Client.Services.Customer
             }
             catch (Exception ex)
             {
-                return ApiResult<CustomerDetailDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin khách hàng");
+                return ApiResult<CustomerDetailDto>.Fail("Không tải được thông tin khách hàng. Vui lòng thử lại.");
             }
         }
 
@@ -72,7 +77,8 @@ namespace Client.Services.Customer
             }
             catch (Exception ex)
             {
-                return ApiResult<CustomerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo khách hàng");
+                return ApiResult<CustomerDto>.Fail("Không tạo được khách hàng. Vui lòng thử lại.");
             }
         }
 
@@ -86,7 +92,8 @@ namespace Client.Services.Customer
             }
             catch (Exception ex)
             {
-                return ApiResult<CustomerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật khách hàng");
+                return ApiResult<CustomerDto>.Fail("Không cập nhật được khách hàng. Vui lòng thử lại.");
             }
         }
 
@@ -103,7 +110,8 @@ namespace Client.Services.Customer
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "khoá tài khoản khách hàng");
+                return ApiResult<bool>.Fail("Không khoá được tài khoản khách hàng. Vui lòng thử lại.");
             }
         }
 
@@ -117,7 +125,8 @@ namespace Client.Services.Customer
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "mở khoá tài khoản khách hàng");
+                return ApiResult<bool>.Fail("Không mở khoá được tài khoản khách hàng. Vui lòng thử lại.");
             }
         }
 
@@ -130,7 +139,8 @@ namespace Client.Services.Customer
             }
             catch (Exception ex)
             {
-                return ApiResult<CustomerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin cá nhân");
+                return ApiResult<CustomerDto>.Fail("Không tải được thông tin cá nhân. Vui lòng tải lại trang.");
             }
         }
 
@@ -144,7 +154,8 @@ namespace Client.Services.Customer
             }
             catch (Exception ex)
             {
-                return ApiResult<CustomerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật thông tin cá nhân");
+                return ApiResult<CustomerDto>.Fail("Không cập nhật được thông tin cá nhân. Vui lòng thử lại.");
             }
         }
     }

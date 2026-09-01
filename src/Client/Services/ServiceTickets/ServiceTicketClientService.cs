@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -9,10 +10,12 @@ namespace Client.Services.ServiceTickets
     public class ServiceTicketClientService : IServiceTicketClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<ServiceTicketClientService> _logger;
 
-        public ServiceTicketClientService(HttpClient httpClient)
+        public ServiceTicketClientService(HttpClient httpClient, ILogger<ServiceTicketClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<ServiceTicketIntakeEvaluationDto>> EvaluateIntakeAsync(string serialNumber)
@@ -25,7 +28,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketIntakeEvaluationDto> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "kiểm tra điều kiện tiếp nhận bảo hành");
+                return new ApiResult<ServiceTicketIntakeEvaluationDto> { Message = "Không kiểm tra được điều kiện tiếp nhận. Vui lòng thử lại." };
             }
         }
 
@@ -39,7 +43,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo phiếu dịch vụ");
+                return new ApiResult<ServiceTicketDetailDto> { Message = "Không tạo được phiếu dịch vụ. Vui lòng thử lại." };
             }
         }
 
@@ -77,7 +82,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<PagedResult<ServiceTicketListDto>> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách phiếu dịch vụ");
+                return new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Không tải được danh sách phiếu dịch vụ. Vui lòng thử lại." };
             }
         }
 
@@ -110,7 +116,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<PagedResult<ServiceTicketListDto>> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách phiếu dịch vụ của tôi");
+                return new ApiResult<PagedResult<ServiceTicketListDto>> { Message = "Không tải được danh sách phiếu dịch vụ. Vui lòng thử lại." };
             }
         }
 
@@ -134,7 +141,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceTicketDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết phiếu dịch vụ");
+                return new ApiResult<ServiceTicketDetailDto> { Message = "Không tải được chi tiết phiếu dịch vụ. Vui lòng thử lại." };
             }
         }
 
@@ -148,7 +156,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "phân công kỹ thuật viên");
+                return new ApiResult<bool> { Message = "Không phân công được kỹ thuật viên. Vui lòng thử lại." };
             }
         }
 
@@ -162,7 +171,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "ghi kết quả chẩn đoán");
+                return new ApiResult<bool> { Message = "Không lưu được kết quả chẩn đoán. Vui lòng thử lại." };
             }
         }
 
@@ -176,7 +186,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "chọn hướng xử lý phiếu dịch vụ");
+                return new ApiResult<bool> { Message = "Không lưu được hướng xử lý. Vui lòng thử lại." };
             }
         }
 
@@ -190,7 +201,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<QuotationDto> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo báo giá");
+                return new ApiResult<QuotationDto> { Message = "Không tạo được báo giá. Vui lòng thử lại." };
             }
         }
 
@@ -204,7 +216,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "duyệt báo giá");
+                return new ApiResult<bool> { Message = "Không duyệt được báo giá. Vui lòng tải lại trang để xem trạng thái báo giá rồi thử lại." };
             }
         }
 
@@ -218,7 +231,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "từ chối báo giá");
+                return new ApiResult<bool> { Message = "Không từ chối được báo giá. Vui lòng tải lại trang để xem trạng thái báo giá rồi thử lại." };
             }
         }
 
@@ -232,7 +246,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<RmaShipmentDto> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo lô gửi hãng");
+                return new ApiResult<RmaShipmentDto> { Message = "Không tạo được lô gửi hãng. Vui lòng thử lại." };
             }
         }
 
@@ -246,7 +261,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "ghi kết quả xử lý từ hãng");
+                return new ApiResult<bool> { Message = "Không lưu được kết quả xử lý từ hãng. Vui lòng thử lại." };
             }
         }
 
@@ -260,7 +276,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "đổi máy 1-1");
+                return new ApiResult<bool> { Message = "Không thực hiện được đổi máy 1-1. Vui lòng tải lại trang để xem trạng thái phiếu rồi thử lại." };
             }
         }
 
@@ -276,7 +293,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "bắt đầu sửa chữa");
+                return new ApiResult<bool> { Message = "Không chuyển được phiếu sang trạng thái đang sửa. Vui lòng thử lại." };
             }
         }
 
@@ -292,7 +310,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "đánh dấu chờ linh kiện");
+                return new ApiResult<bool> { Message = "Không đánh dấu được chờ linh kiện. Vui lòng thử lại." };
             }
         }
 
@@ -308,7 +327,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tiếp tục sửa chữa");
+                return new ApiResult<bool> { Message = "Không tiếp tục được việc sửa chữa. Vui lòng thử lại." };
             }
         }
 
@@ -322,7 +342,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "hoàn tất sửa chữa");
+                return new ApiResult<bool> { Message = "Không hoàn tất được sửa chữa. Vui lòng thử lại." };
             }
         }
 
@@ -336,7 +357,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<ServiceInvoiceDetailDto> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "phát hành hoá đơn dịch vụ");
+                return new ApiResult<ServiceInvoiceDetailDto> { Message = "Không phát hành được hoá đơn dịch vụ. Vui lòng tải lại trang để kiểm tra phiếu trước khi thử lại." };
             }
         }
 
@@ -350,7 +372,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<bool> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "huỷ phiếu dịch vụ");
+                return new ApiResult<bool> { Message = "Không huỷ được phiếu dịch vụ. Vui lòng thử lại." };
             }
         }
 
@@ -364,7 +387,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<List<ServiceTicketStatusHistoryDto>> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải lịch sử trạng thái phiếu dịch vụ");
+                return new ApiResult<List<ServiceTicketStatusHistoryDto>> { Message = "Không tải được lịch sử phiếu dịch vụ. Vui lòng thử lại." };
             }
         }
 
@@ -378,7 +402,8 @@ namespace Client.Services.ServiceTickets
             }
             catch (Exception ex)
             {
-                return new ApiResult<List<SerialRepairLogDto>> { Message = $"Lỗi: {ex.Message}" };
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải lịch sử sửa chữa của serial");
+                return new ApiResult<List<SerialRepairLogDto>> { Message = "Không tải được lịch sử sửa chữa của serial. Vui lòng thử lại." };
             }
         }
     }

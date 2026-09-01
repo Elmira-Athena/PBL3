@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Manufacturers;
@@ -7,11 +8,13 @@ namespace Client.Services.Manufacturer
     public class ManufacturerClientService : IManufacturerClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<ManufacturerClientService> _logger;
         private const string BaseUrl = "api/manufacturers";
 
-        public ManufacturerClientService(HttpClient httpClient)
+        public ManufacturerClientService(HttpClient httpClient, ILogger<ManufacturerClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PagedResult<ManufacturerDto>>> GetListAsync(ManufacturerFilterRequest request)
@@ -39,7 +42,8 @@ namespace Client.Services.Manufacturer
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<ManufacturerDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách hãng sản xuất");
+                return ApiResult<PagedResult<ManufacturerDto>>.Fail("Không tải được danh sách hãng sản xuất. Vui lòng thử lại.");
             }
         }
 
@@ -53,7 +57,8 @@ namespace Client.Services.Manufacturer
             }
             catch (Exception ex)
             {
-                return ApiResult<List<ManufacturerSummaryDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải hãng sản xuất cho ô chọn");
+                return ApiResult<List<ManufacturerSummaryDto>>.Fail("Không tải được danh sách hãng sản xuất. Vui lòng thử lại.");
             }
         }
 
@@ -67,7 +72,8 @@ namespace Client.Services.Manufacturer
             }
             catch (Exception ex)
             {
-                return ApiResult<ManufacturerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin hãng sản xuất");
+                return ApiResult<ManufacturerDto>.Fail("Không tải được thông tin hãng sản xuất. Vui lòng thử lại.");
             }
         }
 
@@ -81,7 +87,8 @@ namespace Client.Services.Manufacturer
             }
             catch (Exception ex)
             {
-                return ApiResult<ManufacturerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo hãng sản xuất");
+                return ApiResult<ManufacturerDto>.Fail("Không tạo được hãng sản xuất. Vui lòng thử lại.");
             }
         }
 
@@ -95,7 +102,8 @@ namespace Client.Services.Manufacturer
             }
             catch (Exception ex)
             {
-                return ApiResult<ManufacturerDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật hãng sản xuất");
+                return ApiResult<ManufacturerDto>.Fail("Không cập nhật được hãng sản xuất. Vui lòng thử lại.");
             }
         }
 
@@ -109,7 +117,8 @@ namespace Client.Services.Manufacturer
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "xoá hãng sản xuất");
+                return ApiResult<bool>.Fail("Không xoá được hãng sản xuất. Vui lòng thử lại.");
             }
         }
     }

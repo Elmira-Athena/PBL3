@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Analytics;
 using PBL3.Shared.DTOs.Common;
@@ -7,11 +8,13 @@ namespace Client.Services.Analytics
     public class AnalyticsClientService : IAnalyticsClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<AnalyticsClientService> _logger;
         private const string BaseUrl = "api/analytics";
 
-        public AnalyticsClientService(HttpClient httpClient)
+        public AnalyticsClientService(HttpClient httpClient, ILogger<AnalyticsClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         private string DateRange(DateTime from, DateTime to) =>
@@ -27,7 +30,8 @@ namespace Client.Services.Analytics
             }
             catch (Exception ex)
             {
-                return ApiResult<AnalyticsSummaryDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải số liệu tổng quan");
+                return ApiResult<AnalyticsSummaryDto>.Fail("Không tải được số liệu tổng quan. Vui lòng thử lại.");
             }
         }
 
@@ -41,7 +45,8 @@ namespace Client.Services.Analytics
             }
             catch (Exception ex)
             {
-                return ApiResult<RevenueTrendDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải biểu đồ doanh thu");
+                return ApiResult<RevenueTrendDto>.Fail("Không tải được biểu đồ doanh thu. Vui lòng thử lại.");
             }
         }
 
@@ -55,7 +60,8 @@ namespace Client.Services.Analytics
             }
             catch (Exception ex)
             {
-                return ApiResult<OrderChannelDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải tỉ lệ kênh bán");
+                return ApiResult<OrderChannelDto>.Fail("Không tải được tỉ lệ kênh bán. Vui lòng thử lại.");
             }
         }
 
@@ -69,7 +75,8 @@ namespace Client.Services.Analytics
             }
             catch (Exception ex)
             {
-                return ApiResult<List<TopProductDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách sản phẩm bán chạy");
+                return ApiResult<List<TopProductDto>>.Fail("Không tải được danh sách sản phẩm bán chạy. Vui lòng thử lại.");
             }
         }
 
@@ -83,7 +90,8 @@ namespace Client.Services.Analytics
             }
             catch (Exception ex)
             {
-                return ApiResult<List<CategoryRevenueDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải doanh thu theo danh mục");
+                return ApiResult<List<CategoryRevenueDto>>.Fail("Không tải được doanh thu theo danh mục. Vui lòng thử lại.");
             }
         }
 
@@ -97,7 +105,8 @@ namespace Client.Services.Analytics
             }
             catch (Exception ex)
             {
-                return ApiResult<InventorySummaryDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải số liệu tồn kho");
+                return ApiResult<InventorySummaryDto>.Fail("Không tải được số liệu tồn kho. Vui lòng thử lại.");
             }
         }
     }

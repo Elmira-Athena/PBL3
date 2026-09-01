@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Products;
@@ -7,11 +8,13 @@ namespace Client.Services.Product
     public class ProductClientService : IProductClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<ProductClientService> _logger;
         private const string BaseUrl = "api/products";
 
-        public ProductClientService(HttpClient httpClient)
+        public ProductClientService(HttpClient httpClient, ILogger<ProductClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PagedResult<ProductListDto>>> GetListAsync(ProductFilterRequest request)
@@ -49,7 +52,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<ProductListDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách sản phẩm");
+                return ApiResult<PagedResult<ProductListDto>>.Fail("Không tải được danh sách sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -63,7 +67,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<ProductDetailDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết sản phẩm");
+                return ApiResult<ProductDetailDto>.Fail("Không tải được chi tiết sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -77,7 +82,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<ProductDetailDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo sản phẩm");
+                return ApiResult<ProductDetailDto>.Fail("Không tạo được sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -91,7 +97,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<ProductDetailDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật sản phẩm");
+                return ApiResult<ProductDetailDto>.Fail("Không cập nhật được sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -105,7 +112,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "xoá sản phẩm");
+                return ApiResult<bool>.Fail("Không xoá được sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -121,7 +129,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<ProductVariantDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin phiên bản sản phẩm");
+                return ApiResult<ProductVariantDto>.Fail("Không tải được thông tin phiên bản sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -135,7 +144,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<ProductVariantDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo phiên bản sản phẩm");
+                return ApiResult<ProductVariantDto>.Fail("Không tạo được phiên bản sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -149,7 +159,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<ProductVariantDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật phiên bản sản phẩm");
+                return ApiResult<ProductVariantDto>.Fail("Không cập nhật được phiên bản sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -164,7 +175,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật ảnh phiên bản sản phẩm");
+                return ApiResult<bool>.Fail("Không cập nhật được ảnh sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -179,7 +191,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật thông số phiên bản sản phẩm");
+                return ApiResult<bool>.Fail("Không cập nhật được thông số sản phẩm. Vui lòng thử lại.");
             }
         }
 
@@ -193,7 +206,8 @@ namespace Client.Services.Product
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "xoá phiên bản sản phẩm");
+                return ApiResult<bool>.Fail("Không xoá được phiên bản sản phẩm. Vui lòng thử lại.");
             }
         }
     }

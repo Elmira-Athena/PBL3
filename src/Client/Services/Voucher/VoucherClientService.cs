@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Vouchers;
@@ -7,11 +8,13 @@ namespace Client.Services.Voucher
     public class VoucherClientService : IVoucherClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<VoucherClientService> _logger;
         private const string BaseUrl = "api/vouchers";
 
-        public VoucherClientService(HttpClient httpClient)
+        public VoucherClientService(HttpClient httpClient, ILogger<VoucherClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PagedResult<VoucherDto>>> GetListAsync(VoucherFilterRequest request)
@@ -43,7 +46,8 @@ namespace Client.Services.Voucher
             }
             catch (Exception ex)
             {
-                return ApiResult<PagedResult<VoucherDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách mã giảm giá");
+                return ApiResult<PagedResult<VoucherDto>>.Fail("Không tải được danh sách mã giảm giá. Vui lòng thử lại.");
             }
         }
 
@@ -56,7 +60,8 @@ namespace Client.Services.Voucher
             }
             catch (Exception ex)
             {
-                return ApiResult<VoucherDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin mã giảm giá");
+                return ApiResult<VoucherDto>.Fail("Không tải được thông tin mã giảm giá. Vui lòng thử lại.");
             }
         }
 
@@ -70,7 +75,8 @@ namespace Client.Services.Voucher
             }
             catch (Exception ex)
             {
-                return ApiResult<VoucherDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tạo mã giảm giá");
+                return ApiResult<VoucherDto>.Fail("Không tạo được mã giảm giá. Vui lòng thử lại.");
             }
         }
 
@@ -84,7 +90,8 @@ namespace Client.Services.Voucher
             }
             catch (Exception ex)
             {
-                return ApiResult<VoucherDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "cập nhật mã giảm giá");
+                return ApiResult<VoucherDto>.Fail("Không cập nhật được mã giảm giá. Vui lòng thử lại.");
             }
         }
 
@@ -98,7 +105,8 @@ namespace Client.Services.Voucher
             }
             catch (Exception ex)
             {
-                return ApiResult<bool>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "xoá mã giảm giá");
+                return ApiResult<bool>.Fail("Không xoá được mã giảm giá. Vui lòng thử lại.");
             }
         }
 
@@ -114,7 +122,8 @@ namespace Client.Services.Voucher
             }
             catch (Exception ex)
             {
-                return ApiResult<VoucherDto>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "bật/tắt mã giảm giá");
+                return ApiResult<VoucherDto>.Fail("Không đổi được trạng thái mã giảm giá. Vui lòng thử lại.");
             }
         }
 
@@ -129,7 +138,8 @@ namespace Client.Services.Voucher
             }
             catch (Exception ex)
             {
-                return ApiResult<List<VoucherAvailabilityDto>>.Fail($"Lỗi kết nối: {ex.Message}");
+                _logger.LogError(ex, "Lỗi khi {Action}.", "tải mã giảm giá áp dụng được cho đơn");
+                return ApiResult<List<VoucherAvailabilityDto>>.Fail("Không tải được danh sách mã giảm giá. Vui lòng thử lại.");
             }
         }
     }
