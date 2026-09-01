@@ -11,6 +11,12 @@
     </ItemGroup>
 
     <ItemGroup>
+      <!-- KHAI TƯỜNG MINH dù đã có sẵn transitively qua Identity.EntityFrameworkCore.
+           `CacheService` có `using Microsoft.Extensions.Caching.Distributed`, tức code của
+           TA phụ thuộc trực tiếp vào gói này. Dựa vào đường transitive là để nó biến mất
+           lặng lẽ vào ngày ai đó gỡ hoặc nâng gói cha — và triệu chứng sẽ là một lỗi biên
+           dịch ở file hoàn toàn không liên quan. -->
+      <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.3" />
       <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.3" />
       <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.1" />
       <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.1">

@@ -212,6 +212,26 @@ Bốn quy tắc này sinh ra từ lỗi có thật đã sửa ở đợt 1 — v
   - Cột mã là `nvarchar(20)`, nên tiền tố 3 ký tự (`ORD`/`POS`/`SRV`) chịu tối đa **7 chữ số**.
     `ORD` và `POS` **dùng chung** một sequence vì cùng ghi vào `Orders.OrderCode`.
 
+- **Cache dữ liệu công khai — qua `ICacheService`, không phải `IMemoryCache` trực tiếp.**
+  (`src/Core/Interfaces/ICacheService.cs`, cài đặt ở `src/Infrastructure/Caching/`.) Nó bọc
+  `IDistributedCache` nên ngày chuyển sang Redis (đợt 8) là đổi **một** dòng đăng ký DI, không
+  phải sửa các chỗ gọi. Hiện `AddDistributedMemoryCache()` ⇒ **vẫn chưa dùng chung giữa các
+  task** — đừng dựa vào nó cho bất biến nào cần nhất quán xuyên instance.
+  ⚠️ **Mọi lỗi cache bị nuốt + log Warning**, kể cả `RemoveAsync` — nghĩa là xoá thất bại thì
+  dữ liệu **cũ còn tới khi TTL hết**. Với thứ gì mà "cũ" là SAI, đọc thẳng DB.
+  🚨 Exception từ `factory` của `GetOrCreateAsync` **không** bị nuốt: nuốt nó là biến "DB sập"
+  thành "danh mục rỗng" — loại lỗi tệ nhất vì nó **nói dối**.
+
+- **`DataProtection` key ring phải dùng chung khi có nhiều task.** Mặc định ASP.NET Core sinh
+  key ring vào ổ đĩa **của từng container**, nên link đặt lại mật khẩu / xác nhận email do task
+  A phát hành thì task B **không giải mã được**. Đã bật qua SSM Parameter Store, **có điều kiện**
+  `DataProtection:SsmPrefix` — thiếu cấu hình ⇒ hành vi như cũ (để `dotnet run` ở local vẫn chạy).
+  🚨 **Env var và chính sách IAM phải vào CÙNG một lần deploy.** Đã đo: đặt env var mà task role
+  chưa có quyền thì app **vẫn khởi động**, `health/live` xanh, ECS coi task healthy — nhưng
+  `IDataProtector.Protect` ném `CryptographicException`. Chỉ vài đường 500, không dashboard nào đỏ.
+  `SetApplicationName("HushStore")` **bắt buộc**: thiếu nó thì purpose string lấy theo tên
+  assembly, hai task ra khác nhau, và key ring dùng chung mà vẫn không giải mã được cho nhau.
+
 - **Không cache trạng thái phân quyền hay khoá tài khoản trong `MemoryCache`.**
   `IsActive`, role, quyền — đọc thẳng DB bằng projection. `MemoryCache` nằm trong RAM của
   **một** tiến trình; với nhiều task, hướng nguy hiểm là hướng **mở khoá**: cache nói tài
@@ -342,7 +362,15 @@ High đã vá và có cổng chặn ở CI; rò rỉ `ex.Message` đã chặn h�
 `check-error-message-leaks.sh`), và **nợ kiểm thử 🧪 ưu tiên 1 + 2 đã trả** — bốn luồng cuối
 (POS · nhập kho · xuất kho · phiếu dịch vụ) **đã chạy thật tới DB**, 4/4 ĐẠT, 0 bản ghi nhân đôi.
 
-Còn lại: **mục 🅹** (35 lời gọi GET chuyển sang `ApiCall.SendAsync`) và **đợt 4 → 6**.
+Còn lại: **mục 🅹** (35 lời gọi GET chuyển sang `ApiCall.SendAsync`), **nửa HẠ TẦNG của đợt 4**
+(chờ review), và **đợt 5 → 6**.
+
+🟡 **Nửa CODE của đợt 4 đã xong và đã đo** — `ICacheService`, `ShutdownTimeout = 45`,
+DataProtection → SSM ([bằng chứng](docs/evidence/ui/2026-09-01-goi-4-nua-code.md)). **Nửa hạ
+tầng chưa làm**, và có **hai thứ phải đọc trước khi chạm `infra/tf/`**: env var + IAM phải vào
+cùng một lần deploy (đã đo, có ca đối chứng), và **kế hoạch tự xung đột** ở
+`deregistration_delay` — `alb.tftest.hcl` khẳng định nó phải bằng `5` trong khi đợt 4 muốn `30`.
+Ba lối chọn ghi ở §Gói 4 của runbook.
 
 ✅ **Chốt chặn đợt 3 đã tháo, và tháo bằng cách đo thứ đáng đo.** `pre_migration_checks.sql`
 chạy được — nhưng trên **DB local có dữ liệu bẩn thật** do LoadProbe tạo, không trên RDS.

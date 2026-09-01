@@ -7,8 +7,13 @@
 · ✅ **LoadProbe 9/9 ĐẠT ở CẢ HAI cấu hình**, `0 KHÔNG KẾT LUẬN`. Bốn kịch bản phụ thuộc thời
 điểm (S03 · S04 · S07 · S08) được quan sát **5 lần** ở cấu hình 2 instance —
 [bằng chứng](evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md)
-· 🔴 **Kế tiếp: gói 4** (đợt 4 — DataProtection → SSM · connection pool · bộ số shutdown ·
-`ICacheService`). Local + `terraform plan`, **$0**.
+· 🟡 **Gói 4: nửa CODE XONG và ĐÃ ĐO, nửa HẠ TẦNG chờ bạn review** — `ICacheService`,
+`ShutdownTimeout = 45`, DataProtection → SSM (có điều kiện). Xem
+[§Gói 4](#-📋-gói-4--nửa-code-xong-nửa-hạ-tầng-chờ-review) và
+[bằng chứng](evidence/ui/2026-09-01-goi-4-nua-code.md).
+· 🚨 **Hai thứ PHẢI đọc trước khi chạm Terraform:** (1) env var `DataProtection__SsmPrefix` và
+chính sách IAM **phải vào cùng một lần deploy** — đã đo ca đối chứng; (2) **kế hoạch tự xung
+đột** ở `deregistration_delay`, ba lối chọn ghi trong §Gói 4.
 · 🚨 **Ba phát hiện của gói 3 đáng đọc trước khi viết code mới** — xem mục 🅶: (1) `RowVersion`
 đóng S08 chứ không phải index; (2) **unique index KHÔNG tự bảo vệ một hạn mức đếm được**;
 (3) **`ConflictExceptionHandler` bị CONTROLLER nuốt** — sửa ở tầng Service là không đủ.
@@ -103,7 +108,7 @@ khác nhau.
 | ~~**1**~~ ✅ **XONG 2026-09-01** | ~~mục 🅸 (124 chỗ, tầng Client) + nửa tầng Service của nợ 🧪~~ — cả hai đã xong, có ca đối chứng ([🅸](evidence/ui/2026-09-01-muc-I-ro-ri-tang-client.md) · [🧪](evidence/ui/2026-09-01-no-kiem-thu-nua-tang-service.md)) | local | $0 | ✅ đạt cả hai điều kiện |
 | ~~**2**~~ ✅ **XONG 2026-09-01** | ~~**đợt 3 phần 1**: SEQUENCE thay ruột `IDocumentCodeGenerator` + `IExceptionHandler` → 409~~ · **S01 🔴 → ✅** (50/50 đơn) | local | **$0** | ✅ đạt |
 | ~~**3**~~ ✅ **XONG 2026-09-01** | ~~**đợt 3 phần 2**: `RowVersion` 6 entity + 3 unique index + bắt `DbUpdateConcurrencyException`~~ · **S03 · S04 · S06 · S08 · S09 đều 🔴 → ✅** ([bằng chứng](evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md)) | local | **$0** | ✅ **vượt tiêu chí** — 9/9 ở cả hai cấu hình, không chỉ 3 kịch bản yêu cầu |
-| **4** ⬅ **kế tiếp** | **đợt 4**: DataProtection → SSM · connection pool · bộ số shutdown 30/45/90 · `ICacheService` | local + `terraform plan` | **$0** | `plan` sạch, build sạch, 6 file `.tftest.hcl` chưa đụng tới |
+| **4** ⬅ *nửa code XONG, nửa hạ tầng CHỜ REVIEW* | **đợt 4**: DataProtection → SSM · connection pool · bộ số shutdown 30/45/90 · `ICacheService` | local + `terraform plan` | **$0** | `plan` sạch, build sạch, 6 file `.tftest.hcl` chưa đụng tới |
 | **5** | **đợt 5**: Terraform scale-out + autoscale hai tầng + sửa 6 file test | AWS | ~$1 | 2 task trên 2 instance khác nhau, deploy 0 downtime |
 | **6** | **đợt 6**: đo tải + 7 hình + báo cáo | AWS | vài $ | báo cáo xong |
 
@@ -298,6 +303,91 @@ giao**, dù gói chưa xong — làm cố qua đây là chỗ chất lượng b�
 - **chốt mới** vào §6 nếu vừa thêm một bất biến,
 - **bẫy mới** vào §5 nếu vừa mất thời gian vì một thứ im lặng.
 
+
+---
+
+### 🟡 📋 Gói 4 — nửa CODE XONG, nửa HẠ TẦNG chờ review
+
+**Xong và đã đo** ([bằng chứng](evidence/ui/2026-09-01-goi-4-nua-code.md)):
+
+| Việc | Vị trí | Đã đo gì |
+|---|---|---|
+| `ICacheService` + `CacheService` | [`ICacheService.cs`](../src/Core/Interfaces/ICacheService.cs) · [`CacheService.cs`](../src/Infrastructure/Caching/CacheService.cs) | `GetOrCreateAsync` gọi factory **đúng 1 lần** cho 2 lượt đọc; miss và sau-`Remove` đều `null` |
+| `ShutdownTimeout = 45` | `Program.cs`, `Configure<HostOptions>` | option **thật sự bind**: đọc ra `45` lúc chạy |
+| DataProtection → SSM | `Program.cs`, có điều kiện `DataProtection:SsmPrefix` | 3 ca: không cấu hình ⇒ như cũ; có cấu hình + không quyền ⇒ 500 ầm ĩ |
+
+#### 🚨 Đọc hai khối này TRƯỚC khi mở `infra/tf/`
+
+**1. Env var và IAM phải vào CÙNG một lần deploy.** Đã đo, có ca đối chứng: đặt
+`DataProtection__SsmPrefix` mà task role chưa có quyền thì **app VẪN khởi động**, `health/live`
+xanh, ECS coi task healthy, ALB đưa traffic vào — nhưng `IDataProtector.Protect` ném
+`CryptographicException`. Ranh giới hỏng rất hẹp và không dashboard nào đỏ: **chỉ** link đặt
+lại mật khẩu, link xác nhận email, và antiforgery token chết. Trang chủ, đăng nhập, đặt hàng
+bình thường.
+
+**2. Kế hoạch TỰ XUNG ĐỘT ở `deregistration_delay`, cần bạn quyết.** Tiêu chí XONG của gói 4
+ghi *"6 file `.tftest.hcl` chưa đụng tới"*, nhưng đổi `deregistration_delay 5 → 30` là việc của
+đợt 4 và [`alb.tftest.hcl:167-170`](../infra/tf/modules/alb/tests/alb.tftest.hcl#L167-L170) khẳng
+định thẳng nó **phải bằng `5`**. Hai tiêu chí không thể cùng đúng. (Phụ: repo có **12** file
+`.tftest.hcl`, không phải 6 — con số 6 trong kế hoạch chưa được kiểm.)
+
+Test đó là **hợp đồng, không phải nhiễu** — lý lẽ của nó (`max_size 1` ⇒ draining chỉ kéo dài
+downtime) đúng *tại thời điểm viết*; đợt 5 mới nâng `max_size`. Ba lối:
+
+| Lối | Nội dung | Ghi chú |
+|---|---|---|
+| 1 | Đổi cả số lẫn test ở gói 4, **viết lại `error_message`** | ⚠️ phải đưa `stopTimeout = 90` vào **cùng** deploy, nếu không `ShutdownTimeout 45 > stopTimeout 30` ⇒ ECS `SIGKILL` giữa lúc drain — **xấu hơn hiện tại** |
+| 2 | **Hoãn `deregistration_delay` sang gói 5** *(khuyến nghị)* | Giữ ba số shutdown thành một thay đổi nguyên khối, cùng lúc `max_size` được nâng |
+| 3 | Đổi số, `-target` cho test pass tạm | **Không khuyến nghị** — đó là tắt hợp đồng |
+
+#### Nửa hạ tầng — CHƯA làm
+
+| Việc | Vị trí | Hiện tại | Đích |
+|---|---|---|---|
+| `deregistration_delay` | `modules/alb/alb.tf:58`, `:83` | `5` | `30` |
+| ECS `stopTimeout` | `modules/ecs/taskdef.tf`, container `api` + `web` | không khai | `90` |
+| `ECS_CONTAINER_STOP_TIMEOUT` | `modules/ecs/user_data.sh.tftpl:26` | `30s` | `90s` |
+| Connection pool | `modules/data/main.tf:126-134` | không có ⇒ mặc định **100/tiến trình** | `Max Pool Size=30; Min Pool Size=2; Connect Timeout=15` |
+| IAM task role | `modules/ecs/iam.tf` | chưa có | `ssm:GetParametersByPath` + `PutParameter` trên `/hushstore/prod/dataprotection/*` |
+| Env var | taskdef container `api` | chưa có | `DataProtection__SsmPrefix` |
+
+⚠️ **Sửa `user_data.sh.tftpl` ⇒ launch template version mới ⇒ `instance_refresh` kích hoạt ⇒
+instance BỊ THAY.** Lên lịch cùng cửa sổ với mọi thay đổi khác cũng recycle instance.
+
+🔴 **Prefix PHẢI hẹp:** `/hushstore/prod/dataprotection/*`, **không** `/hushstore/prod/*`. Cấp
+rộng là task role tự đọc được `connection-string`, `jwt-secret`, `db-password` — phá thẳng
+thiết kế "task role có blast radius nhỏ". Và dùng **task role**, không phải instance role:
+DENY `ssm:GetParameter*` ở `iam.tf:65-83` thuộc `aws_iam_role.instance`, **đừng chạm** nó.
+Điểm hay cho báo cáo: vì key ring nằm dưới `/hushstore/*`, nó **tự động được che** bởi chính
+DENY đó khỏi EC2 host — deliverable bảo mật cũ bảo vệ luôn tài sản mới, không phải sửa gì.
+
+`ssm:DescribeParameters` **không** hỗ trợ resource-level — **thử không có nó trước**, chỉ thêm
+khi CloudTrail chứng minh cần.
+
+#### 🔴 Một chệch khỏi kế hoạch, có ý thức: KHÔNG thêm gói Redis bây giờ
+
+Kế hoạch muốn *"đợt 8 chỉ bật một biến Terraform, không sửa code"*, tức thêm sẵn
+`Microsoft.Extensions.Caching.StackExchangeRedis`. **Không làm** — đó đi ngược bài học của mục
+D: `AutoMapper` từng nằm trong hai `.csproj` mà **không dòng code nào dùng**, và nó mang một lỗ
+hổng **High**. Gói chưa dùng là nợ bảo mật nằm im.
+
+Cái giá đã đo và rất nhỏ: đợt 8 thêm **1** `PackageReference` + đổi **1** dòng. `ICacheService`
+và mọi chỗ gọi nó **không đổi** — đó là phần kế hoạch thực sự muốn bảo vệ, và nó đã được bảo vệ.
+
+#### Công thức đo lại nửa code (nếu cần)
+
+Hai endpoint tạm đã dùng để đo **đã bị gỡ** (`grep __PROBE src/API/Program.cs` = 0). Muốn đo
+lại thì thêm lại theo mẫu trong [bằng chứng](evidence/ui/2026-09-01-goi-4-nua-code.md), và nhớ
+gỡ. Ba ca bắt buộc:
+
+```bash
+# A — không có SsmPrefix: API phải lên, cache phải chạy, ShutdownTimeout phải = 45
+# B — CÓ SsmPrefix, KHÔNG quyền AWS: API vẫn lên, nhưng Protect PHẢI ném CryptographicException
+DataProtection__SsmPrefix="/hushstore/prod/dataprotection/" dotnet run --project src/API/API.csproj …
+# C — đối chứng: bỏ biến trên, Protect phải THÀNH CÔNG
+```
+
+Ca B là ca không được bỏ: nó là thứ quyết định env var và IAM phải đi cùng nhau.
 
 ---
 
@@ -1548,6 +1638,28 @@ grep -n 'terminalStates = ' src/Infrastructure/Repositories/ServiceTicketReposit
 # 🅶 — chốt chặn dữ liệu của migration còn nguyên (đừng "dọn cho gọn")
 grep -c 'THROW 5000' src/Infrastructure/Migrations/*_AddConcurrencyTokensAndUniqueIndexes.cs  # 2
 test -f Infrastructure/db/fixes/dedupe_inventory_adjustment_logs.sql && echo "script dọn: CÓ"
+
+# 🅹/gói 4 — nửa code của đợt 4
+grep -c 'ShutdownTimeout = TimeSpan.FromSeconds(45)' src/API/Program.cs      # kỳ vọng 1
+grep -c '^builder.Services.AddDistributedMemoryCache();' src/API/Program.cs  # kỳ vọng 1
+#   ⚠️ PHẢI neo `^builder.Services.` — cụm `AddDistributedMemoryCache` cũng xuất hiện 2 lần
+#      trong comment giải thích, nên `grep -c` trần ra 3 và chốt sẽ đỏ oan. Cùng loại lỗi đã
+#      mắc ở chốt SEQUENCE của gói 2 (`NEXT VALUE FOR` ra 2 vì trùng comment).
+grep -c 'PersistKeysToAWSSystemsManager' src/API/Program.cs                 # kỳ vọng 1
+grep -c 'SetApplicationName("HushStore")' src/API/Program.cs                # kỳ vọng 1
+#   ⚠️ SetApplicationName THIẾU thì purpose string lấy theo tên assembly và hai task có thể
+#      ra khác nhau — key ring dùng chung mà vẫn không giải mã được cho nhau. Bug NGƯỢC LẠI
+#      với thứ đang sửa, và im lặng hơn.
+
+# 🚨 DataProtection PHẢI có điều kiện. Bật vô điều kiện là làm `dotnet run` ở local chết
+#    ngay lúc khởi động, và làm production 500 ở đường quên-mật-khẩu nếu IAM chưa vào.
+grep -c 'builder.Configuration\["DataProtection:SsmPrefix"\]' src/API/Program.cs   # kỳ vọng 1
+
+# gói 4 — endpoint đo tạm PHẢI đã được gỡ
+grep -c '__PROBE' src/API/Program.cs                                        # kỳ vọng 0
+
+# gói 4 — gói Redis CỐ Ý chưa thêm (xem lý do ở §Gói 4). Dòng này phải RỖNG cho tới đợt 8.
+grep -rn 'StackExchangeRedis' src/*/*.csproj
 
 # E — khuôn hai tầng còn nguyên ở OrderService (nơi mục 🅴 sửa)
 grep -c 'throw new BusinessRuleException' src/Service/Orders/OrderService.cs   # kỳ vọng: 14

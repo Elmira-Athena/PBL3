@@ -15,11 +15,14 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PBL3.Core.Entities;
-using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Infrastructure.Repositories;
 using PBL3.API.Filters;
+using Amazon.AspNetCore.DataProtection.SSM;
+using Microsoft.AspNetCore.DataProtection;
 using PBL3.API.Middleware;
+using PBL3.Core.Interfaces;
+using PBL3.Infrastructure.Caching;
 using PBL3.Service.Common;
 using PBL3.Service.Auth;
 using PBL3.Service.Categories;
@@ -61,6 +64,96 @@ builder.Services.AddControllers(options =>
 });
 
 builder.Services.AddMemoryCache();
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CACHE PHÂN TÁN — khung cho đợt 8, mặc định chạy trong RAM
+// ════════════════════════════════════════════════════════════════════════════════
+// `AddMemoryCache()` ở trên vẫn giữ cho các chỗ đang dùng `IMemoryCache` trực tiếp.
+// `ICacheService` là đường đi MỚI, và lý do nó tồn tại: MemoryCache nằm trong RAM của
+// MỘT tiến trình, nên với nhiều task hai request của cùng một người có thể thấy hai câu
+// trả lời khác nhau.
+//
+// `AddDistributedMemoryCache()` cài đặt IDistributedCache bằng… bộ nhớ tiến trình. Nghe
+// như vô nghĩa, nhưng nó KHÔNG phải: nó khoá HÌNH DẠNG LỜI GỌI ngay từ bây giờ, nên
+// ngày chuyển sang Redis không phải ngày viết lại các chỗ gọi.
+//
+// ⚠️ ĐỌC KỸ: cài đặt hiện tại KHÔNG dùng chung giữa các task. Đừng dựa vào nó cho bất
+// biến nào cần nhất quán xuyên instance — và TUYỆT ĐỐI không cache `IsActive` / role /
+// quyền qua đây (luật ở CLAUDE.md). Nó dành cho dữ liệu công khai, ít đổi.
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddScoped<ICacheService, CacheService>();
+
+// 🔴 CHỆCH KHỎI KẾ HOẠCH GỐC MỘT CÁCH CÓ Ý THỨC — đọc trước khi "sửa cho đúng kế hoạch".
+// Kế hoạch đợt 4 nói mục tiêu là "đợt 8 chỉ bật một biến Terraform, KHÔNG phải sửa code",
+// tức là thêm sẵn `Microsoft.Extensions.Caching.StackExchangeRedis` + nhánh
+// `AddStackExchangeRedisCache(...)` ngay bây giờ.
+//
+// KHÔNG LÀM VẬY, vì nó đi ngược bài học đắt nhất của mục D: gói `AutoMapper` từng nằm
+// trong `API.csproj` và `Service.csproj` mà KHÔNG một dòng code nào dùng — và nó mang
+// một lỗ hổng High (GHSA-rvv3-g6hj-g44x). Một gói chưa dùng không phải "chuẩn bị trước",
+// nó là một khoản nợ bảo mật nằm im. Cổng CI `check-vulnerable-packages.sh` ra đời chính
+// vì chuyện đó.
+//
+// Cái giá của việc hoãn được đo rõ và rất nhỏ: đợt 8 phải thêm 1 PackageReference và đổi
+// 1 dòng dưới đây thành:
+//     var redis = builder.Configuration.GetConnectionString("Redis");
+//     if (!string.IsNullOrWhiteSpace(redis))
+//         builder.Services.AddStackExchangeRedisCache(o => o.Configuration = redis);
+//     else
+//         builder.Services.AddDistributedMemoryCache();
+// Hai dòng code, đổi lấy việc không mang một gói không dùng qua bốn đợt. `ICacheService`
+// và mọi chỗ gọi nó KHÔNG đổi — đó mới là phần mà kế hoạch thực sự muốn bảo vệ.
+
+// ════════════════════════════════════════════════════════════════════════════════
+// DATA PROTECTION — key ring dùng chung qua SSM Parameter Store
+// ════════════════════════════════════════════════════════════════════════════════
+// 🔴 LỖI THẬT ĐANG ĐƯỢC SỬA, không phải dọn dẹp cho đẹp. Mặc định ASP.NET Core sinh key
+// ring vào ổ đĩa CỦA TỪNG CONTAINER. Với 2 task, token do task A phát hành thì task B
+// KHÔNG giải mã được — cụ thể là link đặt lại mật khẩu và link xác nhận email của
+// Identity, cộng antiforgery token. Triệu chứng đúng loại khó nhất: "lúc được lúc không
+// tuỳ ALB định tuyến", không tái hiện được trên máy một tiến trình.
+//
+// ⚠️ CÓ ĐIỀU KIỆN, và điều kiện này quan trọng. Chỉ bật khi `DataProtection:SsmPrefix`
+// có giá trị — Terraform sẽ đặt nó ở nửa hạ tầng của đợt 4. Bật vô điều kiện là làm
+// `dotnet run` ở máy local chết ngay lúc khởi động vì không có credential AWS, và làm
+// production chết nếu task role chưa được cấp quyền. Thiếu cấu hình ⇒ hành vi y như cũ.
+//
+// 🚨 PREFIX PHẢI HẸP: `/hushstore/prod/dataprotection/`, KHÔNG phải `/hushstore/prod/`.
+// Cấp rộng là task role tự đọc được `connection-string`, `jwt-secret`, `db-password` —
+// phá thẳng thiết kế "task role có blast radius nhỏ".
+//
+// SetApplicationName BẮT BUỘC: thiếu nó thì purpose string mặc định lấy theo tên
+// assembly, và hai task có thể ra khác nhau — key ring dùng chung mà vẫn không giải mã
+// được cho nhau, tức là bug NGƯỢC LẠI với điều ta đang sửa, và im lặng hơn.
+var dataProtectionSsmPrefix = builder.Configuration["DataProtection:SsmPrefix"];
+if (!string.IsNullOrWhiteSpace(dataProtectionSsmPrefix))
+{
+    builder.Services.AddDataProtection()
+        .SetApplicationName("HushStore")
+        .PersistKeysToAWSSystemsManager(dataProtectionSsmPrefix);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// SHUTDOWN — 45 giây, là số GIỮA của bộ ba 30/45/90
+// ════════════════════════════════════════════════════════════════════════════════
+// Ràng buộc phải thoả: deregistration_delay + ShutdownTimeout < ECS stopTimeout
+//                      30                  + 45              = 75 < 90   (biên 15s)
+//
+// 🔴 Hiện tại biên là 0: `deregistration_delay = 5` và ShutdownTimeout mặc định 30 giây
+// chạy SONG SONG, nên request đang bay có thể bị cắt giữa dòng lúc rolling deploy.
+//
+// 🚨 HAI SỐ CÒN LẠI NẰM Ở TERRAFORM và CHƯA ĐƯỢC ĐỔI (nửa hạ tầng của đợt 4):
+//   · deregistration_delay 5 → 30  —  infra/tf/modules/alb/alb.tf:58 và :83
+//   · ECS stopTimeout (chưa khai) → 90  —  taskdef.tf, container `api` và `web`
+//   · ECS_CONTAINER_STOP_TIMEOUT 30s → 90s  —  modules/ecs/user_data.sh.tftpl:26
+//
+// ⚠️ Đổi MỘT MÌNH số này là làm tình hình XẤU HƠN, không tốt hơn: 45 > stopTimeout mặc
+// định 30 giây của ECS, nên ECS sẽ SIGKILL container trong lúc nó còn đang chờ drain.
+// Ba số là MỘT thay đổi; đừng deploy nửa này mà không deploy nửa kia.
+builder.Services.Configure<HostOptions>(options =>
+{
+    options.ShutdownTimeout = TimeSpan.FromSeconds(45);
+});
 
 // CORS: Cho phép Frontend (Blazor WASM) gọi API
 var allowedOrigins = builder.Configuration["AllowedOrigins"]?.Split(',')
@@ -423,6 +516,9 @@ builder.Services.AddHsts(options =>
 });
 
 var app = builder.Build();
+
+
+
 
 // Migration KHÔNG chạy ở startup nữa. Từ Task 13 trở đi, schema do một ECS
 // task riêng chạy EF Core migration bundle dựng lên, và pipeline chỉ deploy
