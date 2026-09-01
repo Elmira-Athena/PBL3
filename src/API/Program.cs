@@ -19,6 +19,7 @@ using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Infrastructure.Repositories;
 using PBL3.API.Filters;
+using PBL3.API.Middleware;
 using PBL3.Service.Common;
 using PBL3.Service.Auth;
 using PBL3.Service.Categories;
@@ -179,6 +180,10 @@ builder.Services.AddScoped<ISerialRepairLogRepository, SerialRepairLogRepository
 builder.Services.AddScoped<IBannerRepository, BannerRepository>();
 
 // DI: Unit of Work
+// Cấp số cho mã chứng từ bằng SQL SEQUENCE (đợt 3). Nằm ở nhóm Repositories vì nó
+// chạm DB trực tiếp; xem IDocumentSequence để biết vì sao nó là một lớp trừu tượng riêng.
+builder.Services.AddScoped<IDocumentSequence, DocumentSequenceRepository>();
+
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // DI: Services
@@ -192,7 +197,16 @@ builder.Services.AddScoped<IProductSerialService, ProductSerialService>();
 builder.Services.AddScoped<IInventorySyncService, InventorySyncService>();
 
 // Sinh mã chứng từ (ORD/POS/PN/KK/ST/SRV) — gom 7 khối trùng lặp về một chỗ.
+// Đợt 3 đã thay ruột: số thứ tự do SQL SEQUENCE cấp, không còn "đọc mã cuối rồi +1".
 builder.Services.AddScoped<IDocumentCodeGenerator, DocumentCodeGenerator>();
+
+// ── Ánh xạ xung đột đồng thời sang 409 (đợt 3, mục 🅶) ──
+// Chạy TRƯỚC khối UseExceptionHandler(500) ở phần app phía dưới. AddProblemDetails()
+// là điều kiện của IExceptionHandler trong ASP.NET Core — thiếu nó thì handler vẫn
+// được gọi nhưng fallback mất ProblemDetails; ta không dùng ProblemDetails cho thân
+// phản hồi (repo dùng ApiResult<T>), nhưng vẫn đăng ký cho đúng khuôn framework.
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ConflictExceptionHandler>();
 
 // Làm sạch HTML người dùng nhập, áp TRÊN ĐƯỜNG GHI. Singleton vì HtmlSanitizer
 // dựng khá tốn (kéo theo AngleSharp) và an toàn để dùng lại sau khi cấu hình.
@@ -471,6 +485,13 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+// ── Xung đột đồng thời → 409, KHÔNG phải 500 (đợt 3) ──
+//
+// ⚠️ ConflictExceptionHandler được đăng ký bằng AddExceptionHandler<T>() ở phần
+// builder phía trên. UseExceptionHandler chạy danh sách IExceptionHandler TRƯỚC,
+// và chỉ rơi xuống khối 500 dưới đây khi mọi handler trả về false.
+// Đổi thứ tự hai thứ này là làm ConflictExceptionHandler thành code chết mà KHÔNG
+// có gì báo lỗi — đã kiểm chạy thật, xem bằng chứng của mục 🅶.
 app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
 {
     ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;

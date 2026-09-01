@@ -9,39 +9,27 @@ namespace PBL3.Service.Common
         /// Độ rộng phần số thứ tự.
         /// </summary>
         /// <remarks>
-        /// TRƯỚC ĐÂY LÀ 3 — và đó là quả bom hẹn giờ, không phải chuyện thẩm mỹ:
-        /// mã cuối trong ngày được tìm bằng <c>ORDER BY Code DESC</c>, tức SO SÁNH CHUỖI.
-        /// Quá 999 chứng từ/ngày thì "...-1000" sắp TRƯỚC "...-999" theo thứ tự chuỗi,
-        /// nên truy vấn luôn trả về "-999", số kế tiếp luôn ra 1000, và hệ thống sinh
-        /// mã trùng VĨNH VIỄN kể từ đó.
+        /// LỊCH SỬ, giữ lại vì nó giải thích vì sao con số là 6 chứ không phải 3:
+        /// bản đầu dùng 3, và mã cuối trong ngày được tìm bằng <c>ORDER BY Code DESC</c>,
+        /// tức SO SÁNH CHUỖI. Quá 999 chứng từ/ngày thì "...-1000" sắp TRƯỚC "...-999",
+        /// nên truy vấn luôn trả về "-999" và hệ thống sinh mã trùng VĨNH VIỄN.
         ///
-        /// 6 chữ số đẩy trần lên 999.999 chứng từ/ngày. Cột mã rộng 20 ký tự,
-        /// mã dài nhất là "ORD-yyyyMMdd-NNNNNN" = 19 ký tự => vừa.
+        /// ✅ Đợt 3 đã bỏ hẳn việc so sánh chuỗi VÀ bỏ hẳn việc đọc mã cũ. Số thứ tự nay
+        /// do SQL SEQUENCE cấp, nên độ rộng chỉ còn là chuyện ĐỊNH DẠNG — không còn là
+        /// chuyện đúng/sai. Giới hạn thật bây giờ là ĐỘ RỘNG CỘT (nvarchar(20)):
+        /// tiền tố 3 ký tự chịu được tối đa 7 chữ số. Xem comment ở
+        /// <c>HushStoreDbContext.OnModelCreating</c>.
         ///
-        /// Riêng việc đổi độ rộng KHÔNG an toàn nếu vẫn giữ cách so sánh chuỗi: mã cũ
-        /// "-001" luôn sắp trên mã mới "-000002". Vì vậy repository nay trả về cả danh
-        /// sách mã trong ngày và chỗ này tự lấy max theo SỐ — cách so sánh chuỗi bị bỏ hẳn.
+        /// <c>ToString("D6")</c> KHÔNG cắt số: khi sequence vượt 999.999 nó tự in 7 chữ số.
+        /// Đó là hành vi đúng — thà mã dài hơn một ký tự còn hơn sinh mã trùng.
         /// </remarks>
         private const int NumberWidth = 6;
 
-        private readonly IOrderRepository _orderRepo;
-        private readonly IImportReceiptRepository _receiptRepo;
-        private readonly IInventoryCheckRepository _checkRepo;
-        private readonly IServiceTicketRepository _ticketRepo;
-        private readonly IServiceInvoiceRepository _invoiceRepo;
+        private readonly IDocumentSequence _sequence;
 
-        public DocumentCodeGenerator(
-            IOrderRepository orderRepo,
-            IImportReceiptRepository receiptRepo,
-            IInventoryCheckRepository checkRepo,
-            IServiceTicketRepository ticketRepo,
-            IServiceInvoiceRepository invoiceRepo)
+        public DocumentCodeGenerator(IDocumentSequence sequence)
         {
-            _orderRepo = orderRepo;
-            _receiptRepo = receiptRepo;
-            _checkRepo = checkRepo;
-            _ticketRepo = ticketRepo;
-            _invoiceRepo = invoiceRepo;
+            _sequence = sequence;
         }
 
         public async Task<string> NextAsync(DocumentCodeKind kind)
@@ -50,19 +38,12 @@ namespace PBL3.Service.Common
             // loại khác dùng UtcNow — hai chứng từ tạo cùng lúc có thể rơi vào hai NGÀY
             // khác nhau trong mã, và ngày trong mã lệch với cột ngày (vốn luôn lưu UTC).
             var datePart = DateTime.UtcNow.ToString("yyyyMMdd");
-            var prefix = $"{PrefixOf(kind)}-{datePart}-";
 
-            var todayCodes = await GetCodesAsync(kind, prefix);
+            // Một round-trip, không khoá, không đọc dữ liệu cũ. Đây là toàn bộ bản vá:
+            // không còn "đọc rồi +1" nên không còn khe hở giữa đọc và ghi.
+            var next = await _sequence.NextValueAsync(SequenceOf(kind));
 
-            var max = 0;
-            foreach (var code in todayCodes)
-            {
-                if (code.Length <= prefix.Length) continue;
-                if (int.TryParse(code[prefix.Length..], out var n) && n > max)
-                    max = n;
-            }
-
-            return prefix + (max + 1).ToString(new string('0', NumberWidth));
+            return $"{PrefixOf(kind)}-{datePart}-{next.ToString(new string('0', NumberWidth))}";
         }
 
         private static string PrefixOf(DocumentCodeKind kind) => kind switch
@@ -76,14 +57,18 @@ namespace PBL3.Service.Common
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Loại chứng từ không được hỗ trợ.")
         };
 
-        private Task<List<string>> GetCodesAsync(DocumentCodeKind kind, string prefix) => kind switch
+        /// <remarks>
+        /// 🔴 <c>Order</c> và <c>PosOrder</c> dùng CHUNG một sequence — cả hai ghi vào cùng
+        /// cột <c>Orders.OrderCode</c> có unique index. Đừng tách ra "cho gọn".
+        /// </remarks>
+        private static string SequenceOf(DocumentCodeKind kind) => kind switch
         {
             DocumentCodeKind.Order or DocumentCodeKind.PosOrder
-                                            => _orderRepo.GetCodesByDatePrefixAsync(prefix),
-            DocumentCodeKind.ImportReceipt  => _receiptRepo.GetCodesByDatePrefixAsync(prefix),
-            DocumentCodeKind.InventoryCheck => _checkRepo.GetCodesByDatePrefixAsync(prefix),
-            DocumentCodeKind.ServiceTicket  => _ticketRepo.GetCodesByDatePrefixAsync(prefix),
-            DocumentCodeKind.ServiceInvoice => _invoiceRepo.GetCodesByDatePrefixAsync(prefix),
+                                            => DocumentSequences.Order,
+            DocumentCodeKind.ImportReceipt  => DocumentSequences.ImportReceipt,
+            DocumentCodeKind.InventoryCheck => DocumentSequences.InventoryCheck,
+            DocumentCodeKind.ServiceTicket  => DocumentSequences.ServiceTicket,
+            DocumentCodeKind.ServiceInvoice => DocumentSequences.ServiceInvoice,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Loại chứng từ không được hỗ trợ.")
         };
     }

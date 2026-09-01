@@ -55,6 +55,22 @@ for label, pat in LAYERS:
             st = ln.strip()
             if st.startswith('//') or st.startswith('*') or '_logger' in ln:
                 continue          # comment, hoặc đi vào log — đều được phép
+
+            # NGỮ CẢNH THỨ HAI: nhánh switch-expression khớp KIỂU, không phải khối catch.
+            #   ConcurrentModificationException ex => ex.Message,
+            # Chốt này vốn chỉ biết phân loại theo `catch (...)` bọc ngoài, nên nó đọc
+            # nhánh trên thành "catch(None)" và báo rò rỉ — SAI, vì kiểu ở đây nằm ngay
+            # trong BUSINESS và message đã là câu tiếng Việt soạn cho người dùng.
+            # Phát hiện khi thêm ConflictExceptionHandler (mục 🅶): ánh xạ exception sang
+            # 409 tự nhiên viết bằng switch expression chứ không bằng try/catch.
+            #
+            # ⚠️ Không nới rộng thành "bỏ qua mọi nhánh `=>`": kiểu nghiệp vụ BẮT BUỘC
+            # phải xuất hiện TRÊN CÙNG MỘT DÒNG với ex.Message. Nhờ vậy không mở được
+            # lỗ hổng — muốn qua chốt thì phải viết tường minh kiểu mình đang relay.
+            arm = re.search(r'(\w+Exception)\s+\w+\s*=>', ln)
+            if arm and arm.group(1) in BUSINESS:
+                continue
+
             if cur not in BUSINESS:
                 leaks.append((label, f, i, cur, st[:90]))
 

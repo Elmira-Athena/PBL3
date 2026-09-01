@@ -1,12 +1,17 @@
 # Bắt đầu phiên mới — đọc file này trước
 
 **Cập nhật:** 2026-09-01 · **Trạng thái repo:** nhánh `fix/muc-I-client-error-leaks`, build
-`0 Error(s)` / 184 cảnh báo · **RDS đang TẮT**
+`0 Error(s)` / 184 cảnh báo · **RDS đã bật rồi TẮT LẠI trong phiên này**
 · **Đã xong:** đợt 1, mục 4.1, đợt 2, **A**, **B**, **C**, **D**, **🅴**, **🅷**, **🅸**,
-**nợ 🧪 ưu tiên 1 + 2 (cả nửa giao diện lẫn nửa tầng Service)** — tức **gói 1 XONG**
-· **Kế tiếp:** **gói 2** — tháo chặn đợt 3 (`pre_migration_checks.sql` trên RDS) + SEQUENCE.
-Đây là **điểm quyết định**: gói 2 cần một cửa sổ RDS (~14 phút bật, < $0.01).
-Việc còn lại vẫn gộp thành **6 gói, mỗi gói một phiên** — xem bảng ở §2.
+**nợ 🧪 ưu tiên 1 + 2** (**gói 1 XONG**), và **phần CODE của gói 2** — SEQUENCE (**S01 🔴 → ✅,
+50/50 đơn**) + ánh xạ 409 (đã đo, có ca đối chứng âm)
+· 🔴 **Kế tiếp: một QUYẾT ĐỊNH, không phải một việc.** Nửa AWS của gói 2 —
+`pre_migration_checks.sql` trên RDS — **dừng lại vì tiền đề của nó SAI**: RDS này không có lịch
+sử production (dựng mới 2026-08-24 từ Terraform + seeder), nên câu trả lời sẽ rỗng vì *chưa luồng
+nghiệp vụ nào từng chạy*, **không** vì dữ liệu sạch. Ba lựa chọn ở mục 🅶 — **khuyến nghị lựa chọn
+1 hoặc 3, cả hai $0.**
+· 🚨 **Và đọc §"S03" ở mục 🅶 trước khi xem bảng 9 kịch bản:** sửa S01 đã **tháo mất một tấm lưới
+an toàn tình cờ**, làm lộ một lỗi có sẵn. `4 đạt / 5 hỏng` **không** phải hồi quy.
 
 > 🚦 **Nếu bạn chỉ đọc được một khối, đọc §2.** Nó nói phiên này làm gì, dừng ở đâu, và bàn
 > giao cái gì. Mọi mục chữ cái (🅰…🅸) ở §2bis là **hồ sơ tra cứu**, không phải danh sách việc.
@@ -89,7 +94,7 @@ khác nhau.
 | Gói | Nội dung | Chạy ở đâu | Tiền | Gói coi là XONG khi |
 |---|---|---|---|---|
 | ~~**1**~~ ✅ **XONG 2026-09-01** | ~~mục 🅸 (124 chỗ, tầng Client) + nửa tầng Service của nợ 🧪~~ — cả hai đã xong, có ca đối chứng ([🅸](evidence/ui/2026-09-01-muc-I-ro-ri-tang-client.md) · [🧪](evidence/ui/2026-09-01-no-kiem-thu-nua-tang-service.md)) | local | $0 | ✅ đạt cả hai điều kiện |
-| **2** ⬅ *kế tiếp* | **tháo chặn đợt 3** (`pre_migration_checks.sql` trên RDS) + **đợt 3 phần 1**: SEQUENCE thay ruột `IDocumentCodeGenerator` + `IExceptionHandler` → 409 | local + **một** cửa sổ RDS | **< $0.01** | **S01 chuyển 🔴 → ✅** và hai câu hỏi nghiệp vụ đã có câu trả lời |
+| **2** ⬅ *nửa code XONG, nửa AWS DỪNG* | **tháo chặn đợt 3** (`pre_migration_checks.sql` trên RDS) + **đợt 3 phần 1**: SEQUENCE thay ruột `IDocumentCodeGenerator` + `IExceptionHandler` → 409 | local + **một** cửa sổ RDS | **< $0.01** | ✅ **S01 đã chuyển 🔴 → ✅** · ⚠️ hai câu hỏi nghiệp vụ: **một trả lời được, một KHÔNG** — xem mục 🅶 |
 | **3** | **đợt 3 phần 2**: `RowVersion` 6 entity + 3 unique index + bắt `DbUpdateConcurrencyException` | local | **$0** | **S04 · S06 · S08 chuyển 🔴 → ✅ ở CẢ HAI cấu hình** |
 | **4** | **đợt 4**: DataProtection → SSM · connection pool · bộ số shutdown 30/45/90 · `ICacheService` | local + `terraform plan` | **$0** | `plan` sạch, build sạch, 6 file `.tftest.hcl` chưa đụng tới |
 | **5** | **đợt 5**: Terraform scale-out + autoscale hai tầng + sửa 6 file test | AWS | ~$1 | 2 task trên 2 instance khác nhau, deploy 0 downtime |
@@ -1053,31 +1058,124 @@ thay chuỗi. Nhét vào gói 1 là làm gói 1 tràn. Ứng viên cho gói 4 ho
 
 ---
 
-### 🅶 Đợt 3 — **VẪN BỊ CHẶN CỨNG**
+### 🅶 Đợt 3 — **nửa CODE xong, nửa AWS dừng vì tiền đề SAI**
 
-Không bắt đầu đợt 3 trước khi có kết quả `Infrastructure/db/checks/pre_migration_checks.sql`
-**chạy trên RDS**. Chạy trên DB local là vô nghĩa: local gần như rỗng (Orders = 0,
-ProductSerials = 0, Products = 2).
+#### ✅ Phần 1 phần code — XONG 2026-09-01, đã đo
 
-Hai câu hỏi và hệ quả:
+Bằng chứng đầy đủ: [`evidence/loadprobe/2026-09-01-muc-G-sequence-va-409.md`](evidence/loadprobe/2026-09-01-muc-G-sequence-va-409.md)
 
-| Câu hỏi | Nếu kết quả là… | Thì… |
-|---|---|---|
-| `Vouchers.MaxUsesPerUser` có giá trị `> 1` không? | toàn `NULL`/`1` | unique index `(UserId, VoucherId)` là đủ |
-| | có `> 1` | phải thêm cột `SeqPerUser` + backfill `ROW_NUMBER()` — **thêm ~1 ngày công** |
-| `InventoryAdjustmentLogs` đã có bản ghi trùng chưa? | rỗng | thêm unique index thẳng |
-| | **có** | phát sinh **việc nghiệp vụ**: dọn dữ liệu + đối chiếu sổ tổn thất |
+| Việc | Kết quả |
+|---|---|
+| **SEQUENCE thay ruột `IDocumentCodeGenerator`** | **S01: 🔴 → ✅** · `200×50`, 50 mã phân biệt (trước: `200×12, 400×38`) |
+| Xoá 5 `GetCodesByDatePrefixAsync` | `grep` → **0**. Xoá chứ không để lại. |
+| Migration `AddDocumentCodeSequences` | 5 `CreateSequence`, **không đổi bảng nào**; đã kiểm **đảo được cả hai chiều** (`0 → 5`) |
+| **`ConflictExceptionHandler` → 409** | đã đo 3 ca, **kèm ca đối chứng âm** (exception không phải xung đột → vẫn 500) |
 
-Script **đã sửa cho khớp schema thật** và chạy sạch — chỉ cần trỏ connection string sang RDS.
+Hai điểm thiết kế cần biết trước khi động vào:
 
-🔴 **Mục C vừa làm câu hỏi thứ hai nặng hơn hẳn.** LoadProbe S06 tái hiện được lỗi nhân
-bản `InventoryAdjustmentLogs` (5 lần `approve` → **5 bản ghi** cho cùng một
-`(AuditCheckId, SerialId)`) trên DB sạch, ngay lần chạy đầu. Lỗi này đã chạy trên
-production một thời gian, nên xác suất bảng đó **đã có** bản ghi trùng là cao. Nếu đúng,
-việc phát sinh là **dọn dữ liệu + đối chiếu sổ tổn thất — việc nghiệp vụ, không phải kỹ
-thuật**. Biết bây giờ thì còn thời gian xử; biết lúc migration fail thì không.
+- **Sequence TOÀN CỤC, không reset theo ngày.** Chính yêu cầu "reset mỗi ngày" là thứ bắt buộc
+  phải có `SELECT MAX`, tức **là** nguyên nhân của race. Bỏ reset = bỏ nguyên nhân.
+  Hệ quả: dãy mã **có lỗ** (`NEXT VALUE FOR` không mang tính giao dịch), và số trong mã **không**
+  còn là "chứng từ thứ N". Trần: cột `nvarchar(20)` ⇒ tiền tố 3 ký tự chịu tối đa **7 chữ số**.
+- **`ConflictExceptionHandler` HIỆN chưa với tới được từ đường nghiệp vụ nào** — mọi service đều
+  `catch (Exception)` và nuốt `DbUpdateException` trước khi nó thoát ra middleware. Đây **đúng
+  như kế hoạch sắp xếp** (việc `throw;` lại nằm ở phần 2 cùng `RowVersion`), và là cùng khuôn
+  "dựng bên nhận trước" đã dùng ở đợt 2 với ánh xạ 409 phía client. Giá trị của việc đo hôm nay:
+  gói 3 gắn `RowVersion` vào và **biết chắc dây nối đã sống**.
 
-**Bật RDS một lần rồi chạy script là việc rẻ nhất còn lại trong toàn bộ kế hoạch.**
+#### 🚨 Đọc bảng 9 kịch bản cho đúng — sửa S01 đã THÁO MẤT một tấm lưới an toàn
+
+Sau khi sửa: **4 đạt / 5 hỏng / 0 không kết luận** (1 instance). Lần trước: **5 đạt / 4 hỏng**.
+Trông như đi lùi. **Không phải.**
+
+| # | Trước | Sau | |
+|---|---|---|---|
+| S01 | 🔴 | **✅** | đã sửa bằng SEQUENCE |
+| S03 | ✅ | **🔴** | **lộ ra**, không phải mới hỏng |
+| S04 | ✅ | 🔴 | phụ thuộc thời điểm, đã trong hợp "đã từng sai" |
+| S06 · S08 · S09 | 🔴 | 🔴 | đã biết — việc của gói 3 |
+| S02 · S05 · S07 | ✅ | ✅ | không đổi |
+
+**Bằng chứng S03 là "lộ ra" chứ không phải "mới hỏng"** — so mã HTTP của chính nó:
+
+| | Mã HTTP | `COUNT(VoucherUsages)` | |
+|---|---|---|---|
+| Trước SEQUENCE | **`200×1, 400×9`** | 1 | ✅ |
+| Sau SEQUENCE | **`200×10`** | **10** | 🔴 |
+
+S03 bắn 10 checkout của **cùng một khách** với `MaxUsesPerUser = 1`. Trước đây **9/10 request
+chết ngay ở bước sinh mã đơn** — tức đúng lỗi S01 — nên chỉ 1 request tới được logic voucher và
+bất biến đúng **một cách tình cờ**. Sửa S01 xong, cả 10 tới được, và check-then-act ở đường
+"số lượt mỗi người" hiện nguyên hình.
+
+> 🔴 **Và đây là phần đáng lo nhất: chốt `KHÔNG KẾT LUẬN` KHÔNG bắt được ca này.** Bộ đo báo
+> `0 KHÔNG KẾT LUẬN` ở **cả hai** lần chạy, đúng — 9 request kia **thật sự đã chạy** và **thật
+> sự trả `400`**. Bộ đo không có cách nào biết `400` đó đến từ **một lỗi khác** chứ không từ bất
+> biến đang đo. Đã ghi thành **bẫy #17**.
+
+#### 🔴 Phần AWS — DỪNG, và lý do thứ hai mới là lý do thật
+
+RDS đã bật (`available` sau **~16 phút**, hơi lâu hơn con số ~14 phút đã ghi) và **đã tắt lại
+ngay** khi rõ cửa sổ này không dùng được — theo đúng **dấu hiệu dừng #2**.
+
+**Lý do 1 — RDS không với tới được từ máy local, có chủ đích.**
+
+| Kiểm | Kết quả |
+|---|---|
+| `PubliclyAccessible` | **`false`** |
+| SG RDS inbound 1433 | **chỉ từ `hushstore-web-sg`**, **0 dải CIDR** |
+| EC2 đang chạy · SSM node · NAT gateway · ECS container instance | **0 · 0 · 0 · 0** |
+
+Đây là **thành quả bảo mật đã nghiệm thu** (`evidence/acc-551897327153/kb03-rds-tu-internet.txt`).
+🚨 **Đừng mở CIDR cho IP máy local** — đó là tự tay tháo một deliverable.
+`hushstore-seeder` có sẵn `sqlcmd` và đã nối `DB_PASSWORD` từ SSM, nhưng task definition đó là
+**`EC2` + `bridge`**, cần container instance mà hiện có 0. Đăng ký một task definition **Fargate**
+tạm (dùng lại đúng image + execution role + secret) là đường đi đúng, nhưng nó **tạo hạ tầng AWS**
+nên cần bạn cho phép.
+
+**Lý do 2 — câu trả lời sẽ gần như vô nghĩa. Đây mới là lý do thật.**
+
+Tiền đề của mục này là *"chạy trên DB local là vô nghĩa: local gần như rỗng"*, hàm ý **RDS có dữ
+liệu thật**. **Tiền đề đó SAI.** `evidence/acc-551897327153/kb00-migration-va-seed.txt` ghi RDS này
+dựng **mới hoàn toàn 2026-08-24** bằng `efbundle` + seeder, nội dung sau seed:
+
+```
+AppRoles = 3 · AppUsers = 1 · Categories = 18 · Manufacturers = 21
+Products = 49 · ProductVariants = 52
+```
+
+**Không có** `Orders`, `ProductSerials`, `InventoryChecks`, `InventoryAdjustmentLogs`,
+`VoucherUsages`, `ServiceTickets`. Ba bảng script cần soi chỉ sinh ra khi **chạy luồng nghiệp vụ
+qua API**, mà trên account này chỉ có 13 kịch bản kiểm **bảo mật/hạ tầng** (KB01–KB13) từng chạy.
+Đã kiểm nốt: `408194747451` **không có RDS nào**; `667836586836` là account cũ đã bỏ, token SSO
+hết hạn. **Không account nào trong dự án có database mang lịch sử production.**
+
+**Hệ quả: blocker của đợt 3 không phải cái mục này vẫn ghi.**
+
+| Vẫn ghi | Thực tế |
+|---|---|
+| "Chưa chạy `pre_migration_checks.sql` trên RDS" | "**Không tồn tại** database có lịch sử production để chạy nó" |
+
+| Câu hỏi | Trả lời được? |
+|---|---|
+| *"Migration thêm unique index có FAIL trên DB đích không?"* | ✅ **Được** — gần chắc chắn **không fail**, vì DB đích không có dữ liệu xung đột |
+| *"Dữ liệu đã bị lỗi nhân bản `InventoryAdjustmentLogs` làm bẩn chưa?"* | ❌ **Không** — cần lịch sử production, thứ không tồn tại |
+
+🚨 **Ghi "✅ rỗng ⇒ an toàn tạo unique index" vào tài liệu là chế tạo niềm tin giả.** Rỗng ở đây
+nghĩa là *"chưa luồng nghiệp vụ nào từng chạy trên DB này"*, **không** nghĩa là *"lỗi chưa gây
+thiệt hại"*. Cùng họ với bẫy #8 và #17 — và là lý do phép đo bị **dừng** thay vì chạy cho có số.
+
+#### Ba lựa chọn — cần bạn quyết trước khi bắt đầu gói 3
+
+1. **Tuyên bố blocker vô hiệu** *(khuyến nghị, $0)* — DB đích không có dữ liệu xung đột nên
+   migration không thể fail; ghi thẳng rằng câu hỏi thứ hai **không trả lời được trong phạm vi dự
+   án này**, rồi đi tiếp gói 3.
+2. **Vẫn chạy script để có số cho báo cáo** — cần bạn cho phép đăng ký một ECS task definition tạm
+   + một cửa sổ RDS nữa. Kết quả **biết trước là rỗng**; giá trị duy nhất là "đã chạy trên RDS thật".
+3. **Đo thứ thực sự đáng đo, ở local, $0** *(khuyến nghị nếu muốn số có sức nặng)* — dùng LoadProbe
+   tạo dữ liệu bẩn **thật** (S06 tái hiện lỗi nhân bản `InventoryAdjustmentLogs` ngay lần chạy đầu),
+   rồi thử áp migration unique index lên **chính** dữ liệu bẩn đó. Cái này kiểm được điều mà cả hai
+   lựa chọn trên không kiểm: **migration xử lý xung đột ra sao khi thật sự có xung đột.**
 
 ---
 
@@ -1268,7 +1366,7 @@ Nó tự dọn dữ liệu trước và sau. Mã thoát: `0` đạt hết · `1`
 
 ---
 
-## 5. Mười sáu cái bẫy im lặng đã gặp — đọc trước khi sửa code
+## 5. Mười bảy cái bẫy im lặng đã gặp — đọc trước khi sửa code
 
 Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ ra khi đo.
 
@@ -1357,6 +1455,22 @@ Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ
     "trước" phải là `COUNT(*)` hoặc danh sách đầy đủ, không bao giờ là `TOP n`** — và trước khi
     xoá bất cứ gì để "trả nguyên trạng", kiểm **dấu thời gian**, đừng suy từ chênh lệch.
 
+17. 🔴 **Một kịch bản ĐẠT vì một lỗi KHÁC đang loại bớt request — và `KHÔNG KẾT LUẬN` không bắt
+    được.** S03 (một khách, `MaxUsesPerUser = 1`, 10 request) ĐẠT suốt cho tới khi sửa S01. Lý do:
+    **9/10 request chết ở bước sinh mã đơn**, tức đúng lỗi S01, nên chỉ 1 request tới được logic
+    voucher và bất biến "đúng 1 lượt" đúng **một cách tình cờ**. Sửa S01 xong → `200×10` →
+    `COUNT(VoucherUsages) = 10`. Lỗi check-then-act đó **đã có từ trước**, chỉ bị một lỗi khác che.
+
+    Phần nguy hiểm: bộ đo báo **`0 KHÔNG KẾT LUẬN`** ở **cả hai** lần chạy, và báo **đúng** — 9
+    request kia thật sự đã chạy và thật sự trả `400`, không hề bị rate limiter chặn. Chốt của bẫy
+    #8 chỉ phân biệt được "phép đo rỗng" với "phép đo chạy"; nó **không** phân biệt được `400` đến
+    từ bất biến đang đo với `400` đến từ **một lỗi khác ở thượng nguồn**.
+
+    Quy tắc rút ra: **khi sửa một lỗi làm request chết sớm, phải chạy lại TOÀN BỘ bộ kịch bản và
+    kỳ vọng số HỎNG có thể TĂNG.** Số hỏng tăng sau một bản vá không tự động là hồi quy — hãy so
+    **mã HTTP của từng kịch bản** trước/sau, không so dòng tổng kết. Ở đây `200×1, 400×9` → `200×10`
+    là toàn bộ bằng chứng, và nó nằm trong dữ liệu đã có sẵn từ trước, chỉ chưa ai đọc.
+
 ---
 
 ## 6. Chốt chống hồi quy (trước đây là "script lấy lại danh sách việc")
@@ -1434,6 +1548,15 @@ grep -rn "AutoMapper" --include='*.csproj' src/ tools/    # kỳ vọng: rỗng
 ```
 
 ```bash
+# 🅶 — SEQUENCE thay ruột sinh mã: không được để "đọc mã cuối rồi +1" quay lại
+grep -rn 'GetCodesByDatePrefixAsync' --include='*.cs' src/   # kỳ vọng: rỗng (đã xoá, không để lại)
+grep -c 'SELECT NEXT VALUE FOR' src/Infrastructure/Repositories/DocumentSequenceRepository.cs  # kỳ vọng: 1
+#   ⚠️ Phải có chữ SELECT: `grep 'NEXT VALUE FOR'` trần đếm ra 2 vì cụm đó cũng nằm trong comment.
+#   Và trong DB: SELECT COUNT(*) FROM sys.sequences  => 5
+#   ⚠️ Chốt QUAN TRỌNG NHẤT của mục 🅶 là S01, không phải grep:
+#      dotnet run --project tools/LoadProbe -- --scenarios S01   => kỳ vọng 200×50, 50 mã phân biệt.
+#      Nếu nó quay về "200×N, 400×M" thì ai đó đã đưa check-then-act trở lại.
+
 # C — bộ đo còn chạy được (cần DB + API đang chạy)
 dotnet build tools/LoadProbe/LoadProbe.csproj      # kỳ vọng: 0 Error(s)
 dotnet run --project tools/LoadProbe -- --scenarios S02,S05 --pace 11

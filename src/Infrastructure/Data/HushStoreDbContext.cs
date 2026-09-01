@@ -64,6 +64,40 @@ namespace PBL3.Infrastructure.Data
         {
             base.OnModelCreating(modelBuilder); // Identity mappings
 
+            // ── SEQUENCE cấp số cho mã chứng từ (đợt 3, mục 🅶) ──
+            //
+            // 🔴 VÌ SAO SEQUENCE, VÀ VÌ SAO KHÔNG RESET THEO NGÀY.
+            // Thuật toán cũ là check-then-act: đọc mọi mã trong ngày, lấy max, +1.
+            // N request đồng thời ĐỀU tính ra cùng một giá trị, nên unique index chặn
+            // và người thua nhận lỗi. LoadProbe S01 đo được: 32–41/50 đơn hỏng.
+            //
+            // Thứ GÂY RA race chính là yêu cầu "reset mỗi ngày" — nó bắt buộc phải có
+            // câu SELECT MAX để biết hôm nay đã tới đâu. Bỏ việc reset là bỏ NGUYÊN NHÂN,
+            // không phải vá triệu chứng. Vì vậy sequence ở đây là TOÀN CỤC, không reset;
+            // phần ngày trong mã (`PREFIX-yyyyMMdd-NNNNNN`) giữ lại chỉ để mã còn đọc
+            // được và còn sắp đúng thời gian.
+            //
+            // ⚠️ VÌ SAO KHÔNG chọn "bắt unique-violation rồi retry" làm phương án chính:
+            // với bộ cấp phát SELECT MAX, mỗi vòng retry chỉ cho ĐÚNG MỘT người qua
+            // => cần O(N) vòng, mỗi vòng một round-trip. Ở 50 request đồng thời đó là
+            // hàng nghìn round-trip. Retry là công cụ cho va chạm HIẾM, không phải va
+            // chạm CHẮC CHẮN.
+            //
+            // ⚠️ TRẦN ĐỘ RỘNG CỘT — kiểm trước khi đổi định dạng. Cột mã là nvarchar(20).
+            // Vì sequence không reset, con số lớn dần mãi:
+            //     "ORD-yyyyMMdd-" (13) + 6 chữ số = 19  ✓
+            //     tiền tố 3 ký tự (ORD/POS/SRV) chịu được tối đa 7 chữ số = 20  ✓
+            //                                            8 chữ số = 21  ✗ TRÀN
+            // => trần thực tế là 9.999.999 chứng từ cho mỗi sequence có tiền tố 3 ký tự
+            // (99.999.999 cho PN/KK/ST). Việc so sánh CHUỖI đã bị bỏ hẳn nên số rộng thêm
+            // không gây sai như quả bom {n:D3} cũ — chỉ độ rộng cột mới là giới hạn thật.
+            foreach (var seq in PBL3.Core.Interfaces.DocumentSequences.All)
+            {
+                // StartAt 1000: chừa khoảng cho dữ liệu đã có mã sinh bằng thuật toán cũ,
+                // để mã mới không đụng unique index với mã cũ trong CÙNG một ngày triển khai.
+                modelBuilder.HasSequence<long>(seq).StartsAt(1000).IncrementsBy(1);
+            }
+
             // --- AUTH: Rename Identity tables theo convention ---
             modelBuilder.Entity<AppUser>(entity =>
             {

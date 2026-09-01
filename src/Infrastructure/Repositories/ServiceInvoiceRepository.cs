@@ -79,25 +79,6 @@ namespace PBL3.Infrastructure.Repositories
                 .FirstOrDefaultAsync(i => i.TicketId == ticketId);
         }
 
-        /// <summary>
-        /// Trả về TẤT CẢ mã chứng từ trong ngày khớp tiền tố, để
-        /// <c>DocumentCodeGenerator</c> tự lấy max theo SỐ.
-        /// </summary>
-        /// <remarks>
-        /// Không dùng <c>OrderByDescending(Code).First()</c> nữa: đó là so sánh CHUỖI,
-        /// nên khi hai độ rộng số cùng tồn tại ("-001" cũ và "-000002" mới) thì mã cũ
-        /// luôn sắp trên => luôn trả về mã cũ => sinh mã trùng vĩnh viễn.
-        /// Số chứng từ mỗi ngày là hữu hạn và nhỏ, nên nạp về RAM rồi so sánh số là an toàn.
-        /// </remarks>
-        public async Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix)
-        {
-            return await _dbContext.ServiceInvoices
-                .AsNoTracking()
-                .Where(i => i.InvoiceCode.StartsWith(datePrefix))
-                .Select(i => i.InvoiceCode)
-                .ToListAsync();
-        }
-
         public async Task<bool> InvoiceExistsForTicketAsync(int ticketId)
         {
             return await _dbContext.ServiceInvoices

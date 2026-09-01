@@ -189,9 +189,20 @@ Bốn quy tắc này sinh ra từ lỗi có thật đã sửa ở đợt 1 — v
   delegate — để trong thì nó chạy trong transaction, và khi retry sẽ chạy lại.
 
 - **Sinh mã chứng từ — chỉ qua `IDocumentCodeGenerator`.**
-  Cấm viết lại khối "đọc mã cuối trong ngày rồi +1". Cũng cấm tìm mã cuối bằng
-  `ORDER BY Code DESC` — đó là so sánh **chuỗi**, và nó chính là nguyên nhân quả bom
-  `{n:D3}` (quá 999/ngày thì `-1000` sắp trước `-999`).
+  Cấm viết lại khối "đọc mã cuối trong ngày rồi +1" — **đó là check-then-act**, và LoadProbe S01
+  đã đo: 32–41/50 đơn hỏng vì cùng tính ra một mã rồi đụng `IX_Orders_OrderCode`. Cũng cấm tìm mã
+  cuối bằng `ORDER BY Code DESC` — đó là so sánh **chuỗi**, nguyên nhân quả bom `{n:D3}`
+  (quá 999/ngày thì `-1000` sắp trước `-999`).
+  ✅ **Ruột đã thay bằng SQL SEQUENCE (đợt 3 phần 1, 2026-09-01): S01 chuyển 🔴 → ✅, 50/50 đơn.**
+  Số thứ tự do `SELECT NEXT VALUE FOR` cấp qua `IDocumentSequence` (`src/Core/Interfaces/`), khai
+  bằng `modelBuilder.HasSequence<long>()`. **Sequence TOÀN CỤC, không reset theo ngày** — chính
+  yêu cầu "reset mỗi ngày" là thứ bắt buộc phải có `SELECT MAX`, tức là nguyên nhân của race.
+  Hai hệ quả phải biết trước khi động vào:
+  - `NEXT VALUE FOR` **không mang tính giao dịch**: giá trị bị tiêu thụ dù transaction rollback,
+    nên **dãy mã có lỗ**. Đừng "sửa". Số trong mã **không** còn là "chứng từ thứ N" — muốn đếm
+    thì `COUNT(*)`. (Bù lại: khi transaction retry, lần thử sau lấy mã MỚI — đúng điều cần.)
+  - Cột mã là `nvarchar(20)`, nên tiền tố 3 ký tự (`ORD`/`POS`/`SRV`) chịu tối đa **7 chữ số**.
+    `ORD` và `POS` **dùng chung** một sequence vì cùng ghi vào `Orders.OrderCode`.
 
 - **Không cache trạng thái phân quyền hay khoá tài khoản trong `MemoryCache`.**
   `IsActive`, role, quyền — đọc thẳng DB bằng projection. `MemoryCache` nằm trong RAM của

@@ -40,10 +40,6 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<ServiceTicket?> GetByIdWithTrackingAsync(int id);
 
-        /// <summary>
-        /// Lấy mã phiếu cuối cùng của một ngày (để sinh mã tự động ST-yyyyMMdd-NNN).
-        /// </summary>
-        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
 
         /// <summary>
         /// Kiểm tra xem một serial đã có phiếu mở không (status != terminal).
@@ -191,10 +187,6 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<ServiceInvoice?> GetByTicketIdReadOnlyAsync(int ticketId);
 
-        /// <summary>
-        /// Lấy mã hóa đơn cuối cùng của một ngày (để sinh mã tự động SRV-yyyyMMdd-NNN).
-        /// </summary>
-        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
 
         /// <summary>
         /// Lấy hóa đơn theo Id, với tracking để update.

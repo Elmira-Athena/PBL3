@@ -198,10 +198,6 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<ImportReceipt?> GetByIdWithDetailsAsync(int id);
 
-        /// <summary>
-        /// Lấy mã phiếu nhập cuối cùng theo ngày (để sinh mã tự động).
-        /// </summary>
-        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
 
         Task AddAsync(ImportReceipt receipt);
         Task AddDetailAsync(ImportReceiptDetail detail);
@@ -408,7 +404,6 @@ namespace PBL3.Core.Interfaces
         /// </summary>
         Task<Order?> GetByIdWithDetailsTrackedAsync(int id);
 
-        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
         
         /// <summary>
         /// Lấy danh sách các đơn POS đang lưu nháp bởi một nhân viên.
@@ -630,10 +625,6 @@ namespace PBL3.Core.Interfaces
             string? sortBy,
             bool sortDescending);
 
-        /// <summary>
-        /// Lấy mã phiếu kiểm kê cuối cùng theo ngày (để sinh mã tự động KK-yyyyMMdd-NNN).
-        /// </summary>
-        Task<List<string>> GetCodesByDatePrefixAsync(string datePrefix);
 
         /// <summary>
         /// Lấy 1 row InventoryCheckDetailSerial theo Id.
