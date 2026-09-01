@@ -142,7 +142,11 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
   bắt `InvalidOperationException` thay thế là **không** an toàn vì EF Core dùng chính kiểu đó cho
   chuyện khác — vì vậy `grep -rn 'catch (InvalidOperationException' src/` **phải luôn rỗng**.
   ✅ Tầng **Service và API đã sạch** (mục 🅷): `0` chỗ chở `ex.Message` của hạ tầng ra cho người dùng.
-  ⚠️ Tầng **Client còn 124 chỗ** `$"Lỗi kết nối: {ex.Message}"` (mục 🅸, chưa sửa).
+  ⚠️ Tầng **Client còn 124 chỗ / 18 file** (mục 🅸, chưa sửa) — và ở đó có một biến thể riêng:
+  **`GetFromJsonAsync` tự gọi `EnsureSuccessStatusCode` bên trong**, nên 35 lời gọi GET đang
+  **vứt thân phản hồi**: câu tiếng Việt server soạn mất trắng, người dùng nhận message tiếng Anh
+  của `HttpRequestException`. Viết client service mới thì dùng `ApiCall.SendAsync`
+  (`src/Client/Services/Common/`) — nó đọc thân phản hồi để lấy đúng câu đó.
 - **Chốt chống hồi quy — chạy `devops/scripts/check-error-message-leaks.sh server`** (kỳ vọng
   `Sạch`, mã thoát `0`; mã thoát `2` = **KHÔNG KẾT LUẬN**, không phải sạch).
   🚨 **Đừng thay nó bằng `grep 'ex.Message'`.** `grep` không biết dòng đó nằm trong khối `catch`

@@ -1,12 +1,14 @@
 # Bắt đầu phiên mới — đọc file này trước
 
-**Cập nhật:** 2026-08-31 · **Trạng thái repo:** trên `main` (đã merge `feat/retry-safe-call-sites`,
-fast-forward, CI xanh), build `0 Error(s)` / 184 cảnh báo
-· **Đã xong:** đợt 1, mục 4.1, đợt 2, **mục A**, **mục B**, **mục C**, **mục D**,
-**nợ kiểm thử 🧪 (ưu tiên 1 + nửa giao diện của ưu tiên 2)**, **mục 🅴**, **mục 🅷**
-· **Kế tiếp:** ① **mục 🅸** (124 chỗ rò rỉ `ex.Message` ở tầng **Client** — phạm vi mới phát
-hiện, và là chỗ **an toàn** để sửa bằng script, khác hẳn mục 🅷) → ② nửa **tầng Service** của nợ
-kiểm thử 🧪 (POS · xuất/nhập kho · phiếu dịch vụ) → ③ đợt 3, **vẫn bị chặn** bởi RDS.
+**Cập nhật:** 2026-09-01 · **Trạng thái repo:** trên `main` (sạch, `d179663`), build
+`0 Error(s)` / 184 cảnh báo · **RDS đang TẮT**
+· **Đã xong:** đợt 1, mục 4.1, đợt 2, **A**, **B**, **C**, **D**, **🅴**, **🅷**,
+**nợ 🧪 ưu tiên 1 + nửa giao diện của ưu tiên 2**
+· **Kế tiếp:** **gói 1** — xem bảng gói ở §2. Việc còn lại đã được **gộp thành 6 gói, mỗi gói
+vừa một phiên**; đừng làm theo thứ tự mục chữ cái, làm theo thứ tự gói.
+
+> 🚦 **Nếu bạn chỉ đọc được một khối, đọc §2.** Nó nói phiên này làm gì, dừng ở đâu, và bàn
+> giao cái gì. Mọi mục chữ cái (🅰…🅸) ở §2bis là **hồ sơ tra cứu**, không phải danh sách việc.
 
 > 🧪 **Đừng tin dòng "XONG" nào ở dưới trước khi đọc mục 🧪.** Ranh giới đã dịch hai lần trong
 > phiên 2026-08-31 (chiều): luồng **Checkout đã chạy thật tới DB**, và **cả 6 nút double-submit
@@ -30,7 +32,7 @@ Tài liệu này viết cho một phiên **không có ngữ cảnh gì cả**. N
 
 | # | File | Đọc để biết |
 |---|---|---|
-| 1 | **file này** | việc kế tiếp + cách chạy + cách kiểm |
+| 1 | **file này — §2 trước hết** | **gói việc của phiên này**, điểm dừng, và bàn giao gồm gì |
 | 2 | [`CLAUDE.md`](../CLAUDE.md) | quy ước bắt buộc của repo (có 4 quy tắc sinh ra từ lỗi thật) |
 | 3 | [`docs/nang-cap-dot-1-ket-qua.md`](nang-cap-dot-1-ket-qua.md) | *vì sao* mọi thứ thành ra như hiện tại + bằng chứng đã chạy |
 | 4 | [`tools/LoadProbe/README.md`](../tools/LoadProbe/README.md) | cách đo tính đúng đắn dưới tải, và **bốn cách đo sai** mà bộ đo cố ý chặn |
@@ -63,7 +65,204 @@ một thứ ở ngoài repo (phải chạy script kiểm tra trên RDS) chứ kh
 
 ---
 
-## 2. Việc kế tiếp, xếp theo thứ tự nên làm
+## 2. Gói việc theo phiên — **đọc bảng này trước mọi thứ khác**
+
+Việc còn lại đã được **gộp thành gói**, mỗi gói vừa đúng một phiên. Gộp theo **chi phí dựng
+môi trường và mô hình tư duy**, không theo thứ tự trong kế hoạch gốc — hai việc dùng chung một
+lần seed DB, một lần bật API, một cách suy nghĩ thì nằm cùng gói, kể cả khi chúng thuộc hai mục
+khác nhau.
+
+| Gói | Nội dung | Chạy ở đâu | Tiền | Gói coi là XONG khi |
+|---|---|---|---|---|
+| **1** ⬅ *kế tiếp* | **mục 🅸** (124 chỗ, tầng Client) + **nửa tầng Service của nợ 🧪** (POS · xuất/nhập kho · phiếu dịch vụ) | local | **$0** | không còn việc nào **không bị chặn**; và bạn đã quyết định có bật RDS hay không |
+| **2** | **tháo chặn đợt 3** (`pre_migration_checks.sql` trên RDS) + **đợt 3 phần 1**: SEQUENCE thay ruột `IDocumentCodeGenerator` + `IExceptionHandler` → 409 | local + **một** cửa sổ RDS | **< $0.01** | **S01 chuyển 🔴 → ✅** và hai câu hỏi nghiệp vụ đã có câu trả lời |
+| **3** | **đợt 3 phần 2**: `RowVersion` 6 entity + 3 unique index + bắt `DbUpdateConcurrencyException` | local | **$0** | **S04 · S06 · S08 chuyển 🔴 → ✅ ở CẢ HAI cấu hình** |
+| **4** | **đợt 4**: DataProtection → SSM · connection pool · bộ số shutdown 30/45/90 · `ICacheService` | local + `terraform plan` | **$0** | `plan` sạch, build sạch, 6 file `.tftest.hcl` chưa đụng tới |
+| **5** | **đợt 5**: Terraform scale-out + autoscale hai tầng + sửa 6 file test | AWS | ~$1 | 2 task trên 2 instance khác nhau, deploy 0 downtime |
+| **6** | **đợt 6**: đo tải + 7 hình + báo cáo | AWS | vài $ | báo cáo xong |
+
+**Vì sao gói 1 gộp hai thứ trông chẳng liên quan.** Cả hai đều cần **đúng một** lần dựng: DB +
+API + `LoadProbe --keep` seed serial + Blazor client. Nợ 🧪 cần bấm tay ba luồng trên giao diện;
+mục 🅸 cần **chính giao diện đó** để xác minh thông báo lỗi mới thật sự hiện ra. Tách hai phiên là
+trả tiền dựng môi trường hai lần cho cùng một môi trường.
+
+**Vì sao gói 2 gộp việc AWS với việc code.** Bật RDS mất **~14 phút** (đã đo, xem
+`project_kiem_thu_lai_acc_moi`). Đó là thời gian chết. Việc SEQUENCE **không** phụ thuộc vào kết
+quả script — chỉ **VoucherUsage index ở gói 3** mới phụ thuộc. Nên trình tự đúng là: **bắn lệnh
+bật RDS trước, viết SEQUENCE trong lúc chờ**, chạy script khi RDS lên, tắt RDS ngay. Một cửa sổ
+RDS, hai việc.
+
+**Vì sao đợt 3 tách làm hai gói dù kế hoạch gốc nói "một migration duy nhất".** Đây là **chệch
+khỏi kế hoạch một cách có ý thức**, lý do: `RowVersion` chạm **mọi** đường `SaveChanges` trong
+repo và có chế độ hỏng riêng (**xung đột giả** — token đổi khi *bất kỳ* cột nào đổi), còn SEQUENCE
+là *một file*, chế độ hỏng độc lập, và đo bằng *một* kịch bản. Trộn chúng vào một migration nghĩa
+là khi S01 vẫn đỏ thì không biết tại nửa nào. Lý do kế hoạch gốc đưa ra cho "một migration" là
+**dễ review** — mà hai migration nhỏ thì dễ review hơn một migration to. Đổi lại: rollback thành
+hai bước thay vì một. Nếu bạn muốn giữ đúng một migration, nói trước khi bắt đầu gói 2.
+
+---
+
+### 📋 Gói 1 — công thức đầy đủ, chạy từ trên xuống
+
+Đây là gói kế tiếp. Ba phần, làm đúng thứ tự này vì phần sau dùng lại môi trường của phần trước.
+
+#### Phần 0 — dựng môi trường một lần (~10 phút)
+
+```bash
+cd Infrastructure/db && docker-compose up -d && cd ../..
+PW=$(grep -o '^SA_PASSWORD=.*' Infrastructure/db/.env | cut -d= -f2-)
+export ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=HushStoreDb;User Id=sa;Password=${PW};TrustServerCertificate=True;MultipleActiveResultSets=True"
+export JwtSettings__SecretKey="$(openssl rand -base64 48 | tr -d '\n')"
+export AllowedOrigins="http://localhost:5214"
+export ASPNETCORE_ENVIRONMENT=Development
+
+# Seed serial rồi GIỮ LẠI — không có bước này thì cả ba luồng nghiệp vụ chết ở bước đầu
+dotnet run --project tools/LoadProbe -- --scenarios S01 --keep     # → 60 serial Available
+
+dotnet run --project src/API/API.csproj --no-launch-profile --urls "http://localhost:5222" &
+cat > src/Client/wwwroot/appsettings.Development.json <<'EOF'
+{ "ApiBaseUrl": "http://localhost:5222" }
+EOF
+dotnet run --project src/Client/Client.csproj --no-launch-profile --urls "http://localhost:5214" &
+```
+
+⚠️ `appsettings.Development.json` là file **tạm, đã gitignore — xoá sau khi xong**.
+⚠️ `JwtSettings__SecretKey` phải **giống nhau** giữa API và LoadProbe, nếu không token probe mint
+ra sẽ bị API từ chối và mọi kịch bản thành `KHÔNG KẾT LUẬN` (bẫy #8).
+
+#### Phần 1 — mục 🅸, tầng Client (~45–60 phút)
+
+**Số đã đo lại 2026-09-01, dùng số này chứ đừng dùng số cũ:**
+
+| Đại lượng | Số | Ghi chú |
+|---|---|---|
+| Chỗ rò rỉ | **124** | 2 biến thể: `"Lỗi kết nối: {ex.Message}"` ×99 · `"Lỗi: {ex.Message}"` ×25 |
+| File | **18** | nhiều nhất: `ServiceTicketClientService` 22 · `InventoryCheckClientService` 12 · `ProductClientService` 11 |
+| Client service có `ILogger` | **0** | ⚠️ nên sửa kiểu "thay chuỗi" là **vứt `ex` đi**, mất sạch chẩn đoán |
+| Đã dùng `ApiCall.SendAsync` | **2** (1 file) | helper **đã có sẵn và đúng khuôn**, xem dưới |
+
+🚨 **Tiền đề cũ của mục này SAI, đã đo lại và bác bỏ.** Bản trước viết: *"`0` chỗ gọi
+`EnsureSuccessStatusCode` trong `src/Client/` ⇒ lỗi nghiệp vụ về qua thân HTTP ⇒ an toàn sửa bằng
+find-and-replace."* Vế đầu đúng, **suy luận sai**: `GetFromJsonAsync` **tự gọi
+`EnsureSuccessStatusCode` bên trong**. Đo trực tiếp trên .NET 10 với một server trả `400` kèm thân
+JSON có message tiếng Việt:
+
+```
+GetFromJsonAsync              → NÉM HttpRequestException
+   ex.Message = "Response status code does not indicate success: 400 (Bad Request)."
+PostAsJsonAsync + ReadFromJsonAsync → KHÔNG ném, đọc được "Mã 'X' đã hết lượt sử dụng."
+```
+
+Hệ quả — **hai nhóm khác hẳn nhau, đừng sửa như nhau:**
+
+| Nhóm | Số lời gọi | Hiện đang xảy ra gì |
+|---|---|---|
+| **`GetFromJsonAsync`** | **35** | Server trả `400` + câu tiếng Việt → client **vứt thân phản hồi**, người dùng nhận `"Lỗi kết nối: Response status code does not indicate success: 400 (Bad Request)."` — **hỏng gấp đôi**: vừa tiếng Anh, vừa mất câu server đã soạn |
+| **`Post`/`Put`/`Delete` + `ReadFromJsonAsync`** | **90** | Câu nghiệp vụ về được bình thường; khối `catch` chỉ thấy lỗi transport/JSON thật |
+
+✅ **Bẫy #13 vẫn KHÔNG cắn ở đây** — nhưng vì lý do khác với lý do đã ghi: ở nhóm 90 thì đúng là
+không có lỗi nghiệp vụ nào đi qua exception; ở nhóm 35 thì câu nghiệp vụ **đã mất từ trước khi vào
+`catch`**, nên thay chuỗi không nuốt thêm gì. Kết luận cũ đúng, lập luận cũ sai — và lập luận sai
+sẽ dẫn người sau tới kết luận sai ở chỗ khác.
+
+**Cách sửa — hai tầng, đừng làm cả hai trong một lần:**
+
+1. **Bắt buộc trong gói này** — 124 chỗ: thay chuỗi bằng câu tiếng Việt cố định **có tính hành
+   động**, và **inject `ILogger<T>`** vào 18 file để `ex` đi vào console trình duyệt thay vì bốc
+   hơi. Khuôn:
+   ```csharp
+   catch (Exception ex)
+   {
+       _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách nhà cung cấp");
+       return ApiResult<T>.Fail("Không tải được danh sách nhà cung cấp. Vui lòng thử lại.");
+   }
+   ```
+2. **KHÔNG làm trong gói này** — chuyển 35 lời gọi `GetFromJsonAsync` sang
+   **`ApiCall.SendAsync`** (`src/Client/Services/Common/ApiCall.cs`). Helper này **đã tồn tại, đã
+   đúng**: nó phân biệt `HttpRequestException` / `TaskCanceledException`, **đọc thân phản hồi để
+   lấy câu server đã soạn**, và có sẵn ánh xạ `409 → "Dữ liệu vừa được người khác thay đổi…"` —
+   thứ **đợt 3 sẽ bắt đầu trả về**. Đây là việc đúng nhưng nó là **refactor 35 call-site**, mỗi
+   chỗ một verb/payload riêng; nhét vào gói 1 là làm gói 1 tràn. Ghi thành mục 🅹.
+
+**Chốt sau khi sửa:**
+```bash
+bash devops/scripts/check-error-message-leaks.sh client   # kỳ vọng: Sạch, mã thoát 0
+bash devops/scripts/check-error-message-leaks.sh server   # kỳ vọng: vẫn Sạch, 0 chỗ
+dotnet build PBL3.sln                                     # kỳ vọng: 0 Error(s) / 184 cảnh báo
+```
+
+**Ca đối chứng bắt buộc** (không có nó thì "sạch" chỉ chứng minh chuỗi biến mất, không chứng minh
+người dùng thấy gì): **tắt API** rồi bấm một nút bất kỳ trên giao diện → phải thấy câu tiếng Việt
+mới trong `ISnackbar`, **không** thấy `"No connection could be made…"`. Rồi **bật API lại**, gửi
+một request `400` có message nghiệp vụ (mã voucher rác) → phải thấy **câu nghiệp vụ của server**,
+không phải câu chung. Hai ca này đo hai nửa khác nhau của cùng một bất biến.
+
+#### Phần 2 — nợ 🧪, nửa tầng Service (~60–90 phút)
+
+Ba luồng **chưa từng chạy hết một lần nghiệp vụ nào**, mới chỉ được rà bằng đọc code + build sạch:
+
+| Luồng | Bấm gì | Kiểm ở DB (không kiểm mã HTTP) |
+|---|---|---|
+| **POS** | bán tại quầy một serial `LP-` → in phiếu | `Orders` +1 mã `POS-`, `OrderSerials` +1, serial → `Sold`, `Warranties` +1 |
+| **Nhập kho** | tạo phiếu nhập → duyệt | `ImportReceipts` +1, `ProductSerials` +N `Available`, `StockQuantity` khớp `COUNT` |
+| **Xuất kho** | xuất đơn vừa tạo | `OrderSerials` không trùng, serial → `Sold`, không có `OrderSerial` nhân đôi |
+| **Phiếu dịch vụ** | tiếp nhận → báo giá → khách duyệt → hoàn tất | `ServiceTickets` +1, đúng **1** `Quotation` `Accepted`, `ServiceTicketStatusHistory` đủ bước |
+
+🎯 **Cái đang thật sự được đo là mục 🅰** (transaction retry-safe), không phải giao diện. Chế độ
+hỏng cần bắt là **"`SaveChanges` không sinh `UPDATE`"** và **"entity `Add` hai lần sau retry"** —
+cả hai đều trả `200` và chỉ lộ ra khi **đọc thẳng DB**. Xem bốn cái bẫy ở bảng mục 🅰.
+
+⚠️ **Tên bảng ≠ tên `DbSet`** — `ServiceTicketStatusHistory` là **số ít** trong DB (bẫy #10).
+
+Sau khi đo xong, **chốt hồi quy bắt buộc** vì đã đụng vào vùng tầng Service:
+```bash
+dotnet run --project tools/LoadProbe -- --scenarios S02,S05 --pace 11   # kỳ vọng 2 ĐẠT, 0 KHÔNG KẾT LUẬN
+```
+
+#### Phần 3 — dọn + bàn giao (~15 phút)
+
+```bash
+dotnet run --project tools/LoadProbe -- --scenarios S01     # KHÔNG --keep → dọn sạch dữ liệu LP-
+rm -f src/Client/wwwroot/appsettings.Development.json
+lsof -ti tcp:5222 -ti tcp:5214 | xargs -r kill -9
+```
+
+⚠️ Probe **chỉ** dọn thứ mang tiền tố `LP-` và miền `@loadprobe.local`. Tài khoản / địa chỉ /
+đơn hàng bạn tự tạo để lái tay thì **tự dọn**. Nguyên trạng phải về: `Products = 2`,
+`ProductSerials = 0`, `Orders = 0`, `ServiceTickets = 0`, `InventoryChecks = 0`.
+
+Rồi cập nhật chính file này: đánh dấu 🅸 xong, dịch ranh giới bảng 🟠, ghi bằng chứng vào
+`docs/evidence/`, và **hỏi bạn có bật RDS cho gói 2 không** (đó là điểm dừng của gói 1).
+
+---
+
+### ⏱️ Khi nào nên dừng phiên — dấu hiệu cụ thể, không phải cảm giác
+
+Gói được cắt để một phiên làm vừa hết. Nhưng nếu gặp một trong các dấu hiệu này thì **dừng và bàn
+giao**, dù gói chưa xong — làm cố qua đây là chỗ chất lượng bắt đầu rơi:
+
+1. **Đã tạo xong một migration và đo xong nó.** Migration là ranh giới rollback tự nhiên. Đừng bắt
+   đầu migration thứ hai trong cùng phiên.
+2. **Phải bật/tắt AWS lần thứ hai.** Lần thứ hai nghĩa là kế hoạch cửa sổ đã sai — dừng, nghĩ lại,
+   đừng đốt thêm giờ RDS.
+3. **Bắt đầu phải mở lại file mình vừa sửa để nhớ mình sửa gì.** Đó là ngữ cảnh đã đầy, và nó xảy
+   ra **trước** khi có bất kỳ cảnh báo nào.
+4. **Một phép đo ra `KHÔNG KẾT LUẬN` hai lần liên tiếp.** Bẫy #8: đo tiếp là tích luỹ bằng chứng
+   an toàn giả. Dừng, sửa phép đo trước.
+
+**Bàn giao gồm đúng bốn thứ** — thiếu một thứ là phiên sau phải dựng lại từ đầu:
+- cập nhật **header** của file này (ngày · gói đang ở đâu · việc kế tiếp),
+- **số đo thật** vào `docs/evidence/` (kèm **ca đối chứng**, xem quy tắc rút ra ở mục 🧪),
+- **chốt mới** vào §6 nếu vừa thêm một bất biến,
+- **bẫy mới** vào §5 nếu vừa mất thời gian vì một thứ im lặng.
+
+
+---
+
+## 2bis. Hồ sơ từng mục — tra cứu, không phải danh sách việc
+
+Các mục dưới đây phần lớn **đã xong**; chúng ở đây để tra *vì sao* code thành ra như vậy.
+Việc còn phải làm nằm ở bảng gói phía trên.
 
 ### ✅ 🅰 Rà nốt call-site chưa retry-safe — **XONG (2026-08-31)**
 
@@ -468,6 +667,7 @@ phiên 2026-08-31 (chiều), và nó dịch **không đều giữa hai nửa**:
 
 **Còn nợ ở mục này: nửa *tầng Service* của POS · xuất/nhập kho · phiếu dịch vụ** — tức mục A ở
 những luồng đó vẫn chỉ được rà bằng đọc code + build sạch. Nút đã đo ≠ luồng đã chạy.
+👉 **Đây là phần 2 của gói 1** — công thức đầy đủ (bấm gì, kiểm cột nào ở DB) ở §2.
 
 > 💡 **Cách đo lại nếu cần** (không cần Chrome DevTools MCP, và đừng tranh chấp profile của phiên
 > Claude khác): tự bật Chrome headless với `--user-data-dir` riêng + `--remote-debugging-port=9333`,
@@ -690,39 +890,93 @@ Build sau khi sửa: `0 Error(s)` / **184** cảnh báo — đúng bằng baseli
 
 ---
 
-### 🅸 Rò rỉ tiếng Anh ở TẦNG CLIENT — **124 chỗ, CHƯA SỬA**
+### 🅸 Rò rỉ tiếng Anh ở TẦNG CLIENT — **124 chỗ / 18 file, CHƯA SỬA** → *gói 1*
 
-Phát hiện lúc làm mục 🅷 và **chưa từng được ghi ở đâu**. Đây là tầng thứ ba của cùng một lỗi:
+Phát hiện lúc làm mục 🅷. Đây là tầng thứ ba của cùng một lỗi:
 
 ```csharp
-// src/Client/Services/**/*.cs — 124 chỗ, gần như y hệt nhau
+// src/Client/Services/**/*.cs — 124 chỗ, hai biến thể
 catch (Exception ex)
 {
-    return ApiResult<T>.Fail($"Lỗi kết nối: {ex.Message}");
+    return ApiResult<T>.Fail($"Lỗi kết nối: {ex.Message}");   // ×99
+    return ApiResult<T>.Fail($"Lỗi: {ex.Message}");            // ×25
 }
-```
-
-`ex.Message` ở đây là chuỗi của `HttpClient` / `JsonSerializer`, nên khi API tắt hoặc mạng đứt,
-người dùng nhận:
-
-```
-Lỗi kết nối: No connection could be made because the target machine
-actively refused it. (localhost:5222)
 ```
 
 Nó **có** tới người dùng: 125 chỗ `Snackbar.Add(...Message...)` trong `src/Client/Pages/`.
 
-🎯 **Khác mục 🅷 ở một điểm quyết định: chỗ này an toàn để sửa bằng find-and-replace.** Lý do đã
-kiểm: **`0` chỗ gọi `EnsureSuccessStatusCode` trong toàn bộ `src/Client/`**. Nghĩa là lỗi **nghiệp
-vụ** về qua **thân HTTP** dưới dạng `ApiResult.Fail` theo đường `return` bình thường, **không**
-đi qua exception. Nên 124 khối catch đó **chỉ có thể** thấy lỗi transport/JSON — không có tầng
-nghiệp vụ nào để nuốt, tức bẫy #13 **không áp dụng ở đây**.
+#### 🚨 Tiền đề cũ của mục này SAI — đã đo lại 2026-09-01 và bác bỏ
 
-⚠️ **Nhưng nếu sau này có ai thêm `EnsureSuccessStatusCode` vào một client service, tiền đề trên
-vỡ** và chỗ đó lập tức cần khuôn hai tầng như mục 🅷. Chốt `grep` ở §6 canh đúng điều đó.
+Bản trước viết: *"`0` chỗ gọi `EnsureSuccessStatusCode` trong toàn bộ `src/Client/` ⇒ lỗi nghiệp
+vụ về qua **thân HTTP** ⇒ an toàn sửa bằng find-and-replace."* Vế đầu vẫn đúng
+(`grep` vẫn rỗng), nhưng **suy luận sai**: **`GetFromJsonAsync` tự gọi `EnsureSuccessStatusCode`
+bên trong**. Không grep nào thấy được điều đó.
 
-Chưa làm vì nó là **phạm vi mới phát sinh**, không nằm trong mục 🅷 — để việc mở rộng là một
-quyết định, không phải tác dụng phụ. Khối lượng: 124 chỗ, một script, ~10 phút.
+Đo trực tiếp trên .NET 10, server giả trả `400` kèm thân JSON có message tiếng Việt:
+
+```
+GetFromJsonAsync                     → NÉM HttpRequestException
+    ex.Message = "Response status code does not indicate success: 400 (Bad Request)."
+PostAsJsonAsync + ReadFromJsonAsync  → KHÔNG ném; đọc được "Mã 'X' đã hết lượt sử dụng."
+```
+
+Hệ quả — **hai nhóm hỏng theo hai kiểu khác nhau:**
+
+| Nhóm | Số lời gọi | Đang xảy ra gì |
+|---|---|---|
+| **`GetFromJsonAsync`** | **35** | Server trả `400` + câu tiếng Việt → client **vứt thân phản hồi**, người dùng nhận `"Lỗi kết nối: Response status code does not indicate success: 400 (Bad Request)."` **Hỏng gấp đôi:** vừa tiếng Anh, vừa mất câu server đã soạn. |
+| **`Post` 38 · `Put` 27 · `Delete` 25** | **90** | Câu nghiệp vụ về được bình thường qua `ReadFromJsonAsync`; khối `catch` chỉ thấy lỗi transport/JSON thật. |
+
+✅ **Bẫy #13 vẫn không cắn** — nhưng vì lý do khác hẳn lý do đã ghi. Nhóm 90: đúng là không lỗi
+nghiệp vụ nào đi qua exception. Nhóm 35: câu nghiệp vụ **đã mất trước khi vào `catch`**, nên thay
+chuỗi không nuốt thêm gì. **Kết luận cũ đúng, lập luận cũ sai** — và lập luận sai thì sẽ dẫn người
+sau tới kết luận sai ở một chỗ khác. Xem bẫy #14.
+
+#### Ba số phải biết trước khi sửa
+
+| Đại lượng | Số | Vì sao quan trọng |
+|---|---|---|
+| Client service có inject `ILogger` | **0** | Sửa kiểu "thay chuỗi" là **vứt `ex` đi** — mất sạch chẩn đoán. Mục 🅷 ở tầng server không mất gì vì nó **chuyển** chi tiết vào `ILogger`. Ở đây phải inject mới. |
+| Chỗ đã dùng `ApiCall.SendAsync` | **2** / 1 file | Helper đúng khuôn **đã tồn tại** (xem mục 🅹) và gần như chưa ai dùng. |
+| File phải đụng | **18** | Nhiều nhất: `ServiceTicketClientService` 22 · `InventoryCheckClientService` 12 · `ProductClientService` 11 |
+
+#### Khuôn sửa cho gói 1
+
+```csharp
+catch (Exception ex)
+{
+    _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách nhà cung cấp");
+    return ApiResult<T>.Fail("Không tải được danh sách nhà cung cấp. Vui lòng thử lại.");
+}
+```
+
+Câu thay thế phải **nói người dùng nên làm gì**, không phải chỉ báo có lỗi — lấy giọng văn từ
+`ApiCall.ToUserMessage`, nó đã soạn sẵn cho từng status code.
+
+⚠️ **Nếu sau này có ai thêm `EnsureSuccessStatusCode` tường minh vào một client service**, tiền đề
+"nhóm 90 không chở lỗi nghiệp vụ" vỡ và chỗ đó lập tức cần khuôn hai tầng như mục 🅷. Chốt ở §6
+canh cả hai đường — `EnsureSuccessStatusCode` **và** số lời gọi `GetFromJsonAsync`.
+
+---
+
+### 🅹 Chuyển 35 lời gọi GET sang `ApiCall.SendAsync` — **CHƯA LÀM, cố ý để ngoài gói 1**
+
+`src/Client/Services/Common/ApiCall.cs` **đã tồn tại và đã đúng**. Nó làm ba việc mà 124 khối
+`catch` viết tay không làm được:
+
+1. Phân biệt `HttpRequestException` (mất mạng) với `TaskCanceledException` (quá hạn) — hai câu
+   khác nhau, vì hành động người dùng nên làm khác nhau.
+2. **Đọc thân phản hồi để lấy câu server đã soạn** — thứ nhóm 35 đang vứt đi.
+3. Có sẵn ánh xạ **`409 → "Dữ liệu vừa được người khác thay đổi. Vui lòng tải lại trang…"`** —
+   status mà **đợt 3 sẽ bắt đầu trả về**. Comment trong file ghi rõ nó có mặt từ đợt 2 *trước*
+   khi có endpoint nào dùng, đúng vì lý do đó.
+
+Docstring của nó còn ghi một lỗi tệ hơn cả rò rỉ tiếng Anh, và lỗi đó **có thể còn ở chỗ khác**:
+*nuốt lỗi thành danh sách rỗng* — người dùng thấy "bạn chưa có đơn hàng nào" trong khi thật ra
+token hết hạn. Nó **nói dối**, nên người dùng không có lý do gì để thử lại.
+
+Để ngoài gói 1 vì đây là **refactor 35 call-site**, mỗi chỗ một verb/payload riêng — khác hẳn việc
+thay chuỗi. Nhét vào gói 1 là làm gói 1 tràn. Ứng viên cho gói 4 hoặc một gói riêng.
 
 ---
 
@@ -941,7 +1195,7 @@ Nó tự dọn dữ liệu trước và sau. Mã thoát: `0` đạt hết · `1`
 
 ---
 
-## 5. Mười ba cái bẫy im lặng đã gặp — đọc trước khi sửa code
+## 5. Mười bốn cái bẫy im lặng đã gặp — đọc trước khi sửa code
 
 Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ ra khi đo.
 
@@ -1002,6 +1256,17 @@ Tất cả đều **không sinh lỗi, không sinh cảnh báo**, và chỉ lộ
     một kiểu riêng (`BusinessRuleException`) — **không** bằng cách dò nội dung `ex.Message`, đó
     lại là dùng biểu diễn chuỗi thay cho ngữ nghĩa như bẫy #7.
 
+14. **`GetFromJsonAsync` LÀ một `EnsureSuccessStatusCode` — và không `grep` nào thấy được.**
+    Chốt của mục 🅸 là `grep -rn 'EnsureSuccessStatusCode' src/Client/` → rỗng, và từ cái rỗng đó
+    kết luận "lỗi nghiệp vụ không đi qua exception ở client". Rỗng thật, kết luận sai: helper
+    `GetFromJsonAsync` gọi `EnsureSuccessStatusCode` **bên trong**, nên một `400` kèm câu tiếng
+    Việt do server soạn bị biến thành `HttpRequestException` với message **tiếng Anh**, còn thân
+    phản hồi bị **vứt**. 35 lời gọi trong repo đang như vậy. Đã đo trực tiếp, không suy luận.
+    Bài học rộng hơn — cùng họ với bẫy #11 và với bài học đo lường của mục 🅷: **chốt `grep` chỉ
+    canh được thứ được viết ra tường minh.** Hành vi nằm trong thư viện thì `grep` mù. Trước khi
+    lấy một `grep` rỗng làm tiền đề cho một quyết định, hỏi: *"thứ tôi đang tìm có thể xảy ra mà
+    không xuất hiện thành chữ trong repo này không?"*
+
 ---
 
 ## 6. Chốt chống hồi quy (trước đây là "script lấy lại danh sách việc")
@@ -1051,10 +1316,14 @@ grep -c 'catch (BusinessRuleException)'    src/Service/Orders/OrderService.cs   
 grep -rn 'catch (InvalidOperationException' --include='*.cs' src/   # kỳ vọng: rỗng
 #   EF Core cũng ném kiểu này, nên bắt nó = relay nguyên văn tiếng Anh của EF cho người dùng.
 
-# 🅸 — tiền đề của mục 🅸 còn đúng không (client KHÔNG được ném lỗi nghiệp vụ qua exception)
-grep -rn 'EnsureSuccessStatusCode' --include='*.cs' src/Client/    # kỳ vọng: rỗng
-#   Nếu chỗ này KHÔNG còn rỗng thì lỗi nghiệp vụ bắt đầu đi qua exception ở client, và mục 🅸
-#   không còn sửa được bằng find-and-replace nữa — phải dùng khuôn hai tầng như mục 🅷.
+# 🅸 — client KHÔNG được ném lỗi nghiệp vụ qua exception. PHẢI canh CẢ HAI đường:
+grep -rn 'EnsureSuccessStatusCode' --include='*.cs' src/Client/            # kỳ vọng: rỗng
+grep -rn 'GetFromJsonAsync'        --include='*.cs' src/Client/Services/ | wc -l   # hiện: 35
+#   🚨 Dòng thứ hai mới là dòng quan trọng, và bản trước của §6 KHÔNG CÓ nó — xem bẫy #14.
+#   GetFromJsonAsync gọi EnsureSuccessStatusCode BÊN TRONG, nên nó ném trên 400 và VỨT thân
+#   phản hồi: câu tiếng Việt server soạn mất trắng, người dùng nhận message tiếng Anh của
+#   HttpRequestException. Con số 35 chỉ được GIẢM (giảm khi làm mục 🅹 — chuyển sang
+#   ApiCall.SendAsync). Tăng nghĩa là có GET mới viết theo mẫu vứt-thân-phản-hồi.
 ```
 
 ```bash
