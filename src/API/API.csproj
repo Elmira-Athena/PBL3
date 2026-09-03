@@ -8,6 +8,12 @@
 
     <ItemGroup>
         <PackageReference Include="Amazon.AspNetCore.DataProtection.SSM" Version="4.0.3" />
+        <!-- Khai TƯỜNG MINH: Program.cs trực tiếp `using Amazon.SimpleSystemsManagement` để
+             dựng AmazonSimpleSystemsManagementClient CÓ region. Gói này vốn vào theo diện
+             transitive của DataProtection.SSM, nhưng code đã dùng trực tiếp thì phải khai
+             trực tiếp — nếu không, một lần nâng DataProtection.SSM đổi cây phụ thuộc sẽ làm
+             build vỡ ở chỗ không liên quan. Cùng lý lẽ đã áp cho Infrastructure.csproj. -->
+        <PackageReference Include="AWSSDK.SimpleSystemsManagement" Version="4.0.7.3" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.3" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.1">

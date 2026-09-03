@@ -66,6 +66,18 @@ module "ecs" {
   instance_count = var.instance_count
   instance_type  = var.instance_type
 
+  max_instance_count          = var.max_instance_count
+  rate_limiter_is_distributed = var.rate_limiter_is_distributed
+
+  # Bám TRẠNG THÁI (instance_count), không bám TRẦN (max_instance_count).
+  #
+  # Host port là static nên mỗi instance chứa đúng 1 task/service. Nếu số task
+  # mong muốn lớn hơn số instance đang chạy thì task thừa không có port nào để
+  # xếp lên, service không bao giờ stable, và `aws ecs wait services-stable`
+  # trong deploy.yml treo tới timeout rồi rollback. Buộc hai con số vào nhau ở
+  # ĐÂY là cách làm cho trạng thái đó không biểu diễn được.
+  service_desired_count = var.instance_count
+
   ecr_api_url        = module.storage.ecr_api_url
   ecr_web_url        = module.storage.ecr_web_url
   ecr_migrator_url   = module.storage.ecr_migrator_url

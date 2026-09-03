@@ -33,14 +33,59 @@ variable "web_sg_id" {
   type        = string
 }
 
+# ─── SỐ INSTANCE: TRẦN, TRẠNG THÁI, VÀ ĐIỀU KIỆN ĐỂ NÂNG TRẦN ────
+#
+# Ba biến dưới đây tách ba thứ khác nhau, đừng gộp:
+#   • max_instance_count          — TRẦN. Ý định của người vận hành.
+#   • instance_count              — TRẠNG THÁI. up.sh/down.sh lật; 0 = $0 thật.
+#   • rate_limiter_is_distributed — TIỀN ĐỀ TẦNG APP cho phép trần > 1.
+#
+# 🚨 Vì sao có biến thứ ba, và vì sao nó KHÔNG phải thủ tục rườm rà:
+# Trần cũ bị ghim = 1 bởi một test (`tests/cluster.tftest.hcl`) với lý do ghi
+# thẳng trong error_message: rate limiter của API đếm trong RAM TIẾN TRÌNH, nên
+# 2 task API biến "5 lần đăng nhập/phút mỗi IP" thành 10. Đó không phải suy đoán
+# — nó là kịch bản KB6 của báo cáo bảo mật, đã đo được "req 1-5 → 400,
+# req 6-20 → 429". Nâng trần lên 2 khi rate limiter còn in-process KHÔNG làm
+# hỏng dữ liệu; nó làm **bằng chứng đã nộp trở thành sai sự thật**, và sai âm
+# thầm: không log nào, không alarm nào, ALB vẫn xanh.
+#
+# Nên trần vẫn nâng được — nhưng phải khai tường minh rằng tiền đề đã xử lý.
+# Xoá chốt bằng cách sửa test là bỏ mất chính thứ nó tồn tại để nhắc.
+#
+# Tiền đề coi là ĐÃ XỬ LÝ khi bộ đếm rate limit dùng chung giữa các task
+# (`AddStackExchangeRedisCache` + limiter đọc/ghi qua đó), hoặc rate limit được
+# đẩy lên tầng trước ALB (WAF rate-based rule). Cả hai đều KHÔNG kiểm được từ
+# Terraform, nên đây là lời khai của người vận hành, không phải phép đo.
+variable "max_instance_count" {
+  description = "TRẦN số EC2 container instance (max_size của ASG). > 1 đòi rate_limiter_is_distributed = true"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.max_instance_count >= 1 && var.max_instance_count <= 2
+    error_message = "max_instance_count chỉ được 1 hoặc 2 — t3.micro 1GB RAM và ngân sách của dự án không đỡ nổi hơn."
+  }
+
+  validation {
+    condition     = var.max_instance_count == 1 || var.rate_limiter_is_distributed
+    error_message = "max_instance_count > 1 đòi rate_limiter_is_distributed = true. Rate limiter của API đếm trong RAM tiến trình (src/API/Program.cs, RateLimitPartition.GetFixedWindowLimiter), nên 2 task biến 5 req/phút thành 10 và làm kịch bản KB6 của báo cáo bảo mật sai sự thật. Sửa tầng app trước, rồi khai cờ này."
+  }
+}
+
+variable "rate_limiter_is_distributed" {
+  description = "Lời khai: bộ đếm rate limit đã dùng chung giữa các task (Redis/ElastiCache) hoặc đã đẩy lên WAF. Là ĐIỀU KIỆN để max_instance_count > 1"
+  type        = bool
+  default     = false
+}
+
 variable "instance_count" {
-  description = "desired_capacity của ASG. 0 = tắt hoàn toàn (xoá cả EBS root)"
+  description = "desired_capacity của ASG — TRẠNG THÁI, không phải trần. 0 = tắt hoàn toàn (xoá cả EBS root)"
   type        = number
   default     = 0
 
   validation {
-    condition     = var.instance_count >= 0 && var.instance_count <= 1
-    error_message = "instance_count chỉ được 0 hoặc 1 — max_size của ASG cố định = 1."
+    condition     = var.instance_count >= 0 && var.instance_count <= var.max_instance_count
+    error_message = "instance_count phải nằm trong [0, max_instance_count]. Đặt cao hơn trần thì ASG im lặng kẹp lại và desired_capacity thật khác con số trong tfvars."
   }
 }
 
@@ -127,14 +172,24 @@ variable "tg_api_arn" {
   default     = ""
 }
 
+# Host port là STATIC (80 cho web, 8080 cho api), nên mỗi instance chứa được
+# ĐÚNG MỘT task của mỗi service. Hệ quả: service_desired_count phải ≤ số
+# instance đang chạy, không phải ≤ trần.
+#
+# 🚨 Đặt cao hơn số instance ĐANG chạy thì task thừa không xếp được lên đâu
+# (port đã bị chiếm), service không bao giờ stable, và `aws ecs wait
+# services-stable` trong deploy.yml treo tới timeout rồi rollback — một deploy
+# hỏng vì một con số, không vì code. Vì vậy envs/prod truyền
+# `service_desired_count = var.instance_count`, tức bám TRẠNG THÁI chứ không
+# bám trần.
 variable "service_desired_count" {
-  description = "Số task mỗi service. Giữ 1 — max_size của ASG là 1 và host port là static"
+  description = "Số task mỗi service. Phải bằng instance_count — static host port cho đúng 1 task/service/instance"
   type        = number
   default     = 1
 
   validation {
-    condition     = var.service_desired_count >= 0 && var.service_desired_count <= 1
-    error_message = "service_desired_count chỉ được 0 hoặc 1 — static host port không cho phép 2 task cùng port trên 1 instance."
+    condition     = var.service_desired_count >= 0 && var.service_desired_count <= var.max_instance_count
+    error_message = "service_desired_count phải nằm trong [0, max_instance_count]. Static host port không cho 2 task cùng port trên một instance."
   }
 }
 

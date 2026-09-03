@@ -151,8 +151,9 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
   chuyện khác — vì vậy `grep -rn 'catch (InvalidOperationException' src/` **phải luôn rỗng**.
   ✅ **Cả ba tầng đã sạch:** Service + API (mục 🅷) và **Client** (mục 🅸, xong 2026-09-01) —
   `0` chỗ chở `ex.Message` của hạ tầng ra cho người dùng. Ở tầng Client, 124 chỗ đã đổi sang câu
-  tiếng Việt cố định **có tính hành động**, và **18/18 client service nay inject `ILogger<T>`**
-  (trước đó là `0/18`) — vì "thay chuỗi" mà không log là **vứt sạch chẩn đoán**. Khuôn:
+  tiếng Việt cố định **có tính hành động**, và **18/24 client service nay inject `ILogger<T>`**
+  (trước đó `0`; 6 lớp còn lại chưa có: `BuildPc`, `Cart`, `UserAddress`, `Image`,
+  `InventoryExport`, `Review` — đúng 6 lớp còn nhiều vấn đề nhất) — vì "thay chuỗi" mà không log là **vứt sạch chẩn đoán**. Khuôn:
   ```csharp
   catch (Exception ex)
   {
@@ -167,7 +168,9 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
   (`src/Client/Services/Common/`) — nó đọc thân phản hồi để lấy đúng câu đó, phân biệt
   `HttpRequestException` với `TaskCanceledException`, và có sẵn ánh xạ `409`.
 - **Chốt chống hồi quy — chạy `devops/scripts/check-error-message-leaks.sh`** cho **cả ba tầng**
-  (kỳ vọng `Sạch [all]: 139 file, 0 chỗ`, mã thoát `0`; mã thoát `2` = **KHÔNG KẾT LUẬN**, không
+  (nay quét cả `.razor`: bản trước chỉ quét `src/Client/**/*.cs` nên mù 108 file `.razor`,
+  nơi còn 15 chỗ rò rỉ thật — xem `docs/nhat-ky-sua-loi-nang-cap.md` §6.4)
+  (kỳ vọng `Sạch [all]: 249 file, 0 chỗ`, mã thoát `0`; mã thoát `2` = **KHÔNG KẾT LUẬN**, không
   phải sạch). Tham số `server` / `client` để soi từng tầng — **cả hai nay đều phải ra `0`**.
   🚨 **Đừng thay nó bằng `grep 'ex.Message'`.** `grep` không biết dòng đó nằm trong khối `catch`
   **nào**, nên nó đếm cả **41** chỗ relay **đúng** (từ `catch` nghiệp vụ) thành lỗi. Đã đo: cách
@@ -244,17 +247,39 @@ Bốn quy tắc này sinh ra từ lỗi có thật đã sửa ở đợt 1 — v
   action**. Mọi `catch (Exception)` trong controller là một bức tường trước middleware — và
   **trước gói 3 nó làm handler 409 thành code chết cho MỌI đường nghiệp vụ.**
   🚨 **Sửa ở tầng Service là KHÔNG ĐỦ** — đã đo: chốt `throw;` ở `OrderService` chạy đúng (log
-  ghi "trùng khoá duy nhất") mà 409 vẫn không tới, vì `OrdersController` bắt trước. Khuôn, chỉ
-  đặt ở action **mutation** (GET không sinh được hai loại này):
+  ghi "trùng khoá duy nhất") mà 409 vẫn không tới, vì `OrdersController` bắt trước. Khuôn:
   ```csharp
   catch (BusinessRuleException ex) { return ApiResult<T>.Fail(ex.Message); }
-  catch (DbUpdateConcurrencyException) { throw; }                    // → 409
-  catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
-  { throw; }                                                        // → 409
-  catch (Exception ex) { … }                                        // PHẢI đứng cuối
+  catch (Exception ex) when (ConflictClassifier.IsConflict(ex)) { throw; }   // → 409
+  catch (Exception ex) { … }                                                // PHẢI đứng cuối
   ```
-  Hiện có **27 chốt** ở 4 controller. Nhận diện bằng **số lỗi** (2601/2627), tuyệt đối không dò
-  `ex.Message` — chuỗi đó tiếng Anh và đổi theo phiên bản SQL Server.
+  Hiện có **35 chốt** ở 4 controller: 27 mutation + **8 action ĐỌC**.
+
+  🚨 **Bản trước của chính khuôn trên tự liệt kê `2601 or 2627` và ghi "chỉ đặt ở action
+  mutation — GET không sinh được hai loại này". Cả hai vế đều để lọt deadlock.** Nửa sau đúng cho
+  `2601/2627` và `RowVersion`, nhưng **một `SELECT` bị SQL Server chọn làm nạn nhân `1205` là
+  chuyện bình thường**. Và nửa đầu tạo ra **hai danh sách độc lập** cho cùng một câu hỏi: chốt
+  controller cho thoát 3 loại, `ConflictExceptionHandler` nhận 5 loại. Giao của chúng mới là thứ
+  chạy — phần dôi (`1205`, `ConcurrentModificationException`) là **code chết**, và không gì báo.
+
+  🔴 **Đường thứ ba, khó thấy nhất: `EnableRetryOnFailure` ĐÃ BẬT.** Deadlock nằm trong danh sách
+  transient nên nó **bị thử lại**; hết lượt thì EF bọc nguyên nhân gốc vào
+  `RetryLimitExceededException`. Phép so khớp **một tầng** không khớp cái nào ⇒ **500**. Đã đo
+  bằng deadlock thật ép từ SQL Server: cách cũ để lọt `1205` bọc trong `RetryLimitExceededException`,
+  cách mới bắt được — 12/12, 0 hồi quy
+  ([bằng chứng](docs/evidence/2026-09-03-conflict-classifier.md)).
+
+  Vì vậy việc phân loại nay nằm **một chỗ duy nhất**: `ConflictClassifier`
+  (`src/Infrastructure/Concurrency/`). Controller hỏi `IsConflict`, handler hỏi `Classify` —
+  **cùng một hàm**, nên chúng không lệch được nữa. Nó **đi hết chuỗi `InnerException`** thay vì
+  so khớp một tầng, nên đúng cho mọi lớp bọc kể cả lớp viết sau. Nhận diện bằng **số lỗi**, tuyệt
+  đối không dò `ex.Message` — chuỗi đó tiếng Anh và đổi theo phiên bản SQL Server.
+
+  ⚠️ **Ngoại lệ có chủ ý — 2 chỗ ở tầng Service vẫn tự liệt kê `2601/2627`, và phải giữ vậy:**
+  `ServiceTicketService` (tiếp nhận trùng serial) và `InventoryCheckService` (phê duyệt trùng)
+  **dịch** vi phạm unique thành câu nghiệp vụ riêng. Đổi chúng sang `IsConflict` là **lỗi**:
+  deadlock sẽ được báo là "Sản phẩm này đã có phiếu sửa chữa chưa đóng." — sai sự thật. Chỉ dùng
+  `IsConflict` ở chỗ **rethrow**, không dùng ở chỗ **dịch nghĩa**.
 
 - **Unique index KHÔNG tự bảo vệ một hạn mức đếm được.** Nó chỉ chặn hai bản ghi cùng khoá.
   `UQ_VoucherUsages_UserId_VoucherId_SeqPerUser` chặn được hai insert cùng `SeqPerUser`, nhưng
@@ -346,6 +371,10 @@ xuất kho (Pending/Confirmed/Shipping)`. Serial chỉ đổi `Available` → `S
 
 ## Đang làm dở — đọc trước khi viết code
 
+📘 **[`docs/nhat-ky-sua-loi-nang-cap.md`](docs/nhat-ky-sua-loi-nang-cap.md)** — mọi lỗi đã sửa
+trong kế hoạch nâng cấp, kèm *sai ở đâu · vì sao quan trọng · cách sửa*. Tra ở đây trước khi
+sửa lại một thứ đã được sửa có chủ ý.
+
 🔴 **[`docs/bat-dau-phien-moi.md`](docs/bat-dau-phien-moi.md)** — điểm vào cho một phiên mới.
 Nó ghi: việc kế tiếp (kèm `file:dòng` cụ thể), cách chạy môi trường local, công thức kiểm
 chứng, và **mười ba cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
@@ -361,6 +390,14 @@ mục 🅸 + **đợt 3 (gói 2 + gói 3)** đã xong — **LoadProbe 9/9 ĐẠT
 High đã vá và có cổng chặn ở CI; rò rỉ `ex.Message` đã chặn hết ở **cả ba tầng**, có cổng
 `check-error-message-leaks.sh`), và **nợ kiểm thử 🧪 ưu tiên 1 + 2 đã trả** — bốn luồng cuối
 (POS · nhập kho · xuất kho · phiếu dịch vụ) **đã chạy thật tới DB**, 4/4 ĐẠT, 0 bản ghi nhân đôi.
+
+✅ **Phân loại xung đột đã gom về một chỗ (2026-09-03).** `ConflictClassifier`
+(`src/Infrastructure/Concurrency/`) nay là nguồn sự thật duy nhất cho cả chốt controller lẫn
+`ConflictExceptionHandler`, đóng ba khoảng trống chỉ hiện dưới tải: `1205` là **code chết**,
+`RetryLimitExceededException` **không được gỡ bọc** dù `EnableRetryOnFailure` đã bật, và **8 action
+`GET`** không có chốt nào. Đo bằng deadlock **thật** — 12/12, 0 hồi quy, có cột đối chứng âm để lọt
+3 ca; LoadProbe 9/9 (1 instance)
+([bằng chứng](docs/evidence/2026-09-03-conflict-classifier.md)).
 
 Còn lại: **mục 🅹** (35 lời gọi GET chuyển sang `ApiCall.SendAsync`), **nửa HẠ TẦNG của đợt 4**
 (chờ review), và **đợt 5 → 6**.

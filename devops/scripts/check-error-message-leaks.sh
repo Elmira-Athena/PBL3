@@ -23,9 +23,15 @@ import re, sys, glob
 BUSINESS = {'ConcurrentModificationException', 'BusinessRuleException',
             'UnauthorizedAccessException', 'ArgumentException', 'KeyNotFoundException'}
 
+# 🚨 Tầng Client là Blazor: logic xử lý sự kiện nằm trong khối @code của file .razor,
+# KHÔNG chỉ trong .cs. Bản trước chỉ quét 'src/Client/**/*.cs' nên bỏ qua 108 file .razor,
+# và ở đó còn 15 chỗ Snackbar.Add($"...{ex.Message}") trong catch (Exception) — trong đó
+# ImportReceiptPage.razor:508 là ĐÚNG NGUYÊN VĂN ví dụ SAI mà CLAUDE.md dùng để dạy luật này.
+# Một chốt mù nửa phạm vi mà báo "Sạch" thì tệ hơn không có chốt: nó dập tắt nghi ngờ.
 ALL = [('Service', 'src/Service/**/*.cs'),
        ('API',     'src/API/**/*.cs'),
-       ('Client',  'src/Client/**/*.cs')]
+       ('Client',  'src/Client/**/*.cs'),
+       ('Client',  'src/Client/**/*.razor')]
 
 scope = (sys.argv[1] if len(sys.argv) > 1 else 'all').lower()
 if scope == 'server':

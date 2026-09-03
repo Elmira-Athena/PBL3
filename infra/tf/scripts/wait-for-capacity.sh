@@ -9,13 +9,22 @@
 # user_data gọi `systemctl enable --now ecs` khoá chết với cloud-final, instance
 # chạy nhưng cluster rỗng, và không có tín hiệu nào ở tầng Terraform.
 #
-# Vậy nên: sau MỌI lần bật instance_count = 1, chạy script này. Nó là gate duy
+# Vậy nên: sau MỌI lần bật instance_count > 0, chạy script này. Nó là gate duy
 # nhất phân biệt "hạ tầng đã dựng" với "hạ tầng đã dựng và dùng được".
 #
-# Dùng:
-#   bash infra/tf/scripts/wait-for-capacity.sh [cluster] [timeout_giây]
+# 🚨 THAM SỐ THỨ BA CÓ TỪ LÚC TRẦN LÊN 2 — ĐỌC TRƯỚC KHI BỎ NÓ ĐI:
+# Bản trước thoát ngay khi thấy **ít nhất một** instance ACTIVE. Đúng khi cả hệ
+# thống chỉ có một instance, SAI ngay khi có hai: script trả về sau instance đầu
+# tiên, up.sh báo xong, rồi `service_desired_count = 2` không xếp được task thứ
+# hai (host port static, instance kia chưa đăng ký). Hỏng lộ ra muộn hơn nhiều —
+# ở `aws ecs wait services-stable` trong deploy.yml, dưới dạng timeout, và trông
+# như lỗi deploy chứ không như lỗi capacity.
+# Vì vậy script nay đợi ĐỦ số instance được yêu cầu.
 #
-# Mặc định lấy tên cluster từ `terraform output`, timeout 300 giây.
+# Dùng:
+#   bash infra/tf/scripts/wait-for-capacity.sh [cluster] [timeout_giây] [số_instance]
+#
+# Mặc định lấy tên cluster từ `terraform output`, timeout 300 giây, 1 instance.
 # Script CHỈ gọi API đọc (describe/list) — không tạo, không sửa, không xoá gì.
 
 set -euo pipefail
@@ -23,6 +32,7 @@ set -euo pipefail
 PROFILE="${AWS_PROFILE:-hushstore}"
 REGION="${AWS_REGION:-ap-southeast-1}"
 TIMEOUT="${2:-300}"
+EXPECTED="${3:-1}"
 INTERVAL=10
 
 TF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../envs/prod" && pwd)"
@@ -34,7 +44,7 @@ fi
 
 echo "Cluster : $CLUSTER"
 echo "Region  : $REGION   Profile: $PROFILE"
-echo "Timeout : ${TIMEOUT}s"
+echo "Timeout : ${TIMEOUT}s   Chờ đủ : ${EXPECTED} instance"
 echo
 
 DEADLINE=$((SECONDS + TIMEOUT))
@@ -46,8 +56,19 @@ while :; do
     --query 'containerInstanceArns' --output text \
     --profile "$PROFILE" --region "$REGION" --no-cli-pager)
 
-  if [ -n "$ARNS" ] && [ "$ARNS" != "None" ]; then
-    echo "Đã đăng ký. Chi tiết:"
+  if [ -z "$ARNS" ] || [ "$ARNS" = "None" ]; then
+    FOUND=0
+  else
+    # $ARNS không quote là CỐ Ý — `--output text` phân tách bằng tab, cần word
+    # splitting để `wc -w` đếm được từng ARN.
+    # shellcheck disable=SC2086
+    FOUND=$(echo $ARNS | wc -w | tr -d ' ')
+  fi
+
+  # `-ge` chứ không `-eq`: trong lúc instance refresh, ASG có thể có nhiều hơn
+  # trần trong một khoảnh khắc. Đủ là đủ.
+  if [ "$FOUND" -ge "$EXPECTED" ]; then
+    echo "Đã đăng ký ${FOUND}/${EXPECTED} instance. Chi tiết:"
     # $ARNS KHÔNG được quote một cách CỐ Ý: `--output text` trả danh sách ARN
     # phân tách bằng tab, và `--container-instances` cần chúng là các argument
     # riêng. Quote lại thành một chuỗi là AWS CLI báo lỗi ARN không hợp lệ.
@@ -75,7 +96,16 @@ while :; do
   fi
 
   if [ "$SECONDS" -ge "$DEADLINE" ]; then
-    echo "HẾT THỜI GIAN CHỜ sau ${TIMEOUT}s: cluster $CLUSTER vẫn không có container instance nào." >&2
+    echo "HẾT THỜI GIAN CHỜ sau ${TIMEOUT}s: cluster $CLUSTER chỉ có ${FOUND}/${EXPECTED} container instance đăng ký." >&2
+    if [ "$FOUND" -gt 0 ]; then
+      echo >&2
+      echo "LƯU Ý: có ${FOUND} instance đã vào cluster nhưng CHƯA ĐỦ ${EXPECTED}." >&2
+      echo "Đây là ca khác với 'cluster rỗng': hạ tầng đang lên, chỉ chưa đủ." >&2
+      echo "Kiểm trần trước khi đi chẩn đoán agent:" >&2
+      echo "  grep -E 'instance_count|max_instance_count' $TF_DIR/terraform.tfvars" >&2
+      echo "Nếu instance_count > max_instance_count thì ASG im lặng kẹp lại và" >&2
+      echo "số instance thật SẼ KHÔNG BAO GIỜ đạt con số bạn đang chờ." >&2
+    fi
     echo >&2
     echo "Chẩn đoán theo đúng thứ tự này:" >&2
     echo "  1. Instance có chạy không?" >&2

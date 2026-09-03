@@ -6,6 +6,7 @@
 @inject IOrderClientService OrderService
 @inject NavigationManager NavManager
 @inject ISnackbar Snackbar
+@inject Microsoft.Extensions.Logging.ILogger<MyOrders> Logger
 
 <PageTitle>Đơn hàng của tôi - HushStore</PageTitle>
 
@@ -137,7 +138,11 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            // Không chở thông báo hạ tầng ra người dùng: chuỗi của EF/HttpClient là
+            // tiếng Anh và lộ nội tạng. Câu cố định, tiếng Việt, có tính hành động —
+            // nhưng PHẢI log, vì thay chuỗi mà không log là vứt sạch chẩn đoán.
+            Logger.LogError(ex, "Lỗi ở MyOrders.");
+            Snackbar.Add("Không tải được danh sách đơn hàng. Vui lòng thử lại.", Severity.Error);
             return new TableData<OrderSummaryResponse> { Items = new List<OrderSummaryResponse>(), TotalItems = 0 };
         }
     }

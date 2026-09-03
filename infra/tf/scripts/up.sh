@@ -120,15 +120,25 @@ hs_wait_until "RDS available" 1200 "5-10m, bước lâu nhất" rds_is available
   || hs_die "RDS không lên. Kiểm tra: aws rds describe-events --source-identifier ${HS_DB} --source-type db-instance --duration 60 --profile ${HS_PROFILE}"
 
 hs_head "BƯỚC 4/6 — EC2 container instance"
-hs_tfvar_set instance_count 1
-hs_apply "bật instance"
+# TRẦN nằm ở max_instance_count trong tfvars — đó là nơi người vận hành khai ý
+# định. up.sh chỉ lật TRẠNG THÁI lên bằng trần, không tự quyết số lượng. Nhờ vậy
+# muốn chạy 2 instance thì sửa MỘT dòng tfvars, không phải sửa script.
+#
+# `|| echo 1` cùng lý do như trong hs_tfvar_set: hs_tfvar_get là pipeline mở đầu
+# bằng grep, và file này bật `set -euo pipefail`.
+HS_WANT_INSTANCES="$(hs_tfvar_get max_instance_count || echo 1)"
+hs_tfvar_set instance_count "$HS_WANT_INSTANCES"
+hs_apply "bật ${HS_WANT_INSTANCES} instance"
 
 hs_head "BƯỚC 5/6 — cửa chặn: instance phải đăng ký vào ECS cluster"
 # `terraform apply` xanh KHÔNG có nghĩa cluster dùng được: ASG dùng
 # health_check_type = "EC2" nên nó chỉ hỏi "EC2 có running không". Script này
 # kiểm cả agentConnected — đó là khác biệt giữa "đã dựng" và "dựng xong dùng được".
-bash "${HS_SCRIPT_DIR}/wait-for-capacity.sh" "$HS_CLUSTER" 420 \
-  || hs_die "cluster không có capacity dùng được — xem hướng dẫn chẩn đoán ở trên"
+# Tham số thứ ba: phải đợi ĐỦ số instance, không phải "có ít nhất một". Thiếu
+# nó thì với 2 instance, bước này xanh sau instance đầu tiên và lỗi lộ ra muộn
+# ở `aws ecs wait services-stable` dưới dạng timeout.
+bash "${HS_SCRIPT_DIR}/wait-for-capacity.sh" "$HS_CLUSTER" 420 "$HS_WANT_INSTANCES" \
+  || hs_die "cluster không có đủ capacity dùng được — xem hướng dẫn chẩn đoán ở trên"
 
 if [ "$WANT_ALB" = false ]; then
   hs_head "XONG (chế độ --no-alb) — $(hs_hms $((SECONDS - T_ALL)))"

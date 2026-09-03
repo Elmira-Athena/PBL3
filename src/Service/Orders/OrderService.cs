@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
 using PBL3.Core.Exceptions;
 using PBL3.Core.Interfaces;
+using PBL3.Infrastructure.Concurrency;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Sale;
 using PBL3.Shared.DTOs.Products;
@@ -337,13 +338,15 @@ namespace PBL3.Service.Orders
             // constraint, nên cách duy nhất là dò ex.Message — chuỗi tiếng Anh, đổi theo phiên
             // bản SQL Server, đúng bẫy #7. Câu 409 chung ở trên đủ đúng cho MỌI index ở đường
             // này nên không cần phân biệt.
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            // Hỏi ConflictClassifier thay vì tự liệt kê số lỗi: nó gom cả 2601/2627,
+            // DbUpdateConcurrencyException VÀ 1205 (deadlock) — loại thứ ba mà khối này
+            // trước kia bỏ sót, và là loại DUY NHẤT bị EnableRetryOnFailure bọc vào
+            // RetryLimitExceededException khi hết lượt thử. Nhờ dùng chung một hàm với
+            // ConflictExceptionHandler, cái thoát ra đây luôn khớp cái thành 409.
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
-                _logger.LogWarning(ex, "Đặt hàng thất bại do trùng khoá duy nhất. Người dùng {UserId}.", userId);
-                throw;
-            }
-            catch (DbUpdateConcurrencyException)
-            {
+                _logger.LogWarning(ex,
+                    "Đặt hàng thất bại do xung đột đồng thời. Người dùng {UserId}.", userId);
                 throw;
             }
             catch (Exception ex)
@@ -549,13 +552,15 @@ namespace PBL3.Service.Orders
             // Giải thích đầy đủ: InventoryCheckService.ApproveAsync.
             // Cùng lý do như khối catch của CheckoutAsync ở trên: để 2601/2627 đi qua thành
             // 409, đừng biến hạn mức voucher thành "lỗi hệ thống".
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            // Hỏi ConflictClassifier thay vì tự liệt kê số lỗi: nó gom cả 2601/2627,
+            // DbUpdateConcurrencyException VÀ 1205 (deadlock) — loại thứ ba mà khối này
+            // trước kia bỏ sót, và là loại DUY NHẤT bị EnableRetryOnFailure bọc vào
+            // RetryLimitExceededException khi hết lượt thử. Nhờ dùng chung một hàm với
+            // ConflictExceptionHandler, cái thoát ra đây luôn khớp cái thành 409.
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
-                _logger.LogWarning(ex, "Tạo đơn hàng thất bại do trùng khoá duy nhất. Người dùng {UserId}.", userId);
-                throw;
-            }
-            catch (DbUpdateConcurrencyException)
-            {
+                _logger.LogWarning(ex,
+                    "Tạo đơn hàng thất bại do xung đột đồng thời. Người dùng {UserId}.", userId);
                 throw;
             }
             catch (Exception ex)

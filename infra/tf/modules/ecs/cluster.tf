@@ -104,7 +104,7 @@ resource "aws_autoscaling_group" "this" {
   # phí về $0 thật. Toàn bộ state nằm trong image + Parameter Store nên dựng
   # lại không mất gì — đó là điều Task 16 Step 12 verify.
   min_size         = 0
-  max_size         = 1
+  max_size         = var.max_instance_count
   desired_capacity = var.instance_count
 
   launch_template {
@@ -153,8 +153,15 @@ resource "aws_autoscaling_group" "this" {
     strategy = "Rolling"
 
     preferences {
-      # max_size = 1 nên không thể giữ instance nào healthy trong lúc refresh.
-      min_healthy_percentage = 0
+      # Với trần = 1 thì KHÔNG THỂ giữ instance nào healthy trong lúc refresh:
+      # ASG phải hạ cái duy nhất xuống trước khi dựng cái mới → 0 là con số
+      # đúng, không phải con số dễ dãi.
+      #
+      # Với trần = 2 thì giữ được một nửa, và 50 là mức cao nhất còn khả thi:
+      # đặt 100 nghĩa là ASG phải dựng instance THỨ BA trước khi hạ cái nào —
+      # vượt max_size = 2 → instance refresh không bao giờ bắt đầu được, đứng ở
+      # "Pending" cho tới khi có người đi tìm hiểu vì sao.
+      min_healthy_percentage = var.max_instance_count > 1 ? 50 : 0
     }
   }
 }
@@ -171,8 +178,18 @@ resource "aws_ecs_capacity_provider" "this" {
     managed_termination_protection = "DISABLED"
 
     managed_scaling {
-      # DISABLED: max_size = 1 nên không có gì để scale. Bật lên sẽ khiến ECS
-      # tạo target-tracking policy tranh desired_capacity với Terraform.
+      # DISABLED, và giữ DISABLED cả khi trần = 2.
+      #
+      # Bật lên thì ECS tự tạo một target-tracking policy trên chính ASG này và
+      # bắt đầu tự đặt desired_capacity theo số task đang chờ xếp. Terraform
+      # cũng đặt desired_capacity (= var.instance_count). Hai chủ sở hữu cho một
+      # thuộc tính là drift vĩnh viễn: apply đưa về N, ECS đưa về M, plan lần sau
+      # lại thấy khác — và một plan luôn bẩn thì không ai đọc nó nữa, kể cả khi
+      # drift THẬT làm tốn tiền.
+      #
+      # Ở dự án này số instance là quyết định về CHI PHÍ, do người vận hành lật
+      # qua up.sh/down.sh, không phải quyết định do tải sinh ra. Nên giữ quyền
+      # đó ở Terraform là đúng, không phải là hạn chế.
       status = "DISABLED"
     }
   }

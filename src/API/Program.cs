@@ -19,6 +19,7 @@ using PBL3.Infrastructure.Data;
 using PBL3.Infrastructure.Repositories;
 using PBL3.API.Filters;
 using Amazon.AspNetCore.DataProtection.SSM;
+using Amazon.SimpleSystemsManagement;
 using Microsoft.AspNetCore.DataProtection;
 using PBL3.API.Middleware;
 using PBL3.Core.Interfaces;
@@ -125,9 +126,37 @@ builder.Services.AddScoped<ICacheService, CacheService>();
 // SetApplicationName BẮT BUỘC: thiếu nó thì purpose string mặc định lấy theo tên
 // assembly, và hai task có thể ra khác nhau — key ring dùng chung mà vẫn không giải mã
 // được cho nhau, tức là bug NGƯỢC LẠI với điều ta đang sửa, và im lặng hơn.
+//
+// 🚨 CLIENT SSM PHẢI ĐƯỢC DỰNG TƯỜNG MINH VỚI REGION — thiếu bước này là hỏng CHẮC CHẮN
+// trên production, và hỏng im lặng. Amazon.AspNetCore.DataProtection.SSM lấy
+// IAmazonSimpleSystemsManagement từ DI, và khi không thấy thì fallback
+// `new AmazonSimpleSystemsManagementClient()`. Constructor không tham số phải tự phân giải
+// region theo chuỗi: env AWS_REGION/AWS_DEFAULT_REGION → file config → IMDS. Trên ECS này:
+//   • taskdef KHÔNG đặt AWS_REGION (chỉ có ASPNETCORE_*, AllowedOrigins, AwsSettings__*);
+//     ECS EC2 launch type không tự tiêm biến đó.
+//   • IMDS bị chặn có chủ đích: cluster.tf đặt http_put_response_hop_limit = 1, và comment
+//     ngay trên nó nói rõ "container (bridge network = thêm 1 hop) không tự gọi được".
+// ⇒ chuỗi cạn đường ⇒ AmazonClientException "No RegionEndpoint or ServiceURL configured".
+//
+// Credential thì VẪN ổn (đi qua AWS_CONTAINER_CREDENTIALS_RELATIVE_URI, không cần IMDS),
+// nên đây KHÔNG phải lỗi quyền IAM — nhưng nó trông hệt như lỗi quyền: app vẫn khởi động,
+// health/live và health/ready đều xanh, ALB đưa traffic vào, deploy báo thành công, chỉ vài
+// đường 500. Ai chẩn đoán nhầm sẽ đi nới rộng IAM policy để đuổi một triệu chứng không do IAM
+// — tức phá một deliverable bảo mật vì một lỗi cấu hình region.
+//
+// AmazonS3Client bên dưới trong chính file này đã làm đúng khuôn từ trước; đường DataProtection
+// bỏ sót đúng bước ấy.
 var dataProtectionSsmPrefix = builder.Configuration["DataProtection:SsmPrefix"];
 if (!string.IsNullOrWhiteSpace(dataProtectionSsmPrefix))
 {
+    // Chuẩn hoá prefix: thiếu dấu '/' cuối thì GetParametersByPath và PutParameter ghép tên
+    // khác nhau ⇒ key ring luôn rỗng ⇒ mỗi task tự sinh key riêng. Im lặng y hệt ca thiếu region.
+    dataProtectionSsmPrefix = dataProtectionSsmPrefix.Trim().TrimEnd('/') + "/";
+
+    var ssmRegion = builder.Configuration["AwsSettings:Region"] ?? "ap-southeast-1";
+    builder.Services.AddSingleton<IAmazonSimpleSystemsManagement>(_ =>
+        new AmazonSimpleSystemsManagementClient(RegionEndpoint.GetBySystemName(ssmRegion)));
+
     builder.Services.AddDataProtection()
         .SetApplicationName("HushStore")
         .PersistKeysToAWSSystemsManager(dataProtectionSsmPrefix);
@@ -430,9 +459,12 @@ builder.Services.AddRateLimiter(options =>
                 ((int)retryAfter.TotalSeconds).ToString();
         }
 
+        // ErrorResponseJson.Options: bỏ khoá "data" khỏi thân lỗi. Thiếu nó thì client đọc
+        // ApiResult<bool> sẽ ném JsonException và người dùng không bao giờ thấy câu này.
         await context.HttpContext.Response.WriteAsJsonAsync(
             ApiResult<object>.Fail(
                 "Bạn thao tác quá nhanh. Vui lòng chờ trong giây lát rồi thử lại."),
+            ErrorResponseJson.Options,
             cancellationToken);
     };
 });
@@ -597,8 +629,7 @@ app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
         ? feature?.Error?.Message ?? "Lỗi máy chủ nội bộ."
         : "Lỗi máy chủ nội bộ.";
     var result = ApiResult<object>.Fail(message);
-    await ctx.Response.WriteAsync(JsonSerializer.Serialize(result,
-        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+    await ctx.Response.WriteAsync(JsonSerializer.Serialize(result, ErrorResponseJson.Options));
 }));
 
 // UseForwardedHeaders phải chạy TRƯỚC mọi middleware đọc scheme hoặc IP.
@@ -676,7 +707,8 @@ app.Use(async (context, next) =>
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 context.Response.ContentType = "application/json";
                 context.Response.Headers["X-Account-Status"] = "locked";
-                await context.Response.WriteAsJsonAsync(ApiResult<object>.Fail(message));
+                await context.Response.WriteAsJsonAsync(
+                    ApiResult<object>.Fail(message), ErrorResponseJson.Options);
                 return;
             }
         }

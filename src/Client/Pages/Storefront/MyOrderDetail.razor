@@ -9,6 +9,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
+@inject Microsoft.Extensions.Logging.ILogger<MyOrderDetail> Logger
 
 <PageTitle>Chi tiết đơn hàng - HushStore</PageTitle>
 
@@ -323,7 +324,11 @@ else if (_order != null)
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Lỗi thao tác: {ex.Message}", Severity.Error);
+            // Không chở thông báo hạ tầng ra người dùng: chuỗi của EF/HttpClient là
+            // tiếng Anh và lộ nội tạng. Câu cố định, tiếng Việt, có tính hành động —
+            // nhưng PHẢI log, vì thay chuỗi mà không log là vứt sạch chẩn đoán.
+            Logger.LogError(ex, "Lỗi ở MyOrderDetail.");
+            Snackbar.Add("Không thực hiện được thao tác. Vui lòng tải lại trang để xem trạng thái hiện tại rồi thử lại.", Severity.Error);
         }
         finally
         {

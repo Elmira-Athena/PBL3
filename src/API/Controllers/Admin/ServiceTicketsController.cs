@@ -1,5 +1,3 @@
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Security.Claims;
@@ -8,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.ServiceTickets;
 using PBL3.Core.Exceptions;
+using PBL3.Infrastructure.Concurrency;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.ServiceTickets;
 using Microsoft.AspNetCore.RateLimiting;
@@ -61,11 +60,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -93,11 +88,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -139,6 +130,13 @@ namespace PBL3.API.Controllers.Admin
 
                 return ApiResult<PagedResult<ServiceTicketListDto>>.Ok(paged);
             }
+            // Deadlock (1205) LÀ sinh được ở đường đọc: một SELECT hoàn toàn có thể bị
+            // SQL Server chọn làm nạn nhân. Đây là chỗ tiền đề cũ ("GET không sinh được")
+            // SAI — nó chỉ đúng cho 2601/2627, không đúng cho 1205.
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error listing tickets");
@@ -172,6 +170,13 @@ namespace PBL3.API.Controllers.Admin
 
                 return ApiResult<PagedResult<ServiceTicketListDto>>.Ok(paged);
             }
+            // Deadlock (1205) LÀ sinh được ở đường đọc: một SELECT hoàn toàn có thể bị
+            // SQL Server chọn làm nạn nhân. Đây là chỗ tiền đề cũ ("GET không sinh được")
+            // SAI — nó chỉ đúng cho 2601/2627, không đúng cho 1205.
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error listing customer tickets");
@@ -195,6 +200,13 @@ namespace PBL3.API.Controllers.Admin
             catch (UnauthorizedAccessException ex)
             {
                 return ApiResult<ServiceTicketDetailDto>.Fail(ex.Message);
+            }
+            // Deadlock (1205) LÀ sinh được ở đường đọc: một SELECT hoàn toàn có thể bị
+            // SQL Server chọn làm nạn nhân. Đây là chỗ tiền đề cũ ("GET không sinh được")
+            // SAI — nó chỉ đúng cho 2601/2627, không đúng cho 1205.
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -220,11 +232,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -256,11 +264,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -292,11 +296,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -328,11 +328,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -364,11 +360,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -400,11 +392,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -436,11 +424,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -472,11 +456,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -508,11 +488,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -544,11 +520,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -580,11 +552,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -616,11 +584,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -652,11 +616,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -688,11 +648,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -720,11 +676,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -744,6 +696,13 @@ namespace PBL3.API.Controllers.Admin
                 var history = await _service.GetTicketHistoryAsync(id);
                 return ApiResult<List<ServiceTicketStatusHistoryDto>>.Ok(history);
             }
+            // Deadlock (1205) LÀ sinh được ở đường đọc: một SELECT hoàn toàn có thể bị
+            // SQL Server chọn làm nạn nhân. Đây là chỗ tiền đề cũ ("GET không sinh được")
+            // SAI — nó chỉ đúng cho 2601/2627, không đúng cho 1205.
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting ticket history");
@@ -759,6 +718,13 @@ namespace PBL3.API.Controllers.Admin
             {
                 var history = await _service.GetSerialRepairHistoryAsync(serialNumber);
                 return ApiResult<List<SerialRepairHistoryDto>>.Ok(history);
+            }
+            // Deadlock (1205) LÀ sinh được ở đường đọc: một SELECT hoàn toàn có thể bị
+            // SQL Server chọn làm nạn nhân. Đây là chỗ tiền đề cũ ("GET không sinh được")
+            // SAI — nó chỉ đúng cho 2601/2627, không đúng cho 1205.
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
+            {
+                throw;
             }
             catch (Exception ex)
             {

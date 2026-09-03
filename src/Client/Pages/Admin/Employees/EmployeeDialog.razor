@@ -4,6 +4,7 @@
 @inject IEmployeeClientService EmployeeService
 @inject IImageClientService ImageService
 @inject ISnackbar Snackbar
+@inject Microsoft.Extensions.Logging.ILogger<EmployeeDialog> Logger
 
 <MudDialog>
     <DialogContent>
@@ -310,7 +311,11 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Lỗi thao tác: {ex.Message}", MudBlazor.Severity.Error);
+            // Không chở thông báo hạ tầng ra người dùng: chuỗi của EF/HttpClient là
+            // tiếng Anh và lộ nội tạng. Câu cố định, tiếng Việt, có tính hành động —
+            // nhưng PHẢI log, vì thay chuỗi mà không log là vứt sạch chẩn đoán.
+            Logger.LogError(ex, "Lỗi ở EmployeeDialog.");
+            Snackbar.Add("Không lưu được thông tin nhân viên. Vui lòng tải lại trang rồi thử lại.", MudBlazor.Severity.Error);
         }
         finally
         {

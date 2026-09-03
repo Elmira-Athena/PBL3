@@ -108,9 +108,28 @@ variable "monthly_budget_usd" {
 }
 
 variable "instance_count" {
-  description = "Số EC2 container instance (0 hoặc 1). 0 = tắt hoàn toàn, về $0"
+  description = "Số EC2 container instance ĐANG chạy — trạng thái, do up.sh/down.sh lật. 0 = tắt hoàn toàn, về $0"
   type        = number
   default     = 0
+}
+
+# TRẦN, không phải trạng thái. Xem khối comment ở modules/ecs/variables.tf để
+# biết vì sao nâng nó lên 2 lại đòi một cờ khai tường minh.
+#
+# Giữ mặc định 1 là cố ý: max_size cũng là bán kính thiệt hại nếu có lỗi làm
+# ASG scale ngoài ý muốn — modules/costguard/lambda.tf ghi rõ nó dựa vào chính
+# trần này làm lớp chặn cuối. Nâng trần là nâng luôn bán kính đó, nên phải là
+# một quyết định được gõ ra, không phải mặc định thừa hưởng.
+variable "max_instance_count" {
+  description = "TRẦN số EC2 container instance (1 hoặc 2). > 1 đòi rate_limiter_is_distributed = true"
+  type        = number
+  default     = 1
+}
+
+variable "rate_limiter_is_distributed" {
+  description = "Lời khai: bộ đếm rate limit của API đã dùng chung giữa các task (Redis/ElastiCache) hoặc đã đẩy lên WAF. ĐIỀU KIỆN để max_instance_count > 1"
+  type        = bool
+  default     = false
 }
 
 variable "instance_type" {

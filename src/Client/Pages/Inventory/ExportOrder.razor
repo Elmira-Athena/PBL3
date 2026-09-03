@@ -3,6 +3,7 @@
 @using Client.Services.Orders
 @using PBL3.Shared.DTOs.Inventory
 @using PBL3.Shared.DTOs.Sale
+@inject Microsoft.Extensions.Logging.ILogger<ExportOrder> Logger
 
 <PageTitle>Xuất kho đơn hàng - HushStore</PageTitle>
 
@@ -326,7 +327,11 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            // Không chở thông báo hạ tầng ra người dùng: chuỗi của EF/HttpClient là
+            // tiếng Anh và lộ nội tạng. Câu cố định, tiếng Việt, có tính hành động —
+            // nhưng PHẢI log, vì thay chuỗi mà không log là vứt sạch chẩn đoán.
+            Logger.LogError(ex, "Lỗi ở ExportOrder.");
+            Snackbar.Add("Không thực hiện được thao tác xuất kho. Vui lòng tải lại trang rồi thử lại.", Severity.Error);
         }
         finally
         {
@@ -454,7 +459,11 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            // Không chở thông báo hạ tầng ra người dùng: chuỗi của EF/HttpClient là
+            // tiếng Anh và lộ nội tạng. Câu cố định, tiếng Việt, có tính hành động —
+            // nhưng PHẢI log, vì thay chuỗi mà không log là vứt sạch chẩn đoán.
+            Logger.LogError(ex, "Lỗi ở ExportOrder.");
+            Snackbar.Add("Không thực hiện được thao tác xuất kho. Vui lòng tải lại trang rồi thử lại.", Severity.Error);
         }
     }
 

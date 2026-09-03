@@ -26,12 +26,19 @@ variables {
   allowed_origins           = "https://hushstore.io.vn"
 }
 
-run "asg_gioi_han_dung_1_instance" {
+run "asg_mac_dinh_gioi_han_1_instance" {
   command = plan
 
+  # Trần MẶC ĐỊNH vẫn là 1, và đó là điều đáng chốt.
+  #
+  # Chốt cũ ghim cứng `max_size == 1` để chặn việc chạy 2 task API khi rate
+  # limiter còn đếm trong RAM tiến trình. Trần nay nâng được, nhưng chỉ khi khai
+  # tường minh `rate_limiter_is_distributed = true` — nên bất biến thật đã
+  # chuyển từ "trần luôn bằng 1" sang "trần chỉ vượt 1 khi tiền đề được khai".
+  # Hai run block dưới đây đo đúng hai nửa đó.
   assert {
     condition     = aws_autoscaling_group.this.max_size == 1
-    error_message = "max_size phải = 1: rate limiter là in-memory nên 2 task API sẽ làm giới hạn 5 req/phút thành 10."
+    error_message = "Với var.max_instance_count mặc định (1), max_size phải = 1. Trần là bán kính thiệt hại khi có gì scale ngoài ý muốn, nên nó không được tự nới."
   }
 
   assert {
@@ -42,6 +49,59 @@ run "asg_gioi_han_dung_1_instance" {
   assert {
     condition     = length(aws_autoscaling_group.this.vpc_zone_identifier) == 2
     error_message = "ASG phải trải trên 2 app subnet ở 2 AZ."
+  }
+
+  assert {
+    condition     = aws_autoscaling_group.this.instance_refresh[0].preferences[0].min_healthy_percentage == 0
+    error_message = "Trần = 1 thì min_healthy_percentage phải = 0: không thể giữ instance nào healthy khi chỉ có một cái và nó phải bị thay."
+  }
+}
+
+# ─── NỬA THỨ HAI CỦA BẤT BIẾN: TRẦN 2 ĐÒI TIỀN ĐỀ ĐƯỢC KHAI ─────────
+#
+# 🚨 Đây là ca ĐỐI CHỨNG ÂM, và nó là run block quan trọng nhất trong file.
+# Không có nó, `rate_limiter_is_distributed` chỉ là một biến trang trí: ai đó
+# nâng max_instance_count = 2 mà quên cờ sẽ được `terraform validate` cho qua
+# nếu validation bị xoá, và không gì báo. Test này khẳng định validation THẬT SỰ
+# chặn — nó phải THẤT BẠI, và thất bại đúng ở biến max_instance_count.
+run "tran_2_khong_co_loi_khai_thi_bi_chan" {
+  command = plan
+
+  variables {
+    max_instance_count          = 2
+    rate_limiter_is_distributed = false
+  }
+
+  expect_failures = [var.max_instance_count]
+}
+
+run "tran_2_co_loi_khai_thi_di_qua_va_deploy_khong_downtime" {
+  command = plan
+
+  variables {
+    max_instance_count          = 2
+    rate_limiter_is_distributed = true
+    instance_count              = 2
+    service_desired_count       = 2
+  }
+
+  assert {
+    condition     = aws_autoscaling_group.this.max_size == 2
+    error_message = "Khai đủ tiền đề thì trần phải nâng được lên 2."
+  }
+
+  assert {
+    condition     = aws_autoscaling_group.this.desired_capacity == 2
+    error_message = "desired_capacity phải bám var.instance_count, không bị kẹp về 1."
+  }
+
+  # 50 là con số cho deploy KHÔNG downtime với host port static: ECS hạ một
+  # task, dựng bản mới lên instance vừa trống, rồi mới làm cái còn lại. Nếu con
+  # số này rơi về 0 thì cả lợi ích chính của instance thứ hai mất, mà không gì
+  # báo — service vẫn stable, chỉ là có một khoảng không ai phục vụ.
+  assert {
+    condition     = aws_autoscaling_group.this.instance_refresh[0].preferences[0].min_healthy_percentage == 50
+    error_message = "Trần = 2 thì min_healthy_percentage phải = 50. Đặt 100 sẽ đòi instance thứ ba (vượt max_size) và instance refresh không bao giờ bắt đầu được."
   }
 }
 
@@ -139,7 +199,7 @@ run "capacity_provider_tat_managed_scaling_va_termination_protection" {
 
   assert {
     condition     = aws_ecs_capacity_provider.this.auto_scaling_group_provider[0].managed_scaling[0].status == "DISABLED"
-    error_message = "managed_scaling phải DISABLED: max_size = 1 nên không có gì để scale, và bật lên sẽ tranh desired_capacity với Terraform."
+    error_message = "managed_scaling phải DISABLED ở MỌI trần: bật lên thì ECS tự tạo target-tracking policy và tranh desired_capacity với Terraform — hai chủ sở hữu một thuộc tính là drift vĩnh viễn, và một plan luôn bẩn thì không ai đọc nó nữa."
   }
 }
 

@@ -30,12 +30,45 @@ namespace PBL3.Infrastructure.Caching
 
         public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
         {
+            var (_, value) = await TryGetAsync<T>(key, cancellationToken);
+            return value;
+        }
+
+        /// <summary>
+        /// Đọc cache và trả về CẢ tín hiệu hit/miss, không chỉ giá trị.
+        /// </summary>
+        /// <remarks>
+        /// 🚨 <b>Đây là lý do <see cref="GetOrCreateAsync"/> không được dùng thẳng
+        /// <see cref="GetAsync"/>.</b>
+        ///
+        /// <c>GetAsync</c> trả <c>default(T)</c> khi miss. Với <c>T</c> là kiểu THAM CHIẾU thì
+        /// <c>default(T)</c> là <c>null</c>, phân biệt được với giá trị thật. Với <c>T</c> là kiểu
+        /// GIÁ TRỊ (<c>int</c>, <c>bool</c>, <c>decimal</c>, <c>Guid</c>, struct) thì
+        /// <c>default(T)</c> là <c>0</c>/<c>false</c> — <b>không phân biệt được với một giá trị
+        /// hợp lệ</b>, và phép kiểm <c>cached is not null</c> luôn đúng.
+        ///
+        /// Bản trước viết đúng như vậy, và đã đo trên cache HOÀN TOÀN RỖNG:
+        /// <code>
+        /// GetOrCreateAsync&lt;int&gt;   -> trả 0     | factory gọi 0 lần   (kỳ vọng 42 / 1 lần)
+        /// GetOrCreateAsync&lt;bool&gt;  -> trả False | factory gọi 0 lần   (kỳ vọng True / 1 lần)
+        /// GetOrCreateAsync&lt;List&gt;  -> trả 2     | factory gọi 1 lần   ✓
+        /// </code>
+        /// Tức <c>GetOrCreateAsync&lt;int&gt;("ton-kho", …)</c> trả <c>0</c> mà KHÔNG hề chạm DB,
+        /// mãi mãi. Đúng lớp lỗi "nói dối" mà XML doc của interface tuyên bố sẽ không phạm.
+        ///
+        /// Tín hiệu hit/miss đáng tin DUY NHẤT là ở tầng byte: <c>byte[]</c> null hoặc rỗng = miss.
+        /// Vì vậy phải kiểm ở đó, TRƯỚC khi giải tuần tự. Đừng "sửa" bằng cách so với
+        /// <c>default(T)</c> — làm thế thì một giá trị <c>0</c> hợp lệ bị coi là miss mãi mãi.
+        /// </remarks>
+        private async Task<(bool Found, T? Value)> TryGetAsync<T>(
+            string key, CancellationToken cancellationToken)
+        {
             try
             {
                 var bytes = await _cache.GetAsync(key, cancellationToken);
-                if (bytes is null || bytes.Length == 0) return default;
+                if (bytes is null || bytes.Length == 0) return (false, default);
 
-                return JsonSerializer.Deserialize<T>(bytes);
+                return (true, JsonSerializer.Deserialize<T>(bytes));
             }
             catch (Exception ex)
             {
@@ -44,7 +77,7 @@ namespace PBL3.Infrastructure.Caching
                 // coi như cache miss. Với lỗi giải tuần tự, cách này còn tự chữa — khoá xấu sẽ
                 // bị ghi đè ở lượt SetAsync ngay sau đó.
                 _logger.LogWarning(ex, "Không đọc được cache cho khoá {CacheKey} — coi như miss.", key);
-                return default;
+                return (false, default);
             }
         }
 
@@ -88,8 +121,11 @@ namespace PBL3.Infrastructure.Caching
             TimeSpan? ttl = null,
             CancellationToken cancellationToken = default)
         {
-            var cached = await GetAsync<T>(key, cancellationToken);
-            if (cached is not null) return cached;
+            // TryGetAsync chứ không phải GetAsync: hit/miss phải đọc ở tầng byte, không suy ra
+            // từ giá trị. Xem chú thích ở TryGetAsync — dùng GetAsync ở đây làm factory KHÔNG BAO
+            // GIỜ chạy với kiểu giá trị, đã đo.
+            var (found, cached) = await TryGetAsync<T>(key, cancellationToken);
+            if (found) return cached!;
 
             // 🔴 KHÔNG bọc factory trong try/catch. Exception ở đây là lỗi nghiệp vụ hoặc lỗi
             // DB thật — nuốt nó là biến "DB sập" thành "danh mục rỗng", đúng loại lỗi tệ nhất

@@ -1,11 +1,10 @@
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PBL3.Service.ServiceInvoices;
 using PBL3.Core.Exceptions;
+using PBL3.Infrastructure.Concurrency;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.ServiceTickets;
 
@@ -52,6 +51,13 @@ namespace PBL3.API.Controllers.Admin
                 };
                 return ApiResult<PagedResult<ServiceInvoiceListDto>>.Ok(result);
             }
+            // Deadlock (1205) LÀ sinh được ở đường đọc: một SELECT hoàn toàn có thể bị
+            // SQL Server chọn làm nạn nhân. Đây là chỗ tiền đề cũ ("GET không sinh được")
+            // SAI — nó chỉ đúng cho 2601/2627, không đúng cho 1205.
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Lỗi khi lấy danh sách hóa đơn dịch vụ.");
@@ -77,11 +83,7 @@ namespace PBL3.API.Controllers.Admin
             // Để xung đột đồng thời THOÁT khỏi controller — nếu không, catch (Exception) ở dưới
             // nuốt nó và ConflictExceptionHandler (409) không bao giờ chạy. Giải thích đầy đủ ở
             // action đầu tiên có chốt này trong OrdersController.
-            catch (DbUpdateConcurrencyException)
-            {
-                throw;
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
             {
                 throw;
             }
@@ -105,6 +107,13 @@ namespace PBL3.API.Controllers.Admin
                     return ApiResult<ServiceInvoiceDetailDto>.Fail("Không tìm thấy hóa đơn dịch vụ yêu cầu.");
 
                 return ApiResult<ServiceInvoiceDetailDto>.Ok(invoice);
+            }
+            // Deadlock (1205) LÀ sinh được ở đường đọc: một SELECT hoàn toàn có thể bị
+            // SQL Server chọn làm nạn nhân. Đây là chỗ tiền đề cũ ("GET không sinh được")
+            // SAI — nó chỉ đúng cho 2601/2627, không đúng cho 1205.
+            catch (Exception ex) when (ConflictClassifier.IsConflict(ex))
+            {
+                throw;
             }
             catch (Exception ex)
             {

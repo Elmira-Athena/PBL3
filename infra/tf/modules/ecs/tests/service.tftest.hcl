@@ -66,6 +66,58 @@ run "deployment_percent_phu_hop_voi_static_host_port_1_instance" {
   }
 }
 
+run "deployment_percent_cho_2_instance_thi_deploy_khong_downtime" {
+  command = plan
+
+  variables {
+    max_instance_count          = 2
+    rate_limiter_is_distributed = true
+    instance_count              = 2
+    service_desired_count       = 2
+  }
+
+  # Đây là lợi ích LỚN NHẤT của instance thứ hai, và nó dễ mất im lặng nhất:
+  # nếu min rơi về 0 thì ECS được phép hạ CẢ HAI task cùng lúc, và deploy lại có
+  # downtime — nhưng service vẫn báo stable, không log nào, không alarm nào. Chỉ
+  # có một khoảng vài chục giây không ai phục vụ, và nó không xuất hiện ở đâu.
+  assert {
+    condition = alltrue([
+      aws_ecs_service.api[0].deployment_minimum_healthy_percent == 50,
+      aws_ecs_service.web[0].deployment_minimum_healthy_percent == 50,
+    ])
+    error_message = "Với 2 task, min phải = 50 để luôn còn một task phục vụ trong lúc deploy. Rơi về 0 là mất lợi ích chính của instance thứ hai mà không có tín hiệu nào."
+  }
+
+  # max vẫn 100 kể cả khi có 2 instance: host port là static, nên tổng số task
+  # không vượt được số instance. Đặt 200 là đòi 4 instance.
+  assert {
+    condition = alltrue([
+      aws_ecs_service.api[0].deployment_maximum_percent == 100,
+      aws_ecs_service.web[0].deployment_maximum_percent == 100,
+    ])
+    error_message = "max phải giữ 100 ở mọi trần: static host port cho đúng 1 task/service/instance, nên 200% đòi số instance gấp đôi trần."
+  }
+}
+
+run "task_trai_ra_2_az_truoc_roi_moi_trai_theo_instance" {
+  command = plan
+
+  # Với host port static thì AZ spread gần như bị ép sẵn. Chốt ở đây KHÔNG để
+  # đổi hành vi hôm nay, mà để hành vi không đổi NGẦM vào ngày ai đó chuyển sang
+  # dynamic port mapping: lúc đó, thiếu khối này, ECS mặc định gom cả hai task
+  # lên cùng một instance vì đó là chỗ nó thấy xếp được — và một sơ đồ "2 AZ"
+  # trở thành hai task chết cùng lúc.
+  assert {
+    condition = alltrue([
+      aws_ecs_service.api[0].ordered_placement_strategy[0].type == "spread",
+      aws_ecs_service.api[0].ordered_placement_strategy[0].field == "attribute:ecs.availability-zone",
+      aws_ecs_service.web[0].ordered_placement_strategy[0].type == "spread",
+      aws_ecs_service.web[0].ordered_placement_strategy[0].field == "attribute:ecs.availability-zone",
+    ])
+    error_message = "Chiến lược xếp task ĐẦU TIÊN phải là spread theo availability-zone. Thứ tự có ý nghĩa: spread theo instanceId trước sẽ cho phép hai task nằm cùng một AZ."
+  }
+}
+
 run "service_gan_dung_target_group_va_container" {
   command = plan
 

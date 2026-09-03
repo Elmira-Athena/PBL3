@@ -11,6 +11,7 @@
 @inject Client.Services.Customer.IUserAddressClientService UserAddressClientService
 @inject Client.Services.Cart.ICartClientService CartClientService
 @inject Client.Services.Voucher.IVoucherClientService VoucherService
+@inject Microsoft.Extensions.Logging.ILogger<Checkout> Logger
 
 <PageTitle>Thanh toán - HushStore</PageTitle>
 
@@ -392,7 +393,11 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Lỗi khi đặt hàng: {ex.Message}", Severity.Error);
+            // Không chở thông báo hạ tầng ra người dùng: chuỗi của EF/HttpClient là
+            // tiếng Anh và lộ nội tạng. Câu cố định, tiếng Việt, có tính hành động —
+            // nhưng PHẢI log, vì thay chuỗi mà không log là vứt sạch chẩn đoán.
+            Logger.LogError(ex, "Lỗi ở Checkout.");
+            Snackbar.Add("Không thể hoàn tất đặt hàng do lỗi kết nối. Vui lòng kiểm tra danh sách đơn hàng của bạn trước khi đặt lại.", Severity.Error);
         }
     }
 }
