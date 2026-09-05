@@ -82,7 +82,13 @@ HS_RATE_EC2=0.0132        # t3.micro APS1
 # sau khi vẽ CPUUtilization + CPUCreditBalance + CPUSurplusCreditBalance trên
 # cùng cửa sổ VÀ Cost Explorer xác nhận sau 24-48h.
 HS_RATE_RDS_UP=0.098      # instance $0.031 + CPU surplus $0.067 — đo trên SQL Server, xem cảnh báo trên
-HS_RATE_RDS_STOPPED=0.004 # storage 20GB — tính cả khi stopped (gp2 lúc đo; nay gp3, cùng bậc giá)
+# 🔴 ĐÃ NHÂN ĐÔI VÌ MULTI-AZ. Storage được cấp phát ở CẢ HAI AZ và AWS tính tiền
+# cả hai, kể cả khi instance đã stopped. Nghĩa là Multi-AZ nâng cái SÀN chi phí
+# của dự án — khoảng +$2,3/tháng chạy vĩnh viễn, không tắt được bằng down.sh.
+# Đây là cái giá thật của việc ghim enable_multi_az = true, và nó phải hiện ra
+# ở đây chứ không nằm trong đầu ai đó.
+# $0.004 là số ĐO ĐƯỢC cho 20GB single-AZ; ×2 là suy ra, chưa đối chiếu hoá đơn.
+HS_RATE_RDS_STOPPED=0.008 # storage 20GB × 2 AZ — tính cả khi stopped
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'
@@ -257,6 +263,46 @@ hs_apply() {
 }
 
 hs_tf_out() { terraform -chdir="$HS_TF_DIR" output -raw "$1" 2>/dev/null || true; }
+
+# ── Số NAT theo CẤU HÌNH ĐÃ COMMIT, không theo tfvars ────────────
+# 🚨 VÌ SAO KHÔNG DÙNG hs_tfvar_get: terraform.tfvars bị .gitignore (dòng 119
+# `*.tfvars`), nên nó có thể không tồn tại trên máy này. Phiên bản trước viết
+# `hs_tfvar_get nat_gateway_count || echo 1` — fallback đó IM LẶNG báo thiếu
+# $0,059/giờ khi thực tế đang chạy 2 NAT. Nay đọc từ `terraform output`, tức từ
+# chính cấu hình Terraform sắp/vừa áp.
+#
+# Trả về RỖNG khi không đọc được, và người gọi PHẢI xử lý ca rỗng bằng cách nói
+# "không xác định được" — tuyệt đối không thay bằng một con số đoán. Một dòng
+# tiền sai tệ hơn một dòng tiền thiếu.
+# Hai nguồn, theo thứ tự: THỰC TẾ trước, Ý ĐỊNH sau. Cả hai đều là dữ liệu
+# thật, không có bước nào đoán.
+#   1. `terraform output` — phản ánh state, tức cấu hình vừa/sắp được áp.
+#   2. default trong envs/prod/variables.tf — file ĐƯỢC COMMIT nên luôn tồn tại.
+#      Cần bước này vì output chỉ vào state SAU lần apply đầu tiên kể từ khi nó
+#      được thêm; thiếu nó thì mọi lần chạy trước lần apply đó mất dòng chi phí.
+# Rỗng chỉ xảy ra khi cả hai đều không đọc được — lúc đó người gọi PHẢI nói
+# "không xác định được", không được thay bằng một con số đoán.
+hs_nat_count() {
+  n="$(hs_tf_out nat_gateway_count)"
+  if [ -z "$n" ]; then
+    n="$(awk '/^variable "nat_gateway_count"/,/^}/' "$HS_TF_DIR/variables.tf" 2>/dev/null \
+      | sed -nE 's/^[[:space:]]*default[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' | head -1)"
+  fi
+  case "$n" in
+    '' | *[!0-9]*) echo "" ;;
+    *) echo "$n" ;;
+  esac
+}
+
+# Cùng khuôn cho Multi-AZ: state trước, default đã commit sau.
+hs_multi_az() {
+  v="$(hs_tf_out multi_az_enabled)"
+  if [ -z "$v" ]; then
+    v="$(awk '/^variable "enable_multi_az"/,/^}/' "$HS_TF_DIR/variables.tf" 2>/dev/null \
+      | sed -nE 's/^[[:space:]]*default[[:space:]]*=[[:space:]]*(true|false).*/\1/p' | head -1)"
+  fi
+  echo "$v"
+}
 
 # ─── CẢNH BÁO TAG LỆCH (Phase 2) ─────────────────────────────────────────────
 # Từ Phase 2, GitHub Actions push image lên ECR ở MỌI lần push vào main — kể cả

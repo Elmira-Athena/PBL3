@@ -126,3 +126,17 @@ output "costguard_schedule_name" {
   description = "Tên schedule chạy hằng đêm. RỖNG nghĩa là enable_auto_stop = false, tức đang KHÔNG có lưới an toàn nào"
   value       = module.costguard.schedule_name
 }
+
+# ─── Hai output PHỤC VỤ SCRIPT, không phục vụ người đọc ──────────
+# up.sh/down.sh/status.sh đọc chúng qua hs_tf_out() thay vì qua tfvars, vì tfvars
+# bị .gitignore nên có thể không tồn tại — và fallback im lặng của phiên bản
+# trước (`|| echo 1`) báo thiếu $0,059/giờ mà không nói gì.
+output "nat_gateway_count" {
+  description = "Số NAT Gateway theo cấu hình (kể cả khi enable_nat = false). Script dùng để tính chi phí đúng"
+  value       = var.nat_gateway_count
+}
+
+output "multi_az_enabled" {
+  description = "RDS có đang cấu hình Multi-AZ hay không — script dùng để in đúng đơn giá"
+  value       = var.enable_multi_az
+}

@@ -199,10 +199,15 @@ echo "  Theo dõi    : bash infra/tf/scripts/status.sh -w"
 # nat_gateway_count = 2 thì nó báo thiếu gần một nửa. Dòng cuối cùng người dùng
 # đọc trước khi rời máy là dòng tệ nhất để nói dối về tiền, nên nay nó TÍNH từ
 # HS_RATE_* trong lib.sh và từ số NAT thật.
-HS_NAT_N="$(hs_tfvar_get nat_gateway_count || echo 1)"
-HS_HOURLY="$(awk -v n="$HS_NAT_N" -v nat="$HS_RATE_NAT" -v alb="$HS_RATE_ALB" \
-  'BEGIN { printf "%.4f", n * nat + alb }')"
-echo "  ${C_YELLOW}Tắt khi xong: bash infra/tf/scripts/down.sh${C_RESET}  ${C_DIM}(${HS_NAT_N}×NAT + ALB = \$${HS_HOURLY}/giờ, chưa tính EC2 và RDS)${C_RESET}"
+HS_NAT_N="$(hs_nat_count)"
+if [ -n "$HS_NAT_N" ]; then
+  HS_HOURLY="$(awk -v n="$HS_NAT_N" -v nat="$HS_RATE_NAT" -v alb="$HS_RATE_ALB" \
+    'BEGIN { printf "%.4f", n * nat + alb }')"
+  echo "  ${C_YELLOW}Tắt khi xong: bash infra/tf/scripts/down.sh${C_RESET}  ${C_DIM}(${HS_NAT_N}×NAT + ALB = \$${HS_HOURLY}/giờ, chưa tính EC2 và RDS)${C_RESET}"
+else
+  echo "  ${C_YELLOW}Tắt khi xong: bash infra/tf/scripts/down.sh${C_RESET}"
+  hs_warn "không đọc được output nat_gateway_count nên KHÔNG in đơn giá — thà thiếu còn hơn sai"
+fi
 
 if [ "$(hs_tfvar_get enable_read_replica)" = "true" ]; then
   hs_warn "CÓ READ REPLICA: AWS TỪ CHỐI stop primary khi còn replica ⇒ down.sh và cost guard mất tác dụng. Huỷ replica (enable_read_replica=false + apply) TRƯỚC khi rời máy."

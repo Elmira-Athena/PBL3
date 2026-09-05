@@ -30,9 +30,17 @@ run "rds_khong_bao_gio_public_accessible" {
     error_message = "multi_az phải bám đúng var.enable_multi_az — hard-code lại là tước mất công tắc."
   }
 
+  # ⚠️ ASSERT NÀY NÓI VỀ DEFAULT CỦA MODULE, KHÔNG VỀ HẠ TẦNG ĐANG CHẠY.
+  # envs/prod GHIM enable_multi_az = true (xem envs/prod/variables.tf) — đó là
+  # kiến trúc đã chốt. Module thì phải giữ default false, vì nó là thư viện: một
+  # env khác dùng lại nó không được tự nhiên bị Multi-AZ. Hợp đồng hai tầng:
+  # module an toàn theo mặc định, env quyết định kiến trúc.
+  #
+  # Câu lỗi cũ ghi "chỉ bật trong cửa sổ demo" — nay SAI, vì prod bật vĩnh viễn.
+  # Sửa câu chữ chứ không sửa điều kiện: điều kiện vẫn là bất biến đúng.
   assert {
     condition     = var.enable_multi_az == false
-    error_message = "enable_multi_az phải mặc định false: Multi-AZ nằm ngoài free tier, chỉ bật trong cửa sổ demo."
+    error_message = "MODULE phải mặc định false để env khác dùng lại không tự bị Multi-AZ. Muốn bật thì ghim ở env (envs/prod đã ghim true), đừng đổi default ở đây."
   }
 }
 

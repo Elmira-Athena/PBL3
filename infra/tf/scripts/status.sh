@@ -135,7 +135,7 @@ render() {
 
   # In cả ý muốn (tfvars) cạnh thực tế (AWS). Hai cột này lệch nhau nghĩa là có
   # apply chưa chạy hoặc chạy dở — thông tin đó không suy ra được từ bảng dưới.
-  echo "${C_DIM}  tfvars: enable_nat=$(hs_tfvar_get enable_nat)  nat_gateway_count=$(hs_tfvar_get nat_gateway_count)  enable_alb=$(hs_tfvar_get enable_alb)  instance_count=$(hs_tfvar_get instance_count)  enable_flow_logs=$(hs_tfvar_get enable_flow_logs)  enable_deny_demo=$(hs_tfvar_get enable_deny_demo)${C_RESET}"
+  echo "${C_DIM}  tfvars: enable_nat=$(hs_tfvar_get enable_nat)  enable_alb=$(hs_tfvar_get enable_alb)  instance_count=$(hs_tfvar_get instance_count)  enable_flow_logs=$(hs_tfvar_get enable_flow_logs)  enable_deny_demo=$(hs_tfvar_get enable_deny_demo)${C_RESET}"
   if [ "$(hs_tfvar_get enable_deny_demo)" = "true" ]; then
     echo "  ${C_YELLOW}!${C_RESET} enable_deny_demo = true → NACL đang chặn ${C_B}$(hs_tfvar_get my_ip)${C_RESET} ở tầng mạng."
     echo "    ${C_DIM}Browser sẽ timeout và trông y như hạ tầng lỗi. Đặt false rồi apply nếu không đang demo.${C_RESET}"
@@ -175,10 +175,12 @@ render() {
     done
     # Cảnh báo khi số gateway thật KHÁC tfvars: hai NAT trong khi tfvars khai 1
     # nghĩa là có một cái mồ côi ngoài Terraform, và nó không bị down.sh dọn.
-    want="$(hs_tfvar_get nat_gateway_count || echo 1)"
-    if [ "$nat_n" != "$want" ]; then
+    # Đọc từ terraform output, KHÔNG từ tfvars: hai giá trị này đã được ghim vào
+    # default ở envs/prod/variables.tf và cố ý không còn khai trong tfvars.
+    want="$(hs_nat_count)"
+    if [ -n "$want" ] && [ "$nat_n" != "$want" ]; then
       row "NAT lệch tfvars" "$nat_n vs $want" "-" "-" "-" \
-        "${C_RED}có $nat_n gateway thật nhưng tfvars khai nat_gateway_count=$want${C_RESET} — kiểm gateway mồ côi, down.sh chỉ dọn cái Terraform biết"
+        "${C_RED}có $nat_n gateway thật nhưng cấu hình khai nat_gateway_count=$want${C_RESET} — kiểm gateway mồ côi, down.sh chỉ dọn cái Terraform biết"
     fi
   else
     tally down; row "NAT Gateway" "-" "-" "-" "-" "chưa dựng (enable_nat = false)"

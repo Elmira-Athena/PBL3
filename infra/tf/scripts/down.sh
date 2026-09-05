@@ -202,13 +202,19 @@ if [ -n "$WINDOW" ]; then
   # 🚨 CON SỐ NÀY TỪNG IN CỨNG "0.1954" — tổng của ĐÚNG MỘT NAT. Từ lúc
   # nat_gateway_count = 2 nó báo thiếu $0.059/giờ, và báo thiếu ở dòng cuối cùng
   # người dùng đọc trước khi rời máy. Nay tính từ HS_RATE_* và số NAT thật.
-  DN_NAT="$(hs_tfvar_get nat_gateway_count || echo 1)"
+  DN_NAT="$(hs_nat_count)"
+  if [ -z "$DN_NAT" ]; then
+    hs_warn "không đọc được output nat_gateway_count — bỏ qua dòng chi phí thay vì in một con số đoán"
+    DN_NAT=0
+  fi
   DN_RATE="$(awk -v n="$DN_NAT" -v nat="$HS_RATE_NAT" -v alb="$HS_RATE_ALB" \
     -v rds="$HS_RATE_RDS_UP" -v ec2="$HS_RATE_EC2" \
     'BEGIN { printf "%.4f", n * nat + alb + rds + ec2 }')"
-  echo "  Cửa sổ tính phí : $(hs_hms "$WINDOW")  ·  ~\$$(hs_cost "$WINDOW" "$DN_RATE")"
-  echo "  ${C_DIM}  ${DN_NAT}×NAT \$${HS_RATE_NAT} + ALB \$${HS_RATE_ALB} + RDS \$${HS_RATE_RDS_UP} + EC2 \$${HS_RATE_EC2} = \$${DN_RATE}/giờ (APS1).${C_RESET}"
-  if [ "$(hs_tfvar_get enable_multi_az)" = "true" ]; then
+  if [ "$DN_NAT" != "0" ]; then
+    echo "  Cửa sổ tính phí : $(hs_hms "$WINDOW")  ·  ~\$$(hs_cost "$WINDOW" "$DN_RATE")"
+    echo "  ${C_DIM}  ${DN_NAT}×NAT \$${HS_RATE_NAT} + ALB \$${HS_RATE_ALB} + RDS \$${HS_RATE_RDS_UP} + EC2 \$${HS_RATE_EC2} = \$${DN_RATE}/giờ (APS1).${C_RESET}"
+  fi
+  if [ "$(hs_multi_az)" = "true" ]; then
     echo "  ${C_DIM}  Multi-AZ BẬT: RDS thật ~\$0.057/giờ (instance ×2 + storage ×2), tức DƯỚI \$${HS_RATE_RDS_UP} ở trên.${C_RESET}"
     echo "  ${C_DIM}  \$${HS_RATE_RDS_UP} là số đo trên sqlserver-ex, giữ lại làm CẬN TRÊN — xem lib.sh.${C_RESET}"
   fi

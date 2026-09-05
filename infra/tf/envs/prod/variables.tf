@@ -61,10 +61,22 @@ variable "db_subnet_cidrs" {
   default     = ["10.20.20.0/24", "10.20.21.0/24"]
 }
 
+# ═══ HAI GIÁ TRỊ NÀY LÀ KIẾN TRÚC, KHÔNG PHẢI CÔNG TẮC ════════════
+# 🚨 CHÚNG CỐ TÌNH ĐƯỢC GHIM Ở ĐÂY, KHÔNG Ở terraform.tfvars.
+# `.gitignore` dòng 119 loại `*.tfvars`, nên mọi thứ khai trong tfvars KHÔNG
+# sang máy khác và KHÔNG sang CI. Trước đây hai giá trị này nằm ở đó, tức một
+# lần clone lại là hạ tầng âm thầm rơi về 1 NAT / không Multi-AZ — mà cả hai đều
+# là thuộc tính đã ghi vào báo cáo. Default nằm trong file ĐƯỢC COMMIT là cách
+# duy nhất làm chúng bền.
+#
+# Hệ quả phải biết: các script KHÔNG còn đọc hai giá trị này từ tfvars nữa
+# (hs_nat_count trong lib.sh đọc từ `terraform output`). Thêm lại một dòng
+# nat_gateway_count vào tfvars sẽ ghi đè default ở đây mà script vẫn báo đúng —
+# nhưng đừng làm vậy: nó tạo lại đúng hai-nguồn-sự-thật vừa bỏ.
 variable "nat_gateway_count" {
-  description = "Số NAT Gateway khi enable_nat = true. 1 = mặc định rẻ nhất; 2 = mỗi AZ một cái (+$0,059/giờ), egress không chết theo một AZ"
+  description = "Số NAT Gateway khi enable_nat = true. GHIM 2: mỗi AZ một cái, egress không chết theo một AZ. Hạ về 1 tiết kiệm $0,059/giờ nhưng app subnet ở AZ-b mất egress khi AZ-a chết"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "enable_nat" {
@@ -98,9 +110,9 @@ variable "db_engine_version" {
 
 # ─── HAI CÔNG TẮC ĐỢT 7 — cả hai mặc định TẮT ────────────────────
 variable "enable_multi_az" {
-  description = "Bật Multi-AZ cho RDS trong cửa sổ demo. Standby KHÔNG phục vụ đọc — availability, không phải read scaling."
+  description = "GHIM true: standby ở AZ thứ hai, tự failover. Standby KHÔNG phục vụ đọc — availability, không phải read scaling. PostgreSQL vẫn stop được khi Multi-AZ (SQL Server thì không), nên down.sh/cost guard không bị ảnh hưởng"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_read_replica" {
