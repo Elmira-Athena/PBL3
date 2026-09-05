@@ -4,8 +4,24 @@
 # báo bằng resource tách rời bên dưới để tránh circular dependency giữa
 # sg-alb và sg-web.
 
+# 🚨 `name_prefix`, KHÔNG PHẢI `name` — ĐÂY LÀ LỖI ĐÃ LÀM HỎNG MỘT LẦN APPLY.
+# Description của security group là BẤT BIẾN ở AWS: đổi nó buộc Terraform thay
+# thế cả SG. Kết hợp `name` cố định với `create_before_destroy` thì lần thay thế
+# nào cũng chết, vì Terraform tạo SG mới TRƯỚC khi xoá cái cũ, mà cái cũ vẫn
+# đang giữ tên:
+#     InvalidGroup.Duplicate: The security group 'hushstore-rds-sg'
+#     already exists for VPC 'vpc-...'
+# Đã xảy ra thật lúc apply đợt 7 (đổi description "RDS SQL Server: 1433" thành
+# "RDS PostgreSQL: 5432"), và hỏng ở giữa: RDS CŨ ĐÃ BỊ XOÁ, RDS MỚI CHƯA DỰNG
+# ĐƯỢC vì thiếu SG. Đó là lý do phải sửa cả ba chứ không riêng cái vừa nổ — hai
+# cái kia là cùng một quả mìn, chỉ chưa ai giẫm.
+#
+# `name_prefix` để AWS gắn hậu tố ngẫu nhiên nên SG mới và cũ không đụng tên,
+# và create_before_destroy chạy đúng như thiết kế. Không gì phụ thuộc vào tên
+# literal (đã kiểm: 0 chỗ trong tests, scripts, costguard, .github) — tag Name
+# mới là thứ người và script đọc, và tag đó giữ nguyên.
 resource "aws_security_group" "alb" {
-  name        = "${var.project}-alb-sg"
+  name_prefix = "${var.project}-alb-sg-"
   description = "ALB: nhan 80/443 tu internet, chuyen tiep sang sg-web"
   vpc_id      = var.vpc_id
 
@@ -17,7 +33,7 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "web" {
-  name        = "${var.project}-web-sg"
+  name_prefix = "${var.project}-web-sg-"
   description = "ECS container instance: chi nhan traffic tu ALB, khong co port 22"
   vpc_id      = var.vpc_id
 
@@ -29,7 +45,7 @@ resource "aws_security_group" "web" {
 }
 
 resource "aws_security_group" "rds" {
-  name        = "${var.project}-rds-sg"
+  name_prefix = "${var.project}-rds-sg-"
   description = "RDS PostgreSQL: chi nhan 5432 tu sg-web, egress rong"
   vpc_id      = var.vpc_id
 
@@ -84,7 +100,7 @@ locals {
     # sg-rds: đúng 1 rule.
     "rds-postgres" = {
       sg_id       = aws_security_group.rds.id
-      description = "SQL Server, chi tu container instance"
+      description = "PostgreSQL, chi tu container instance"
       from_port   = 5432
       to_port     = 5432
       cidr_ipv4   = null
@@ -116,7 +132,7 @@ locals {
     # duy nhất kiểm soát egress ở tầng SG.
     "web-to-rds" = {
       sg_id       = aws_security_group.web.id
-      description = "Ket noi SQL Server"
+      description = "Ket noi PostgreSQL"
       from_port   = 5432
       to_port     = 5432
       cidr_ipv4   = null

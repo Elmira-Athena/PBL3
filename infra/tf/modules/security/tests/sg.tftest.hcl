@@ -132,3 +132,46 @@ run "rds_chi_nhan_5432_tu_sg_web_va_khong_co_egress" {
     error_message = "sg-rds phải có egress RỖNG — RDS không cần gọi ra ngoài."
   }
 }
+
+# ─────────────────────────────────────────────────────────────────
+# CHỐT CHO MỘT LỖI CHỈ NỔ LÚC APPLY, KHÔNG NỔ LÚC PLAN.
+#
+# Description của security group là BẤT BIẾN ở AWS ⇒ đổi nó buộc thay thế SG.
+# `name` cố định + `create_before_destroy` thì lần thay thế nào cũng chết:
+#   InvalidGroup.Duplicate: The security group '...' already exists for VPC
+# `terraform plan` KHÔNG thấy gì bất thường — nó in `+/-` rồi báo xanh. Chỉ tới
+# lúc apply AWS mới từ chối, và khi đó apply đã hỏng Ở GIỮA.
+#
+# Đã xảy ra thật ở apply đợt 7: RDS cũ bị xoá xong, RDS mới không dựng được vì
+# security group của nó tạo không nổi. Test này là thứ duy nhất trong repo canh
+# chỗ đó, vì fmt/validate/plan đều không canh.
+# ─────────────────────────────────────────────────────────────────
+run "sg_dung_name_prefix_chu_khong_dung_name" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for sg in [aws_security_group.alb, aws_security_group.web, aws_security_group.rds] :
+      sg.name_prefix != null && sg.name_prefix != ""
+    ])
+    error_message = "Cả 3 security group PHẢI dùng name_prefix. Với `name` cố định + create_before_destroy, mọi lần đổi description (bất biến ở AWS ⇒ buộc thay thế) sẽ chết vì InvalidGroup.Duplicate, và chết GIỮA apply."
+  }
+}
+
+run "khong_con_chuoi_sql_server_trong_description" {
+  command = plan
+
+  # Sau đợt 7 engine là PostgreSQL. Description ghi "SQL Server" không làm hỏng
+  # gì về kỹ thuật — đó chính là lý do nó sống sót qua cả một đợt migration và
+  # suýt đi vào báo cáo. Console AWS là nơi người chấm nhìn vào.
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      # Lọc dòng comment — cùng lý do đã ghi ở modules/data/tests/rds.tftest.hcl:
+      # khối comment ngay phía trên giải thích chính lỗi này và có nhắc cả hai từ
+      # khoá, không lọc thì assert đỏ vì lời giải thích của chính nó.
+      l if !startswith(trimspace(l), "#") && strcontains(l, "description") && strcontains(l, "SQL Server")
+    ]) == 0
+    error_message = "Còn description nhắc 'SQL Server' trong modules/security/main.tf — engine đã là PostgreSQL từ đợt 7."
+  }
+}
