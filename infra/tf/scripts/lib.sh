@@ -435,3 +435,74 @@ hs_window_seconds() {
 }
 
 hs_window_close() { rm -f "$HS_WINDOW_FILE"; }
+
+# ── Chi phí THẬT của những gì ĐANG SỐNG, đo tại thời điểm gọi ────
+#
+# 🚨 VÌ SAO KHÔNG NHÂN "CỬA SỔ × ĐƠN GIÁ CẢ STACK" — cách cũ in ra $75.50 CHO
+# MỘT CỬA SỔ TỐN VÀI XU. Bản trước của down.sh dùng `hs_cost "$WINDOW" 0.2544`,
+# tức thời gian kể từ lần up.sh gần nhất nhân đơn giá TOÀN BỘ stack. Cả hai thừa
+# số đều sai:
+#   · Cửa sổ KHÔNG phải thời gian tính tiền. Marker chỉ bị xoá ở DÒNG CUỐI của
+#     down.sh, nên mỗi lần down.sh chết giữa chừng là nó sống thêm. Đo được: nó
+#     tích 12 ngày 8 giờ trong khi stack tắt gần như suốt — và nó tích được đúng
+#     vì down.sh đang chết im lặng ở bước 1 (lỗi pipefail trong hs_apply).
+#     Hai lỗi cộng hưởng: cái này làm cái kia trông tệ gấp trăm lần.
+#   · Đơn giá gộp cả 2 NAT + ALB + EC2, mà trong cửa sổ đó KHÔNG cái nào từng
+#     tồn tại (enable_nat=false, enable_alb=false, instance_count=0 suốt).
+#
+# Dòng cũ có ghi "chặn trên", và về mặt kỹ thuật thì đúng. Nhưng một chặn trên
+# cao gấp trăm lần không phải thông tin — nó là tiếng ồn, và tiếng ồn ở dòng
+# tiền thì lần sau không ai đọc nữa, kể cả khi nó báo đúng.
+#
+# Hàm này đo TỪNG resource theo tuổi THẬT của chính nó, cùng cách status.sh làm.
+# PHẢI gọi TRƯỚC khi destroy — sau đó không còn gì để hỏi.
+hs_spend_now() {
+  pairs=""
+
+  albt="$(aws elbv2 describe-load-balancers --query 'LoadBalancers[0].CreatedTime' "${AWSQT[@]}" 2>/dev/null || echo None)"
+  # ⚠️ DÙNG `if`, KHÔNG DÙNG `[ ... ] && ...`. Đã đo: một AND-list thất bại mà
+  # đứng CUỐI một hàm sẽ làm hàm trả 1, và dưới `set -e` điều đó giết script gọi
+  # nó — không in gì. Nó chỉ sống sót khi tình cờ có lệnh khác đứng sau. Đó đúng
+  # là loại phụ thuộc ngầm vừa làm down.sh chết im lặng ở hs_apply, nên ở đây
+  # viết dài hơn vài dòng để không phải nhớ luật đó nữa.
+  a="$(hs_age "$albt")"
+  if [ -n "${a:-}" ]; then pairs="${pairs}${a} ${HS_RATE_ALB}
+"; fi
+
+  # Mỗi NAT tính riêng — 2 NAT là hai dòng, không phải một dòng nhân đôi.
+  for t in $(aws ec2 describe-nat-gateways --filter "Name=state,Values=pending,available" \
+      --query 'NatGateways[].CreateTime' "${AWSQT[@]}" 2>/dev/null || true); do
+    a="$(hs_age "$t")"
+    if [ -n "${a:-}" ]; then pairs="${pairs}${a} ${HS_RATE_NAT}
+"; fi
+  done
+
+  for t in $(aws ec2 describe-instances \
+      --filters "Name=tag:Project,Values=${HS_PROJECT}" "Name=instance-state-name,Values=running" \
+      --query 'Reservations[].Instances[].LaunchTime' "${AWSQT[@]}" 2>/dev/null || true); do
+    a="$(hs_age "$t")"
+    if [ -n "${a:-}" ]; then pairs="${pairs}${a} ${HS_RATE_EC2}
+"; fi
+  done
+
+  # RDS chỉ tính khi `available`. Mốc bắt đầu lấy CÁI MUỘN HƠN giữa
+  # InstanceCreateTime và sự kiện start gần nhất — cùng lý do đã vá ở status.sh:
+  # identifier được tái sử dụng nên describe-events còn trả lịch sử của instance
+  # đã bị xoá.
+  rst="$(aws rds describe-db-instances --db-instance-identifier "$HS_DB" \
+    --query 'DBInstances[0].DBInstanceStatus' "${AWSQT[@]}" 2>/dev/null || echo none)"
+  if [ "$rst" = "available" ]; then
+    rcrt="$(aws rds describe-db-instances --db-instance-identifier "$HS_DB" \
+      --query 'DBInstances[0].InstanceCreateTime' "${AWSQT[@]}" 2>/dev/null || echo None)"
+    rev="$(aws rds describe-events --source-identifier "$HS_DB" --source-type db-instance \
+      --duration 20160 --query 'Events[?Message==`DB instance started`].Date | [-1]' \
+      "${AWSQT[@]}" 2>/dev/null || echo None)"
+    a1="$(hs_age "$rcrt")"; a2="$(hs_age "$rev")"
+    a="${a1:-}"
+    if [ -n "${a2:-}" ] && { [ -z "${a:-}" ] || [ "$a2" -lt "$a" ]; }; then a="$a2"; fi
+    if [ -n "${a:-}" ]; then pairs="${pairs}${a} ${HS_RATE_RDS_UP}
+"; fi
+  fi
+
+  printf '%s' "$pairs" | awk '{ t += $1 / 3600 * $2 } END { printf "%.4f", t + 0 }'
+}
