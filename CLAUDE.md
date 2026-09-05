@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IT Hardware E-commerce & Management System ("HushStore") — a full-stack C# application with ASP.NET Core 10 Web API backend and Blazor WebAssembly frontend, backed by SQL Server 2025.
+IT Hardware E-commerce & Management System ("HushStore") — a full-stack C# application with ASP.NET Core 10 Web API backend and Blazor WebAssembly frontend, backed by **PostgreSQL 17** (chuyển từ SQL Server 2025 ở đợt 7 — xem `docs/nhat-ky-sua-loi-nang-cap.md` §8).
 
 ## Build & Run Commands
 
@@ -18,8 +18,8 @@ dotnet run --project src/API/API.csproj
 # Run Blazor client (https://localhost:7107)
 dotnet run --project src/Client/Client.csproj
 
-# Start SQL Server container (from Infrastructure/db/)
-docker-compose up -d
+# Start PostgreSQL container (from Infrastructure/db/)
+docker-compose up -d postgres
 
 # Create a new EF Core migration
 dotnet ef migrations add <MigrationName> --project src/Infrastructure --startup-project src/API
@@ -83,7 +83,8 @@ Global EF query filter loại bỏ bản ghi soft-deleted tự động **cho nh�
 ⚠️ **KHÔNG phải mọi entity đều có `IsDeleted`.** Đã kiểm trên schema thật:
 `Orders`, `OrderSerials`, `VoucherUsages`, `ProductSerials` **không có** cột này;
 `ImportReceipts` không có `CreatedDate`. Viết truy vấn hay script SQL thì kiểm cột trước,
-đừng giả định — chính giả định này làm bản đầu của `Infrastructure/db/checks/pre_migration_checks.sql` chạy lỗi.
+đừng giả định — chính giả định này từng làm một script kiểm tra tiền-migration chạy lỗi.
+(Script đó là T-SQL và **đã bị xoá ở đợt 7**; bài học thì giữ lại — xem §8.3 của nhật ký.)
 
 🚨 **Bản trước của chính dòng trên ghi SAI: nó xếp `InventoryChecks` vào nhóm "không có".**
 Đã đo lại bằng `INFORMATION_SCHEMA.COLUMNS` ở gói 3: **`InventoryChecks.IsDeleted` CÓ tồn tại**
@@ -105,7 +106,9 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
 - **Stock sync**: `ProductVariant.StockQuantity` is a DB column kept in sync by `InventoryService` by counting `ProductSerial` records with `Available` status — do not set it manually
 - **Order flow**: Cart → Order (OrderDetail + OrderSerial) → Voucher deduction
 - **POS flow**: Direct in-store sale without cart
-- **JSON specs**: `ProductVariant.Specifications` is a `Dictionary<string, string>` stored as a JSON column
+- **JSON specs**: `ProductVariant.Specifications` is a `Dictionary<string, string>` stored as a
+  **`jsonb`** column. Truy vấn theo khoá dùng toán tử `->>` (xem `ProductRepository`), **không**
+  dùng `JSON_VALUE` — đó là hàm riêng của SQL Server.
 
 ## Coding Conventions
 
@@ -188,6 +191,14 @@ Các quy tắc này bắt buộc, không được bỏ qua:
 - **Async only** — dùng `ToListAsync()`, `FirstOrDefaultAsync()`, `AnyAsync()`. Cấm dùng `.Result` hoặc `.Wait()` gây deadlock.
 - **PLINQ** — chỉ dùng `.AsParallel()` sau khi đã `ToList()` về RAM (CPU-bound tasks như kiểm tra tương thích Build PC). Tuyệt đối không gọi `.AsParallel()` trực tiếp trên `DbSet` hay `IQueryable`.
 - **Caching** — dùng `MemoryCache` cho dữ liệu ít thay đổi (danh mục, menu) để đảm bảo API listing < 2 giây.
+- **Ô tìm kiếm "chứa chuỗi" — `EF.Functions.ILike` + `SearchPattern`, không `$"%{kw}%"` tại chỗ.**
+  PostgreSQL phân biệt hoa/thường, khác collation CI mặc định của SQL Server. Hai điều phải nhớ:
+  - **Cột đã là `citext`** (`SerialNumber`, `SKU`, `Vouchers.Code`, hai cột `Slug`,
+    `SerialNumberRaw`) thì `.Contains()` **đã đúng** — đổi sang `ILike` là sửa thứ đang đúng.
+  - `ILike` **mất** phần escape `%`/`_` mà `.Contains()` được EF tự làm. Đo được:
+    `'STX1' ILIKE '%st_1%'` → **`true`**, tức trả về thừa mà không báo gì. Vì vậy luôn dùng
+    `SearchPattern.Contains(kw)` + `SearchPattern.EscapeCharacter` (`src/Infrastructure/Queries/`),
+    đừng nối chuỗi tại chỗ — rải ra thì chỗ viết sau chỉ cần quên một lần là hỏng.
 
 ## Bắt buộc dùng lớp trừu tượng có sẵn
 
@@ -212,7 +223,7 @@ Bốn quy tắc này sinh ra từ lỗi có thật đã sửa ở đợt 1 — v
   - `NEXT VALUE FOR` **không mang tính giao dịch**: giá trị bị tiêu thụ dù transaction rollback,
     nên **dãy mã có lỗ**. Đừng "sửa". Số trong mã **không** còn là "chứng từ thứ N" — muốn đếm
     thì `COUNT(*)`. (Bù lại: khi transaction retry, lần thử sau lấy mã MỚI — đúng điều cần.)
-  - Cột mã là `nvarchar(20)`, nên tiền tố 3 ký tự (`ORD`/`POS`/`SRV`) chịu tối đa **7 chữ số**.
+  - Cột mã rộng 20 ký tự, nên tiền tố 3 ký tự (`ORD`/`POS`/`SRV`) chịu tối đa **7 chữ số**.
     `ORD` và `POS` **dùng chung** một sequence vì cùng ghi vào `Orders.OrderCode`.
 
 - **Cache dữ liệu công khai — qua `ICacheService`, không phải `IMemoryCache` trực tiếp.**
@@ -255,27 +266,32 @@ Bốn quy tắc này sinh ra từ lỗi có thật đã sửa ở đợt 1 — v
   ```
   Hiện có **35 chốt** ở 4 controller: 27 mutation + **8 action ĐỌC**.
 
-  🚨 **Bản trước của chính khuôn trên tự liệt kê `2601 or 2627` và ghi "chỉ đặt ở action
-  mutation — GET không sinh được hai loại này". Cả hai vế đều để lọt deadlock.** Nửa sau đúng cho
-  `2601/2627` và `RowVersion`, nhưng **một `SELECT` bị SQL Server chọn làm nạn nhân `1205` là
-  chuyện bình thường**. Và nửa đầu tạo ra **hai danh sách độc lập** cho cùng một câu hỏi: chốt
+  🚨 **Bản trước của chính khuôn trên tự liệt kê mã lỗi và ghi "chỉ đặt ở action mutation — GET
+  không sinh được hai loại này". Cả hai vế đều để lọt deadlock.** Nửa sau đúng cho vi phạm unique
+  và cho concurrency token, nhưng **một `SELECT` bị chọn làm nạn nhân deadlock là chuyện bình
+  thường**. Và nửa đầu tạo ra **hai danh sách độc lập** cho cùng một câu hỏi: chốt
   controller cho thoát 3 loại, `ConflictExceptionHandler` nhận 5 loại. Giao của chúng mới là thứ
-  chạy — phần dôi (`1205`, `ConcurrentModificationException`) là **code chết**, và không gì báo.
+  chạy — phần dôi (deadlock, `ConcurrentModificationException`) là **code chết**, và không gì báo.
 
   🔴 **Đường thứ ba, khó thấy nhất: `EnableRetryOnFailure` ĐÃ BẬT.** Deadlock nằm trong danh sách
   transient nên nó **bị thử lại**; hết lượt thì EF bọc nguyên nhân gốc vào
   `RetryLimitExceededException`. Phép so khớp **một tầng** không khớp cái nào ⇒ **500**. Đã đo
-  bằng deadlock thật ép từ SQL Server: cách cũ để lọt `1205` bọc trong `RetryLimitExceededException`,
-  cách mới bắt được — 12/12, 0 hồi quy
-  ([bằng chứng](docs/evidence/2026-09-03-conflict-classifier.md)).
+  bằng deadlock thật: cách cũ để lọt deadlock bọc trong `RetryLimitExceededException`, cách mới
+  bắt được — 12/12, 0 hồi quy ([bằng chứng](docs/evidence/2026-09-03-conflict-classifier.md), đo
+  trên `1205` của SQL Server). **Đã đo lại trên PostgreSQL** với `40P01` ép từ deadlock thật:
+  đúng cả khi trần lẫn khi bọc 3 lớp, và `42P01` (bảng không tồn tại) trả `False`
+  ([bằng chứng](docs/evidence/2026-09-05-postgresql-2-instance.md) §6).
 
   Vì vậy việc phân loại nay nằm **một chỗ duy nhất**: `ConflictClassifier`
   (`src/Infrastructure/Concurrency/`). Controller hỏi `IsConflict`, handler hỏi `Classify` —
   **cùng một hàm**, nên chúng không lệch được nữa. Nó **đi hết chuỗi `InnerException`** thay vì
   so khớp một tầng, nên đúng cho mọi lớp bọc kể cả lớp viết sau. Nhận diện bằng **số lỗi**, tuyệt
-  đối không dò `ex.Message` — chuỗi đó tiếng Anh và đổi theo phiên bản SQL Server.
+  đối không dò `ex.Message` — chuỗi đó tiếng Anh và đổi theo phiên bản.
+  Mã hiện dùng là `SqlState` của PostgreSQL: `23505` unique_violation (PG **không** phân biệt
+  index với constraint — gộp một nhánh), `40P01` deadlock_detected, `40001` serialization_failure.
 
-  ⚠️ **Ngoại lệ có chủ ý — 2 chỗ ở tầng Service vẫn tự liệt kê `2601/2627`, và phải giữ vậy:**
+  ⚠️ **Ngoại lệ có chủ ý — 2 chỗ ở tầng Service vẫn dịch vi phạm unique thành câu nghiệp vụ
+  riêng, và phải giữ vậy:**
   `ServiceTicketService` (tiếp nhận trùng serial) và `InventoryCheckService` (phê duyệt trùng)
   **dịch** vi phạm unique thành câu nghiệp vụ riêng. Đổi chúng sang `IsConflict` là **lỗi**:
   deadlock sẽ được báo là "Sản phẩm này đã có phiếu sửa chữa chưa đóng." — sai sự thật. Chỉ dùng
@@ -289,11 +305,20 @@ Bốn quy tắc này sinh ra từ lỗi có thật đã sửa ở đợt 1 — v
   🔴 `200×2` ở lần sau mà không dòng code nào đổi. Giữ **cả hai** chốt — chốt ngoài cho thông
   báo tử tế ở đường thường, chốt trong là lưới cuối.
 
-- **`RowVersion` (`[Timestamp]`) có trên 6 entity** — `ProductSerial`, `ServiceTicket`,
-  `Quotation`, `InventoryCheck`, `Order`, `RmaShipment`. **`ExecuteUpdateAsync` BỎ QUA HOÀN TOÀN
-  token này** (nó không qua Change Tracker), nên chuyển một đường ghi từ tracked-write sang
-  `ExecuteUpdate` là **âm thầm gỡ mất** lớp bảo vệ — phải tự đưa vị từ trạng thái vào `Where`.
+- **Concurrency token có trên 6 entity** — `ProductSerial`, `ServiceTicket`, `Quotation`,
+  `InventoryCheck`, `Order`, `RmaShipment`. **`ExecuteUpdateAsync` BỎ QUA HOÀN TOÀN token này**
+  (nó không qua Change Tracker), nên chuyển một đường ghi từ tracked-write sang `ExecuteUpdate`
+  là **âm thầm gỡ mất** lớp bảo vệ — phải tự đưa vị từ trạng thái vào `Where`.
   Không đặt lên `Voucher` (đã dùng atomic increment) và `AppUser` (Identity có `ConcurrencyStamp`).
+
+  ⚠️ **Từ đợt 7 nó là `xmin` của PostgreSQL, khai bằng SHADOW PROPERTY — 6 thuộc tính
+  `[Timestamp] byte[]? RowVersion` đã bị XOÁ khỏi entity.** Đừng thêm lại. Muốn đọc thì
+  `context.Entry(e).Property("xmin")`.
+  🚨 **`UseXminAsConcurrencyToken()` KHÔNG tồn tại ở Npgsql 10** (đã quét assembly — cả kế hoạch
+  lẫn một agent thiết kế đều khẳng định là có). Phải khai tay đủ **bốn** phần: `HasColumnName`,
+  `HasColumnType("xid")`, `ValueGeneratedOnAddOrUpdate`, **`IsConcurrencyToken`**. Thiếu riêng
+  phần cuối thì **vẫn build, vẫn chạy, và mất sạch lớp bảo vệ** — xem helper `UseXmin<T>` trong
+  `HushStoreDbContext`.
 
 - **Không thêm gói NuGet dính lỗ hổng High/Critical.** Cổng CI
   (`devops/scripts/check-vulnerable-packages.sh`) chặn ở bước `dotnet build`. Chạy trước khi
@@ -382,9 +407,12 @@ tầng Service, auth, hay rate limiting.
 
 Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C + mục D + mục 🅴 + mục 🅷 +
 mục 🅸 + **đợt 3 (gói 2 + gói 3)** đã xong — **LoadProbe 9/9 ĐẠT ở CẢ HAI cấu hình**,
-`0 KHÔNG KẾT LUẬN`, và bốn kịch bản phụ thuộc thời điểm (S03/S04/S07/S08) được quan sát
-**5 lần** ở cấu hình 2 instance
-([bằng chứng](docs/evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md)) (18/18 call-site transaction retry-safe; 23/23 nút mutation dùng
+`0 KHÔNG KẾT LUẬN` ở cấu hình 2 instance
+([bằng chứng](docs/evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md)).
+⚠️ **Bản trước ghi bốn kịch bản phụ thuộc thời điểm (S03/S04/S07/S08) được quan sát "5 lần" ở
+2 instance — đếm lại chỉ có 1** (repo có đúng một báo cáo ở cấu hình đó, `git log
+--diff-filter=D` rỗng). Theo luật của chính repo — *một ✅ không là bằng chứng an toàn* — bốn
+kịch bản này đang đứng trên một ✅ cho mỗi engine. Xem §7.4 của nhật ký. (18/18 call-site transaction retry-safe; 23/23 nút mutation dùng
 `ActionButton`/`BusyScope`, trong đó **6/6 nút hỏng thật đã đo có ca đối chứng âm**; bộ đo
 `tools/LoadProbe/` + hạ tầng 2 replica đã chạy ra số ở **cả hai** cấu hình; 10/10 lỗ hổng NuGet
 High đã vá và có cổng chặn ở CI; rò rỉ `ex.Message` đã chặn hết ở **cả ba tầng**, có cổng
@@ -393,14 +421,34 @@ High đã vá và có cổng chặn ở CI; rò rỉ `ex.Message` đã chặn h�
 
 ✅ **Phân loại xung đột đã gom về một chỗ (2026-09-03).** `ConflictClassifier`
 (`src/Infrastructure/Concurrency/`) nay là nguồn sự thật duy nhất cho cả chốt controller lẫn
-`ConflictExceptionHandler`, đóng ba khoảng trống chỉ hiện dưới tải: `1205` là **code chết**,
+`ConflictExceptionHandler`, đóng ba khoảng trống chỉ hiện dưới tải: deadlock là **code chết**,
 `RetryLimitExceededException` **không được gỡ bọc** dù `EnableRetryOnFailure` đã bật, và **8 action
 `GET`** không có chốt nào. Đo bằng deadlock **thật** — 12/12, 0 hồi quy, có cột đối chứng âm để lọt
 3 ca; LoadProbe 9/9 (1 instance)
 ([bằng chứng](docs/evidence/2026-09-03-conflict-classifier.md)).
 
+🟢 **Đợt 7 — chuyển sang PostgreSQL 17 — ĐÃ XONG CẢ HAI NỬA (2026-09-05).**
+Tầng code: `citext` cho 6 cột, `xmin` thay `RowVersion`, `ConflictClassifier` đổi sang `SqlState`,
+`SEQUENCE` qua `nextval`, `jsonb` cho `Specifications`, converter ép `Kind=Utc`, seeder
+`sqlcmd` → `psql 17`. Hạ tầng: `engine = "postgres"`, `gp3`, `db.t4g.micro`, cổng 5432, hai công
+tắc `enable_multi_az` / `enable_read_replica` (**cả hai mặc định `false`**), cost guard hết nói
+dối về read replica.
+Đo được: **LoadProbe 9/9 ở CẢ 1 lẫn 2 instance**, `0 KHÔNG KẾT LUẬN`; `terraform test` **99/99**;
+seeder chạy thật với 2 ca đối chứng âm
+([bằng chứng](docs/evidence/2026-09-05-postgresql-2-instance.md)).
+
+🔴 **Chưa chạy lên AWS lần nào.** Toàn bộ số ở trên đo ở local. Chưa có: apply thật, seeder vào
+RDS qua `verify-full` với CA thật, failover Multi-AZ, `ReplicaLag`, và **ca đối chứng cho bản vá
+cost guard khi replica đang tồn tại**. Chi phí `HS_RATE_RDS_UP = 0.098` vẫn là số đo trên SQL
+Server — nay là **cận trên**, cố ý chưa sửa cho tới khi Cost Explorer xác nhận sau 24–48h.
+
+⚠️ **Đừng bật `enable_read_replica` rồi để qua đêm.** Có replica thì AWS **từ chối** stop
+primary ⇒ `down.sh` và cost guard mất tác dụng, mà RDS còn tự khởi động lại sau 7 ngày stopped.
+`down.sh` đã tự huỷ replica trước khi stop, `status.sh` in một dòng đỏ khi thấy replica — nhưng
+cả hai chỉ chạy khi có người gõ.
+
 Còn lại: **mục 🅹** (35 lời gọi GET chuyển sang `ApiCall.SendAsync`), **nửa HẠ TẦNG của đợt 4**
-(chờ review), và **đợt 5 → 6**.
+(chờ review), **cửa sổ đo trên AWS của đợt 7**, và **đợt 5 → 6**.
 
 🟡 **Nửa CODE của đợt 4 đã xong và đã đo** — `ICacheService`, `ShutdownTimeout = 45`,
 DataProtection → SSM ([bằng chứng](docs/evidence/ui/2026-09-01-goi-4-nua-code.md)). **Nửa hạ
@@ -409,19 +457,12 @@ cùng một lần deploy (đã đo, có ca đối chứng), và **kế hoạch t
 `deregistration_delay` — `alb.tftest.hcl` khẳng định nó phải bằng `5` trong khi đợt 4 muốn `30`.
 Ba lối chọn ghi ở §Gói 4 của runbook.
 
-✅ **Chốt chặn đợt 3 đã tháo, và tháo bằng cách đo thứ đáng đo.** `pre_migration_checks.sql`
-chạy được — nhưng trên **DB local có dữ liệu bẩn thật** do LoadProbe tạo, không trên RDS.
-Lý do: RDS đó dựng mới từ Terraform + seeder nên chưa luồng nghiệp vụ nào từng chạy, kết quả
-"rỗng" ở đó nghĩa là *"chưa ai dùng"*, **không** nghĩa *"dữ liệu sạch"*. Cách làm ở local trả
-lời được câu mà RDS không trả lời nổi: **migration xử lý xung đột ra sao khi thật sự có
-xung đột.** Đo được: `Error 1505` và **rollback SẠCH HOÀN TOÀN** (0 cột, 0 index,
-`__EFMigrationsHistory` không ghi nhận) — EF bọc cả migration trong một transaction.
-
-⚠️ **Migration đợt 3 có HAI CHỐT CHẶN sẽ `THROW` nếu DB đích có dữ liệu xung đột**, kèm câu
-chỉ thẳng script phải chạy: `Infrastructure/db/fixes/dedupe_inventory_adjustment_logs.sql`.
-Đó là **cố ý**: xoá bản ghi kế toán là quyết định nghiệp vụ, migration không quyết thay người
-chịu trách nhiệm. Ngược lại, backfill `SeqPerUser` thì migration **tự làm** — nó không xoá gì
-và `ROW_NUMBER` bảo đảm tính duy nhất tự thân cấu trúc.
+🗑️ **HAI CHỐT `THROW` CỦA MIGRATION ĐỢT 3 KHÔNG CÒN — đừng đi tìm.** Cùng với
+`Infrastructure/db/checks/pre_migration_checks.sql` và `fixes/dedupe_inventory_adjustment_logs.sql`,
+cả ba đã bị xoá ở đợt 7: 22 migration cũ sinh cho SQL Server nên không dùng lại được, thay bằng
+một `InitialCreatePostgres` duy nhất, và ba file kia là T-SQL thuần. **Không lớp bảo vệ nào mất
+đi** — hai chốt tồn tại để chặn migration chạy trên DB **có dữ liệu bẩn**, mà DB mới dựng từ đầu
+thì không có dữ liệu nào để bẩn. Lý lẽ đầy đủ ở §8.3 của nhật ký.
 
 🧪 **Nợ kiểm thử — đọc mục 🧪 của runbook trước khi tin dòng "XONG" nào.** `grep` chỉ chứng
 minh **hình dạng code**, không chứng minh hành vi. Nợ của mục D **đã trả** (OpenAPI sinh được

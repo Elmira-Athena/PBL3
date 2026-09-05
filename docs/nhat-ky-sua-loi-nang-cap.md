@@ -871,6 +871,118 @@ rồi mới scale.
 
 ---
 
+# Đợt 7 — Chuyển SQL Server → PostgreSQL 17
+
+Lý do đổi engine là **edition**, không phải kiến trúc: read replica của RDS đòi SQL Server
+**Enterprise Edition** *và* instance class **≥ 4 vCPU**. Stack chạy `sqlserver-ex` trên
+`db.t3.micro` (2 vCPU) — hỏng cả hai điều kiện, và không có cách cấu hình nào mở được.
+Lý do thứ hai ngang quan trọng: **PostgreSQL Multi-AZ stop được, SQL Server Multi-AZ thì
+không**, nên bật Multi-AZ trên PostgreSQL không phá cơ chế tắt tiền của cả stack.
+
+## 8.1 Hoa/thường — thứ hỏng mà không ném, không log
+
+Repo **không có `HasCollation` nào**, nghĩa là không dòng code nào *nói ra* rằng nó đang dựa
+vào collation case-insensitive mặc định của SQL Server. Trên PostgreSQL, những chỗ đó đổi
+hành vi và trả **HTTP 200** với kết quả rỗng.
+
+Sáu cột đổi sang **`citext`** — chọn ở **tầng lưu trữ** để mọi call-site viết sau cũng đúng.
+Lập luận quyết định: **ba đường GHI của chính sáu cột này không chuẩn hoá**
+(`ProductVariantService.cs:47,97`, `ProductService.cs:144` ghi thô, `ImportReceiptService.cs:163`
+chỉ `.Trim()`), nên phương án "chuẩn hoá bằng code" đòi mọi write path hiện tại *và tương lai*
+nhớ gọi `.ToUpper()`, mà không có gì bắt lỗi khi quên.
+
+**Cách chứng minh phủ hết rẻ hơn nhiều so với thêm kịch bản.** Bản kế hoạch đầu định thêm
+`S10`. Sai hướng: `S02`/`S03` **vốn đã mù** với đúng lỗi này — chúng seed `Code = VoucherCode`
+rồi gửi lại **đúng chuỗi đó**. Tách làm hai hằng (seed `LP-VQ1`, gửi `lp-vq1`) — một dòng mỗi
+file — biến hai kịch bản sẵn có thành phép đo trực tiếp cho quyết định lớn nhất của đợt.
+
+Nhóm `.Contains()` ở ô tìm kiếm hoá ra **chỉ 3 chỗ hỏng, không phải 8** như kế hoạch ghi:
+`SerialNumber` đã là `citext` (đổi sang `ILike` là **sửa thứ đang đúng**), bốn chỗ khác đã
+`ToLower()` **cả hai vế** nên đúng nghĩa, ba chỗ còn lại là số điện thoại. Thật sự hỏng:
+`InvoiceCode`, `TicketCode` ×2.
+
+⚠️ `EF.Functions.ILike` **mất** phần escape `%`/`_` mà `.Contains()` được EF tự làm. Đối chứng
+âm đo trên PostgreSQL: `'STX1' ILIKE '%st_1%'` → **`true`** (trả về thừa). Vì vậy escape nằm
+ở một lớp dùng chung (`SearchPattern`), không rải theo call-site.
+
+## 8.2 `DateTime` — kế hoạch dự đoán SAI hướng hỏng
+
+Kế hoạch viết: sai `Kind` ⇒ *"cửa sổ hiệu lực voucher lệch 7 giờ"* — tức hỏng **âm thầm**.
+Đo thật trên Npgsql 10 với 57 cột `timestamp with time zone`:
+
+```
+Kind=Unspecified -> NÉM ArgumentException ("only UTC is supported")
+Kind=Local       -> NÉM ArgumentException
+Kind=Utc         -> OK
+```
+
+Hỏng **ồn ào**. Dễ chịu hơn nhiều, nhưng cũng có nghĩa đây là lỗi **chặn đường**: không có
+`UtcDateTimeConverter` thì admin **không tạo nổi voucher** và **không sửa nổi ngày sinh**, vì
+`MudDatePicker` gửi chuỗi không có hậu tố `Z` (⇒ `Kind=Unspecified`).
+
+Chuỗi không nêu múi giờ được diễn giải là **UTC** — đây là **giữ nguyên hành vi cũ**, không
+phải "chọn cho đúng": trên SQL Server các cột là `datetime2` (không mang múi giờ), thứ admin
+gõ được lưu nguyên văn rồi so thẳng với `DateTime.UtcNow`, tức hệ thống **vốn đã** diễn giải
+giờ admin nhập là UTC.
+
+`DateOnly` cho `DateOfBirth` **hoãn có chủ ý**: đo cho thấy nó round-trip đúng
+(`1990-01-01T00:00:00` → DB `1990-01-01 00:00:00+00`) sau khi có converter, nên đó là dọn dẹp
+chứ không phải sửa lỗi — mà nó chạm DTO ở `Shared` và form Blazor.
+
+## 8.3 🚨 HAI CHỐT `THROW` CỦA MIGRATION ĐÃ BIẾN MẤT — đừng đi tìm
+
+Mục **4.5** ở trên mô tả hai chốt `THROW 50001/50002` và script
+`Infrastructure/db/fixes/dedupe_inventory_adjustment_logs.sql`. **Cả ba đã bị xoá ở đợt 7**,
+cùng với `Infrastructure/db/checks/pre_migration_checks.sql`. Ghi ra đây vì mục 4.5 vẫn còn
+nguyên trong tài liệu này và sẽ dẫn người đọc đi tìm những file không tồn tại.
+
+Lý do xoá — và vì sao nó **không** làm mất một lớp bảo vệ nào:
+
+- Cả 22 migration cũ sinh cho SQL Server (`SqlServer:Identity`, `rowversion`, `nvarchar`,
+  `datetime2`) nên **không dùng lại được**; thay bằng một `InitialCreatePostgres` duy nhất.
+- Hai chốt tồn tại để chặn migration chạy trên DB **có dữ liệu bẩn**. DB mới dựng từ đầu, chưa
+  luồng nghiệp vụ nào chạy ⇒ **không có dữ liệu nào để bẩn**. Chốt không mất tác dụng — nó
+  không còn đối tượng.
+- Backfill `SeqPerUser` cũng không còn gì để backfill.
+- Ba file kia là **T-SQL** (`THROW`, `OBJECT_ID`, `[ngoặc vuông]`, `IDENTITY_INSERT`) — giữ lại
+  là giữ một thứ chạy sẽ lỗi cú pháp ngay dòng đầu.
+
+**Phần kiến thức đáng giữ, tách khỏi cú pháp đã chết:** `pre_migration_checks.sql` từng chứng
+minh rằng ba bất biến đợt 3 **thật sự bị vi phạm trên dữ liệu thật** do LoadProbe sinh ra —
+không phải lo xa. Nếu có ngày cần lại một script kiểu đó cho PostgreSQL, bài học kèm theo là:
+**kiểm cột trước, đừng giả định** — chính giả định "mọi entity đều có `IsDeleted`" làm bản đầu
+của file đó chạy lỗi (`Orders`, `OrderSerials`, `VoucherUsages`, `ProductSerials` **không có**
+cột này).
+
+## 8.4 Cost guard từng **nói dối** về read replica
+
+`_stop_rds` bắt `InvalidDBInstanceState` rồi ghi `notes`: *"đã có tiến trình khác stop trước —
+trạng thái đích vẫn đạt được."* Nhưng AWS dùng **chung** mã đó cho những tình huống trái ngược
+nhau: đã `stopped` (đích đã đạt) **và** đang `backing-up`/`modifying`/**có read replica** (vẫn
+tính đủ `$0,098/giờ`). `notes` chỉ vào CloudWatch, không vào email ⇒ **không ai biết**.
+
+Vá theo hướng sửa **cả lớp lỗi**: đọc `ReadReplicaDBInstanceIdentifiers` **trước** khi gọi
+stop, và khi stop bị từ chối thì **đọc lại trạng thái** thay vì đoán. Đo bằng
+`infra/tf/modules/costguard/tests/test_cost_guard_rds.py` — **bản mới 6/6, bản cũ 3/6**, và cả
+ba ca đỏ đều đỏ theo hướng "ghi `notes` nói đích đã đạt trong khi RDS vẫn tính tiền".
+
+⚠️ Kế hoạch định nới `rds:StopDBInstance` ra cả replica. **Cố ý không làm**: AWS ghi *"You
+can't stop a DB instance that has a read replica, or that is a read replica"* — quyền đó là
+quyền **không bao giờ dùng được**, nới ra chỉ mở rộng blast radius.
+
+## 8.5 Một assert xanh vì lý do sai
+
+Assert mới kiểm `main.tf` có đặt `db_name` được viết lần đầu bằng
+`strcontains(l, "db_name")`, **và nó xanh cả khi đã xoá dòng `db_name`** — vì chuỗi kết nối có
+dòng `"Database=${var.db_name};"` cũng chứa `"db_name"`. Đổi sang
+`startswith(trimspace(l), "db_name")`.
+
+Đúng bài học của assertion `task_role_arn` trong `taskdef.tftest.hcl`, và đáng lặp lại:
+**assert xanh vì lý do sai tệ hơn không có assert**, vì nó bảo rằng chuyện đã được canh. Cách
+duy nhất biết được là **phá thật rồi chạy lại**.
+
+---
+
 # Cách nghiệm thu lại
 
 ```bash
