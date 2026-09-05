@@ -61,6 +61,12 @@ variable "db_subnet_cidrs" {
   default     = ["10.20.20.0/24", "10.20.21.0/24"]
 }
 
+variable "nat_gateway_count" {
+  description = "Số NAT Gateway khi enable_nat = true. 1 = mặc định rẻ nhất; 2 = mỗi AZ một cái (+$0,059/giờ), egress không chết theo một AZ"
+  type        = number
+  default     = 1
+}
+
 variable "enable_nat" {
   description = "Tạo NAT Gateway — $0.045/giờ. Chỉ bật khi cần pull ECR hoặc dùng SSM"
   type        = bool

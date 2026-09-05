@@ -24,6 +24,7 @@ module "network" {
   db_subnet_cidrs     = var.db_subnet_cidrs
   my_ip               = var.my_ip
   enable_nat          = var.enable_nat
+  nat_gateway_count   = var.nat_gateway_count
   enable_flow_logs    = var.enable_flow_logs
   enable_deny_demo    = var.enable_deny_demo
 }

@@ -230,6 +230,56 @@ resource "aws_ssm_parameter" "connection_string" {
   tags = { Name = "${var.project}-connection-string" }
 }
 
+# ─── CONNECTION STRING CHỈ ĐỌC — sống/chết cùng replica ──────────
+# ⚠️ HIỆN CHƯA CÓ DÒNG CODE NÀO ĐỌC PARAMETER NÀY, và phải nói thẳng: dựng
+# replica lên là có thêm một instance TÍNH TIỀN mà primary KHÔNG được giảm tải
+# chút nào. Read replica chỉ có ích khi ứng dụng chủ động lái truy vấn đọc sang
+# nó; task definition không khai parameter này trong khối `secrets`, nên hôm nay
+# replica là hạ tầng để ĐO và để trình bày trong báo cáo, không phải để tăng
+# hiệu năng.
+#
+# Việc còn thiếu ở tầng app (chưa làm, cố ý): một DbContext thứ hai trỏ vào
+# chuỗi này cho các truy vấn `AsNoTracking()`. Kèm hai cái bẫy phải biết trước:
+#   1. Replication là BẤT ĐỒNG BỘ — đọc từ replica có thể thấy dữ liệu cũ. Mọi
+#      đường "ghi rồi đọc lại để map DTO" PHẢI ở primary, nếu không người dùng
+#      lưu xong bấm xem lại và thấy bản cũ.
+#   2. `IsActive`/role/quyền TUYỆT ĐỐI không đọc từ replica — cùng lý lẽ với
+#      luật "không cache trạng thái phân quyền" ở CLAUDE.md: hướng nguy hiểm là
+#      hướng MỞ KHOÁ, và độ trễ replica làm nó xảy ra thật.
+#
+# Vì sao vẫn tạo parameter: không có nó, cách duy nhất để dùng endpoint replica
+# là chép tay một chuỗi CÓ MẬT KHẨU từ `terraform output` vào chỗ khác — đúng
+# thứ mà SecureString sinh ra để tránh. Parameter Standard: $0.
+resource "aws_ssm_parameter" "replica_connection_string" {
+  count = var.enable_read_replica ? 1 : 0
+
+  name        = "${local.ssm_prefix}/connection-string-readonly"
+  description = "Connection string tro vao read replica. CHI dung cho truy van doc, KHONG dung cho auth"
+  type        = "SecureString"
+
+  # Cùng `SSL Mode=VerifyFull` + Root Certificate như primary: replica dùng cert
+  # do cùng RDS CA cấp, nên tụt xuống `Prefer` ở đây cũng mất đúng lớp xác thực
+  # ấy — và mất im lặng y hệt. Pool nhỏ hơn primary vì replica chỉ nhận truy vấn
+  # đọc, và mỗi kết nối vẫn ăn RAM của một db.t4g.micro.
+  value = join("", [
+    "Host=${aws_db_instance.replica[0].address};",
+    "Port=5432;",
+    "Database=${var.db_name};",
+    "Username=${var.db_username};",
+    "Password=${random_password.db.result};",
+    "SSL Mode=VerifyFull;",
+    "Root Certificate=/usr/local/share/ca-certificates/rds-ap-southeast-1.crt;",
+    "Maximum Pool Size=10;",
+    "Minimum Pool Size=0;",
+    "Timeout=15;",
+  ])
+
+  tags = {
+    Name      = "${var.project}-connection-string-readonly"
+    Lifecycle = "ephemeral-demo-window-only"
+  }
+}
+
 resource "aws_ssm_parameter" "jwt_secret" {
   name        = "${local.ssm_prefix}/jwt-secret"
   description = "JwtSettings__SecretKey — 64 ky tu, tren 256-bit entropy"

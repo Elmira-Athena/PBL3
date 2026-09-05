@@ -130,12 +130,46 @@ run "chuoi_ket_noi_phai_giu_ssl_mode_verifyfull" {
   # Kiểm trên MÃ NGUỒN thay vì trên giá trị. Phải lọc bỏ dòng comment, vì ngay
   # phía trên chuỗi trong main.tf có một khối comment dài nhắc tên các tham số
   # này — không lọc thì assert xanh nhờ chính lời giải thích của nó.
+  # 🚨 BA ASSERT DƯỚI ĐÂY TỪNG VIẾT `== 1` VÀ ĐÃ ĐỎ ĐÚNG LÚC CẦN ĐỎ.
+  # Chúng đếm số dòng trong main.tf, nên `== 1` ngầm khẳng định "cả module chỉ có
+  # MỘT chuỗi kết nối". Điều đó đúng cho tới khi read replica có chuỗi chỉ-đọc
+  # riêng — lúc đó `== 1` đỏ, và cái đỏ ấy KHÔNG nói "bảo mật hỏng", nó nói "giả
+  # định về số lượng đã cũ". Nếu sửa bằng cách đổi thành `== 2` thì đúng hôm nay
+  # và rỗ lại ở chuỗi thứ ba.
+  #
+  # Bất biến THẬT không phụ thuộc số lượng: MỌI chuỗi kết nối đều phải có
+  # VerifyFull, có Root Certificate, và dùng 5432. Diễn đạt bằng phép SO SÁNH
+  # GIỮA CÁC SỐ ĐẾM thay vì bằng một hằng số.
   assert {
     condition = length([
       for l in split("\n", file("${path.module}/main.tf")) :
       l if !startswith(trimspace(l), "#") && strcontains(l, "SSL Mode=VerifyFull")
-    ]) == 1
-    error_message = "Chuỗi kết nối PHẢI có SSL Mode=VerifyFull. Npgsql mặc định Prefer — mã hoá nhưng KHÔNG xác thực cert, tức mất im lặng đúng thứ đang được bảo vệ. Require cũng không đủ."
+    ]) >= 1
+    error_message = "Phải có ít nhất một chuỗi kết nối mang SSL Mode=VerifyFull. Npgsql mặc định Prefer — mã hoá nhưng KHÔNG xác thực cert, tức mất im lặng đúng thứ đang được bảo vệ. Require cũng không đủ."
+  }
+
+  # Mỗi chuỗi có VerifyFull phải có đúng một Root Certificate đi kèm, và mỗi
+  # chuỗi phải dùng 5432. Hai phép so dưới đây tự đúng với 1, 2 hay N chuỗi.
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "Root Certificate=")
+      ]) == length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "SSL Mode=VerifyFull")
+    ])
+    error_message = "Số dòng `Root Certificate=` phải BẰNG số chuỗi VerifyFull — một chuỗi có VerifyFull mà thiếu Root Certificate là chuỗi sẽ GÃY lúc kết nối (Npgsql/libpq KHÔNG đọc trust store hệ thống)."
+  }
+
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "Port=5432")
+      ]) == length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "SSL Mode=VerifyFull")
+    ])
+    error_message = "Mỗi chuỗi kết nối phải dùng cổng 5432 của PostgreSQL — sót một chuỗi còn 1433 là tàn dư SQL Server."
   }
 
   assert {
@@ -144,22 +178,6 @@ run "chuoi_ket_noi_phai_giu_ssl_mode_verifyfull" {
       l if !startswith(trimspace(l), "#") && strcontains(l, "SSL Mode=") && !strcontains(l, "SSL Mode=VerifyFull")
     ]) == 0
     error_message = "Có một `SSL Mode=` khác VerifyFull trong main.tf — đó là đường tụt xuống mức không xác thực cert."
-  }
-
-  assert {
-    condition = length([
-      for l in split("\n", file("${path.module}/main.tf")) :
-      l if !startswith(trimspace(l), "#") && strcontains(l, "Root Certificate=")
-    ]) == 1
-    error_message = "Phải trỏ Root Certificate vào bundle CA của RDS: khác sqlcmd, Npgsql/libpq KHÔNG đọc trust store hệ thống nên update-ca-certificates một mình là chưa đủ."
-  }
-
-  assert {
-    condition = length([
-      for l in split("\n", file("${path.module}/main.tf")) :
-      l if !startswith(trimspace(l), "#") && strcontains(l, "Port=5432")
-    ]) == 1
-    error_message = "Chuỗi kết nối phải dùng cổng 5432."
   }
 }
 
@@ -242,5 +260,77 @@ run "mat_khau_du_dai_va_khong_chua_ky_tu_rds_cam" {
   assert {
     condition     = random_password.jwt.length >= 48
     error_message = "JWT secret phải tối thiểu 48 ký tự để đủ 256-bit entropy."
+  }
+}
+
+run "bat_replica_thi_dung_len_dung_mot_cai_va_co_chuoi_chi_doc" {
+  command = plan
+
+  variables {
+    enable_read_replica = true
+  }
+
+  assert {
+    condition     = length(aws_db_instance.replica) == 1
+    error_message = "enable_read_replica = true phải dựng đúng 1 replica."
+  }
+
+  assert {
+    condition     = aws_db_instance.replica[0].replicate_source_db == aws_db_instance.this.identifier
+    error_message = "Replica phải nhân bản từ primary của chính stack này, không phải identifier viết cứng."
+  }
+
+  # Replica KHÔNG thừa hưởng publicly_accessible và storage_encrypted theo cách
+  # hiển nhiên — phải khai. Bỏ sót là dựng một bản sao TOÀN BỘ dữ liệu ra
+  # internet, và đó là bản sao mà kịch bản kiểm thử số 3 không hề nhắm tới.
+  assert {
+    condition     = aws_db_instance.replica[0].publicly_accessible == false
+    error_message = "Replica TUYỆT ĐỐI không được publicly_accessible — nó chứa đúng dữ liệu như primary."
+  }
+
+  assert {
+    condition     = aws_db_instance.replica[0].storage_encrypted == true
+    error_message = "Replica phải mã hoá at-rest như primary."
+  }
+
+  # ĐIỀU KIỆN TIÊN QUYẾT DỄ MẤT NHẤT: read replica đòi primary có backup tự động
+  # (backup_retention_period > 0). Hạ nó về 0 để "tiết kiệm" là hợp lý ở mọi góc
+  # nhìn khác — backup miễn phí tới mức bằng allocated_storage nên chẳng tiết
+  # kiệm được gì — nhưng nó làm việc DỰNG replica đỏ ở giữa apply, với một câu
+  # lỗi của AWS không nhắc gì tới replica. Assert này bắt trước lúc plan.
+  assert {
+    condition     = aws_db_instance.this.backup_retention_period > 0
+    error_message = "Read replica ĐÒI primary bật backup tự động: backup_retention_period phải > 0. Đặt 0 thì replica không dựng được, và thông báo lỗi của AWS không nói vì sao."
+  }
+
+  # Chuỗi chỉ-đọc chỉ tồn tại khi có replica, và phải giữ nguyên lớp xác thực
+  # cert. Tụt về `Prefer` ở đây mất đúng thứ mà chuỗi primary đang bảo vệ.
+  assert {
+    condition     = length(aws_ssm_parameter.replica_connection_string) == 1
+    error_message = "Bật replica phải sinh kèm connection string chỉ-đọc, nếu không endpoint chỉ nằm trong terraform output."
+  }
+
+  assert {
+    condition     = aws_ssm_parameter.replica_connection_string[0].type == "SecureString"
+    error_message = "Chuỗi chỉ-đọc chứa mật khẩu master nên phải là SecureString."
+  }
+
+  # ⚠️ KHÔNG assert được nội dung `.value`: nó nội suy
+  # `aws_db_instance.replica[0].address` (known after apply) nên ở plan-time là
+  # unknown, và Terraform đỏ với "Unknown condition value" — một cái đỏ nói về
+  # THỜI ĐIỂM, không nói về nội dung. Cùng lý do như chuỗi primary ở run block
+  # `chuoi_ket_noi_phai_giu_ssl_mode_verifyfull`, nên dùng cùng cách: kiểm trên
+  # MÃ NGUỒN. Bất biến VerifyFull/Root Certificate/5432 của chuỗi này đã được
+  # run block đó phủ, vì nó đếm trên toàn bộ main.tf.
+  #
+  # Còn lại đúng một điều nó không phủ: chuỗi chỉ-đọc phải trỏ vào REPLICA. Chép
+  # nhầm host sang primary là lỗi IM LẶNG TUYỆT ĐỐI — mọi truy vấn vẫn đúng, chỉ
+  # là replica không nhận tải nào trong khi vẫn tính tiền đủ.
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "aws_db_instance.replica[0].address")
+    ]) == 1
+    error_message = "Chuỗi chỉ-đọc phải nội suy aws_db_instance.replica[0].address. Không thấy dòng nào ⇒ nó đang trỏ vào primary và replica là tiền bỏ đi."
   }
 }

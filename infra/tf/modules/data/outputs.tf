@@ -45,3 +45,23 @@ output "db_name" {
   description = "Tên database — task seeder truyền vào sqlcmd -d"
   value       = var.db_name
 }
+
+# ─── READ REPLICA — rỗng khi tắt, không phải lỗi ─────────────────
+# Ba output này là cách down.sh / status.sh và người đọc console biết replica có
+# đang sống hay không. Trước đợt này replica được dựng mà KHÔNG có output nào
+# chỉ tới nó: cách duy nhất để thấy là mở AWS console, mà đây đúng là resource
+# không được phép sống qua đêm — thứ nguy hiểm nhất để làm cho khó thấy.
+output "rds_replica_endpoint" {
+  description = "Hostname của read replica (không kèm port). Rỗng khi enable_read_replica = false"
+  value       = var.enable_read_replica ? aws_db_instance.replica[0].address : ""
+}
+
+output "rds_replica_identifier" {
+  description = "Identifier của read replica — dùng cho aws rds delete-db-instance và cho status.sh. Rỗng khi tắt"
+  value       = var.enable_read_replica ? aws_db_instance.replica[0].identifier : ""
+}
+
+output "ssm_replica_connection_string_arn" {
+  description = "ARN parameter chứa connection string chỉ-đọc. Rỗng khi tắt. CHƯA có task definition nào tiêu thụ nó"
+  value       = var.enable_read_replica ? aws_ssm_parameter.replica_connection_string[0].arn : ""
+}

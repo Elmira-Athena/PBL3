@@ -39,8 +39,23 @@ output "db_subnet_cidrs" {
 }
 
 output "nat_gateway_id" {
-  description = "ID của NAT Gateway, rỗng khi enable_nat = false"
-  value       = var.enable_nat ? aws_nat_gateway.this[0].id : ""
+  description = "ID của NAT Gateway ĐẦU TIÊN, rỗng khi enable_nat = false. Giữ lại cho tương thích — dùng nat_gateway_ids khi cần đủ danh sách"
+  value       = local.nat_count > 0 ? aws_nat_gateway.this[0].id : ""
+}
+
+output "nat_gateway_ids" {
+  description = "ID của MỌI NAT Gateway đang dựng. Rỗng khi enable_nat = false, 1 phần tử khi nat_gateway_count = 1, 2 phần tử khi = 2"
+  value       = aws_nat_gateway.this[*].id
+}
+
+output "nat_gateway_count" {
+  description = "Số NAT Gateway thực tế đang dựng — dùng cho status.sh để tính tiền đúng thay vì giả định 1"
+  value       = local.nat_count
+}
+
+output "private_route_table_ids" {
+  description = "ID của các private route table, mỗi AZ một cái"
+  value       = aws_route_table.private[*].id
 }
 
 output "nacl_public_id" {

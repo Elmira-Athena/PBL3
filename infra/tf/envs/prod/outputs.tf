@@ -39,6 +39,21 @@ output "rds_identifier" {
   value       = module.data.rds_identifier
 }
 
+output "rds_replica_endpoint" {
+  description = "Hostname read replica — rỗng khi enable_read_replica = false"
+  value       = module.data.rds_replica_endpoint
+}
+
+output "rds_replica_identifier" {
+  description = "Identifier read replica — rỗng khi tắt. CÒN NÓ THÌ KHÔNG STOP ĐƯỢC PRIMARY"
+  value       = module.data.rds_replica_identifier
+}
+
+output "nat_gateway_ids" {
+  description = "ID của mọi NAT Gateway đang dựng — mỗi cái $0,059/giờ"
+  value       = module.network.nat_gateway_ids
+}
+
 output "budget_name" {
   description = "Tên budget theo dõi chi phí tháng"
   value       = module.costguard.budget_name
