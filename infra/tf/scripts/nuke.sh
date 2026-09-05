@@ -70,7 +70,10 @@ terraform -chdir="$HS_TF_DIR" destroy -auto-approve -input=false -lock-timeout=5
   >"$LOG" 2>&1 &
 pid=$!
 while kill -0 "$pid" 2>/dev/null; do
-  last="$(grep -E 'Destroying\.\.\.|Destruction complete|Still destroying' "$LOG" 2>/dev/null | tail -1 | cut -c1-72)"
+  # `|| true`: xem comment dài ở hs_apply trong lib.sh. Cùng một lỗi, cùng một
+  # chế độ chết — destroy mà không còn gì để destroy thì log rỗng dòng tiến độ,
+  # grep trả 1, pipefail + set -e giết script không một lời.
+  last="$(grep -E 'Destroying\.\.\.|Destruction complete|Still destroying' "$LOG" 2>/dev/null | tail -1 | cut -c1-72 || true)"
   printf '\r  %-74s' "$(hs_hms $((SECONDS - T0)))  ${last}"
   sleep 5
 done

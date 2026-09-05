@@ -241,8 +241,21 @@ hs_apply() {
   pid=$!
 
   while kill -0 "$pid" 2>/dev/null; do
+    # 🚨 `|| true` Ở ĐÂY LÀ BẮT BUỘC, VÀ THIẾU NÓ ĐÃ GIẾT down.sh TRONG IM LẶNG.
+    # File này bật `set -euo pipefail`. Khi apply KHÔNG có thay đổi nào,
+    # terraform in "No changes." và log KHÔNG chứa một dòng tiến độ nào — grep
+    # không khớp gì, trả 1, pipefail cho cả pipeline trả 1, và `set -e` giết
+    # script NGAY TẠI DÒNG GÁN NÀY, khoảng 5 giây sau khi vòng lặp bắt đầu.
+    # Không thông báo, không mã lỗi nào người dùng thấy được: down.sh in đúng
+    # "BƯỚC 1/5" rồi trả về prompt như thể đã xong.
+    #
+    # Đây là lỗi TIỀM ẨN từ lâu, chỉ nổ khi mọi thứ đã tắt sẵn nên bước 1 thành
+    # no-op — tức đúng lúc người ta chạy down.sh lần thứ hai cho chắc. Và cái nó
+    # bỏ qua là BƯỚC 4: stop RDS. Nghĩa là chế độ lỗi của nó là "người dùng tin
+    # đã tắt xong, trong khi RDS vẫn chạy và vẫn tính tiền".
+    # (Đã đo: log của một apply "No changes" chứa 0 dòng khớp regex dưới đây.)
     last="$(grep -E 'Still (creating|destroying|modifying)|Creating\.\.\.|Destroying\.\.\.|Modifying\.\.\.|Creation complete|Destruction complete|Modifications complete' \
-             "$HS_LAST_LOG" 2>/dev/null | tail -1 | cut -c1-72)"
+             "$HS_LAST_LOG" 2>/dev/null | tail -1 | cut -c1-72 || true)"
     printf '\r  %-74s' "$(hs_hms $((SECONDS - t0)))  ${last}"
     sleep 5
   done
@@ -258,7 +271,9 @@ hs_apply() {
     return "$rc"
   fi
 
-  changes="$(grep -E '^Apply complete!' "$HS_LAST_LOG" | tail -1)"
+  # Cùng lý do: nếu terraform đổi câu chữ ở phiên bản sau, grep trượt và script
+  # chết im lặng NGAY SAU một apply đã THÀNH CÔNG — chế độ lỗi tệ nhất có thể.
+  changes="$(grep -E '^Apply complete!' "$HS_LAST_LOG" | tail -1 || true)"
   hs_ok "${label} — $(hs_hms $((SECONDS - t0)))  ${C_DIM}${changes}${C_RESET}"
 }
 
