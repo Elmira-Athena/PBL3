@@ -52,6 +52,7 @@ using FluentValidation;
 using PBL3.Shared.Validators.Banners;
 using PBL3.Shared.Validators.Reviews;
 using PBL3.Shared.DTOs.Inventory;
+using PBL3.API.Json;
 using PBL3.Shared.Validators.Inventory;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -62,6 +63,15 @@ builder.Services.AddControllers(options =>
 {
     // Chặn trần pageSize cho toàn bộ 148 endpoint, kể cả endpoint viết sau này.
     options.Filters.Add<ClampPageSizeFilter>();
+})
+.AddJsonOptions(options =>
+{
+    // Ép Kind = Utc cho MỌI DateTime đi qua JSON. Bắt buộc từ khi chuyển PostgreSQL:
+    // 57 cột ngày giờ là `timestamp with time zone`, và Npgsql NÉM khi ghi Kind khác Utc —
+    // mà MudDatePicker gửi lên chuỗi không có hậu tố Z (=> Kind=Unspecified).
+    // Đăng ký ở đây, một chỗ, thay vì rải [JsonConverter] lên từng DTO: DTO viết sau này
+    // cũng được phủ, và không có gì để ai đó quên. Chi tiết lý lẽ: UtcDateTimeConverter.
+    options.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
 });
 
 builder.Services.AddMemoryCache();

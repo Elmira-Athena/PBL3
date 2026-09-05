@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
+using PBL3.Infrastructure.Queries;
 
 namespace PBL3.Infrastructure.Repositories
 {
@@ -31,7 +32,7 @@ namespace PBL3.Infrastructure.Repositories
 
             if (!string.IsNullOrWhiteSpace(keyword))
             {
-                query = query.Where(t => t.TicketCode.Contains(keyword));
+                query = query.Where(t => EF.Functions.ILike(t.TicketCode, SearchPattern.Contains(keyword), SearchPattern.EscapeCharacter));
             }
 
             if (status.HasValue)
@@ -156,7 +157,7 @@ namespace PBL3.Infrastructure.Repositories
 
             if (!string.IsNullOrWhiteSpace(keyword))
             {
-                query = query.Where(t => t.TicketCode.Contains(keyword));
+                query = query.Where(t => EF.Functions.ILike(t.TicketCode, SearchPattern.Contains(keyword), SearchPattern.EscapeCharacter));
             }
 
             if (status.HasValue)

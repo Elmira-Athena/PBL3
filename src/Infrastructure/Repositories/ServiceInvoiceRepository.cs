@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PBL3.Core.Entities;
 using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
+using PBL3.Infrastructure.Queries;
 
 namespace PBL3.Infrastructure.Repositories
 {
@@ -27,7 +28,7 @@ namespace PBL3.Infrastructure.Repositories
             var query = _dbContext.ServiceInvoices.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(keyword))
-                query = query.Where(i => i.InvoiceCode.Contains(keyword));
+                query = query.Where(i => EF.Functions.ILike(i.InvoiceCode, SearchPattern.Contains(keyword), SearchPattern.EscapeCharacter));
 
             if (paymentStatus.HasValue)
                 query = query.Where(i => i.PaymentStatus == paymentStatus.Value);
