@@ -214,9 +214,19 @@ namespace PBL3.Infrastructure.Repositories
 
         public async Task<List<ProductVariant>> FilterBySpecificationAsync(string specKey, string specValue)
         {
-            string jsonPath = $"$.{specKey}";
+            // Đợt 7 — ba lỗi chồng nhau ở bản SQL Server, sửa cùng lúc:
+            //   1. `JSON_VALUE` là hàm RIÊNG của SQL Server.
+            //   2. JSON path `$.{key}` là cú pháp riêng của SQL Server.
+            //   3. `FROM ProductVariants` KHÔNG quote — PostgreSQL hạ chữ thường thành
+            //      `productvariants` rồi ném `relation does not exist`. Lỗi này ồn ào, nhưng
+            //      hai lỗi trên thì không: chúng chỉ trả về rỗng.
+            //
+            // `Specifications` nay là `jsonb` (xem HushStoreDbContext), nên `->>` lấy giá trị
+            // text của một khoá. Cả specKey lẫn specValue đều đi vào dưới dạng THAM SỐ —
+            // không còn ghép chuỗi nào, nên đường này nay an toàn hơn bản cũ.
             return await _context.ProductVariants
-                .FromSqlInterpolated($"SELECT * FROM ProductVariants WHERE JSON_VALUE(Specifications, {jsonPath}) = {specValue}")
+                .FromSqlInterpolated(
+                    $"""SELECT * FROM "ProductVariants" WHERE "Specifications" ->> {specKey} = {specValue}""")
                 .AsNoTracking()
                 .Where(v => !v.IsDeleted)
                 .Include(v => v.Product)

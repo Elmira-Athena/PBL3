@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using PBL3.Core.Constants;
 using PBL3.Core.Entities;
 
 namespace PBL3.Infrastructure.Data
@@ -64,6 +65,73 @@ namespace PBL3.Infrastructure.Data
         {
             base.OnModelCreating(modelBuilder); // Identity mappings
 
+            // ── citext: khôi phục ngữ nghĩa case-insensitive của SQL Server (đợt 7) ──
+            //
+            // 🔴 SQL Server dùng collation CI mặc định, nên 25 chỗ so sánh chuỗi trong repo đang
+            // đúng NHỜ CẤU HÌNH DB — không có HasCollation nào trong toàn bộ src/. PostgreSQL
+            // phân biệt hoa/thường ⇒ 25 chỗ đó đổi hành vi mà KHÔNG ném lỗi, KHÔNG ghi log.
+            // Nặng nhất là hai chỗ trả HTTP 200 trong khi làm sai: PosService gắn voucher, và
+            // VoucherRepository.TryConsumeByCodesAsync báo "tiêu thụ thành công" mà không trừ lượt.
+            //
+            // Vì sao citext chứ không phải chuẩn hoá bằng code: BA đường GHI của chính các cột này
+            // không chuẩn hoá (ProductVariantService, ProductService, ImportReceiptService chỉ
+            // .Trim()). Phương án code đòi mọi write path hiện tại VÀ tương lai nhớ gọi .ToUpper(),
+            // và không gì bắt lỗi khi quên — đúng loại lỗi âm thầm mà đợt này đang diệt.
+            // citext sửa ở TẦNG LƯU TRỮ nên đúng cho cả call-site chưa ai viết.
+            //
+            // Vì sao KHÔNG dùng collation non-deterministic: đã đo trên PG 17.11 —
+            //   ERROR: nondeterministic collations are not supported for LIKE
+            // Mà 8 chỗ .Contains() dịch thẳng thành LIKE. Nó biến bug im lặng thành exception
+            // lúc chạy ở ô tìm kiếm: đổi LOẠI lỗi chứ không sửa lỗi.
+            // Bằng chứng: docs/evidence/2026-09-03-baseline-hoa-thuong-truoc-postgresql.md §6
+            //
+            // ⚠️ Khai bằng HasPostgresExtension (cấu hình model) chứ KHÔNG bằng migrationBuilder.Sql:
+            // SQL thô thì snapshot không nhớ, và lần sinh migration sau sẽ mất extension.
+            modelBuilder.HasPostgresExtension("citext");
+
+            // ── Concurrency token: xmin (đợt 7, thay `rowversion` của SQL Server) ──
+            //
+            // 🔴 VÌ SAO CẦN — lý do này KHÔNG đổi theo provider. LoadProbe S06 đo được sổ tổn thất
+            // nhân 5: năm lần phê duyệt song song cùng một phiếu kiểm kê, cả năm đều 200, và một
+            // serial khách vừa mua bị ghi đè thẳng từ Sold sang Lost. Nguyên nhân: EF sinh
+            // `UPDATE "ProductSerials" SET "Status"=5 WHERE "Id"=@p` — KHÔNG có mệnh đề trạng thái
+            // nào. Có token thì thành `… WHERE "Id"=@p AND xmin=@v` → 0 dòng bị ảnh hưởng →
+            // DbUpdateConcurrencyException → transaction rollback → all-or-nothing cho cả lần
+            // phê duyệt, đúng điều mong muốn.
+            //
+            // VÌ SAO SHADOW PROPERTY chứ không phải thuộc tính `uint` trên entity: giữ thuộc tính
+            // chỉ có giá trị khi client phải GỬI LẠI token. Repo không làm thế — mọi chốt
+            // concurrency là read-modify-write TRONG CÙNG một request, nên token chỉ cần sống
+            // trong đời DbContext. Đã kiểm: `RowVersion` xuất hiện 0 lần ở src/Shared và
+            // src/Client, và 0 chỗ nào đọc hay gán nó. Shadow property là dạng ít xâm lấn nhất.
+            // Muốn đọc token thì `context.Entry(e).Property("xmin")`.
+            //
+            // ⚠️ GIỚI HẠN 1 — xung đột GIẢ. xmin đổi khi BẤT KỲ cột nào của hàng đổi, không riêng
+            // cột ta quan tâm. Hai thao tác sửa hai cột KHÁC NHAU vẫn đụng nhau. Đó là cái giá của
+            // token cấp-hàng; đừng "sửa" bằng cách bỏ token. Giống hệt `rowversion` cũ.
+            //
+            // 🚨 GIỚI HẠN 2 — ExecuteUpdateAsync BỎ QUA HOÀN TOÀN token này. Nó đi thẳng xuống SQL,
+            // không qua Change Tracker. Ai đó chuyển một đường ghi từ tracked-write sang
+            // ExecuteUpdate sẽ ÂM THẦM GỠ MẤT lớp bảo vệ, và không gì báo lỗi — comment này là thứ
+            // duy nhất chặn điều đó. Nếu chuyển, phải tự đưa vị từ trạng thái vào Where (mẫu:
+            // InventoryCheckService.ApproveAsync). Repo hiện có 19 chỗ ExecuteUpdateAsync và
+            // KHÔNG chỗ nào trong số đó được token bảo vệ.
+            //
+            // ⚠️ GIỚI HẠN 3 — RIÊNG của xmin, không có ở rowversion: xmin là 32-bit và QUAY VÒNG.
+            // Về lý thuyết một hàng không đổi suốt một chu kỳ wraparound rồi bị sửa đúng lúc trùng
+            // giá trị cũ sẽ bỏ lọt xung đột. Xác suất ở quy mô này bằng 0 — ghi ra để người phát
+            // hiện lại sau này không phải hoảng.
+            // ⚠️ KHÔNG dùng `UseXminAsConcurrencyToken()` — hàm đó ĐÃ BỊ GỠ khỏi Npgsql 10.
+            // Đã kiểm bằng cách soi assembly 10.0.3: không có chuỗi "xmin" nào trong đó. Tài liệu
+            // và câu trả lời trên mạng vẫn nhắc tên hàm này rất nhiều, nên đây là chỗ dễ chép nhầm.
+            // Khai tay dưới đây CHÍNH LÀ thứ hàm cũ làm bên trong — xem UseXmin().
+            UseXmin<ProductSerial>(modelBuilder);
+            UseXmin<InventoryCheck>(modelBuilder);
+            UseXmin<ServiceTicket>(modelBuilder);
+            UseXmin<Quotation>(modelBuilder);
+            UseXmin<RmaShipment>(modelBuilder);
+            UseXmin<Order>(modelBuilder);
+
             // ── SEQUENCE cấp số cho mã chứng từ (đợt 3, mục 🅶) ──
             //
             // 🔴 VÌ SAO SEQUENCE, VÀ VÌ SAO KHÔNG RESET THEO NGÀY.
@@ -102,8 +170,10 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<AppUser>(entity =>
             {
                 entity.ToTable("AppUsers");
-                entity.Property(u => u.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
-                entity.Property(u => u.PhoneNumber).HasMaxLength(20).IsUnicode(false);
+                entity.Property(u => u.Id).HasDefaultValueSql("gen_random_uuid()");
+                // IsUnicode(false) đã gỡ: trên SQL Server nó cho varchar thay nvarchar; PostgreSQL
+                // mọi text đều UTF-8 nên Npgsql bỏ qua — giữ lại là code chết gây hiểu nhầm.
+                entity.Property(u => u.PhoneNumber).HasMaxLength(20);
             });
             modelBuilder.Entity<UserProfile>(entity =>
             {
@@ -116,7 +186,7 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<AppRole>(entity =>
             {
                 entity.ToTable("AppRoles");
-                entity.Property(r => r.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+                entity.Property(r => r.Id).HasDefaultValueSql("gen_random_uuid()");
                 entity.HasIndex(r => r.RoleCode).IsUnique();
             });
             modelBuilder.Entity<IdentityUserRole<Guid>>().ToTable("AppUserRoles");
@@ -129,11 +199,15 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<Product>(entity =>
             {
                 entity.HasIndex(p => p.Slug).IsUnique();
+                // citext (Products.Slug): unique index này đổi nghĩa ngầm nếu để `text`.
+                entity.Property(p => p.Slug).HasColumnType("citext");
             });
 
             modelBuilder.Entity<Category>(entity =>
             {
                 entity.HasIndex(c => c.Slug).IsUnique();
+                // citext (Categories.Slug): unique index này đổi nghĩa ngầm nếu để `text`.
+                entity.Property(c => c.Slug).HasColumnType("citext");
                 // Recursive Relationship (Adjacency List)
                 entity.HasOne(c => c.Parent)
                     .WithMany(p => p.Children)
@@ -144,6 +218,8 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<ProductVariant>(entity =>
             {
                 entity.HasIndex(v => v.SKU).IsUnique();
+                // citext (ProductVariants.SKU): unique index này đổi nghĩa ngầm nếu để `text`.
+                entity.Property(v => v.SKU).HasColumnType("citext");
                 entity.HasIndex(v => v.ProductId);
                 entity.Property(e => e.Price).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.OriginalPrice).HasColumnType("decimal(18,2)");
@@ -162,7 +238,9 @@ namespace PBL3.Infrastructure.Data
                     c => new Dictionary<string, string>(c ?? new())
                 );
                 entity.Property(e => e.Specifications)
-                      .HasColumnType("nvarchar(max)")
+                      // jsonb, không phải text: ProductRepository.FilterBySpecificationAsync
+                      // cần truy vấn VÀO TRONG JSON (trước đây bằng JSON_VALUE của SQL Server).
+                      .HasColumnType("jsonb")
                       .HasConversion(
                           v => System.Text.Json.JsonSerializer.Serialize(v, System.Text.Json.JsonSerializerOptions.Default),
                           v => System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(v, System.Text.Json.JsonSerializerOptions.Default)
@@ -199,6 +277,8 @@ namespace PBL3.Infrastructure.Data
             modelBuilder.Entity<ProductSerial>(entity =>
             {
                 entity.HasIndex(s => s.SerialNumber).IsUnique();
+                // citext (ProductSerials.SerialNumber): unique index này đổi nghĩa ngầm nếu để `text`.
+                entity.Property(s => s.SerialNumber).HasColumnType("citext");
                 entity.HasIndex(s => new { s.VariantId, s.Status });
             });
 
@@ -236,7 +316,7 @@ namespace PBL3.Infrastructure.Data
                 entity.HasIndex(d => d.VariantId);
 
                 entity.Property(e => e.Difference)
-                      .HasComputedColumnSql("([ActualQuantity] - [SystemQuantity])");
+                      .HasComputedColumnSql("(\"ActualQuantity\" - \"SystemQuantity\")", stored: true);
             });
 
             modelBuilder.Entity<InventoryCheckDetailSerial>(entity =>
@@ -246,9 +326,15 @@ namespace PBL3.Infrastructure.Data
                 entity.HasIndex(s => new { s.CheckId, s.ScanStatus });
 
                 // Chống quét trùng trong cùng 1 phiếu
+                // citext (InventoryCheckDetailSerials.SerialNumberRaw): cột thứ SÁU của nhóm,
+                // và là cột dễ sót nhất vì nó nằm trong index TỔ HỢP chứ không phải
+                // `HasIndex(x).IsUnique()` đơn lẻ như năm cột kia. Bất biến "một serial chỉ
+                // xuất hiện một lần trong một phiếu kiểm kê" đổi nghĩa ngầm nếu để `text`:
+                // nhân viên quét 'abc123' rồi gõ tay 'ABC123' sẽ tạo được HAI dòng.
+                entity.Property(s => s.SerialNumberRaw).HasColumnType("citext");
                 entity.HasIndex(s => new { s.CheckId, s.SerialNumberRaw })
                       .IsUnique()
-                      .HasDatabaseName("UQ_InventoryCheckDetailSerials_CheckId_SerialNumberRaw");
+                      .HasDatabaseName(DbConstraints.InventoryCheckDetailSerial);
 
                 // FK: CheckId → InventoryChecks (cascade delete: xóa phiếu thì xóa serials)
                 entity.HasOne(s => s.Check)
@@ -293,7 +379,7 @@ namespace PBL3.Infrastructure.Data
                 // tử tế, cái thứ hai để dữ liệu không hỏng được kể cả khi ai đó viết đường ghi mới.
                 entity.HasIndex(l => new { l.AuditCheckId, l.SerialId })
                       .IsUnique()
-                      .HasDatabaseName("UQ_InventoryAdjustmentLogs_AuditCheckId_SerialId");
+                      .HasDatabaseName(DbConstraints.InventoryAdjustmentLogAuditSerial);
 
                 entity.Property(e => e.CostImpact).HasColumnType("decimal(18,2)");
 
@@ -323,11 +409,13 @@ namespace PBL3.Infrastructure.Data
 
                 entity.ToTable(t =>
                 {
-                    t.HasCheckConstraint("CK_Vouchers_Date", "[EndDate] >= [StartDate]");
+                    t.HasCheckConstraint("CK_Vouchers_Date", "\"EndDate\" >= \"StartDate\"");
                     // Quantity nullable: null = unlimited
-                    t.HasCheckConstraint("CK_Vouchers_Quantity", "[Quantity] IS NULL OR [UsedCount] <= [Quantity]");
+                    t.HasCheckConstraint("CK_Vouchers_Quantity", "\"Quantity\" IS NULL OR \"UsedCount\" <= \"Quantity\"");
                 });
                 entity.HasIndex(v => v.Code).IsUnique();
+                // citext (Vouchers.Code): unique index này đổi nghĩa ngầm nếu để `text`.
+                entity.Property(v => v.Code).HasColumnType("citext");
                 entity.Property(e => e.DiscountValue).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.MinOrderValue).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.MaxDiscountAmount).HasColumnType("decimal(18,2)");
@@ -389,7 +477,7 @@ namespace PBL3.Infrastructure.Data
                 // dùng đã xảy ra thì vẫn đã xảy ra), nhưng đừng suy rộng sang index khác.
                 entity.HasIndex(vu => new { vu.UserId, vu.VoucherId, vu.SeqPerUser })
                       .IsUnique()
-                      .HasDatabaseName("UQ_VoucherUsages_UserId_VoucherId_SeqPerUser");
+                      .HasDatabaseName(DbConstraints.VoucherUsagePerUserSeq);
 
                 // Index cho truy vấn theo OrderId
                 entity.HasIndex(vu => vu.OrderId);
@@ -422,7 +510,7 @@ namespace PBL3.Infrastructure.Data
                 entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.TotalLine)
                     .HasColumnType("decimal(18,2)")
-                    .HasComputedColumnSql("([Quantity] * [UnitPrice])");
+                    .HasComputedColumnSql("(\"Quantity\" * \"UnitPrice\")", stored: true);
             });
 
             modelBuilder.Entity<OrderSerial>(entity =>
@@ -464,13 +552,13 @@ namespace PBL3.Infrastructure.Data
 
                 entity.HasIndex(r => new { r.ProductId, r.UserId })
                       .IsUnique()
-                      .HasDatabaseName("UQ_ProductReviews_ProductId_UserId");
+                      .HasDatabaseName(DbConstraints.ProductReviewProductUser);
 
                 entity.HasIndex(r => r.ProductId)
                       .HasDatabaseName("IX_ProductReviews_ProductId");
 
                 entity.ToTable(t =>
-                    t.HasCheckConstraint("CK_ProductReviews_Rating", "[Rating] BETWEEN 1 AND 5"));
+                    t.HasCheckConstraint("CK_ProductReviews_Rating", "\"Rating\" BETWEEN 1 AND 5"));
 
                 entity.HasOne(r => r.Product)
                       .WithMany()
@@ -500,12 +588,17 @@ namespace PBL3.Infrastructure.Data
                 // terminal ở đó mà quên ở đây thì bất biến ÂM THẦM NỚI RA — không có gì báo lỗi.
                 // Hai chỗ này comment chéo nhau; đọc một chỗ thì sang chỗ kia.
                 //
-                // ⚠️ Trên SQL Server phải BUNG `NOT IN` thành chuỗi `<>`: HasFilter nhận SQL thô,
-                // và filtered index không cho phép `NOT IN`.
+                // ⚠️ Giữ nguyên dạng BUNG `<>` thay vì gộp lại `NOT IN`. Giới hạn "filtered index
+                // không cho phép NOT IN" là của SQL SERVER — PostgreSQL cho phép. Nhưng vị từ này
+                // phải khớp NGUYÊN VĂN với HasOpenTicketForSerialAsync, nên đổi cách viết chỉ để
+                // gọn hơn là tự tạo rủi ro lệch, không đổi lấy gì.
+                //
+                // 🚨 `IsDeleted` là `boolean` trên PostgreSQL, không phải `bit`.
+                // `"IsDeleted" = 0` sẽ LỖI KIỂU, phải là `= false`.
                 entity.HasIndex(t => t.SerialId)
                       .IsUnique()
-                      .HasFilter("[Status] <> 3 AND [Status] <> 8 AND [Status] <> 9 AND [Status] <> 10 AND [IsDeleted] = 0")
-                      .HasDatabaseName("UQ_ServiceTickets_SerialId_Open");
+                      .HasFilter("\"Status\" <> 3 AND \"Status\" <> 8 AND \"Status\" <> 9 AND \"Status\" <> 10 AND \"IsDeleted\" = false")
+                      .HasDatabaseName(DbConstraints.ServiceTicketSerialOpen);
                 entity.HasIndex(t => t.Status);
                 entity.HasIndex(t => t.CustomerId);
                 entity.HasIndex(t => t.AssignedEmployeeId);
@@ -581,7 +674,7 @@ namespace PBL3.Infrastructure.Data
                 entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.LineTotal)
                     .HasColumnType("decimal(18,2)")
-                    .HasComputedColumnSql("([Quantity] * [UnitPrice])");
+                    .HasComputedColumnSql("(\"Quantity\" * \"UnitPrice\")", stored: true);
             });
 
             modelBuilder.Entity<RmaShipment>(entity =>
@@ -619,7 +712,7 @@ namespace PBL3.Infrastructure.Data
                 entity.Property(e => e.UnitPrice).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.LineTotal)
                     .HasColumnType("decimal(18,2)")
-                    .HasComputedColumnSql("([Quantity] * [UnitPrice])");
+                    .HasComputedColumnSql("(\"Quantity\" * \"UnitPrice\")", stored: true);
             });
 
             modelBuilder.Entity<SerialRepairLog>(entity =>
@@ -645,5 +738,33 @@ namespace PBL3.Infrastructure.Data
                     .OnDelete(DeleteBehavior.NoAction);
             });
         }
+
+        /// <summary>
+        /// Khai cột hệ thống <c>xmin</c> của PostgreSQL làm concurrency token cho <typeparamref name="TEntity"/>.
+        /// </summary>
+        /// <remarks>
+        /// Đây là bản viết tay thay cho <c>UseXminAsConcurrencyToken()</c> — hàm tiện ích đó
+        /// <b>không còn</b> trong Npgsql 10 (đã soi assembly 10.0.3 để xác nhận, không phải suy đoán).
+        ///
+        /// Bốn mảnh, thiếu mảnh nào cũng hỏng một kiểu khác nhau:
+        /// <list type="bullet">
+        ///   <item><c>Property&lt;uint&gt;("xmin")</c> — <b>shadow property</b>, không có thuộc tính
+        ///     tương ứng trên entity. Đó là chủ ý: repo không bao giờ gửi token về client, mọi chốt
+        ///     concurrency là read-modify-write trong cùng một request.</item>
+        ///   <item><c>HasColumnType("xid")</c> — kiểu thật của <c>xmin</c> trong PostgreSQL.</item>
+        ///   <item><c>ValueGeneratedOnAddOrUpdate()</c> — DB tự sinh, EF không được ghi.
+        ///     Thiếu nó thì EF cố INSERT vào một cột hệ thống chỉ-đọc.</item>
+        ///   <item><c>IsConcurrencyToken()</c> — mảnh làm nên tác dụng: đưa cột vào mệnh đề
+        ///     <c>WHERE</c> của <c>UPDATE</c>. <b>Thiếu riêng mảnh này thì mọi thứ vẫn chạy, vẫn
+        ///     build, và bảo vệ biến mất hoàn toàn mà không có gì báo.</b></item>
+        /// </list>
+        /// </remarks>
+        private static void UseXmin<TEntity>(ModelBuilder modelBuilder) where TEntity : class
+            => modelBuilder.Entity<TEntity>()
+                           .Property<uint>("xmin")
+                           .HasColumnName("xmin")
+                           .HasColumnType("xid")
+                           .ValueGeneratedOnAddOrUpdate()
+                           .IsConcurrencyToken();
     }
 }

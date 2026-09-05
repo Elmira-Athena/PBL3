@@ -49,10 +49,15 @@ public sealed class ProbeEnvironment : IDisposable
     public HushStoreDbContext NewDbContext()
     {
         var options = new DbContextOptionsBuilder<HushStoreDbContext>()
-            .UseSqlServer(_config.ConnectionString, sql => sql.EnableRetryOnFailure(
+            // Đợt 7: Npgsql thay SqlServer. Tham số thứ ba đổi tên VÀ đổi kiểu —
+            // `errorNumbersToAdd: IEnumerable<int>?` của SQL Server thành
+            // `errorCodesToAdd: IEnumerable<string>?` của PostgreSQL (SqlState là chuỗi:
+            // "23505", "40P01"). Nghĩa giữ nguyên: null = dùng danh sách transient mặc định,
+            // và danh sách đó CÓ 40P01 (deadlock) y như SQL Server có 1205.
+            .UseNpgsql(_config.ConnectionString, npgsql => npgsql.EnableRetryOnFailure(
                 maxRetryCount: 3,
                 maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorNumbersToAdd: null))
+                errorCodesToAdd: null))
             .Options;
 
         return new HushStoreDbContext(options);

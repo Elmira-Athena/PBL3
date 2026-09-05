@@ -16,10 +16,16 @@
            TA phụ thuộc trực tiếp vào gói này. Dựa vào đường transitive là để nó biến mất
            lặng lẽ vào ngày ai đó gỡ hoặc nâng gói cha — và triệu chứng sẽ là một lỗi biên
            dịch ở file hoàn toàn không liên quan. -->
-      <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.3" />
-      <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.3" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.1" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.1">
+      <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.11" />
+      <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
+      <!-- Đợt 7: PostgreSQL thay SQL Server. Lý do KHÔNG phải hiệu năng mà là edition —
+           read replica trên RDS "chỉ có ở SQL Server Enterprise Edition" và "chỉ với instance
+           class từ 4 vCPU", còn stack chạy sqlserver-ex trên db.t3.micro (2 vCPU): hỏng cả hai
+           điều kiện, không cấu hình nào mở được. Xem kế hoạch đợt 7.
+           Npgsql 10.0.3 đòi Microsoft.EntityFrameworkCore >= 10.0.4 — đó là lý do cả họ gói
+           Identity/EF đã được nâng lên 10.0.11 ở bước trước, TÁCH RIÊNG khỏi lần đổi này. -->
+      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+      <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11">
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         <PrivateAssets>all</PrivateAssets>
       </PackageReference>

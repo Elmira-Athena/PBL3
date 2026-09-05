@@ -101,12 +101,6 @@ namespace PBL3.Core.Entities
         public byte PaymentMethod { get; set; } // 0: COD, 1: Banking, 2: VNPay
         public byte PaymentStatus { get; set; } // 0: Unpaid, 1: Paid, 2: Refunded
 
-        /// <summary>
-        /// Concurrency token do SQL Server tự sinh. Xem giải thích đầy đủ + <b>hai giới hạn</b>
-        /// ở <see cref="ProductSerial.RowVersion"/> — đặc biệt: <c>ExecuteUpdateAsync</c> bỏ qua nó.
-        /// </summary>
-        [Timestamp]
-        public byte[]? RowVersion { get; set; }
 
         public byte OrderType { get; set; } // 0: Online, 1: POS
 

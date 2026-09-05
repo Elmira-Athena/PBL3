@@ -18,9 +18,10 @@ namespace PBL3.Infrastructure.Repositories
         public async Task<long> NextValueAsync(string sequenceName)
         {
             // 🔴 KHÔNG nội suy chuỗi trực tiếp vào SQL mà không kiểm.
-            // `NEXT VALUE FOR` không nhận tên sequence dưới dạng THAM SỐ — nó là một
-            // định danh, không phải giá trị — nên câu SQL buộc phải ghép chuỗi. Điều đó
-            // biến `sequenceName` thành một đường SQL injection nếu nó tới từ bên ngoài.
+            // `nextval()` của PostgreSQL nhận tên sequence dưới dạng GIÁ TRỊ (kiểu `regclass`),
+            // nên về lý thuyết tham số hoá được. Chốt danh sách trắng vẫn GIỮ NGUYÊN — nó là
+            // phòng thủ có chủ đích, không phải hệ quả của giới hạn cú pháp; bỏ đi vì "giờ đã
+            // tham số hoá được" là gỡ một lớp bảo vệ để đổi lấy không gì cả.
             //
             // Chốt: chỉ nhận tên nằm trong danh sách trắng của DocumentSequences.All.
             // Hiện mọi lời gọi đều truyền hằng số, nên vòng kiểm này không bao giờ đỏ —
@@ -38,7 +39,10 @@ namespace PBL3.Infrastructure.Repositories
             // transaction đó. (Giá trị vẫn bị tiêu thụ dù transaction rollback — xem
             // phần ghi chú về tính không-giao-dịch ở IDocumentSequence.)
             await using var command = _dbContext.Database.GetDbConnection().CreateCommand();
-            command.CommandText = $"SELECT NEXT VALUE FOR [{sequenceName}]";
+            // Nháy KÉP lồng trong nháy ĐƠN, và đó là bắt buộc: PostgreSQL hạ mọi định danh
+            // không nháy về chữ thường, nên `nextval('SeqOrderCode')` sẽ đi tìm `seqordercode`
+            // và ném `relation does not exist`. Tên sequence do EF tạo giữ nguyên hoa/thường.
+            command.CommandText = $"SELECT nextval('\"{sequenceName}\"')";
 
             var transaction = _dbContext.Database.CurrentTransaction;
             if (transaction is not null)

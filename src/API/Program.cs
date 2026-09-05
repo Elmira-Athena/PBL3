@@ -207,9 +207,9 @@ builder.Services.AddSwaggerGen();
 // Add DbContext
 builder.Services.AddDbContext<HushStoreDbContext>(options =>
 {
-    options.UseSqlServer(
+    options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        sql => sql.EnableRetryOnFailure(
+        npgsql => npgsql.EnableRetryOnFailure(
             // Đợt 1 mục 4.1. Điều kiện cần đã đủ: 18 call-site transaction đều đi qua
             // IUnitOfWork.ExecuteInTransactionAsync, tức qua CreateExecutionStrategy().
             // EF Core CẤM BeginTransactionAsync() thủ công khi có retrying strategy và
@@ -225,7 +225,15 @@ builder.Services.AddDbContext<HushStoreDbContext>(options =>
             // tới khi từng chỗ được rà. Xem hợp đồng retry ở IUnitOfWork.
             maxRetryCount: 3,
             maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorNumbersToAdd: null));
+            // Đợt 7: đổi tên VÀ đổi kiểu — SQL Server dùng `errorNumbersToAdd: IEnumerable<int>?`
+            // (mã lỗi là số: 1205), PostgreSQL dùng `errorCodesToAdd: IEnumerable<string>?`
+            // (SqlState là chuỗi: "40P01"). null = giữ danh sách transient mặc định của provider.
+            //
+            // ⚠️ Đã tra trước khi đổi: danh sách mặc định của Npgsql CÓ 40P01 (deadlock), giống
+            // như của SQL Server có 1205. Nên deadlock VẪN bị retry, VẪN bị bọc vào
+            // RetryLimitExceededException khi cạn lượt, và ConflictClassifier VẪN phải đi hết
+            // chuỗi InnerException. Đổi provider không nới lỏng ràng buộc nào ở đó.
+            errorCodesToAdd: null));
     // ServiceInvoice intentionally omits the query filter so financial records
     // remain queryable even after the parent ServiceTicket is soft-deleted.
     options.ConfigureWarnings(w => w.Ignore(

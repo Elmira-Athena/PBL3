@@ -382,17 +382,17 @@ public sealed class ProbeFixture
         // Đơn hàng / phiếu dịch vụ do CHÍNH API tạo ra trong lúc đo mang mã thật
         // (ORD-…, ST-…) chứ không mang "LP-". Nhận diện chúng qua thứ chúng tham
         // chiếu tới: biến thể, serial và tài khoản của probe.
-        const string probeUsers = "SELECT Id FROM AppUsers WHERE Email LIKE '%@loadprobe.local'";
-        const string probeVariants = "SELECT Id FROM ProductVariants WHERE SKU LIKE 'LP-%'";
-        const string probeSerials = "SELECT Id FROM ProductSerials WHERE SerialNumber LIKE 'LP-%'";
+        const string probeUsers = "SELECT \"Id\" FROM \"AppUsers\" WHERE \"Email\" LIKE '%@loadprobe.local'";
+        const string probeVariants = "SELECT \"Id\" FROM \"ProductVariants\" WHERE \"SKU\" LIKE 'LP-%'";
+        const string probeSerials = "SELECT \"Id\" FROM \"ProductSerials\" WHERE \"SerialNumber\" LIKE 'LP-%'";
         var probeOrders =
-            $"SELECT Id FROM Orders WHERE OrderCode LIKE 'LP-%' " +
-            $"OR UserId IN ({probeUsers}) " +
-            $"OR Id IN (SELECT OrderId FROM OrderDetails WHERE VariantId IN ({probeVariants}))";
+            $"SELECT \"Id\" FROM \"Orders\" WHERE \"OrderCode\" LIKE 'LP-%' " +
+            $"OR \"UserId\" IN ({probeUsers}) " +
+            $"OR \"Id\" IN (SELECT \"OrderId\" FROM \"OrderDetails\" WHERE \"VariantId\" IN ({probeVariants}))";
         var probeTickets =
-            $"SELECT Id FROM ServiceTickets WHERE TicketCode LIKE 'LP-%' " +
-            $"OR SerialId IN ({probeSerials})";
-        const string probeChecks = "SELECT Id FROM InventoryChecks WHERE CheckCode LIKE 'LP-%'";
+            $"SELECT \"Id\" FROM \"ServiceTickets\" WHERE \"TicketCode\" LIKE 'LP-%' " +
+            $"OR \"SerialId\" IN ({probeSerials})";
+        const string probeChecks = "SELECT \"Id\" FROM \"InventoryChecks\" WHERE \"CheckCode\" LIKE 'LP-%'";
 
         // Thứ tự dưới đây là thứ tự khoá ngoại, đọc từ lá lên gốc của đồ thị phụ
         // thuộc. Đổi chỗ hai dòng bất kỳ là gặp lỗi 547 (REFERENCE constraint).
@@ -406,53 +406,53 @@ public sealed class ProbeFixture
         var statements = new[]
         {
             // Dịch vụ
-            $"DELETE FROM ServiceTicketStatusHistory WHERE TicketId IN ({probeTickets})",
-            $"DELETE FROM QuotationItems WHERE QuotationId IN (SELECT Id FROM Quotations WHERE TicketId IN ({probeTickets}))",
-            $"DELETE FROM ServiceInvoiceItems WHERE InvoiceId IN (SELECT Id FROM ServiceInvoices WHERE TicketId IN ({probeTickets}))",
-            $"DELETE FROM ServiceInvoices WHERE TicketId IN ({probeTickets})",
-            $"DELETE FROM RmaShipments WHERE TicketId IN ({probeTickets})",
-            $"DELETE FROM SerialRepairLogs WHERE TicketId IN ({probeTickets}) OR SerialId IN ({probeSerials})",
-            $"DELETE FROM Quotations WHERE TicketId IN ({probeTickets})",
-            $"DELETE FROM ServiceTickets WHERE Id IN ({probeTickets})",
+            $"DELETE FROM \"ServiceTicketStatusHistory\" WHERE \"TicketId\" IN ({probeTickets})",
+            $"DELETE FROM \"QuotationItems\" WHERE \"QuotationId\" IN (SELECT \"Id\" FROM \"Quotations\" WHERE \"TicketId\" IN ({probeTickets}))",
+            $"DELETE FROM \"ServiceInvoiceItems\" WHERE \"InvoiceId\" IN (SELECT \"Id\" FROM \"ServiceInvoices\" WHERE \"TicketId\" IN ({probeTickets}))",
+            $"DELETE FROM \"ServiceInvoices\" WHERE \"TicketId\" IN ({probeTickets})",
+            $"DELETE FROM \"RmaShipments\" WHERE \"TicketId\" IN ({probeTickets})",
+            $"DELETE FROM \"SerialRepairLogs\" WHERE \"TicketId\" IN ({probeTickets}) OR \"SerialId\" IN ({probeSerials})",
+            $"DELETE FROM \"Quotations\" WHERE \"TicketId\" IN ({probeTickets})",
+            $"DELETE FROM \"ServiceTickets\" WHERE \"Id\" IN ({probeTickets})",
 
             // Kiểm kê
-            $"DELETE FROM InventoryAdjustmentLogs WHERE AuditCheckId IN ({probeChecks}) OR SerialId IN ({probeSerials})",
-            $"DELETE FROM InventoryCheckDetailSerials WHERE CheckId IN ({probeChecks}) OR SerialId IN ({probeSerials})",
-            $"DELETE FROM InventoryCheckDetails WHERE CheckId IN ({probeChecks}) OR VariantId IN ({probeVariants})",
-            $"DELETE FROM InventoryChecks WHERE Id IN ({probeChecks})",
+            $"DELETE FROM \"InventoryAdjustmentLogs\" WHERE \"AuditCheckId\" IN ({probeChecks}) OR \"SerialId\" IN ({probeSerials})",
+            $"DELETE FROM \"InventoryCheckDetailSerials\" WHERE \"CheckId\" IN ({probeChecks}) OR \"SerialId\" IN ({probeSerials})",
+            $"DELETE FROM \"InventoryCheckDetails\" WHERE \"CheckId\" IN ({probeChecks}) OR \"VariantId\" IN ({probeVariants})",
+            $"DELETE FROM \"InventoryChecks\" WHERE \"Id\" IN ({probeChecks})",
 
             // Bán hàng
-            $"DELETE FROM OrderSerials WHERE SerialId IN ({probeSerials}) OR OrderDetailId IN (SELECT Id FROM OrderDetails WHERE OrderId IN ({probeOrders}))",
-            $"DELETE FROM Warranties WHERE OrderId IN ({probeOrders}) OR SerialId IN ({probeSerials})",
-            $"DELETE FROM OrderDetails WHERE OrderId IN ({probeOrders})",
-            $"DELETE FROM VoucherUsages WHERE OrderId IN ({probeOrders}) OR VoucherId IN (SELECT Id FROM Vouchers WHERE Code LIKE 'LP-%')",
-            $"UPDATE ProductSerials SET OrderId = NULL WHERE OrderId IN ({probeOrders})",
-            $"DELETE FROM Orders WHERE Id IN ({probeOrders})",
-            "DELETE FROM Vouchers WHERE Code LIKE 'LP-%'",
+            $"DELETE FROM \"OrderSerials\" WHERE \"SerialId\" IN ({probeSerials}) OR \"OrderDetailId\" IN (SELECT \"Id\" FROM \"OrderDetails\" WHERE \"OrderId\" IN ({probeOrders}))",
+            $"DELETE FROM \"Warranties\" WHERE \"OrderId\" IN ({probeOrders}) OR \"SerialId\" IN ({probeSerials})",
+            $"DELETE FROM \"OrderDetails\" WHERE \"OrderId\" IN ({probeOrders})",
+            $"DELETE FROM \"VoucherUsages\" WHERE \"OrderId\" IN ({probeOrders}) OR \"VoucherId\" IN (SELECT \"Id\" FROM \"Vouchers\" WHERE \"Code\" LIKE 'LP-%')",
+            $"UPDATE \"ProductSerials\" SET \"OrderId\" = NULL WHERE \"OrderId\" IN ({probeOrders})",
+            $"DELETE FROM \"Orders\" WHERE \"Id\" IN ({probeOrders})",
+            "DELETE FROM \"Vouchers\" WHERE \"Code\" LIKE 'LP-%'",
 
             // Kho
-            "DELETE FROM ProductSerials WHERE SerialNumber LIKE 'LP-%'",
-            "DELETE FROM ImportReceiptDetails WHERE ReceiptId IN (SELECT Id FROM ImportReceipts WHERE ReceiptCode LIKE 'LP-%')",
-            "DELETE FROM ImportReceipts WHERE ReceiptCode LIKE 'LP-%'",
-            "DELETE FROM Suppliers WHERE Name LIKE 'LP-%'",
+            "DELETE FROM \"ProductSerials\" WHERE \"SerialNumber\" LIKE 'LP-%'",
+            "DELETE FROM \"ImportReceiptDetails\" WHERE \"ReceiptId\" IN (SELECT \"Id\" FROM \"ImportReceipts\" WHERE \"ReceiptCode\" LIKE 'LP-%')",
+            "DELETE FROM \"ImportReceipts\" WHERE \"ReceiptCode\" LIKE 'LP-%'",
+            "DELETE FROM \"Suppliers\" WHERE \"Name\" LIKE 'LP-%'",
 
             // Danh mục
-            "DELETE FROM ProductImages WHERE VariantId IN (SELECT Id FROM ProductVariants WHERE SKU LIKE 'LP-%')",
-            "DELETE FROM ProductVariants WHERE SKU LIKE 'LP-%'",
-            "DELETE FROM ProductReviews WHERE ProductId IN (SELECT Id FROM Products WHERE Slug = 'lp-product')",
-            "DELETE FROM Products WHERE Slug = 'lp-product'",
-            "DELETE FROM VoucherCategories WHERE CategoryId IN (SELECT Id FROM Categories WHERE Slug = 'lp-category')",
-            "DELETE FROM Categories WHERE Slug = 'lp-category'",
-            "DELETE FROM Manufacturers WHERE Name LIKE 'LP-%'",
+            "DELETE FROM \"ProductImages\" WHERE \"VariantId\" IN (SELECT \"Id\" FROM \"ProductVariants\" WHERE \"SKU\" LIKE 'LP-%')",
+            "DELETE FROM \"ProductVariants\" WHERE \"SKU\" LIKE 'LP-%'",
+            "DELETE FROM \"ProductReviews\" WHERE \"ProductId\" IN (SELECT \"Id\" FROM \"Products\" WHERE \"Slug\" = 'lp-product')",
+            "DELETE FROM \"Products\" WHERE \"Slug\" = 'lp-product'",
+            "DELETE FROM \"VoucherCategories\" WHERE \"CategoryId\" IN (SELECT \"Id\" FROM \"Categories\" WHERE \"Slug\" = 'lp-category')",
+            "DELETE FROM \"Categories\" WHERE \"Slug\" = 'lp-category'",
+            "DELETE FROM \"Manufacturers\" WHERE \"Name\" LIKE 'LP-%'",
 
             // Người dùng
-            $"DELETE FROM Carts WHERE UserId IN ({probeUsers})",
-            $"DELETE FROM UserAddresses WHERE UserId IN ({probeUsers})",
-            $"DELETE FROM UserProfiles WHERE UserId IN ({probeUsers})",
-            $"DELETE FROM RefreshTokens WHERE UserId IN ({probeUsers})",
-            $"DELETE FROM AppUserRoles WHERE UserId IN ({probeUsers})",
-            $"DELETE FROM AppUserClaims WHERE UserId IN ({probeUsers})",
-            "DELETE FROM AppUsers WHERE Email LIKE '%@loadprobe.local'"
+            $"DELETE FROM \"Carts\" WHERE \"UserId\" IN ({probeUsers})",
+            $"DELETE FROM \"UserAddresses\" WHERE \"UserId\" IN ({probeUsers})",
+            $"DELETE FROM \"UserProfiles\" WHERE \"UserId\" IN ({probeUsers})",
+            $"DELETE FROM \"RefreshTokens\" WHERE \"UserId\" IN ({probeUsers})",
+            $"DELETE FROM \"AppUserRoles\" WHERE \"UserId\" IN ({probeUsers})",
+            $"DELETE FROM \"AppUserClaims\" WHERE \"UserId\" IN ({probeUsers})",
+            "DELETE FROM \"AppUsers\" WHERE \"Email\" LIKE '%@loadprobe.local'"
         };
 
         foreach (var sql in statements)

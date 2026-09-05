@@ -1,4 +1,3 @@
-using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -334,7 +333,7 @@ namespace PBL3.Service.Orders
             // lại trang và thử lại." Đó là ĐÚNG lớp thông báo cho tình huống này, và client đã
             // có ánh xạ 409 từ đợt 2.
             //
-            // ⚠️ Cố ý KHÔNG cố đoán index nào bị vi phạm. SqlException không có thuộc tính tên
+            // ⚠️ Cố ý KHÔNG cố đoán index nào bị vi phạm — dù PostgreSQL CÓ ConstraintName.
             // constraint, nên cách duy nhất là dò ex.Message — chuỗi tiếng Anh, đổi theo phiên
             // bản SQL Server, đúng bẫy #7. Câu 409 chung ở trên đủ đúng cho MỌI index ở đường
             // này nên không cần phân biệt.

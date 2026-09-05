@@ -1,8 +1,9 @@
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PBL3.Core.Entities;
+using PBL3.Core.Constants;
 using PBL3.Core.Exceptions;
+using PBL3.Infrastructure.Concurrency;
 using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Shared.DTOs.Common;
@@ -886,10 +887,15 @@ namespace PBL3.Service.Inventory
             // bên trong transaction. Dùng lại nguyên văn để người dùng thấy CÙNG một thông báo
             // dù họ thua ở chốt trong transaction hay thua ở index.
             //
-            // 🚨 Lập luận "chỉ một nguồn" là LẬP LUẬN CỤC BỘ — nó đúng vì phạm vi hẹp. Thêm một
-            // unique index nào nữa vào đường phê duyệt thì phải xem lại khối này, đừng copy
-            // khuôn này sang hàm có nhiều index.
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            // ✅ Đợt 7 — lập luận cục bộ ở trên KHÔNG CÒN CẦN, và cảnh báo "đừng copy khuôn này"
+            // đã được gỡ: khuôn nay an toàn để copy. PostgresException mang TÊN constraint, nên
+            // phép phân biệt đúng theo CẤU TRÚC thay vì theo phạm vi hàm. Thêm một unique index
+            // vào đường phê duyệt thì khối này tự động không khớp nữa và rơi xuống 409 chung —
+            // đúng, thay vì âm thầm gán nhầm câu nghiệp vụ.
+            //
+            // ✅ Cũng thoát bẫy RetryLimitExceededException: khuôn cũ so khớp MỘT tầng.
+            catch (Exception ex) when (
+                ConflictClassifier.IsUniqueViolation(ex, DbConstraints.InventoryAdjustmentLogAuditSerial))
             {
                 _logger.LogWarning(ex,
                     "Phê duyệt trùng cho phiếu kiểm kê {CheckId} — unique index đã chặn.", checkId);

@@ -96,32 +96,6 @@ namespace PBL3.Core.Entities
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
         public DateTime? SoldDate { get; set; }
 
-        /// <summary>
-        /// Concurrency token do SQL Server tự sinh (<c>rowversion</c>). Không gán tay, không backfill.
-        /// </summary>
-        /// <remarks>
-        /// 🔴 <b>VÌ SAO CẦN:</b> LoadProbe S06 đo được sổ tổn thất nhân <b>5</b> — 5 lần phê duyệt
-        /// song song cùng một phiếu kiểm kê, cả 5 đều <c>200</c>, và một serial khách vừa mua bị
-        /// ghi đè thẳng từ <c>Sold</c> sang <c>Lost</c>. Nguyên nhân: EF sinh
-        /// <c>UPDATE ProductSerials SET Status=5 WHERE Id=@p</c> — <b>không có mệnh đề trạng thái
-        /// nào</b>. Có token thì câu lệnh thành <c>… WHERE Id=@p AND RowVersion=@v</c> → 0 dòng
-        /// bị ảnh hưởng → <see cref="DbUpdateConcurrencyException"/> → transaction rollback →
-        /// <b>all-or-nothing cho cả lần phê duyệt</b>, đúng điều mong muốn.
-        ///
-        /// ⚠️ <b>Giới hạn 1 — xung đột GIẢ.</b> <c>rowversion</c> đổi khi <b>bất kỳ</b> cột nào của
-        /// hàng đổi, không riêng cột ta quan tâm. Hai thao tác sửa hai cột <em>khác nhau</em> vẫn
-        /// đụng nhau. Đó là cái giá của token cấp-hàng; đừng "sửa" bằng cách bỏ token.
-        ///
-        /// 🚨 <b>Giới hạn 2 — <c>ExecuteUpdateAsync</c> BỎ QUA HOÀN TOÀN token này.</b> Nó đi
-        /// thẳng xuống SQL, không qua Change Tracker. Ai đó sau này chuyển một đường ghi từ
-        /// tracked-write sang <c>ExecuteUpdate</c> sẽ <b>âm thầm gỡ mất</b> lớp bảo vệ này, và
-        /// không có gì báo lỗi — comment này là thứ duy nhất chặn điều đó. Nếu chuyển, phải tự
-        /// đưa vị từ trạng thái vào mệnh đề <c>Where</c> (xem
-        /// <c>InventoryCheckService.ApproveAsync</c> để lấy mẫu).
-        /// </remarks>
-        [Timestamp]
-        public byte[]? RowVersion { get; set; }
-
         [ForeignKey("VariantId")]
         public virtual ProductVariant Variant { get; set; } = null!;
         [ForeignKey("ImportReceiptId")]
@@ -165,12 +139,6 @@ namespace PBL3.Core.Entities
 
         public bool IsDeleted { get; set; }
 
-        /// <summary>
-        /// Concurrency token do SQL Server tự sinh. Xem giải thích đầy đủ + <b>hai giới hạn</b>
-        /// ở <see cref="ProductSerial.RowVersion"/> — đặc biệt: <c>ExecuteUpdateAsync</c> bỏ qua nó.
-        /// </summary>
-        [Timestamp]
-        public byte[]? RowVersion { get; set; }
 
         [ForeignKey("ScopeCategoryId")]
         public virtual Category? ScopeCategory { get; set; }

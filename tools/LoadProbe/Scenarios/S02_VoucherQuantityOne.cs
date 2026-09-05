@@ -16,6 +16,27 @@ public sealed class S02_VoucherQuantityOne : ScenarioBase
     private const int Customers = 20;
     private const string VoucherCode = "LP-VQ1";
 
+    /// <summary>
+    /// Mã như NGƯỜI DÙNG gõ — cố ý khác hoa/thường với <see cref="VoucherCode"/> đã lưu.
+    /// </summary>
+    /// <remarks>
+    /// 🚨 Trước đợt 7, kịch bản này seed và gửi CÙNG MỘT hằng, nên nó <b>mù</b> với việc tra mã
+    /// có phân biệt hoa/thường hay không. SQL Server dùng collation CI mặc định nên bất biến
+    /// "gõ thường vẫn khớp mã hoa" đang đúng — nhưng đúng <b>nhờ cấu hình DB</b>, không nhờ dòng
+    /// code nào: không có <c>HasCollation</c> nào trong repo, và ba đường GHI của các cột này
+    /// (<c>ProductVariantService</c>, <c>ProductService</c>, <c>ImportReceiptService</c>) thậm
+    /// chí không chuẩn hoá.
+    ///
+    /// Tách hai hằng biến kịch bản sẵn có thành phép đo trực tiếp cho quyết định lớn nhất của
+    /// đợt chuyển PostgreSQL: <c>Vouchers.Code</c> có phải <c>citext</c> không. Trên PostgreSQL
+    /// KHÔNG có citext, <c>GetByCodesWithCategoriesAsync</c> trả rỗng ⇒ kịch bản này đỏ.
+    ///
+    /// ⚠️ Phải chạy XANH trên SQL Server trước khi chuyển — đó là ca đối chứng. Bỏ qua bước đó
+    /// thì một lần đỏ về sau không phân biệt được "citext hỏng" với "kịch bản vốn đã sai".
+    /// </remarks>
+    private const string VoucherCodeAsTyped = "lp-vq1";
+
+
     private List<ProbeCustomer> _customers = new();
     private int _voucherId;
 
@@ -34,8 +55,8 @@ public sealed class S02_VoucherQuantityOne : ScenarioBase
 
         // Xoá bản của lần chạy trước để kịch bản chạy lại được nhiều lần.
         await db.Database.ExecuteSqlRawAsync(
-            "DELETE FROM VoucherUsages WHERE VoucherId IN (SELECT Id FROM Vouchers WHERE Code = {0});" +
-            "DELETE FROM Vouchers WHERE Code = {0};", VoucherCode);
+            "DELETE FROM \"VoucherUsages\" WHERE \"VoucherId\" IN (SELECT \"Id\" FROM \"Vouchers\" WHERE \"Code\" = {0});" +
+            "DELETE FROM \"Vouchers\" WHERE \"Code\" = {0};", VoucherCode);
 
         var voucher = new Voucher
         {
@@ -71,7 +92,7 @@ public sealed class S02_VoucherQuantityOne : ScenarioBase
                 BuyNowQuantity = 1,
                 PaymentMethod = 0,
                 ShippingFee = 0,
-                VoucherCodes = new List<string> { VoucherCode },
+                VoucherCodes = new List<string> { VoucherCodeAsTyped },
                 Note = "LoadProbe S02"
             }, customer.Token);
         });

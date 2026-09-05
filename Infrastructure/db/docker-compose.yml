@@ -1,4 +1,10 @@
 # infrastructure/db/docker-compose.yml
+#
+# Trong lúc chuyển engine (đợt 7) CẢ HAI cùng chạy, và đó là CỐ Ý:
+# `S10` cần đo trên SQL Server để có ca đối chứng — chứng minh bất biến hoa/thường
+# hiện đang đúng NHỜ collation CI mặc định, chứ không nhờ dòng code nào. Không có
+# điểm đo đó thì "PostgreSQL làm hỏng nó" chỉ là lời khẳng định.
+# Xoá service `sqlserver` sau khi đợt 7 xong và LoadProbe 10/10 trên PostgreSQL.
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2025-latest
@@ -14,6 +20,33 @@ services:
       - sqlserver_data:/var/opt/mssql
     restart: unless-stopped
 
+  postgres:
+    # Ghim MAJOR thôi. 17.5/17.6 hết hỗ trợ 31/10/2026 nên ghim minor là tự tạo việc;
+    # RDS cũng dùng engine_version = "17" (prefix match) cho cùng lý do.
+    image: postgres:17
+    container_name: hushstore_postgres_dev
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=HushStoreDb
+      - POSTGRES_USER=hushstore
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-${SA_PASSWORD}}
+      - TZ=Asia/Ho_Chi_Minh
+      # Ép collation/ctype giống RDS mặc định. KHÔNG đặt collation
+      # non-deterministic ở đây: PostgreSQL cấm LIKE trên nó, mà repo có 8 chỗ
+      # .Contains() dịch thành LIKE. citext ở tầng cột mới là lời giải — xem §B1.
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hushstore -d HushStoreDb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   sqlserver_data:
     name: hushstore_sqlserver_data
+  postgres_data:
+    name: hushstore_postgres_data

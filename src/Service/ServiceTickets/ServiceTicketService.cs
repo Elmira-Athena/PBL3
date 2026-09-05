@@ -1,12 +1,13 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using PBL3.Core.Entities;
+using PBL3.Core.Constants;
 using PBL3.Core.Exceptions;
+using PBL3.Infrastructure.Concurrency;
 using PBL3.Core.Interfaces;
 using PBL3.Infrastructure.Data;
 using PBL3.Shared.DTOs.ServiceTickets;
@@ -245,9 +246,20 @@ namespace PBL3.Service.ServiceTickets
             // thông báo dù họ thua cuộc đua hay bị chặn từ đầu. Đó là lý do kế hoạch đợt 3 ghi
             // "để service call-site cung cấp thông báo theo ngữ cảnh".
             //
-            // 🚨 Nhận diện bằng SỐ LỖI (2601/2627), KHÔNG dò nội dung ex.Message. Chuỗi đó là
-            // tiếng Anh, đổi theo phiên bản SQL Server, và dò chuỗi là đúng cái bẫy #7.
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+            // 🚨 Nhận diện bằng TÊN CONSTRAINT, không dò ex.Message (chuỗi tiếng Anh, đổi theo
+            // phiên bản — đúng bẫy #7) và cũng không chỉ dò "vi phạm unique nào đó".
+            //
+            // ✅ Đợt 7: trước đây khối này bắt `SqlException { Number: 2601 or 2627 }` — tức MỌI
+            // vi phạm unique trong hàm — rồi dựa vào một lập luận CỤC BỘ ("ở đây chỉ có một
+            // nguồn") để khẳng định đó là serial trùng. Lập luận đúng, nhưng không gì bắt lỗi khi
+            // nó hết đúng. PostgreSQL cho biết TÊN constraint, nên nay khớp đích danh — sai
+            // constraint thì rơi xuống 409 chung, không bịa ra câu nghiệp vụ sai sự thật.
+            //
+            // ✅ Và nó thoát luôn bẫy RetryLimitExceededException: khuôn cũ so khớp MỘT tầng
+            // InnerException, nên khi execution strategy bọc lại thì không khớp gì cả.
+            // IsUniqueViolation đi hết chuỗi.
+            catch (Exception ex) when (
+                ConflictClassifier.IsUniqueViolation(ex, DbConstraints.ServiceTicketSerialOpen))
             {
                 _logger.LogWarning(ex,
                     "Tiếp nhận trùng cho serial {SerialNumber} — unique index đã chặn.",
