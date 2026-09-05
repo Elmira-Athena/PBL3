@@ -110,3 +110,29 @@ chạy seed, mà seed *có* `setval`, nên tới `[3b]` sequence đã được v
   file), và **cost guard chưa vá** — `cost_guard.py:264` vẫn xếp `InvalidDBInstanceState`
   vào `notes` với câu *"trạng thái đích vẫn đạt được"*, đúng mã lỗi RDS trả về khi instance
   có read replica.
+
+---
+
+## 6. Bổ sung — deadlock `40P01` đã đo trên PostgreSQL (không chép từ SQL Server)
+
+§5 ở trên viết khi mục này còn trống. Đã đo xong cùng ngày, bằng **deadlock thật** ép từ
+PostgreSQL (hai transaction khoá hai hàng theo thứ tự ngược nhau, gặp nhau ở `Barrier`):
+
+| Ca | Đo được |
+|---|---|
+| Deadlock thật, exception **trần** | `PostgresException`, `SqlState = 40P01` → `IsConflict = True`, `Classify` = *"Hệ thống đang bận, vui lòng thử lại sau giây lát."* |
+| Cùng exception **bọc 3 lớp** (`RetryLimitExceededException` → `DbUpdateException` → `InvalidOperationException` → gốc) | `IsConflict = True`, `Classify` ra **cùng câu** |
+| **Đối chứng âm**: bảng không tồn tại (`SqlState = 42P01`) | `IsConflict = False` |
+
+Ca thứ hai là ca đáng giá: `EnableRetryOnFailure` đang bật và `40P01` **nằm trong danh sách
+transient của Npgsql**, nên hết lượt thử lại thì EF bọc nguyên nhân gốc lại. Phép so khớp
+**một tầng** sẽ không khớp cái nào ⇒ **500**. `ConflictClassifier` đi hết chuỗi
+`InnerException` nên bắt được — đúng cái đã đo trên SQL Server với `1205`, nay đo lại trên
+đúng engine đang chạy thay vì chép kết luận sang.
+
+**Từ đó suy ra 409, và suy ra được vì handler không có nhánh nào khác:**
+`ConflictExceptionHandler.TryHandleAsync` chỉ làm `Classify(exception)`, `null` thì trả
+`false`, khác `null` thì ghi `409`. Mà nhánh "`Classify` khác null ⇒ HTTP 409" đã được đo
+riêng **19 lần** trong lần chạy 1 instance (S03 `409×9`, S08 `409×1`, …). Hai mắt xích khớp
+nhau ⇒ `40P01` → `409`.
+

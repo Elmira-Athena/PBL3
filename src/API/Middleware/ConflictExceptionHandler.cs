@@ -23,18 +23,25 @@ namespace PBL3.API.Middleware
     /// sau thì handler tổng đã ghi <c>500</c> và kết thúc response — file này thành code chết
     /// mà không có gì báo lỗi.
     ///
-    /// ⚠️ <b>Ở đây SQL Server thua PostgreSQL một bậc.</b> <c>SqlException</c>
-    /// <b>không có</b> thuộc tính tên constraint, nên không tra bảng "constraint → thông báo"
-    /// sạch sẽ được. Cách đúng trên SQL Server là <b>để service call-site cung cấp thông báo
-    /// theo ngữ cảnh</b> — nó biết nó đang làm gì — còn handler này chỉ lo <b>status code</b>.
-    /// Đừng parse <c>ex.Message</c> để đoán constraint nào: đó là dùng biểu diễn chuỗi thay
-    /// cho ngữ nghĩa, đúng cái bẫy #7. Sau khi chuyển PostgreSQL (đợt 7) thì đổi sang tra
-    /// theo <c>PostgresException.ConstraintName</c>, sạch hơn.
+    /// ⚠️ <b>Handler này CỐ Ý ở lại mức chung, kể cả sau khi đã có
+    /// <c>PostgresException.ConstraintName</c>.</b> Đợt 7 mở ra khả năng tra bảng
+    /// "constraint → thông báo" ngay tại đây, và đã <b>không</b> làm. Lý do: câu nói đúng
+    /// việc gì vừa hỏng chỉ có <b>service call-site</b> biết — nó biết nó đang tiếp nhận
+    /// serial hay đang phê duyệt phiếu kiểm kê. Một bảng tra tập trung ở đây sẽ phải đoán
+    /// ngữ cảnh từ tên constraint, và sẽ đoán sai ngay khi một constraint được dùng ở hai
+    /// đường nghiệp vụ khác nhau. Vì vậy: <b>call-site lo CÂU CHỮ, handler này lo STATUS
+    /// CODE.</b> Hai chỗ dùng <c>ConflictClassifier.IsUniqueViolation(ex, tên)</c> là
+    /// <c>ServiceTicketService</c> và <c>InventoryCheckService</c> — chúng <b>dịch nghĩa</b>,
+    /// còn đây chỉ <b>xếp loại</b>.
+    ///
+    /// Và tuyệt đối đừng parse <c>ex.Message</c> để đoán constraint nào: đó là dùng biểu diễn
+    /// chuỗi thay cho ngữ nghĩa, đúng cái bẫy #7 — chuỗi ấy tiếng Anh và đổi theo phiên bản.
     ///
     /// 🚨 <b>Việc PHÂN LOẠI không nằm ở file này — nó ở
     /// <see cref="ConflictClassifier"/>, và phải ở đó.</b> Trước kia file này có bản phân loại
     /// RIÊNG, rộng hơn danh sách mà 27 chốt controller cho thoát ra; phần dôi ra
-    /// (<c>1205</c> deadlock, <c>ConcurrentModificationException</c>) là <b>code chết</b> vì
+    /// (deadlock — <c>1205</c> thời SQL Server, nay là <c>40P01</c> —
+    /// và <c>ConcurrentModificationException</c>) là <b>code chết</b> vì
     /// <c>catch (Exception)</c> ở controller nuốt trước. Hai danh sách trôi khỏi nhau mà không
     /// gì báo. Nay controller hỏi <c>ConflictClassifier.IsConflict</c> và handler hỏi
     /// <c>ConflictClassifier.Classify</c> — <b>cùng một hàm</b>, nên chúng không thể lệch nữa.
