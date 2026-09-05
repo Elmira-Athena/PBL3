@@ -149,7 +149,7 @@ render() {
     age="$(hs_age "$(jq -r '.LoadBalancers[0].CreatedTime // ""' "$TMP/alb.json")")"
     c="$(hs_cost "${age:-0}" "$HS_RATE_ALB")"; add_spent "$c"
     dns="$(jq -r '.LoadBalancers[0].DNSName // ""' "$TMP/alb.json")"
-    if [ "$st" = "active" ]; then tally up; note="$dns"
+    if [ "$st" = "active" ]; then tally up; ALB_UP=1; note="$dns"
     else tally transit; note="đang provisioning, thường ~3m"; fi
     row ALB "$st" "$(hs_hms "${age:-0}")" "$HS_RATE_ALB" "$c" "$note"
   else
@@ -266,7 +266,24 @@ render() {
   st="$(jq -r '.DBInstances[0].DBInstanceStatus // ""' "$TMP/rds.json")"
   if [ -n "$st" ]; then
     ev="$(jq -r '[.Events[]? | select(.Message | test("^DB instance (started|stopped)$"))] | last | .Date // ""' "$TMP/rdsev.json" 2>/dev/null)"
+
+    # 🚨 InstanceCreateTime LÀ SÀN, VÀ THIẾU NÓ THÌ DÒNG TIỀN SAI NHIỀU LẦN.
+    # `describe-events` tra theo IDENTIFIER, mà identifier được TÁI SỬ DỤNG khi
+    # instance bị xoá rồi dựng lại. Sau apply đợt 7 (xoá bản SQL Server, dựng bản
+    # PostgreSQL cùng tên), sự kiện start/stop mới nhất là của instance ĐÃ CHẾT —
+    # và nó còn là một sự kiện "stopped". Bản trước lấy đúng mốc đó làm "chạy từ
+    # lúc nào" và in ra: RDS available, 4d 09h, đã tốn $10.337 — cho một instance
+    # 20 phút tuổi chưa tốn tới 2 xu.
+    # Sai theo hướng PHÓNG ĐẠI nên không ai mất tiền vì nó, nhưng một đồng hồ
+    # tiền báo gấp 500 lần thì lần sau không ai tin nó nữa, kể cả khi nó đúng.
+    crt="$(jq -r '.DBInstances[0].InstanceCreateTime // ""' "$TMP/rds.json" 2>/dev/null)"
     age="$(hs_age "$ev")"
+    age_crt="$(hs_age "$crt")"
+    # Tuổi NHỎ HƠN = mốc MUỘN HƠN = mốc đúng. Instance dựng lại thì age_crt nhỏ
+    # hơn; instance được start sau khi dựng thì sự kiện mới hơn và thắng.
+    if [ -n "${age_crt:-}" ] && { [ -z "${age:-}" ] || [ "$age_crt" -lt "$age" ]; }; then
+      age="$age_crt"
+    fi
     tstr="-"; [ -n "$age" ] && tstr="$(hs_hms "$age")"
     rate="$HS_RATE_RDS_STOPPED"; rcost="-"
     case "$st" in
@@ -386,9 +403,19 @@ render() {
   if [ "$TRANSIT" -gt 0 ]; then
     verdict="${C_YELLOW}ĐANG CHUYỂN TRẠNG THÁI${C_RESET} — chưa dùng được, chờ thêm"
     code=20
-  elif [ "$UP" -gt 0 ]; then
+  elif [ "$UP" -gt 0 ] && [ "${ALB_UP:-0}" = "1" ]; then
     verdict="${C_GREEN}ĐANG BẬT${C_RESET} — mở browser được"
     code=0
+  elif [ "$UP" -gt 0 ]; then
+    # 🚨 "CÓ THỨ ĐANG TỐN TIỀN" VÀ "TRANG WEB VÀO ĐƯỢC" LÀ HAI CÂU KHÁC NHAU,
+    # và bản trước gộp chúng làm một. Sau apply đợt 7, chỉ RDS chạy còn
+    # enable_alb = false — không có load balancer nào để mở, vậy mà dòng kết
+    # luận vẫn nói "mở browser được". Người đọc thử, không vào được, rồi đi tìm
+    # lỗi ở chỗ không có lỗi.
+    # Hướng sai còn nguy hiểm hơn ở chiều ngược lại: nó khiến "đang tốn tiền"
+    # trông như "đang phục vụ", tức làm người ta ÍT muốn tắt đi.
+    verdict="${C_YELLOW}BẬT MỘT PHẦN${C_RESET} — đang tốn tiền nhưng CHƯA phục vụ được (không có ALB)"
+    code=20
   else
     verdict="${C_DIM}ĐANG TẮT${C_RESET} — không tốn phí theo giờ"
     code=10
