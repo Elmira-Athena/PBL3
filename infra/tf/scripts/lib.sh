@@ -66,8 +66,23 @@ HS_RATE_ALB=0.0252        # APS1, không phải $0.0225 của us-east-1
 HS_RATE_NAT=0.0590        # APS1, không phải $0.045 của us-east-1
 HS_RATE_EIP_IDLE=0.005
 HS_RATE_EC2=0.0132        # t3.micro APS1
-HS_RATE_RDS_UP=0.098      # instance $0.031 + CPU surplus $0.067
-HS_RATE_RDS_STOPPED=0.004 # storage gp2 20GB — tính cả khi stopped
+# ⚠️ HAI SỐ DƯỚI ĐÂY ĐO TRÊN sqlserver-ex/db.t3.micro/gp2 VÀ CỐ Ý CHƯA SỬA SAU
+# KHI CHUYỂN POSTGRESQL (đợt 7). Chúng đáng tin CHÍNH VÌ là số đo, không phải số
+# ước lượng — thay bằng một con số đoán là biến bảng chi phí từ "đã đo" thành
+# "nghe hợp lý", mà không có gì đánh dấu sự khác nhau đó.
+#
+# 2/3 của $0.098 là CPU credit surplus, vì SQL Server Express ngồi ~36% CPU
+# NGAY CẢ KHI KHÔNG TẢI trong khi baseline t3.micro là 10%. PostgreSQL idle thấp
+# hơn nhiều, nên $0.098 giờ là CẬN TRÊN — bảng sẽ báo đắt hơn thực tế, tức lệch
+# về phía an toàn.
+#
+# 🚨 T4g CŨNG chạy unlimited mode, credit surplus vẫn $0.075/vCPU-giờ. Khoản
+# surplus chỉ biến mất NẾU PostgreSQL thật sự idle dưới baseline 10% — đó là giả
+# thuyết, chưa phải phép đo. Chỉ sửa hai số này (và docs/terraform-runbook.md)
+# sau khi vẽ CPUUtilization + CPUCreditBalance + CPUSurplusCreditBalance trên
+# cùng cửa sổ VÀ Cost Explorer xác nhận sau 24-48h.
+HS_RATE_RDS_UP=0.098      # instance $0.031 + CPU surplus $0.067 — đo trên SQL Server, xem cảnh báo trên
+HS_RATE_RDS_STOPPED=0.004 # storage 20GB — tính cả khi stopped (gp2 lúc đo; nay gp3, cùng bậc giá)
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_RESET=$'\033[0m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'

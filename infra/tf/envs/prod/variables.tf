@@ -86,8 +86,21 @@ variable "enable_deny_demo" {
 }
 
 variable "db_engine_version" {
-  description = "Version của sqlserver-ex. Lấy bằng: aws rds describe-db-engine-versions --engine sqlserver-ex --query 'sort_by(DBEngineVersions,&EngineVersion)[-1].EngineVersion' --output text"
+  description = "Major version của PostgreSQL. Dùng prefix ('17'), ĐỪNG ghim minor — 17.5/17.6 hết hỗ trợ 31/10/2026. Liệt kê bằng: aws rds describe-db-engine-versions --engine postgres --query 'DBEngineVersions[].EngineVersion' --output text"
   type        = string
+}
+
+# ─── HAI CÔNG TẮC ĐỢT 7 — cả hai mặc định TẮT ────────────────────
+variable "enable_multi_az" {
+  description = "Bật Multi-AZ cho RDS trong cửa sổ demo. Standby KHÔNG phục vụ đọc — availability, không phải read scaling."
+  type        = bool
+  default     = false
+}
+
+variable "enable_read_replica" {
+  description = "Dựng read replica. Bật là AWS TỪ CHỐI stop primary ⇒ cơ chế tắt tiền mất tác dụng. Chỉ bật trong cửa sổ đo, huỷ ngay sau đó."
+  type        = bool
+  default     = false
 }
 
 variable "alert_email" {

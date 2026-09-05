@@ -30,7 +30,7 @@ resource "aws_security_group" "web" {
 
 resource "aws_security_group" "rds" {
   name        = "${var.project}-rds-sg"
-  description = "RDS SQL Server: chi nhan 1433 tu sg-web, egress rong"
+  description = "RDS PostgreSQL: chi nhan 5432 tu sg-web, egress rong"
   vpc_id      = var.vpc_id
 
   tags = { Name = "${var.project}-rds-sg" }
@@ -82,11 +82,11 @@ locals {
     }
 
     # sg-rds: đúng 1 rule.
-    "rds-mssql" = {
+    "rds-postgres" = {
       sg_id       = aws_security_group.rds.id
       description = "SQL Server, chi tu container instance"
-      from_port   = 1433
-      to_port     = 1433
+      from_port   = 5432
+      to_port     = 5432
       cidr_ipv4   = null
       source_sg   = aws_security_group.web.id
     }
@@ -111,14 +111,14 @@ locals {
       target_sg   = aws_security_group.web.id
     }
 
-    # sg-web: 1433 tới RDS, và 80/443 ra internet qua NAT để pull ECR,
+    # sg-web: 5432 tới RDS, và 80/443 ra internet qua NAT để pull ECR,
     # gọi SSM, yum update. NAT Gateway không gắn được SG nên đây là chỗ
     # duy nhất kiểm soát egress ở tầng SG.
     "web-to-rds" = {
       sg_id       = aws_security_group.web.id
       description = "Ket noi SQL Server"
-      from_port   = 1433
-      to_port     = 1433
+      from_port   = 5432
+      to_port     = 5432
       cidr_ipv4   = null
       target_sg   = aws_security_group.rds.id
     }

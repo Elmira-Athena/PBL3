@@ -106,16 +106,16 @@ run "web_chi_nhan_traffic_tu_sg_alb" {
   }
 }
 
-run "rds_chi_nhan_1433_tu_sg_web_va_khong_co_egress" {
+run "rds_chi_nhan_5432_tu_sg_web_va_khong_co_egress" {
   command = plan
 
   assert {
     condition = alltrue([
-      aws_vpc_security_group_ingress_rule.all["rds-mssql"].from_port == 1433,
-      aws_vpc_security_group_ingress_rule.all["rds-mssql"].to_port == 1433,
-      aws_vpc_security_group_ingress_rule.all["rds-mssql"].cidr_ipv4 == null,
+      aws_vpc_security_group_ingress_rule.all["rds-postgres"].from_port == 5432,
+      aws_vpc_security_group_ingress_rule.all["rds-postgres"].to_port == 5432,
+      aws_vpc_security_group_ingress_rule.all["rds-postgres"].cidr_ipv4 == null,
     ])
-    error_message = "sg-rds phải nhận đúng 1433 và chỉ qua referenced_security_group_id (sg-web), không qua CIDR."
+    error_message = "sg-rds phải nhận đúng 5432 và chỉ qua referenced_security_group_id (sg-web), không qua CIDR."
   }
 
   assert {

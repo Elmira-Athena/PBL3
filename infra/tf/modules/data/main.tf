@@ -3,12 +3,21 @@ locals {
 }
 
 # ─── MẬT KHẨU SINH TỰ ĐỘNG ───────────────────────────────────────
-# RDS SQL Server cấm các ký tự: / ' " @ và khoảng trắng trong master
-# password. override_special dưới đây đã loại hết chúng.
+# RDS PostgreSQL cấm / ' " @ và khoảng trắng trong master password.
+# override_special dưới đây đã loại hết chúng.
+#
+# ⚠️ ĐÃ BỎ THÊM DẤU `=` so với bản SQL Server, và lý do không nằm ở phía AWS mà
+# ở phía CLIENT: Npgsql đọc chuỗi kết nối theo cặp `key=value;`. Một mật khẩu
+# chứa `=` không chắc chắn parse đúng ở mọi đường (chuỗi còn đi qua SSM, qua
+# `secrets` của ECS, qua biến môi trường), và khi hỏng thì triệu chứng là
+# "password authentication failed" — một câu chỉ thẳng vào sai mật khẩu, tức
+# đánh lạc hướng hoàn toàn khỏi nguyên nhân thật. Bỏ một ký tự khỏi bảng chữ
+# cái của mật khẩu 32 ký tự là cái giá không đáng kể để đổi lấy việc loại hẳn
+# một giờ đi tìm nhầm chỗ.
 resource "random_password" "db" {
   length           = 32
   special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
+  override_special = "!#$%&*()-_+[]{}<>:?"
   min_upper        = 2
   min_lower        = 2
   min_numeric      = 2
@@ -29,29 +38,50 @@ resource "aws_db_subnet_group" "this" {
   tags = { Name = "${var.project}-db-subnet-group" }
 }
 
-# ─── RDS SQL SERVER EXPRESS ──────────────────────────────────────
+# ─── RDS POSTGRESQL ──────────────────────────────────────────────
+# Vì sao đổi khỏi sqlserver-ex — lý do là EDITION, không phải kiến trúc:
+#   · "Read replicas are only available on the SQL Server Enterprise Edition"
+#   · "...only available for DB instance classes with four or more vCPUs"
+# Stack cũ chạy sqlserver-ex trên db.t3.micro (2 vCPU) ⇒ hỏng CẢ HAI điều kiện.
+# Không có cách cấu hình nào mở được read replica; EE thì gấp nhiều lần ngân sách.
+#
+# Lý do thứ hai, quan trọng ngang: "RDS for SQL Server doesn't support stopping a
+# DB instance in a Multi-AZ deployment." PostgreSQL thì stop được. Nghĩa là bật
+# Multi-AZ trên PostgreSQL KHÔNG phá cơ chế tắt tiền (up.sh/down.sh/cost guard)
+# — trên SQL Server thì có.
 resource "aws_db_instance" "this" {
   identifier = "${var.project}-db-tf"
 
-  engine         = "sqlserver-ex"
+  engine         = "postgres"
   engine_version = var.engine_version
-  license_model  = "license-included"
   instance_class = var.instance_class
+  # KHÔNG có license_model: PostgreSQL là engine open-source, không có license để
+  # khai. Để lại "license-included" là apply đỏ ngay — hỏng ồn ào, không sao.
 
   allocated_storage = var.allocated_storage
-  storage_type      = "gp2"
+  storage_type      = "gp3"
   storage_encrypted = true
 
   username = var.db_username
   password = random_password.db.result
 
-  # KHÔNG đặt db_name — aws_db_instance.db_name không được hỗ trợ cho engine
-  # SQL Server. Database HushStoreDB do EF Core migration bundle tạo ở Task 13.
+  # ⚠️ CÓ đặt db_name — ngược hẳn bản SQL Server, nơi comment ở đúng chỗ này ghi
+  # "KHÔNG đặt db_name vì aws_db_instance.db_name không hỗ trợ SQL Server".
+  # PostgreSQL tạo database NGAY LÚC CREATE instance. Bỏ trống thì RDS tạo một
+  # database tên `postgres` và ứng dụng nối vào một DB rỗng — mà migration bundle
+  # sẽ chạy được ở đó, seed cũng chạy được, nên KHÔNG có gì đỏ; chỉ là toàn bộ hệ
+  # thống sống trong một database mang tên sai.
+  db_name = var.db_name
 
   db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = [var.rds_sg_id]
   publicly_accessible    = false
-  multi_az               = false
+
+  # Công tắc, mặc định false. Standby của Multi-AZ KHÔNG phục vụ đọc
+  # ("You can't configure the secondary DB instance to accept database read
+  # activity") — Multi-AZ là AVAILABILITY, replica mới là TẢI ĐỌC. Báo cáo phải
+  # nói đúng hai chuyện đó, đừng gộp.
+  multi_az = var.enable_multi_az
 
   backup_retention_period    = var.backup_retention_days
   auto_minor_version_upgrade = true
@@ -99,10 +129,59 @@ resource "aws_db_instance" "this" {
   tags = { Name = "${var.project}-db-tf" }
 }
 
+# ─── READ REPLICA — TÀI NGUYÊN PHÙ DU, MẶC ĐỊNH TẮT ──────────────
+# 🔴 `enable_read_replica = false` là DEFAULT AN TOÀN, không phải default tiết
+# kiệm. Đọc trước khi bật lần đầu:
+#
+#   1. AWS: "You can't stop a DB instance that has a read replica, or that is a
+#      read replica." Replica PHÁ cơ chế tắt tiền của cả stack. Nó phải được
+#      dựng và HUỶ trong cùng một cửa sổ đo, không để qua đêm.
+#   2. Cộng với "If you don't manually start your DB instance after it is
+#      stopped for seven consecutive days, RDS automatically starts your DB
+#      instance for you" — một lần quên huỷ là hoá đơn chạy nhiều ngày.
+#   3. Cost guard đã được vá để BÁO chuyện này (findings ⇒ có email) thay vì
+#      nuốt nó thành notes. Vá đó phải có TRƯỚC lần bật đầu tiên — nếu không,
+#      guard sẽ nói "đã tắt xong" trong khi tiền vẫn chạy. Xem
+#      modules/costguard/src/cost_guard.py và tests/test_cost_guard_rds.py CA 2.
+#
+# THỨ TỰ BẮT BUỘC khi tắt: huỷ replica (enable_read_replica = false + apply)
+# TRƯỚC, rồi mới stop primary. Đảo lại thì stop bị AWS từ chối.
+#
+# Không cần subnet/NACL mới: VPC đã có 2 AZ, db subnet group đã phủ cả hai, và
+# NACL db gắn cả hai subnet — replica rơi vào AZ nào cũng đã có đường.
+resource "aws_db_instance" "replica" {
+  count = var.enable_read_replica ? 1 : 0
+
+  identifier          = "${var.project}-db-tf-replica"
+  replicate_source_db = aws_db_instance.this.identifier
+  instance_class      = var.replica_instance_class
+
+  # KHÔNG khai username/password/db_name/allocated_storage: replica thừa hưởng
+  # tất cả từ primary, và khai lại là apply đỏ. Cũng KHÔNG khai
+  # db_subnet_group_name — replica cùng region dùng lại subnet group của nguồn.
+  vpc_security_group_ids = [var.rds_sg_id]
+  publicly_accessible    = false
+  storage_encrypted      = true
+
+  # Replica không tự backup (backup_retention_period = 0 là mặc định của replica).
+  skip_final_snapshot = true
+  deletion_protection = false
+
+  # Không Performance Insights — cùng lý do như primary.
+  performance_insights_enabled = false
+
+  tags = {
+    Name = "${var.project}-db-tf-replica"
+    # Tag này để status.sh và người đọc console nhìn phát là biết nó không được
+    # phép sống qua đêm.
+    Lifecycle = "ephemeral-demo-window-only"
+  }
+}
+
 # ─── SSM PARAMETER STORE (SecureString, miễn phí) ────────────────
 resource "aws_ssm_parameter" "db_password" {
   name        = "${local.ssm_prefix}/db-password"
-  description = "Master password cua RDS SQL Server"
+  description = "Master password cua RDS PostgreSQL"
   type        = "SecureString"
   value       = random_password.db.result
 
@@ -114,23 +193,38 @@ resource "aws_ssm_parameter" "connection_string" {
   description = "Connection string day du, inject vao container qua khoi secrets cua ECS"
   type        = "SecureString"
 
-  # Encrypt=True + TrustServerCertificate=False: bắt buộc TLS VÀ xác thực cert của
-  # RDS thật, không tin mù. TrustServerCertificate=True (bản trước) vẫn mã hoá
-  # nhưng bỏ qua kiểm cert, tức về nguyên tắc vẫn bị MITM ngay trong VPC.
-  # ĐIỀU KIỆN: cert của RDS do Amazon RDS CA cấp, mà CA đó KHÔNG có trong trust
-  # store mặc định — nên cả image API (Dockerfile) và image migrator
-  # (Dockerfile.migrator) đều đã cài bundle CA của region ap-southeast-1. Thiếu
-  # bước đó là app không kết nối được DB.
-  # Chỉ chuỗi PRODUCTION này xác thực cert; chuỗi local dev vẫn dùng
-  # TrustServerCertificate=True vì SQL Server trong container dùng cert tự ký.
+  # 🔴 `SSL Mode=VerifyFull` LÀ THUỘC TÍNH BẢO MẬT DỄ MẤT NHẤT CỦA CẢ ĐỢT NÀY.
+  # Npgsql mặc định `Prefer`: MÃ HOÁ NHƯNG KHÔNG XÁC THỰC CERT. Tụt về mặc định
+  # là mất đúng thứ ba dòng comment này đang bảo vệ, và mất IM LẶNG — kết nối vẫn
+  # thành công, log vẫn sạch, không có gì đỏ ở đâu cả. `Require` cũng không đủ:
+  # ở Npgsql nó vẫn không xác thực chain. Chỉ `VerifyFull` mới vừa xác thực cert
+  # vừa kiểm hostname.
+  #
+  # ĐIỀU KIỆN: cert của RDS do Amazon RDS CA cấp, CA đó KHÔNG có trong trust store
+  # mặc định — nên image API (Dockerfile) và image migrator (Dockerfile.migrator)
+  # đều cài bundle CA của ap-southeast-1 vào /usr/local/share/ca-certificates/.
+  # `Root Certificate` trỏ thẳng vào file đó: khác sqlcmd, Npgsql/libpq KHÔNG đọc
+  # trust store của hệ thống, nên `update-ca-certificates` một mình là chưa đủ.
+  # Thiếu đường dẫn này thì kết nối GÃY chứ không tụt xuống chế độ kém an toàn —
+  # đúng hướng hỏng ta muốn.
+  #
+  # Chuỗi local dev (devops/docker/docker-compose.multi.yml) dùng `SSL Mode=Disable`
+  # vì container postgres không bật TLS. ĐỪNG chép chuỗi đó lên đây.
+  #
+  # Ba tham số của bản SQL Server KHÔNG TỒN TẠI ở Npgsql và đã biến mất cùng nhau:
+  # Encrypt, TrustServerCertificate, MultipleActiveResultSets. Npgsql không cần
+  # MARS — nó dùng nhiều kết nối trong pool thay vì nhiều result set trên một.
   value = join("", [
-    "Server=${aws_db_instance.this.address},1433;",
+    "Host=${aws_db_instance.this.address};",
+    "Port=5432;",
     "Database=${var.db_name};",
-    "User Id=${var.db_username};",
+    "Username=${var.db_username};",
     "Password=${random_password.db.result};",
-    "Encrypt=True;",
-    "TrustServerCertificate=False;",
-    "MultipleActiveResultSets=True;",
+    "SSL Mode=VerifyFull;",
+    "Root Certificate=/usr/local/share/ca-certificates/rds-ap-southeast-1.crt;",
+    "Maximum Pool Size=30;",
+    "Minimum Pool Size=2;",
+    "Timeout=15;",
   ])
 
   tags = { Name = "${var.project}-connection-string" }

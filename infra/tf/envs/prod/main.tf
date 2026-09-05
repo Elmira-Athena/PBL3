@@ -49,6 +49,9 @@ module "data" {
   db_subnet_ids  = module.network.db_subnet_ids
   rds_sg_id      = module.security.rds_sg_id
   engine_version = var.db_engine_version
+
+  enable_multi_az     = var.enable_multi_az
+  enable_read_replica = var.enable_read_replica
 }
 
 module "ecs" {

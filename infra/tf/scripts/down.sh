@@ -88,6 +88,23 @@ if [ "$(hs_tfvar_get enable_deny_demo)" = "true" ]; then
 fi
 hs_apply "xoá NAT + EIP"
 
+# ── READ REPLICA PHẢI CHẾT TRƯỚC PRIMARY ───────────────────────
+# 🔴 THỨ TỰ Ở ĐÂY KHÔNG PHẢI SỞ THÍCH. AWS: "You can't stop a DB instance that
+# has a read replica, or that is a read replica." Nếu còn replica thì lệnh
+# stop-db-instance ở BƯỚC 4 bị từ chối bằng InvalidDBInstanceState, và nhánh
+# `*)` của case dưới chỉ in một dòng warn màu vàng — script vẫn exit 0. Kết quả:
+# người chạy thấy down.sh "xong", trong khi CẢ primary lẫn replica vẫn tính đủ
+# tiền giờ. Cộng với việc RDS tự khởi động lại sau 7 ngày stopped, một lần bỏ
+# sót là hoá đơn chạy nhiều ngày.
+#
+# Đặt ở đây, SAU apply của bước 3 và TRƯỚC lệnh stop — không gộp vào apply trên
+# để dòng log nói đúng việc đang làm khi nó mất vài phút.
+if [ "$(hs_tfvar_get enable_read_replica)" = "true" ]; then
+  hs_warn "còn read replica — phải huỷ TRƯỚC khi stop primary, nếu không AWS từ chối lệnh stop"
+  hs_tfvar_set enable_read_replica false
+  hs_apply "huỷ read replica"
+fi
+
 hs_head "BƯỚC 4/5 — RDS"
 st="$(aws rds describe-db-instances --db-instance-identifier "$HS_DB" \
   --query 'DBInstances[0].DBInstanceStatus' --output text \
@@ -98,7 +115,17 @@ case "$st" in
     hs_ok "đã phát lệnh stop (mất ~5m để về stopped, không cần chờ)"
     ;;
   stopped|stopping) hs_ok "RDS đã ${st}" ;;
-  *) hs_warn "RDS đang ở ${st} — chưa stop được, chạy lại down.sh sau" ;;
+  *)
+    hs_warn "RDS đang ở ${st} — chưa stop được, chạy lại down.sh sau"
+    # Nêu đích danh nghi phạm hay gặp nhất, vì `modifying` do huỷ replica sinh ra
+    # trông giống hệt `modifying` do bất kỳ thay đổi nào khác.
+    rep="$(aws rds describe-db-instances --db-instance-identifier "$HS_DB" \
+      --query 'DBInstances[0].ReadReplicaDBInstanceIdentifiers' --output text \
+      --profile "$HS_PROFILE" --region "$HS_REGION" --no-cli-pager 2>/dev/null || echo "")"
+    if [ -n "$rep" ] && [ "$rep" != "None" ]; then
+      hs_warn "nguyên nhân: vẫn còn read replica ($rep). Đặt enable_read_replica=false rồi apply."
+    fi
+    ;;
 esac
 
 # ── Xác nhận độc lập — đừng chỉ tin terraform ───────────────────

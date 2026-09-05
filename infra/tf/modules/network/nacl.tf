@@ -28,8 +28,13 @@ locals {
   # THỨ TỰ RULE Ở ĐÂY LÀ ĐIỂM KỸ THUẬT CỐT LÕI — xem ghi chú ở đầu task.
   app_ingress = [
     # 90/95/115: DENY phải đứng trước rule 120
+    #
+    # 🔴 RULE 95 LÀ THỨ DUY NHẤT CHẶN RULE 120 MỞ CỔNG DB RA INTERNET. Nó tồn
+    # tại vì rule 120 buộc phải cho cả dải ephemeral 1024-65535, và 5432 nằm
+    # TRONG dải đó — y hệt 1433 trước đây. Xoá rule 95, hay quên đổi số cổng của
+    # nó khi đổi engine, là mở 5432 ra 0.0.0.0/0 mà KHÔNG có gì đỏ ở đâu cả.
     { no = 90, proto = "tcp", action = "deny", cidr = "0.0.0.0/0", from = 22, to = 22 },
-    { no = 95, proto = "tcp", action = "deny", cidr = "0.0.0.0/0", from = 1433, to = 1433 },
+    { no = 95, proto = "tcp", action = "deny", cidr = "0.0.0.0/0", from = 5432, to = 5432 },
     { no = 100, proto = "tcp", action = "allow", cidr = local.public_tier_cidr, from = 80, to = 80 },
     { no = 110, proto = "tcp", action = "allow", cidr = local.public_tier_cidr, from = 8080, to = 8080 },
     { no = 115, proto = "tcp", action = "deny", cidr = "0.0.0.0/0", from = 8080, to = 8080 },
@@ -39,7 +44,7 @@ locals {
   ]
 
   app_egress = [
-    { no = 100, proto = "tcp", action = "allow", cidr = local.db_tier_cidr, from = 1433, to = 1433 },
+    { no = 100, proto = "tcp", action = "allow", cidr = local.db_tier_cidr, from = 5432, to = 5432 },
     { no = 110, proto = "tcp", action = "allow", cidr = "0.0.0.0/0", from = 80, to = 80 },
     { no = 115, proto = "tcp", action = "allow", cidr = "0.0.0.0/0", from = 443, to = 443 },
     # Response về ALB. Chỉ tới public tier, KHÔNG mở ra 0.0.0.0/0.
@@ -48,7 +53,7 @@ locals {
 
   # ── nacl-db: chặt nhất, đúng 1 rule mỗi chiều ──────────────────
   db_ingress = [
-    { no = 100, proto = "tcp", action = "allow", cidr = local.app_tier_cidr, from = 1433, to = 1433 },
+    { no = 100, proto = "tcp", action = "allow", cidr = local.app_tier_cidr, from = 5432, to = 5432 },
   ]
 
   db_egress = [

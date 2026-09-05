@@ -23,7 +23,7 @@ enable_deny_demo = false
 #   aws rds describe-db-engine-versions --engine sqlserver-ex \
 #     --query 'sort_by(DBEngineVersions,&EngineVersion)[-1].EngineVersion' \
 #     --output text --profile hushstore
-db_engine_version = "16.00.4210.1.v1"
+db_engine_version = "17"
 
 # Email nhận cảnh báo chi phí. AWS gửi mail xác nhận đăng ký — phải bấm xác nhận.
 alert_email = "you@example.com"

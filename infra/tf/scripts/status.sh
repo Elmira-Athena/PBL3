@@ -254,8 +254,10 @@ render() {
     case "$st" in
       available)
         tally up; note="nhận kết nối được"
-        # Tính phí theo giá niêm yết: 2/3 số này là CPU credit surplus vì SQL
-        # Server ngồi ~36% CPU trên baseline 10%. Xem comment trong lib.sh.
+        # Tính phí theo giá niêm yết. 2/3 số này là CPU credit surplus đo hồi
+        # còn chạy SQL Server (~36% CPU khi không tải, baseline 10%). Sau khi
+        # chuyển PostgreSQL nó là CẬN TRÊN — bảng báo đắt hơn thực tế, lệch về
+        # phía an toàn. Chưa đo lại, cố ý. Xem cảnh báo trong lib.sh.
         rate="$HS_RATE_RDS_UP"
         rcost="$(hs_cost "${age:-0}" "$rate")"; add_spent "$rcost"
         ;;
@@ -293,6 +295,21 @@ render() {
       *)         tally transit; note="" ;;
     esac
     row RDS "$st" "$tstr" "$rate" "$rcost" "$note"
+
+    # ── READ REPLICA — lớp phòng thủ cuối cho "quên huỷ replica" ──
+    # 🔴 Replica là tài nguyên DUY NHẤT trong stack vừa tính tiền theo giờ vừa
+    # VÔ HIỆU HOÁ cơ chế tắt tiền: còn nó thì AWS từ chối stop primary. Nghĩa là
+    # bỏ quên nó không tốn gấp đôi mà tốn gấp đôi MÃI, cho tới khi có người để ý.
+    # Cost guard đã được vá để gửi email về việc này, nhưng email chỉ tới vào
+    # 00:00; dòng dưới đây là chỗ thấy nó NGAY khi gõ status.sh.
+    reps="$(jq -r '.DBInstances[0].ReadReplicaDBInstanceIdentifiers // [] | join(", ")' "$TMP/rds.json")"
+    if [ -n "$reps" ]; then
+      rep_cost="$(hs_cost "${age:-0}" "$HS_RATE_RDS_UP")"
+      row "RDS replica" "sống" "$tstr" "$HS_RATE_RDS_UP" "$rep_cost" \
+        "${C_RED}${reps} — CÒN NÓ THÌ KHÔNG STOP ĐƯỢC PRIMARY${C_RESET}: đặt enable_read_replica=false rồi apply, sau đó chạy down.sh"
+      tally up
+      add_spent "$rep_cost"
+    fi
   else
     row RDS "?" "-" "-" "-" "không đọc được — kiểm tra SSO session"
   fi

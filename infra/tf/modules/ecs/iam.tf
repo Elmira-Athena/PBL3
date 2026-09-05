@@ -194,11 +194,11 @@ resource "aws_iam_role_policy" "task_app" {
 }
 
 # ─── ROLE 4: TASK MIGRATOR ───────────────────────────────────────
-# Migrator chỉ nói chuyện với RDS qua TCP 1433 — không cần quyền AWS API nào.
+# Migrator chỉ nói chuyện với RDS qua TCP 5432 — không cần quyền AWS API nào.
 # Role rỗng (chỉ có trust policy) để task định danh được trong CloudTrail.
 resource "aws_iam_role" "task_migrator" {
   name               = "${var.project}-task-migrator-role"
-  description        = "Container migrator: khong can quyen AWS API nao, chi TCP 1433 toi RDS"
+  description        = "Container migrator: khong can quyen AWS API nao, chi TCP 5432 toi RDS"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }
 

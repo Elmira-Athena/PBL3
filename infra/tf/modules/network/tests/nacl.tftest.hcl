@@ -67,16 +67,16 @@ run "nacl_app_chan_port_22_truoc_rule_ephemeral" {
   }
 }
 
-run "nacl_app_chan_1433_va_8080_truoc_rule_ephemeral_120" {
+run "nacl_app_chan_5432_va_8080_truoc_rule_ephemeral_120" {
   command = plan
 
   assert {
     condition = alltrue([
       aws_network_acl_rule.app_ingress["95"].rule_action == "deny",
-      aws_network_acl_rule.app_ingress["95"].from_port == 1433,
+      aws_network_acl_rule.app_ingress["95"].from_port == 5432,
       aws_network_acl_rule.app_ingress["95"].cidr_block == "0.0.0.0/0",
     ])
-    error_message = "Rule 95 phải DENY 1433 từ 0.0.0.0/0 — vì rule 120 allow 1024-65535 sẽ vô tình mở nó."
+    error_message = "Rule 95 phải DENY 5432 từ 0.0.0.0/0 — vì rule 120 allow 1024-65535 sẽ vô tình mở nó. Đây là thứ DUY NHẤT chặn cổng DB lọt ra internet."
   }
 
   assert {
@@ -95,7 +95,7 @@ run "nacl_app_chan_1433_va_8080_truoc_rule_ephemeral_120" {
       aws_network_acl_rule.app_ingress["95"].rule_number < aws_network_acl_rule.app_ingress["120"].rule_number,
       aws_network_acl_rule.app_ingress["115"].rule_number < aws_network_acl_rule.app_ingress["120"].rule_number,
     ])
-    error_message = "Rule DENY 1433 và 8080 phải có số nhỏ hơn rule 120 allow 1024-65535, nếu không sẽ bị bỏ qua."
+    error_message = "Rule DENY 5432 và 8080 phải có số nhỏ hơn rule 120 allow 1024-65535, nếu không sẽ bị bỏ qua."
   }
 }
 
@@ -121,22 +121,22 @@ run "nacl_app_chi_nhan_80_va_8080_tu_public_tier" {
   }
 }
 
-run "nacl_db_chi_co_dung_mot_rule_allow_1433" {
+run "nacl_db_chi_co_dung_mot_rule_allow_5432" {
   command = plan
 
   assert {
     condition     = length(aws_network_acl_rule.db_ingress) == 1
-    error_message = "NACL db inbound phải có ĐÚNG 1 rule — chỉ 1433 từ app tier. Thêm rule nào là vi phạm nguyên tắc tối thiểu."
+    error_message = "NACL db inbound phải có ĐÚNG 1 rule — chỉ 5432 từ app tier. Thêm rule nào là vi phạm nguyên tắc tối thiểu."
   }
 
   assert {
     condition = alltrue([
       aws_network_acl_rule.db_ingress["100"].rule_action == "allow",
-      aws_network_acl_rule.db_ingress["100"].from_port == 1433,
-      aws_network_acl_rule.db_ingress["100"].to_port == 1433,
+      aws_network_acl_rule.db_ingress["100"].from_port == 5432,
+      aws_network_acl_rule.db_ingress["100"].to_port == 5432,
       aws_network_acl_rule.db_ingress["100"].cidr_block == "10.20.10.0/23",
     ])
-    error_message = "Rule duy nhất của NACL db phải là allow 1433 từ CIDR gộp của app tier."
+    error_message = "Rule duy nhất của NACL db phải là allow 5432 từ CIDR gộp của app tier."
   }
 
   assert {

@@ -7,7 +7,7 @@ variables {
   project        = "hushstore-tftest"
   db_subnet_ids  = ["subnet-00000000000000001", "subnet-00000000000000002"]
   rds_sg_id      = "sg-00000000000000000"
-  engine_version = "16.00.4210.1.v1"
+  engine_version = "17"
   db_username    = "dbadmin"
   db_name        = "HushStoreDB"
 }
@@ -20,9 +20,37 @@ run "rds_khong_bao_gio_public_accessible" {
     error_message = "RDS TUYỆT ĐỐI không được publicly_accessible — đây là lớp phòng thủ đầu tiên cho kịch bản kiểm thử số 3."
   }
 
+  # ⚠️ ASSERT NÀY ĐÃ ĐỔI HỢP ĐỒNG, không chỉ đổi giá trị. Bản cũ đòi
+  # `multi_az == false` với lý do "SQL Server Express không hỗ trợ Multi-AZ" —
+  # TIỀN ĐỀ ĐÓ BIẾN MẤT cùng engine. Giữ nguyên câu cũ là để lại một assert xanh
+  # vì lý do sai, thứ nguy hiểm hơn một assert đỏ.
+  # Hợp đồng mới: Multi-AZ phải do người ta CỐ Ý bật, không bao giờ tự bật.
   assert {
-    condition     = aws_db_instance.this.multi_az == false
-    error_message = "SQL Server Express không hỗ trợ Multi-AZ, và Multi-AZ nằm ngoài free tier."
+    condition     = aws_db_instance.this.multi_az == var.enable_multi_az
+    error_message = "multi_az phải bám đúng var.enable_multi_az — hard-code lại là tước mất công tắc."
+  }
+
+  assert {
+    condition     = var.enable_multi_az == false
+    error_message = "enable_multi_az phải mặc định false: Multi-AZ nằm ngoài free tier, chỉ bật trong cửa sổ demo."
+  }
+}
+
+run "read_replica_mac_dinh_tat_va_khong_duoc_dung_len" {
+  command = plan
+
+  # 🔴 Đây là DEFAULT AN TOÀN, không phải default tiết kiệm. Có replica thì AWS
+  # từ chối StopDBInstance ⇒ toàn bộ cơ chế tắt tiền (down.sh + cost guard) mất
+  # tác dụng, và RDS còn tự khởi động lại sau 7 ngày stopped. Một lần quên huỷ
+  # là hoá đơn chạy im lặng nhiều ngày.
+  assert {
+    condition     = var.enable_read_replica == false
+    error_message = "enable_read_replica phải mặc định false — bật nó là vô hiệu hoá cơ chế tắt tiền của cả stack."
+  }
+
+  assert {
+    condition     = length(aws_db_instance.replica) == 0
+    error_message = "Khi enable_read_replica = false thì KHÔNG được dựng replica nào."
   }
 }
 
@@ -36,37 +64,102 @@ run "rds_nam_trong_db_subnet_va_dung_sg_rds" {
 
   assert {
     condition     = contains(aws_db_instance.this.vpc_security_group_ids, var.rds_sg_id)
-    error_message = "RDS phải dùng đúng sg-rds (chỉ nhận 1433 từ sg-web)."
+    error_message = "RDS phải dùng đúng sg-rds (chỉ nhận 5432 từ sg-web)."
   }
 }
 
-# KHÔNG assert `aws_db_instance.this.db_name == null`: attribute này là
-# Optional+Computed trong AWS provider, nên ở plan-time nó là (known after apply)
-# NGAY CẢ KHI config không đặt nó — Terraform báo `Unknown condition value` và bỏ
-# luôn các run còn lại. Việc "không đặt db_name" được bảo đảm bằng chính việc
-# main.tf không có argument đó (SQL Server không hỗ trợ), kiểm bằng grep; còn
-# database HushStoreDB do EF Core migration bundle tạo ở Task 13.
-# Thay bằng các thuộc tính đặc thù SQL Server mà plan-time biết được.
-run "rds_dung_cau_hinh_sql_server_express" {
+# ⚠️ ĐẢO NGƯỢC SO VỚI BẢN SQL SERVER. Chỗ này trước đây là một đoạn dài giải
+# thích vì sao KHÔNG assert `db_name` — vì SQL Server không nhận argument đó.
+# PostgreSQL thì NGƯỢC LẠI: nó tạo database ngay lúc create instance, nên db_name
+# BẮT BUỘC phải được đặt. Bỏ trống thì RDS tạo một DB tên `postgres`, migration
+# và seed đều chạy được ở đó, KHÔNG có gì đỏ — hệ thống chỉ đơn giản sống trong
+# một database mang tên sai.
+#
+# Vẫn không assert được `db_name` ở plan-time (Optional+Computed ⇒ unknown, và
+# `Unknown condition value` sẽ bỏ luôn các run còn lại). Nên kiểm bằng cách khác:
+# đòi chính dòng `db_name` có mặt trong main.tf, lọc bỏ dòng comment.
+run "rds_dung_cau_hinh_postgres" {
   command = plan
 
   assert {
-    condition     = aws_db_instance.this.engine == "sqlserver-ex"
-    error_message = "Phải dùng engine sqlserver-ex (Express) — đây là edition nằm trong free tier."
+    condition     = aws_db_instance.this.engine == "postgres"
+    error_message = "Phải dùng engine postgres — sqlserver-ex không mở được read replica (đòi Enterprise Edition + >= 4 vCPU)."
+  }
+
+  # 🚨 PHẢI dùng startswith, KHÔNG dùng strcontains. Lần đầu tôi viết assert này
+  # bằng `strcontains(l, "db_name")` VÀ NÓ XANH CẢ KHI ĐÃ XOÁ DÒNG db_name — vì
+  # chuỗi kết nối có dòng `"Database=${var.db_name};",` cũng chứa "db_name".
+  # Assert xanh vì lý do sai nguy hiểm hơn không có assert: nó bảo chuyện đã được
+  # canh. Đo bằng cách xoá thật dòng đó rồi chạy lại, không bằng cách đọc.
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if startswith(trimspace(l), "db_name")
+    ]) == 1
+    error_message = "main.tf phải đặt argument db_name: PostgreSQL tạo database lúc create instance, bỏ trống thì RDS tạo DB tên `postgres`, migration và seed vẫn chạy được ở đó — hệ thống sống trong một database mang tên sai mà KHÔNG có gì đỏ."
   }
 
   assert {
-    condition     = aws_db_instance.this.license_model == "license-included"
-    error_message = "SQL Server trên RDS bắt buộc license_model = license-included."
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "license_model")
+    ]) == 0
+    error_message = "PostgreSQL là engine open-source — KHÔNG được khai license_model."
   }
 
   assert {
     condition = alltrue([
       aws_db_instance.this.storage_encrypted == true,
       aws_db_instance.this.allocated_storage == 20,
-      aws_db_instance.this.storage_type == "gp2",
+      aws_db_instance.this.storage_type == "gp3",
     ])
-    error_message = "Storage phải mã hoá, 20GB, gp2 — mức tối thiểu của SQL Server Express và nằm trong free tier."
+    error_message = "Storage phải mã hoá, 20GB, gp3."
+  }
+}
+
+# Chốt cho thuộc tính bảo mật DỄ MẤT NHẤT của đợt 7. Npgsql mặc định `Prefer` —
+# mã hoá nhưng KHÔNG xác thực cert — nên tụt về mặc định là mất im lặng đúng thứ
+# đang được bảo vệ: kết nối vẫn thành công, log vẫn sạch. `Require` cũng không đủ.
+run "chuoi_ket_noi_phai_giu_ssl_mode_verifyfull" {
+  command = plan
+
+  # ⚠️ KHÔNG assert được trên `aws_ssm_parameter.connection_string.value`: nó phụ
+  # thuộc `aws_db_instance.this.address` (known after apply) nên ở plan-time là
+  # unknown, và Terraform sẽ đỏ với "Condition expression could not be evaluated
+  # at this time" — một cái đỏ nói về THỜI ĐIỂM chứ không nói về nội dung.
+  # Kiểm trên MÃ NGUỒN thay vì trên giá trị. Phải lọc bỏ dòng comment, vì ngay
+  # phía trên chuỗi trong main.tf có một khối comment dài nhắc tên các tham số
+  # này — không lọc thì assert xanh nhờ chính lời giải thích của nó.
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "SSL Mode=VerifyFull")
+    ]) == 1
+    error_message = "Chuỗi kết nối PHẢI có SSL Mode=VerifyFull. Npgsql mặc định Prefer — mã hoá nhưng KHÔNG xác thực cert, tức mất im lặng đúng thứ đang được bảo vệ. Require cũng không đủ."
+  }
+
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "SSL Mode=") && !strcontains(l, "SSL Mode=VerifyFull")
+    ]) == 0
+    error_message = "Có một `SSL Mode=` khác VerifyFull trong main.tf — đó là đường tụt xuống mức không xác thực cert."
+  }
+
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "Root Certificate=")
+    ]) == 1
+    error_message = "Phải trỏ Root Certificate vào bundle CA của RDS: khác sqlcmd, Npgsql/libpq KHÔNG đọc trust store hệ thống nên update-ca-certificates một mình là chưa đủ."
+  }
+
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/main.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "Port=5432")
+    ]) == 1
+    error_message = "Chuỗi kết nối phải dùng cổng 5432."
   }
 }
 
