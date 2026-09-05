@@ -250,6 +250,35 @@ def _stop_rds(actions, notes, findings, errors):
         )
         return
 
+    # ── READ REPLICA: kiểm TRƯỚC khi gọi stop ──────────────────────
+    # AWS: "You can't stop a DB instance that has a read replica, or that is a
+    # read replica." Nên khi có replica thì StopDBInstance CHẮC CHẮN bị từ chối,
+    # và từ chối bằng đúng mã InvalidDBInstanceState mà khối except bên dưới
+    # từng diễn giải là "ai đó đã stop trước — trạng thái đích vẫn đạt được".
+    #
+    # 🔴 ĐÓ LÀ CHẾ ĐỘ HỎNG TỆ NHẤT CÓ THỂ CÓ Ở ĐÂY: guard BÁO THÀNH CÔNG trong
+    # khi RDS vẫn tính $0,098/giờ. Không email, không dòng đỏ nào. Cộng thêm
+    # "RDS tự khởi động lại sau 7 ngày stopped", một lần quên huỷ replica là hoá
+    # đơn chạy im lặng nhiều ngày — đúng lớp sự cố mà runbook đã đo một lần
+    # ($16,5 bay âm thầm trong một tuần).
+    #
+    # Vào `findings` chứ KHÔNG phải `errors`, theo đúng quy tắc ghi ở đầu file:
+    # ranh giới là "khoản này CÒN ĐANG TÍNH TIỀN theo giờ hay không", không phải
+    # "có bất thường hay không". Guard không hỏng — nó chạy đúng và phát hiện ra
+    # một khoản nó không có quyền tắt. `errors` sẽ đổi subject thành "CO LOI",
+    # tức nói sai nguyên nhân, mà chính file này đã ghi: một subject nói sai
+    # nguyên nhân làm người đọc mở down.sh thay vì mở status.sh.
+    replicas = instances[0].get("ReadReplicaDBInstanceIdentifiers") or []
+    if replicas:
+        findings.append(
+            f"RDS {RDS_IDENTIFIER} đang có read replica ({', '.join(replicas)}) nên AWS TỪ CHỐI "
+            f"StopDBInstance — cả primary lẫn replica vẫn tính đủ tiền giờ. Cost guard KHÔNG "
+            f"tự huỷ replica (không được cấp rds:DeleteDBInstance, và cũng không nên). "
+            f"Phải làm tay: đặt `enable_read_replica = false` rồi `terraform apply`, sau đó "
+            f"chạy `{DOWN_COMMAND}`."
+        )
+        return
+
     try:
         _rds.stop_db_instance(DBInstanceIdentifier=RDS_IDENTIFIER)
         actions.append(
@@ -257,17 +286,52 @@ def _stop_rds(actions, notes, findings, errors):
             f"Mất khoảng 5 phút để về 'stopped'."
         )
     except (ClientError, BotoCoreError) as exc:
-        # Cửa sổ tranh chấp: giữa describe và stop có thể có một lần chạy khác
-        # (hoặc `down.sh` do người chạy) đã stop trước. Trạng thái đích đã đạt
-        # được, nên đây không phải lỗi. Đây cũng là lớp bù cho việc KHÔNG đặt
-        # được reserved_concurrent_executions = 1 — xem lambda.tf.
-        if _err_code(exc) in ("InvalidDBInstanceState", "DBInstanceNotFound"):
+        if _err_code(exc) == "DBInstanceNotFound":
             notes.append(
-                f"RDS {RDS_IDENTIFIER}: đã có tiến trình khác stop trước "
-                f"({_err_code(exc)}) — trạng thái đích vẫn đạt được."
+                f"RDS {RDS_IDENTIFIER}: không còn tồn tại (DBInstanceNotFound) — "
+                f"không còn tính tiền, trạng thái đích đã đạt."
             )
+        elif _err_code(exc) == "InvalidDBInstanceState":
+            # ⚠️ KHÔNG được suy ra "ai đó đã stop trước" từ MÌNH mã lỗi này. AWS
+            # dùng chung InvalidDBInstanceState cho nhiều nguyên nhân trái ngược
+            # nhau: đã stopped (đích đã đạt) HOẶC đang backing-up/modifying/có
+            # replica (vẫn tính đủ tiền). Bản trước gộp hết thành một dòng
+            # `notes` nói "trạng thái đích vẫn đạt được" — tức là ĐOÁN, và đoán
+            # về phía im lặng. Hỏi lại AWS thay vì đoán: một lời gọi describe
+            # rẻ hơn nhiều so với một đêm không ai biết hoá đơn đang chạy.
+            _phan_loai_lai_sau_khi_stop_bi_tu_choi(notes, findings, errors)
         else:
             errors.append(f"Không stop được RDS {RDS_IDENTIFIER} — {_err_text(exc)}")
+
+
+def _phan_loai_lai_sau_khi_stop_bi_tu_choi(notes, findings, errors):
+    """Đọc lại trạng thái RDS để biết InvalidDBInstanceState nghĩa là gì.
+
+    Tách hàm riêng vì nó là một phép ĐO, không phải một nhánh xử lý lỗi: câu trả
+    lời quyết định giữa "im lặng, mọi thứ ổn" và "gửi email, tiền đang chạy".
+    """
+    try:
+        again = _rds.describe_db_instances(DBInstanceIdentifier=RDS_IDENTIFIER)
+    except (ClientError, BotoCoreError) as exc:
+        # Không đọc được thì KHÔNG được mặc định là ổn. Chưa biết ⇒ báo.
+        errors.append(
+            f"RDS {RDS_IDENTIFIER}: stop bị từ chối (InvalidDBInstanceState) và không đọc lại "
+            f"được trạng thái để biết vì sao — {_err_text(exc)}. Chạy `{STATUS_COMMAND}`."
+        )
+        return
+
+    trang_thai = (again.get("DBInstances") or [{}])[0].get("DBInstanceStatus", "unknown")
+    if trang_thai in RDS_TARGET_STATES:
+        notes.append(
+            f"RDS {RDS_IDENTIFIER}: đã có tiến trình khác stop trước — đọc lại thấy "
+            f"'{trang_thai}', trạng thái đích đã đạt."
+        )
+    else:
+        findings.append(
+            f"RDS {RDS_IDENTIFIER}: AWS từ chối StopDBInstance và đọc lại thấy trạng thái "
+            f"'{trang_thai}' — VẪN ĐANG TÍNH $0,098/giờ. Cost guard không tắt được. "
+            f"Chạy `{STATUS_COMMAND}` để xem vì sao."
+        )
 
 
 def _detect_terraform_owned_leftovers(actions, notes, findings, errors):

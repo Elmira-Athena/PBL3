@@ -258,13 +258,24 @@ run "lambda_chi_dung_resource_sao_o_dung_bon_action_chi_doc" {
     error_message = "ARN của autoscaling:SetDesiredCapacity phải kết thúc bằng :autoScalingGroupName/<asg_name>. Đoạn uuid ở giữa buộc phải là * (AWS sinh lúc tạo group), nhưng TÊN group phải khớp chính xác — đây là lớp siết duy nhất còn lại vì AWS không hỗ trợ condition theo giá trị DesiredCapacity."
   }
 
+  # ⚠️ ĐỪNG NỚI RA CHO READ REPLICA. Kế hoạch đợt 7 ban đầu định đổi
+  # local.rds_instance_arn thành một list phủ cả replica, và điều đó SAI — nó
+  # dựa trên giả định rằng cost guard sẽ stop replica. AWS: "You can't stop a DB
+  # instance that has a read replica, or that is a read replica." Nghĩa là quyền
+  # stop trên replica là quyền KHÔNG BAO GIỜ dùng được: nới ra chỉ mở rộng blast
+  # radius, đổi lại con số không.
+  #
+  # Cách xử lý đúng nằm ở tầng Python: _stop_rds đọc
+  # ReadReplicaDBInstanceIdentifiers TRƯỚC khi gọi stop, và khi có replica thì
+  # ghi vào `findings` (có email) kèm câu chỉ rõ phải `enable_read_replica =
+  # false` rồi apply. Đo bằng tests/test_cost_guard_rds.py — CA 2.
   assert {
     condition = alltrue([
       for s in jsondecode(data.aws_iam_policy_document.cost_guard.json).Statement :
       !contains(flatten([s.Action]), "rds:StopDBInstance") ||
       alltrue([for r in flatten([s.Resource]) : endswith(r, ":db:${var.rds_identifier}")])
     ])
-    error_message = "rds:StopDBInstance phải ghim vào đúng ARN của var.rds_identifier."
+    error_message = "rds:StopDBInstance phải ghim vào đúng ARN của var.rds_identifier — KHÔNG nới ra cho replica, xem comment ngay trên."
   }
 }
 
