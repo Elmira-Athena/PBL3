@@ -193,4 +193,17 @@ echo "  API         : https://api.${WEB_DOMAIN}/"
 echo "  Đăng nhập   : admin@hushstore.com / Admin@123"
 echo
 echo "  Theo dõi    : bash infra/tf/scripts/status.sh -w"
-echo "  ${C_YELLOW}Tắt khi xong: bash infra/tf/scripts/down.sh${C_RESET}  ${C_DIM}(NAT + ALB \$0.0675/giờ)${C_RESET}"
+# 🚨 CON SỐ NÀY TỪNG ĐƯỢC IN CỨNG LÀ "$0.0675/giờ" VÀ SAI HAI LẦN CÙNG LÚC:
+# nó là tổng giá us-east-1 ($0.045 NAT + $0.0225 ALB) chứ không phải
+# ap-southeast-1 ($0.0590 + $0.0252), VÀ nó giả định đúng một NAT — nên từ lúc
+# nat_gateway_count = 2 thì nó báo thiếu gần một nửa. Dòng cuối cùng người dùng
+# đọc trước khi rời máy là dòng tệ nhất để nói dối về tiền, nên nay nó TÍNH từ
+# HS_RATE_* trong lib.sh và từ số NAT thật.
+HS_NAT_N="$(hs_tfvar_get nat_gateway_count || echo 1)"
+HS_HOURLY="$(awk -v n="$HS_NAT_N" -v nat="$HS_RATE_NAT" -v alb="$HS_RATE_ALB" \
+  'BEGIN { printf "%.4f", n * nat + alb }')"
+echo "  ${C_YELLOW}Tắt khi xong: bash infra/tf/scripts/down.sh${C_RESET}  ${C_DIM}(${HS_NAT_N}×NAT + ALB = \$${HS_HOURLY}/giờ, chưa tính EC2 và RDS)${C_RESET}"
+
+if [ "$(hs_tfvar_get enable_read_replica)" = "true" ]; then
+  hs_warn "CÓ READ REPLICA: AWS TỪ CHỐI stop primary khi còn replica ⇒ down.sh và cost guard mất tác dụng. Huỷ replica (enable_read_replica=false + apply) TRƯỚC khi rời máy."
+fi

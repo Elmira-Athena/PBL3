@@ -135,7 +135,7 @@ render() {
 
   # In cả ý muốn (tfvars) cạnh thực tế (AWS). Hai cột này lệch nhau nghĩa là có
   # apply chưa chạy hoặc chạy dở — thông tin đó không suy ra được từ bảng dưới.
-  echo "${C_DIM}  tfvars: enable_nat=$(hs_tfvar_get enable_nat)  enable_alb=$(hs_tfvar_get enable_alb)  instance_count=$(hs_tfvar_get instance_count)  enable_flow_logs=$(hs_tfvar_get enable_flow_logs)  enable_deny_demo=$(hs_tfvar_get enable_deny_demo)${C_RESET}"
+  echo "${C_DIM}  tfvars: enable_nat=$(hs_tfvar_get enable_nat)  nat_gateway_count=$(hs_tfvar_get nat_gateway_count)  enable_alb=$(hs_tfvar_get enable_alb)  instance_count=$(hs_tfvar_get instance_count)  enable_flow_logs=$(hs_tfvar_get enable_flow_logs)  enable_deny_demo=$(hs_tfvar_get enable_deny_demo)${C_RESET}"
   if [ "$(hs_tfvar_get enable_deny_demo)" = "true" ]; then
     echo "  ${C_YELLOW}!${C_RESET} enable_deny_demo = true → NACL đang chặn ${C_B}$(hs_tfvar_get my_ip)${C_RESET} ở tầng mạng."
     echo "    ${C_DIM}Browser sẽ timeout và trông y như hạ tầng lỗi. Đặt false rồi apply nếu không đang demo.${C_RESET}"
@@ -156,14 +156,30 @@ render() {
     tally down; row ALB "-" "-" "-" "-" "chưa dựng (enable_alb = false)"
   fi
 
-  # ── NAT Gateway ──────────────────────────────────────────────
-  st="$(jq -r '.NatGateways[0].State // ""' "$TMP/nat.json")"
-  if [ -n "$st" ]; then
-    age="$(hs_age "$(jq -r '.NatGateways[0].CreateTime // ""' "$TMP/nat.json")")"
-    c="$(hs_cost "${age:-0}" "$HS_RATE_NAT")"; add_spent "$c"
-    case "$st" in available) tally up; note="egress cho ECR + SSM" ;;
-                  *) tally transit; note="thường ~2m" ;; esac
-    row "NAT Gateway" "$st" "$(hs_hms "${age:-0}")" "$HS_RATE_NAT" "$c" "$note"
+  # ── NAT Gateway — MỘT DÒNG MỖI GATEWAY ───────────────────────
+  # 🚨 Bản trước đọc `.NatGateways[0]` và in đúng MỘT dòng. Điều đó đúng khi
+  # stack chỉ có thể có một NAT, và trở thành BÁO SAI TIỀN từ lúc
+  # nat_gateway_count = 2: gateway thứ hai không hiện ở đâu cả, và tổng chi phí
+  # thiếu đúng $0,0590/giờ. Đó là chế độ lỗi tệ nhất của một cái đồng hồ tiền —
+  # nó không im lặng, nó NÓI DỐI, và nói dối theo hướng làm người đọc yên tâm.
+  nat_n="$(jq -r '(.NatGateways // []) | length' "$TMP/nat.json")"
+  if [ "${nat_n:-0}" -gt 0 ]; then
+    for i in $(seq 0 $((nat_n - 1))); do
+      st="$(jq -r --argjson i "$i" '.NatGateways[$i].State // ""' "$TMP/nat.json")"
+      az="$(jq -r --argjson i "$i" '.NatGateways[$i].SubnetId // "?"' "$TMP/nat.json")"
+      age="$(hs_age "$(jq -r --argjson i "$i" '.NatGateways[$i].CreateTime // ""' "$TMP/nat.json")")"
+      c="$(hs_cost "${age:-0}" "$HS_RATE_NAT")"; add_spent "$c"
+      case "$st" in available) tally up; note="egress cho ECR + SSM · ${az}" ;;
+                    *) tally transit; note="thường ~2m · ${az}" ;; esac
+      row "NAT Gateway $((i + 1))/${nat_n}" "$st" "$(hs_hms "${age:-0}")" "$HS_RATE_NAT" "$c" "$note"
+    done
+    # Cảnh báo khi số gateway thật KHÁC tfvars: hai NAT trong khi tfvars khai 1
+    # nghĩa là có một cái mồ côi ngoài Terraform, và nó không bị down.sh dọn.
+    want="$(hs_tfvar_get nat_gateway_count || echo 1)"
+    if [ "$nat_n" != "$want" ]; then
+      row "NAT lệch tfvars" "$nat_n vs $want" "-" "-" "-" \
+        "${C_RED}có $nat_n gateway thật nhưng tfvars khai nat_gateway_count=$want${C_RESET} — kiểm gateway mồ côi, down.sh chỉ dọn cái Terraform biết"
+    fi
   else
     tally down; row "NAT Gateway" "-" "-" "-" "-" "chưa dựng (enable_nat = false)"
   fi
@@ -254,6 +270,13 @@ render() {
     case "$st" in
       available)
         tally up; note="nhận kết nối được"
+        # Multi-AZ nhân đôi tiền instance VÀ tiền storage. Không hiện nó ra thì
+        # bảng chi phí đúng con số nhưng thiếu lý do — và lần sau ai đó nhìn
+        # hoá đơn sẽ không nối được về đây. (Multi-AZ KHÔNG chặn stop trên
+        # PostgreSQL, khác read replica — xem modules/data/main.tf.)
+        if [ "$(jq -r '.DBInstances[0].MultiAZ // false' "$TMP/rds.json")" = "true" ]; then
+          note="${note} · ${C_B}Multi-AZ${C_RESET} (standby AZ thứ hai, KHÔNG phục vụ đọc)"
+        fi
         # Tính phí theo giá niêm yết. 2/3 số này là CPU credit surplus đo hồi
         # còn chạy SQL Server (~36% CPU khi không tải, baseline 10%). Sau khi
         # chuyển PostgreSQL nó là CẬN TRÊN — bảng báo đắt hơn thực tế, lệch về

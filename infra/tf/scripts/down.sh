@@ -99,10 +99,31 @@ hs_apply "xoá NAT + EIP"
 #
 # Đặt ở đây, SAU apply của bước 3 và TRƯỚC lệnh stop — không gộp vào apply trên
 # để dòng log nói đúng việc đang làm khi nó mất vài phút.
-if [ "$(hs_tfvar_get enable_read_replica)" = "true" ]; then
-  hs_warn "còn read replica — phải huỷ TRƯỚC khi stop primary, nếu không AWS từ chối lệnh stop"
+# 🚨 HỎI AWS, KHÔNG CHỈ HỎI tfvars. Bản trước chỉ đọc `enable_read_replica`
+# trong tfvars. Điều đó đúng khi tfvars luôn khớp thực tế — nhưng chính script
+# này ĐẶT nó về false rồi mới apply, nên một lần apply hỏng giữa chừng (mạng
+# rớt, Ctrl-C, hết hạn credential) để lại đúng trạng thái tồi nhất: tfvars nói
+# "không có replica", AWS thì vẫn còn. Lần chạy sau guard bị bỏ qua hoàn toàn,
+# stop bị từ chối, và script vẫn báo xong.
+rep_live() {
+  aws rds describe-db-instances --db-instance-identifier "$HS_DB" \
+    --query 'DBInstances[0].ReadReplicaDBInstanceIdentifiers' --output text \
+    --profile "$HS_PROFILE" --region "$HS_REGION" --no-cli-pager 2>/dev/null \
+    | sed 's/None//' | tr -d '[:space:]'
+}
+
+REP_NOW="$(rep_live)"
+if [ -n "$REP_NOW" ] || [ "$(hs_tfvar_get enable_read_replica)" = "true" ]; then
+  hs_warn "còn read replica (${REP_NOW:-theo tfvars}) — phải huỷ TRƯỚC khi stop primary, nếu không AWS từ chối lệnh stop"
   hs_tfvar_set enable_read_replica false
   hs_apply "huỷ read replica"
+
+  # Xác nhận lại bằng AWS. Nếu replica được tạo ngoài Terraform thì apply ở trên
+  # KHÔNG xoá nó (state không có), và im lặng đi tiếp là quay lại đúng cái bẫy.
+  if [ -n "$(rep_live)" ]; then
+    hs_warn "VẪN CÒN replica sau khi apply — nhiều khả năng nó được tạo ngoài Terraform."
+    hs_warn "Xoá tay rồi chạy lại: aws rds delete-db-instance --db-instance-identifier <id> --skip-final-snapshot"
+  fi
 fi
 
 hs_head "BƯỚC 4/5 — RDS"
@@ -141,6 +162,29 @@ chk "Elastic IP" "$(aws ec2 describe-addresses --query 'length(Addresses)' --out
 chk "EC2 đang sống" "$(aws ec2 describe-instances --filters "Name=instance-state-name,Values=pending,running,stopping,stopped" --query 'length(Reservations[].Instances[])' --output text "${AWSQT[@]}" 2>/dev/null || echo '?')"
 chk "VPC Flow Log" "$(aws ec2 describe-flow-logs --query 'length(FlowLogs)' --output text "${AWSQT[@]}" 2>/dev/null || echo '?')"
 
+# 🚨 RDS TỪNG KHÔNG CÓ TRONG DANH SÁCH NÀY, VÀ ĐÓ LÀ LỖ HỔNG LỚN NHẤT CỦA
+# down.sh. Năm phép kiểm phía trên đều là resource do Terraform tạo/xoá, nên
+# `terraform plan` ở dưới bắt được. RDS thì KHÁC: "đang chạy" hay "đã stop" là
+# trạng thái RUNTIME mà Terraform không quản — plan trả về "No changes" y hệt
+# trong cả hai trường hợp.
+# Hệ quả trước khi vá: nếu lệnh stop ở BƯỚC 4 bị từ chối (còn replica, hoặc
+# instance đang `modifying`/`backing-up`), nhánh `*)` chỉ in một dòng vàng và
+# KHÔNG đặt fail=1 — script in "Không còn resource nào tính theo giờ" rồi exit 0
+# trong khi RDS, khoản ĐẮT NHẤT của cả stack, vẫn chạy. Cộng với việc AWS tự
+# khởi động lại sau 7 ngày, một lần bỏ sót là hoá đơn nhiều ngày.
+rds_st="$(aws rds describe-db-instances --db-instance-identifier "$HS_DB" \
+  --query 'DBInstances[0].DBInstanceStatus' --output text \
+  --profile "$HS_PROFILE" --region "$HS_REGION" --no-cli-pager 2>/dev/null || echo '?')"
+case "$rds_st" in
+  stopped|stopping)
+    printf '  %-22s %s\n' "RDS" "${C_GREEN}${rds_st}${C_RESET}"
+    ;;
+  *)
+    printf '  %-22s %s\n' "RDS" "${C_RED}${rds_st} — CÒN TÍNH TIỀN${C_RESET}"
+    fail=1
+    ;;
+esac
+
 mkdir -p "${HS_LOCAL_DIR}/logs"
 set +e
 terraform -chdir="$HS_TF_DIR" plan -detailed-exitcode -input=false -lock-timeout=5m -no-color \
@@ -155,9 +199,19 @@ esac
 
 hs_head "XONG — tổng $(hs_hms $((SECONDS - T_ALL)))"
 if [ -n "$WINDOW" ]; then
-  echo "  Cửa sổ tính phí : $(hs_hms "$WINDOW")  ·  ~\$$(hs_cost "$WINDOW" 0.1954)"
-  echo "  ${C_DIM}  NAT \$0.059 + ALB \$0.0252 + RDS \$0.098 + EC2 \$0.0132 (giá APS1).${C_RESET}"
-  echo "  ${C_DIM}  Trong đó \$0.067 là CPU credit surplus của RDS — khoản lớn nhất.${C_RESET}"
+  # 🚨 CON SỐ NÀY TỪNG IN CỨNG "0.1954" — tổng của ĐÚNG MỘT NAT. Từ lúc
+  # nat_gateway_count = 2 nó báo thiếu $0.059/giờ, và báo thiếu ở dòng cuối cùng
+  # người dùng đọc trước khi rời máy. Nay tính từ HS_RATE_* và số NAT thật.
+  DN_NAT="$(hs_tfvar_get nat_gateway_count || echo 1)"
+  DN_RATE="$(awk -v n="$DN_NAT" -v nat="$HS_RATE_NAT" -v alb="$HS_RATE_ALB" \
+    -v rds="$HS_RATE_RDS_UP" -v ec2="$HS_RATE_EC2" \
+    'BEGIN { printf "%.4f", n * nat + alb + rds + ec2 }')"
+  echo "  Cửa sổ tính phí : $(hs_hms "$WINDOW")  ·  ~\$$(hs_cost "$WINDOW" "$DN_RATE")"
+  echo "  ${C_DIM}  ${DN_NAT}×NAT \$${HS_RATE_NAT} + ALB \$${HS_RATE_ALB} + RDS \$${HS_RATE_RDS_UP} + EC2 \$${HS_RATE_EC2} = \$${DN_RATE}/giờ (APS1).${C_RESET}"
+  if [ "$(hs_tfvar_get enable_multi_az)" = "true" ]; then
+    echo "  ${C_DIM}  Multi-AZ BẬT: RDS thật ~\$0.057/giờ (instance ×2 + storage ×2), tức DƯỚI \$${HS_RATE_RDS_UP} ở trên.${C_RESET}"
+    echo "  ${C_DIM}  \$${HS_RATE_RDS_UP} là số đo trên sqlserver-ex, giữ lại làm CẬN TRÊN — xem lib.sh.${C_RESET}"
+  fi
   echo "  ${C_DIM}  Chặn trên: NAT/ALB sống ngắn hơn cửa sổ. Trừ vào credit trả trước.${C_RESET}"
 fi
 hs_window_close
