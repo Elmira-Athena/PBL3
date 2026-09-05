@@ -1,12 +1,57 @@
 # Bắt đầu phiên mới — đọc file này trước
 
-**Cập nhật:** 2026-09-01 · **Trạng thái repo:** nhánh `fix/muc-I-client-error-leaks`, build
+> ## 🟢 ĐỢT 7 — ĐÃ CHUYỂN SANG POSTGRESQL 17 (2026-09-05)
+>
+> **Đọc khối này trước phần còn lại của file.** Mọi thứ bên dưới viết khi repo còn chạy SQL
+> Server; phần lớn vẫn đúng, nhưng những chỗ nói về `2601/2627/1205`, `RowVersion`,
+> `sqlcmd`, `sqlserver-ex` hay cổng `1433` thì **không còn**.
+>
+> **Trạng thái:** nhánh `feat/dot-7-postgresql`, 7 commit, build `0 Error(s)`.
+>
+> **Vì sao đổi engine — là EDITION, không phải kiến trúc:** read replica của RDS đòi SQL Server
+> **Enterprise Edition** *và* class **≥ 4 vCPU**; stack chạy `sqlserver-ex` trên `db.t3.micro`
+> (2 vCPU) nên hỏng cả hai, không cấu hình nào cứu được. Kèm theo: **PostgreSQL Multi-AZ stop
+> được, SQL Server Multi-AZ thì không** — tức đổi engine giữ nguyên được `up.sh`/`down.sh`/cost guard.
+>
+> **Đã đo (đều ở local, $0):**
+> - LoadProbe **9/9 ở CẢ 1 lẫn 2 instance**, `0 KHÔNG KẾT LUẬN`
+>   ([bằng chứng](evidence/2026-09-05-postgresql-2-instance.md)). Ở 2 instance S03 ra
+>   `200×1, 400×6, 409×3` thay vì `409×9` — phân bố khác chính là thứ chứng minh hai lần chạy
+>   không phải một.
+> - `terraform test` **99/99** trên 8 module; `validate` + `fmt` sạch.
+> - Seeder (`psql 17`) chạy thật, kèm **2 ca đối chứng âm** cho `sslmode=verify-full`.
+> - Deadlock `40P01` ép thật → `ConflictClassifier` bắt được cả khi bọc 3 lớp; `42P01` trả `False`.
+>
+> **🔴 CHƯA CHẠY LÊN AWS LẦN NÀO.** Chưa có: apply thật · seeder vào RDS qua `verify-full` với
+> CA thật · failover Multi-AZ · `ReplicaLag` · **ca đối chứng cho bản vá cost guard khi replica
+> đang tồn tại**. `HS_RATE_RDS_UP = 0.098` vẫn là số đo trên SQL Server, nay là **cận trên**,
+> cố ý chưa sửa.
+>
+> **⚠️ Đừng bật `enable_read_replica` rồi để qua đêm.** Có replica thì AWS **từ chối** stop
+> primary ⇒ `down.sh` và cost guard mất tác dụng, mà RDS còn tự khởi động lại sau 7 ngày
+> stopped. Hai lưới đã có (`down.sh` tự huỷ replica trước khi stop, `status.sh` in dòng đỏ)
+> nhưng **cả hai chỉ chạy khi có người gõ**.
+>
+> **Ba chỗ KẾ HOẠCH ĐỢT 7 GHI SAI, đã đo lại** — chi tiết ở §8 của nhật ký:
+> 1. Nhóm `.Contains()` là **3 chỗ**, không phải 8 (cột `citext` đã đúng sẵn; bốn chỗ đã
+>    `ToLower()` cả hai vế).
+> 2. `DateTime` sai `Kind` hỏng **ỒN ÀO** (Npgsql ném), không phải "lệch 7 giờ" âm thầm.
+> 3. `UseXminAsConcurrencyToken()` **không tồn tại** ở Npgsql 10 — phải khai tay 4 phần.
+>
+> **Môi trường local đổi:** `docker compose up -d postgres` (compose có cả hai service);
+> chuỗi kết nối `Host=localhost;Port=5432;Database=HushStoreDb;Username=hushstore;Password=…`.
+
+---
+
+**Cập nhật:** 2026-09-05 · **Trạng thái repo:** nhánh `feat/dot-7-postgresql`, build
 `0 Error(s)`
 · **Đã xong:** đợt 1, mục 4.1, đợt 2, **A**, **B**, **C**, **D**, **🅴**, **🅷**, **🅸**,
 **nợ 🧪 ưu tiên 1 + 2**, **gói 2**, và **gói 3 — đợt 3 XONG TRỌN VẸN**
-· ✅ **LoadProbe 9/9 ĐẠT ở CẢ HAI cấu hình**, `0 KHÔNG KẾT LUẬN`. Bốn kịch bản phụ thuộc thời
-điểm (S03 · S04 · S07 · S08) được quan sát **5 lần** ở cấu hình 2 instance —
-[bằng chứng](evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md)
+· ✅ **LoadProbe 9/9 ĐẠT ở CẢ HAI cấu hình**, `0 KHÔNG KẾT LUẬN` —
+[bằng chứng](evidence/loadprobe/2026-09-01-goi-3-rowversion-va-unique-index.md).
+⚠️ **Bản trước ghi bốn kịch bản phụ thuộc thời điểm (S03 · S04 · S07 · S08) được quan sát
+"5 lần" ở 2 instance — đếm lại chỉ có 1.** Theo luật của chính repo, một ✅ không là bằng
+chứng an toàn.
 · 🟡 **Gói 4: nửa CODE XONG và ĐÃ ĐO, nửa HẠ TẦNG chờ bạn review** — `ICacheService`,
 `ShutdownTimeout = 45`, DataProtection → SSM (có điều kiện). Xem
 [§Gói 4](#-📋-gói-4--nửa-code-xong-nửa-hạ-tầng-chờ-review) và
