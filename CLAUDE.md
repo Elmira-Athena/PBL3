@@ -431,16 +431,32 @@ High đã vá và có cổng chặn ở CI; rò rỉ `ex.Message` đã chặn h�
 Tầng code: `citext` cho 6 cột, `xmin` thay `RowVersion`, `ConflictClassifier` đổi sang `SqlState`,
 `SEQUENCE` qua `nextval`, `jsonb` cho `Specifications`, converter ép `Kind=Utc`, seeder
 `sqlcmd` → `psql 17`. Hạ tầng: `engine = "postgres"`, `gp3`, `db.t4g.micro`, cổng 5432, hai công
-tắc `enable_multi_az` / `enable_read_replica` (**cả hai mặc định `false`**), cost guard hết nói
+tắc `enable_multi_az` / `enable_read_replica`, cost guard hết nói
 dối về read replica.
 Đo được: **LoadProbe 9/9 ở CẢ 1 lẫn 2 instance**, `0 KHÔNG KẾT LUẬN`; `terraform test` **106/106**;
 seeder chạy thật với 2 ca đối chứng âm
 ([bằng chứng](docs/evidence/2026-09-05-postgresql-2-instance.md)).
 
-🔴 **Chưa chạy lên AWS lần nào.** Toàn bộ số ở trên đo ở local. Chưa có: apply thật, seeder vào
-RDS qua `verify-full` với CA thật, failover Multi-AZ, `ReplicaLag`, và **ca đối chứng cho bản vá
-cost guard khi replica đang tồn tại**. Chi phí `HS_RATE_RDS_UP = 0.098` vẫn là số đo trên SQL
-Server — nay là **cận trên**, cố ý chưa sửa cho tới khi Cost Explorer xác nhận sau 24–48h.
+🚨 **Hai khẳng định ở bản trước của đoạn này ĐỀU SAI, và sai theo hướng nguy hiểm — đã sửa
+2026-09-06 bằng cách hỏi thẳng AWS:**
+
+1. Bản trước ghi hai công tắc *"cả hai mặc định `false`"*. Sai một nửa, **về phía tốn tiền**:
+   `envs/prod/variables.tf` ghim `enable_multi_az = true` và `nat_gateway_count = 2`
+   (`terraform.tfvars` cố ý không ghi đè). Multi-AZ tính tiền storage cho **2 AZ kể cả khi RDS
+   `stopped`**, nên ai tin dòng cũ sẽ tính sai sàn chi phí. Chỉ `enable_read_replica` là `false`.
+   ⚠️ Đây là **hợp đồng hai tầng**: default của *module* vẫn `false` (an toàn khi dùng lại
+   module), default ở *envs/prod* mới là `true`. Đọc một tầng rồi kết luận là cách sai này sinh ra.
+2. Bản trước ghi *"Chưa chạy lên AWS lần nào"*. **Apply ĐÃ chạy và đã xong** — AWS trả về
+   `hushstore-db-tf`, `db.t4g.micro`, `MultiAZ: True`, trạng thái `stopped`.
+
+**Thứ thật sự còn thiếu là CỬA SỔ ĐO, không phải apply.** Chưa có: seeder vào RDS qua
+`verify-full` với CA thật · **12 kịch bản bảo mật chạy lại trên cổng 5432** (bản đã nộp đo trên
+`1433`) · failover Multi-AZ · `ReplicaLag` · **ca đối chứng cho bản vá cost guard khi replica
+đang tồn tại**. Chi phí `HS_RATE_RDS_UP = 0.098` vẫn là số đo trên SQL Server — nay là **cận
+trên**, cố ý chưa sửa cho tới khi có hoá đơn thật.
+
+📊 **Trạng thái AWS đo lúc 2026-09-06:** RDS `stopped` (Multi-AZ) · **0** ALB · **0** NAT ·
+**0** EC2 đang chạy. Tức chỉ còn chảy tiền storage.
 
 ⚠️ **Đừng bật `enable_read_replica` rồi để qua đêm.** Có replica thì AWS **từ chối** stop
 primary ⇒ `down.sh` và cost guard mất tác dụng, mà RDS còn tự khởi động lại sau 7 ngày stopped.

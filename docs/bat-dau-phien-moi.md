@@ -22,10 +22,17 @@
 > - Seeder (`psql 17`) chạy thật, kèm **2 ca đối chứng âm** cho `sslmode=verify-full`.
 > - Deadlock `40P01` ép thật → `ConflictClassifier` bắt được cả khi bọc 3 lớp; `42P01` trả `False`.
 >
-> **🔴 CHƯA CHẠY LÊN AWS LẦN NÀO.** Chưa có: apply thật · seeder vào RDS qua `verify-full` với
-> CA thật · failover Multi-AZ · `ReplicaLag` · **ca đối chứng cho bản vá cost guard khi replica
-> đang tồn tại**. `HS_RATE_RDS_UP = 0.098` vẫn là số đo trên SQL Server, nay là **cận trên**,
-> cố ý chưa sửa.
+> **🚨 Bản trước của dòng này ghi "CHƯA CHẠY LÊN AWS LẦN NÀO" — SAI, đã sửa 2026-09-06.**
+> Apply đã chạy xong; AWS trả về `hushstore-db-tf`, `db.t4g.micro`, `MultiAZ: True`, `stopped`.
+> Thứ còn thiếu là **CỬA SỔ ĐO**, không phải apply.
+>
+> **🔴 Còn thiếu:** seeder vào RDS qua `verify-full` với CA thật · **12 kịch bản bảo mật chạy
+> lại trên cổng 5432** (bản đã nộp đo trên `1433` — đây là "Đầu ra số 2" của đề bài, nên nó là
+> món nợ đắt nhất) · failover Multi-AZ · `ReplicaLag` · **ca đối chứng cho bản vá cost guard khi
+> replica đang tồn tại**. `HS_RATE_RDS_UP = 0.098` vẫn là số đo trên SQL Server, nay là **cận
+> trên**, cố ý chưa sửa.
+>
+> 📊 **Trạng thái AWS 2026-09-06:** RDS `stopped` (Multi-AZ) · 0 ALB · 0 NAT · 0 EC2.
 >
 > **⚠️ Đừng bật `enable_read_replica` rồi để qua đêm.** Có replica thì AWS **từ chối** stop
 > primary ⇒ `down.sh` và cost guard mất tác dụng, mà RDS còn tự khởi động lại sau 7 ngày
