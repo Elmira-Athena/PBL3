@@ -77,7 +77,13 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids = [var.rds_sg_id]
   publicly_accessible    = false
 
-  # Công tắc, mặc định false. Standby của Multi-AZ KHÔNG phục vụ đọc
+  # ⚠️ HỢP ĐỒNG HAI TẦNG — đừng đọc một tầng rồi kết luận:
+  #   · default của MODULE này        = false  (an toàn cho ai dùng lại module)
+  #   · default ở envs/prod/variables.tf = TRUE (ghim, và tfvars cố ý không ghi đè)
+  # Nên ở prod Multi-AZ đang BẬT. Bản trước của comment này chỉ ghi "mặc định
+  # false" và người đọc kết luận ngược lại sự thật.
+  #
+  # Standby của Multi-AZ KHÔNG phục vụ đọc
   # ("You can't configure the secondary DB instance to accept database read
   # activity") — Multi-AZ là AVAILABILITY, replica mới là TẢI ĐỌC. Báo cáo phải
   # nói đúng hai chuyện đó, đừng gộp.
