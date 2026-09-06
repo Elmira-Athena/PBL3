@@ -358,8 +358,21 @@ người apply cùng lúc thì người thứ hai bị chặn, tránh hỏng h�
 ## Đường đi của một request
 
 Người dùng mở `https://hushstore.io.vn` và bấm xem sản phẩm. Gói tin đi qua
-**bảy** lớp kiểm soát (ở db tier, NACL và SG gộp chung một số vì chúng luôn đi liền
-nhau, không có bước nào chen giữa — tách ra thì thành tám):
+**tám** lớp kiểm soát, vẽ thành bảy ô đánh số — ô ⑦ gộp hai lớp (NACL db và SG rds)
+cho sơ đồ đỡ dài. Đếm theo *lớp* thì là tám: mỗi tier đều có một NACL ở tầng subnet
+và một SG ở tầng máy, ba tier là sáu, cộng ALB và luật chọn tên miền của nó.
+
+⚠️ **Ba con số, đừng tưởng chúng mâu thuẫn** — chúng đếm ba thứ khác nhau:
+> - **8 lớp** (ở đây) — số *chốt chặn* trên đường đi của một request.
+> - **7 lớp phòng thủ** ([bao-mat-he-thong.md](bao-mat-he-thong.md)) — số *nhóm* biện
+>   pháp bảo vệ, gộp theo loại chứ không theo vị trí.
+> - **12 chốt kiểm** (cũng tài liệu đó) — vì NACL **stateless** nên mỗi NACL bị hỏi
+>   **hai lần**: một lần lúc gói tin đi vào, một lần nữa lúc câu trả lời đi ra.
+>
+> Cùng một hệ thống, ba cách đếm. Nếu thầy hỏi "hệ thống có mấy lớp bảo vệ", hãy hỏi
+> lại *"thầy đếm chốt trên đường đi hay đếm nhóm biện pháp?"* — đó là câu trả lời
+> đúng, không phải né tránh.
+
 
 **Trước khi đọc sơ đồ — Cloudflare là ai và vì sao nó ở đây.** Tên miền
 `hushstore.io.vn` được quản lý DNS bởi **Cloudflare** (dịch vụ miễn phí, KHÔNG
