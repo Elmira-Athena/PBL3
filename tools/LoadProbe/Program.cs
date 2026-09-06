@@ -54,7 +54,8 @@ var all = new List<IProbeScenario>
     new S06_ApproveInventoryCheck(),
     new S07_PosVersusInventoryLoss(),
     new S08_CreateQuotationRace(),
-    new S09_RefreshTokenRace()
+    new S09_RefreshTokenRace(),
+    new S11_LoginRateLimitShared()
 };
 
 var selected = config.ScenarioIds.Count == 0
@@ -99,7 +100,12 @@ for (var i = 0; i < selected.Count; i++)
 
         // Cửa chặn phép đo rỗng, chạy TRƯỚC phần khẳng định bất biến. Một kịch bản
         // mà 49/50 request ăn 429 vẫn thoả mọi bất biến — vì code cần đo chưa chạy.
-        var vacuity = fire.VacuityReason(scenario.ExpectedRequests);
+        //
+        // Ngoại lệ duy nhất: kịch bản đo CHÍNH rate limiter (S11), nơi 429 là kết quả
+        // mong đợi. Nó tự khẳng định số 429 và cột Count trong AssertAsync, nên cửa
+        // chặn 429 ở đây sẽ luôn dập nó thành KHÔNG KẾT LUẬN nếu không loại trừ.
+        var vacuity = fire.VacuityReason(
+            scenario.ExpectedRequests, scenario.RateLimitIsUnderTest);
         report.Outcome = vacuity is not null
             ? ProbeOutcome.Inconclusive(vacuity, $"Mã HTTP: {fire.Histogram()}")
             : await scenario.AssertAsync(env, fire);

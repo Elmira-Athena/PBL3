@@ -6,6 +6,7 @@ using PBL3.Shared.DTOs.Auth;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Customers;
 using System.Security.Claims;
+using PBL3.API.Filters;
 
 namespace PBL3.API.Controllers.Storefront
 {
@@ -24,7 +25,7 @@ namespace PBL3.API.Controllers.Storefront
         /// Đăng nhập: Nhận Email + Password, trả về cặp Access Token + Refresh Token.
         /// </summary>
         [HttpPost("login")]
-        [EnableRateLimiting("LoginRateLimit")]
+        [DbRateLimit("LoginRateLimit", permitLimit: 5, windowSeconds: 60)]
         [ProducesResponseType(typeof(ApiResult<TokenResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResult<TokenResponse>), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
@@ -43,7 +44,7 @@ namespace PBL3.API.Controllers.Storefront
         /// Làm mới Token: Nhận cặp Access Token (hết hạn) + Refresh Token, trả về cặp Token mới.
         /// </summary>
         [HttpPost("refresh-token")]
-        [EnableRateLimiting("RefreshRateLimit")]
+        [DbRateLimit("RefreshRateLimit", permitLimit: 10, windowSeconds: 60)]
         [ProducesResponseType(typeof(ApiResult<TokenResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResult<TokenResponse>), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
@@ -91,7 +92,7 @@ namespace PBL3.API.Controllers.Storefront
         /// Đăng ký tài khoản (UC001): Khách hàng tự đăng ký. Trả về thông báo thành công (yêu cầu khách tự đăng nhập).
         /// </summary>
         [HttpPost("register")]
-        [EnableRateLimiting("RegisterRateLimit")]
+        [DbRateLimit("RegisterRateLimit", permitLimit: 3, windowSeconds: 3600)]
         [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResult<bool>), StatusCodes.Status400BadRequest)]

@@ -32,7 +32,7 @@ dotnet run --project tools/LoadProbe -- --out docs/evidence/loadprobe
 Mã thoát: `0` tất cả đạt · `1` có bất biến sai · `2` có kịch bản không kết luận được ·
 `3` lỗi cấu hình/môi trường.
 
-## Chín kịch bản
+## Kịch bản
 
 | # | Bắn | Bất biến kiểm sau |
 |---|---|---|
@@ -45,6 +45,7 @@ Mã thoát: `0` tất cả đạt · `1` có bất biến sai · `2` có kịch 
 | S07 | POS bán serial S **xen kẽ** kiểm kê đánh S là Lost | Nếu đã bán thì `Status ≠ Lost` |
 | S08 | 2 lần `create-quotation` song song | Đúng 1 báo giá `Status=0` |
 | S09 | 2 lần `refresh-token` cùng cặp | Không ai bị đăng xuất oan |
+| S11 | 20 lần `login` song song cùng một IP | Đúng 5 đi qua, 15 ăn 429, **một** hàng `RateLimitCounters` có `Count = 20` |
 
 ## Bốn quyết định thiết kế, mỗi cái đóng một cách đo sai
 
@@ -56,6 +57,17 @@ Kịch bản nào bị **429**, lỗi tầng vận chuyển, hay bắn thiếu r
 Vì sao bắt buộc: một kịch bản mà 49/50 request ăn 429 sẽ **thoả mọi bất biến** — không
 có voucher nào vượt hạn mức, không có mã đơn nào trùng — chỉ vì code cần đo chưa từng
 chạy. Nếu in ra "ĐẠT" thì báo cáo đang nói dối, và nói dối theo hướng an toàn giả.
+
+**Ngoại lệ duy nhất: S11**, kịch bản đo chính rate limiter — ở đó 429 là kết quả *mong
+đợi*. Nó bật cờ `RateLimitIsUnderTest`, và cờ đó tắt **đúng một** nhánh 429 của
+`FireReport.VacuityReason`; lỗi tầng vận chuyển và bắn thiếu request vẫn dập nó thành
+`KHÔNG KẾT LUẬN` như mọi kịch bản khác. S11 cũng tự có bốn cửa `KHÔNG KẾT LUẬN` riêng:
+không tìm thấy hàng đếm (⇒ bộ đếm dùng chung chưa nằm trên đường đăng nhập), thấy nhiều
+ô đếm, ô đếm mang số dư từ trước, và bảng `RateLimitCounters` chưa tồn tại.
+
+⚠️ S11 đốt trọn cửa sổ **1 phút** của `LoginRateLimit`. Chạy lại nó trong vòng một phút
+thì cả 20 request ăn 429 và kết quả là `KHÔNG KẾT LUẬN` (không phải HỎNG) — chờ hết cửa
+sổ. Nó cũng tự canh mốc cửa sổ trước khi bắn để loạt request không bị chẻ làm hai ô đếm.
 
 ### 2. Probe **tự ký** access token, không gọi `/api/auth/login`
 

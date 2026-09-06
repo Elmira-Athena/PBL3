@@ -52,10 +52,21 @@ variable "web_sg_id" {
 # Nên trần vẫn nâng được — nhưng phải khai tường minh rằng tiền đề đã xử lý.
 # Xoá chốt bằng cách sửa test là bỏ mất chính thứ nó tồn tại để nhắc.
 #
-# Tiền đề coi là ĐÃ XỬ LÝ khi bộ đếm rate limit dùng chung giữa các task
-# (`AddStackExchangeRedisCache` + limiter đọc/ghi qua đó), hoặc rate limit được
-# đẩy lên tầng trước ALB (WAF rate-based rule). Cả hai đều KHÔNG kiểm được từ
-# Terraform, nên đây là lời khai của người vận hành, không phải phép đo.
+# Tiền đề coi là ĐÃ XỬ LÝ khi bộ đếm của BỐN policy XÁC THỰC — LoginRateLimit,
+# RegisterRateLimit, RefreshRateLimit, LookupRateLimit — nằm ở nơi dùng chung
+# giữa mọi task (bảng `RateLimitCounters` trong PostgreSQL, hoặc Redis), hoặc
+# rate limit được đẩy lên tầng trước ALB (WAF rate-based rule). Mọi lối đó đều
+# KHÔNG kiểm được từ Terraform, nên đây là lời khai của người vận hành, không
+# phải phép đo.
+#
+# ⚠️ CỜ NÀY KHÔNG NÓI GÌ VỀ HAI POLICY CÒN LẠI, và đó là chủ ý, không phải sót.
+# `GlobalLimiter` (100 req/10 giây) và `PublicReadRateLimit` (60 req/phút) vẫn
+# đếm trong RAM TỪNG TIẾN TRÌNH, nên với N instance chúng thành 100N và 60N.
+# Lý do giữ vậy: hai cái đó chạm MỌI request duyệt catalogue; đặt một lần ghi DB
+# lên đường nóng đó là biến DB thành cổ chai — đúng ngược mục đích của việc
+# scale ra. Đánh đổi được chấp nhận vì chúng là chốt chặn burst THÔ, không phải
+# bất biến đang được chấm: không bằng chứng nào đã nộp dựa vào con số của chúng,
+# khác hẳn 5 req/phút của KB6. Đừng "sửa" hai cái này để cờ trông trọn vẹn hơn.
 variable "max_instance_count" {
   description = "TRẦN số EC2 container instance (max_size của ASG). > 1 đòi rate_limiter_is_distributed = true"
   type        = number
@@ -68,12 +79,12 @@ variable "max_instance_count" {
 
   validation {
     condition     = var.max_instance_count == 1 || var.rate_limiter_is_distributed
-    error_message = "max_instance_count > 1 đòi rate_limiter_is_distributed = true. Rate limiter của API đếm trong RAM tiến trình (src/API/Program.cs, RateLimitPartition.GetFixedWindowLimiter), nên 2 task biến 5 req/phút thành 10 và làm kịch bản KB6 của báo cáo bảo mật sai sự thật. Sửa tầng app trước, rồi khai cờ này."
+    error_message = "max_instance_count > 1 đòi rate_limiter_is_distributed = true. Cờ đó khẳng định BỐN policy XÁC THỰC — LoginRateLimit, RegisterRateLimit, RefreshRateLimit, LookupRateLimit — đã đếm ở nơi dùng chung giữa mọi task (bảng RateLimitCounters trong PostgreSQL, hoặc Redis, hoặc WAF), nên 5 lần đăng nhập/phút mỗi IP vẫn là 5 với N task và kịch bản KB6 của báo cáo bảo mật vẫn đúng sự thật. Chưa làm điều đó thì đừng khai cờ: rate limiter đếm trong RAM tiến trình (src/API/Program.cs, RateLimitPartition.GetFixedWindowLimiter) biến 5 req/phút thành 5N, và sai âm thầm — không log, không alarm, ALB vẫn xanh. Cờ này KHÔNG khẳng định GlobalLimiter và PublicReadRateLimit: hai policy đó CỐ Ý vẫn per-instance (thành 100N req/10 giây và 60N req/phút) vì chúng chạm mọi request duyệt catalogue, và ghi DB trên đường nóng đó là biến DB thành cổ chai — đúng ngược mục đích của việc scale ra. Đánh đổi đó ĐƯỢC CHẤP NHẬN: chúng là chốt chặn burst thô, không có bằng chứng nào đã nộp dựa vào con số của chúng."
   }
 }
 
 variable "rate_limiter_is_distributed" {
-  description = "Lời khai: bộ đếm rate limit đã dùng chung giữa các task (Redis/ElastiCache) hoặc đã đẩy lên WAF. Là ĐIỀU KIỆN để max_instance_count > 1"
+  description = "Lời khai: bộ đếm của 4 policy XÁC THỰC (login/register/refresh/lookup) đã dùng chung giữa mọi task — bảng RateLimitCounters trong PostgreSQL, hoặc Redis/ElastiCache, hoặc đã đẩy lên WAF. KHÔNG nói gì về GlobalLimiter và PublicReadRateLimit: hai policy đó cố ý vẫn đếm per-instance (100N/10 giây và 60N/phút) và điều đó được chấp nhận. Là ĐIỀU KIỆN để max_instance_count > 1"
   type        = bool
   default     = false
 }

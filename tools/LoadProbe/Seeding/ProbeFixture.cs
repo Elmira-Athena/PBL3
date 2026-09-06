@@ -452,7 +452,28 @@ public sealed class ProbeFixture
             $"DELETE FROM \"RefreshTokens\" WHERE \"UserId\" IN ({probeUsers})",
             $"DELETE FROM \"AppUserRoles\" WHERE \"UserId\" IN ({probeUsers})",
             $"DELETE FROM \"AppUserClaims\" WHERE \"UserId\" IN ({probeUsers})",
-            "DELETE FROM \"AppUsers\" WHERE \"Email\" LIKE '%@loadprobe.local'"
+            "DELETE FROM \"AppUsers\" WHERE \"Email\" LIKE '%@loadprobe.local'",
+
+            // Bộ đếm rate limit do S11 sinh ra.
+            //
+            // 🚨 GUARD to_regclass LÀ BẮT BUỘC, KHÔNG PHẢI CẨN THẬN THÁI QUÁ. Bảng
+            // RateLimitCounters chưa có trong migration InitialCreatePostgres, nên trên một DB
+            // chưa cập nhật thì DELETE trần ném 42P01 — và Program.cs gọi CleanupAsync() NGOÀI
+            // try/catch, ngay trước vòng chạy kịch bản. Tức một dòng dọn dẹp hỏng sẽ giết cả
+            // lần chạy và KÉO THEO 9 kịch bản không liên quan. Guard biến nó thành no-op.
+            //
+            // ⚠️ Xoá ô đếm của cửa sổ ĐANG MỞ là hoàn lại hạn mức cho IP đó. Chỉ an toàn vì
+            // Program.cs gọi CleanupAsync đúng hai chỗ: trước mọi kịch bản và sau tất cả —
+            // TUYỆT ĐỐI không được gọi giữa FireAsync và AssertAsync của S11, làm vậy là tự
+            // xoá bằng chứng rồi kết luận "không có hàng đếm nào".
+            """
+            DO $$ BEGIN
+              IF to_regclass('"RateLimitCounters"') IS NOT NULL THEN
+                DELETE FROM "RateLimitCounters" WHERE "PartitionKey" LIKE 'LoginRateLimit:%';
+                DELETE FROM "RateLimitCounters" WHERE "WindowStart" < NOW() - INTERVAL '1 hour';
+              END IF;
+            END $$;
+            """
         };
 
         foreach (var sql in statements)

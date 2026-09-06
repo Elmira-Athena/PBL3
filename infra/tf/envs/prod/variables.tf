@@ -158,7 +158,7 @@ variable "max_instance_count" {
 }
 
 variable "rate_limiter_is_distributed" {
-  description = "Lời khai: bộ đếm rate limit của API đã dùng chung giữa các task (Redis/ElastiCache) hoặc đã đẩy lên WAF. ĐIỀU KIỆN để max_instance_count > 1"
+  description = "Lời khai: bộ đếm của 4 policy XÁC THỰC (login/register/refresh/lookup) đã dùng chung giữa mọi task — RateLimitCounters trong PostgreSQL, hoặc Redis/ElastiCache, hoặc đã đẩy lên WAF. GlobalLimiter và PublicReadRateLimit cố ý vẫn per-instance, và điều đó được chấp nhận. ĐIỀU KIỆN để max_instance_count > 1"
   type        = bool
   default     = false
 }

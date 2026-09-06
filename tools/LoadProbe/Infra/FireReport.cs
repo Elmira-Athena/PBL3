@@ -68,9 +68,14 @@ public sealed class FireReport
     /// Gọi hàm này TRƯỚC khi kết luận Pass. Một kịch bản mà 49/50 request ăn 429
     /// vẫn thoả mọi bất biến — vì code cần kiểm chưa từng chạy.
     /// </summary>
-    public string? VacuityReason(int expectedRequests)
+    /// <param name="rateLimitIsUnderTest">
+    /// <c>true</c> chỉ với kịch bản đang đo CHÍNH rate limiter (S11), nơi 429 là kết quả mong
+    /// đợi. Nó tắt đúng một nhánh dưới đây; hai cửa chặn còn lại giữ nguyên, vì "429 là mong
+    /// đợi" không có nghĩa "0 request tới được API cũng ổn".
+    /// </param>
+    public string? VacuityReason(int expectedRequests, bool rateLimitIsUnderTest = false)
     {
-        if (RateLimited > 0)
+        if (RateLimited > 0 && !rateLimitIsUnderTest)
         {
             return $"{RateLimited}/{Total} request bị rate limiter chặn (429). Tăng --pace " +
                    "hoặc giảm số request; trần chung là 100 request/10 giây mỗi IP.";

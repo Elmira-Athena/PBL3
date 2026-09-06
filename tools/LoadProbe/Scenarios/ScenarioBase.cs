@@ -9,6 +9,10 @@ public abstract class ScenarioBase : IProbeScenario
     public abstract string Invariant { get; }
     public abstract int ExpectedRequests { get; }
 
+    /// <inheritdoc />
+    /// <remarks>Chỉ S11 (đo chính rate limiter) ghi đè cờ này.</remarks>
+    public virtual bool RateLimitIsUnderTest => false;
+
     protected ProbeFixture Fixture { get; private set; } = null!;
 
     public virtual Task SetupAsync(ProbeEnvironment env, ProbeFixture fixture)

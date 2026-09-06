@@ -54,6 +54,8 @@ using PBL3.Shared.Validators.Reviews;
 using PBL3.Shared.DTOs.Inventory;
 using PBL3.API.Json;
 using PBL3.Shared.Validators.Inventory;
+using PBL3.Core.RateLimiting;
+using PBL3.Infrastructure.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -443,23 +445,32 @@ builder.Services.AddRateLimiter(options =>
             });
     });
 
-    // ── Đăng nhập: 5 lần/phút MỖI IP (bản cũ là 5 lần/phút cho cả thế giới) ──
-    AddPerIpFixedWindow(options, "LoginRateLimit", permitLimit: 5, TimeSpan.FromMinutes(1));
-
-    // ── Đăng ký: 3 lần/giờ mỗi IP. `register` ghi DB không giới hạn là đường
-    //    làm phình bảng AppUsers rẻ nhất. ──
-    AddPerIpFixedWindow(options, "RegisterRateLimit", permitLimit: 3, TimeSpan.FromHours(1));
-
-    // ── Refresh token: 10 lần/phút mỗi IP. Refresh token xoay vòng mỗi lần
-    //    dùng nên nhịp bình thường rất thấp; vượt xa mức này là dấu hiệu dò. ──
-    AddPerIpFixedWindow(options, "RefreshRateLimit", permitLimit: 10, TimeSpan.FromMinutes(1));
-
-    // ── Hai endpoint tra cứu là ORACLE: tra serial và dò mã voucher. Chúng trả
-    //    lời "có tồn tại hay không" cho người chưa đăng nhập, tức cho phép quét
-    //    sạch không gian mã nếu không chặn nhịp. ──
-    AddPerIpFixedWindow(options, "LookupRateLimit", permitLimit: 10, TimeSpan.FromMinutes(1));
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BỐN POLICY XÁC THỰC ĐÃ RA KHỎI ĐÂY — chúng nay đếm ở DB, dùng chung giữa
+    // các task. Xem [DbRateLimit] trên chính các action:
+    //
+    //   LoginRateLimit     5 / 1 phút    AuthController.Login
+    //   RegisterRateLimit  3 / 1 giờ     AuthController.Register
+    //   RefreshRateLimit  10 / 1 phút    AuthController.Refresh
+    //   LookupRateLimit   10 / 1 phút    ServiceTicketsController · VouchersController
+    //
+    // 🚨 ĐỪNG THÊM LẠI CHÚNG VÀO ĐÂY. Hai cơ chế cùng đếm một endpoint thì hạn
+    // mức thật là giá trị nhỏ hơn của hai, và không ai đoán được là bao nhiêu.
+    //
+    // Vì sao phải chuyển: bộ đếm của System.Threading.RateLimiting nằm trong RAM
+    // của MỘT tiến trình, nên N task ⇒ mọi hạn mức nhân N. "5 lần đăng nhập/phút"
+    // thành 5N. Đó là kịch bản KB6 của docs/security-validation-report.md, đã nộp
+    // với số đo "req 1-5 → 400, req 6-20 → 429" — scale ra mà không sửa là biến
+    // một bằng chứng đã nộp thành lời khai sai, và sai ÂM THẦM.
+    // ═══════════════════════════════════════════════════════════════════════════
 
     // ── Đọc công khai (catalogue, tìm kiếm): 60 lần/phút mỗi IP. ──
+    //
+    // ⚠️ CỐ Ý Ở LẠI IN-PROCESS, tức per-instance: với N task nó thành 60N/phút.
+    // Chấp nhận được, và đây là lý lẽ — endpoint này chạm MỌI request duyệt
+    // catalogue, nên ghi DB trên đường nóng đó là biến DB thành cổ chai, đúng
+    // ngược mục đích của việc scale ra. Nó là chốt chặn burst thô, và KHÔNG có
+    // bằng chứng nào đã nộp dựa vào con số của nó.
     AddPerIpFixedWindow(options, "PublicReadRateLimit", permitLimit: 60, TimeSpan.FromMinutes(1));
 
     // ── Thân phản hồi khi bị chặn ──
@@ -486,6 +497,14 @@ builder.Services.AddRateLimiter(options =>
             cancellationToken);
     };
 });
+
+// Bộ đếm rate limit dùng chung — PostgreSQL, không phải RAM tiến trình.
+// Scoped vì nó dùng HushStoreDbContext (cũng scoped).
+builder.Services.AddScoped<IRateLimitStore, PostgresRateLimitStore>();
+
+// Dọn hàng đếm đã hết hạn. Chạy nền, KHÔNG chen vào đường request —
+// theo luật "Async vs Sync Decision" của CLAUDE.md.
+builder.Services.AddHostedService<PBL3.API.RateLimitCounterCleanupService>();
 
 // Phân vùng theo IP client. Đặt SAU UseForwardedHeaders trong pipeline nên
 // RemoteIpAddress đã là IP thật cho traffic qua ALB.

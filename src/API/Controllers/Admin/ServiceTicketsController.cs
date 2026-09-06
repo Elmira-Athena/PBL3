@@ -10,6 +10,7 @@ using PBL3.Infrastructure.Concurrency;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.ServiceTickets;
 using Microsoft.AspNetCore.RateLimiting;
+using PBL3.API.Filters;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -43,7 +44,7 @@ namespace PBL3.API.Controllers.Admin
         // Nhưng đây là ORACLE LIỆT KÊ SERIAL: nó xác nhận một mã serial có tồn tại
         // trong hệ thống hay không, tức cho phép dò sạch kho serial. Kẹp nhịp lại.
         [AllowAnonymous]
-        [EnableRateLimiting("LookupRateLimit")]
+        [DbRateLimit("LookupRateLimit", permitLimit: 10, windowSeconds: 60)]
         public async Task<ApiResult<ServiceTicketIntakeEvaluationDto>> EvaluateIntake([FromBody] string serialNumber)
         {
             try

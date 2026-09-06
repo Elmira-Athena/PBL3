@@ -24,6 +24,20 @@ public interface IProbeScenario
     /// <summary>Số request kịch bản dự định bắn, dùng để phát hiện phép đo rỗng.</summary>
     int ExpectedRequests { get; }
 
+    /// <summary>
+    /// <c>true</c> nghĩa là CHÍNH rate limiter là thứ đang được đo, nên 429 là kết quả MONG
+    /// ĐỢI chứ không phải dấu hiệu phép đo rỗng.
+    ///
+    /// 🚨 Cờ này chỉ tắt DUY NHẤT nhánh 429 của <see cref="FireReport.VacuityReason"/>. Các
+    /// cửa chặn khác (lỗi tầng vận chuyển, bắn thiếu request) vẫn giữ nguyên — nếu không thì
+    /// một kịch bản bật cờ này sẽ mất luôn lưới an toàn và "0 request nào tới được API" cũng
+    /// đọc thành ĐẠT.
+    ///
+    /// Mặc định <c>false</c> ở <c>ScenarioBase</c>: tám kịch bản còn lại đo tính đúng đắn dữ
+    /// liệu, và với chúng 429 vẫn là bằng chứng rỗng như trước.
+    /// </summary>
+    bool RateLimitIsUnderTest { get; }
+
     Task SetupAsync(ProbeEnvironment env, ProbeFixture fixture);
 
     Task<FireReport> FireAsync(ProbeEnvironment env);

@@ -5,6 +5,7 @@ using PBL3.Service.Vouchers;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Vouchers;
 using Microsoft.AspNetCore.RateLimiting;
+using PBL3.API.Filters;
 
 namespace PBL3.API.Controllers.Admin
 {
@@ -158,7 +159,7 @@ namespace PBL3.API.Controllers.Admin
         // Nhưng đây là một ORACLE: nó trả lời "mã này có tồn tại không" nên cho phép
         // quét sạch không gian mã nếu không chặn nhịp. Kẹp bằng LookupRateLimit.
         [AllowAnonymous]
-        [EnableRateLimiting("LookupRateLimit")]
+        [DbRateLimit("LookupRateLimit", permitLimit: 10, windowSeconds: 60)]
         [ProducesResponseType(typeof(ApiResult<ValidateVoucherResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> ValidateCode([FromBody] ValidateVoucherRequest request)
         {

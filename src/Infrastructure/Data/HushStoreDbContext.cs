@@ -61,6 +61,13 @@ namespace PBL3.Infrastructure.Data
         // Storefront
         public DbSet<Banner> Banners { get; set; } = null!;
 
+        /// <summary>
+        /// Bộ đếm rate limit dùng chung giữa các task API — xem <see cref="RateLimitCounter"/>.
+        /// Đây là điều kiện mà <c>infra/tf/modules/ecs/variables.tf</c> đòi trước khi cho
+        /// <c>max_instance_count &gt; 1</c>.
+        /// </summary>
+        public DbSet<RateLimitCounter> RateLimitCounters { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder); // Identity mappings
@@ -175,6 +182,33 @@ namespace PBL3.Infrastructure.Data
                 // mọi text đều UTF-8 nên Npgsql bỏ qua — giữ lại là code chết gây hiểu nhầm.
                 entity.Property(u => u.PhoneNumber).HasMaxLength(20);
             });
+            modelBuilder.Entity<RateLimitCounter>(entity =>
+            {
+                entity.ToTable("RateLimitCounters");
+
+                // Khoá chính GHÉP (PartitionKey, WindowStart) — và nó phải là KHOÁ CHÍNH, không
+                // phải chỉ một index. `ON CONFLICT ("PartitionKey", "WindowStart")` trong
+                // PostgresRateLimitStore chỉ hợp lệ khi có một ràng buộc unique đúng trên cặp
+                // cột đó; thiếu nó thì câu lệnh KHÔNG chạy được — hỏng lúc chạy, không lúc
+                // biên dịch, và hỏng ở đúng đường đăng nhập.
+                entity.HasKey(c => new { c.PartitionKey, c.WindowStart });
+
+                // 128 ký tự đủ cho "PolicyName:IPv6". Không để mặc định text vô hạn: khoá chính
+                // là nơi PostgreSQL phải so sánh mọi lần upsert.
+                entity.Property(c => c.PartitionKey).HasMaxLength(128).IsRequired();
+
+                entity.Property(c => c.WindowStart).HasColumnType("timestamp with time zone");
+                entity.Property(c => c.Count).IsRequired();
+
+                // Index để RateLimitCounterCleanupService quét theo thời gian. Không có nó thì
+                // câu DELETE dọn rác phải seq-scan cả bảng.
+                entity.HasIndex(c => c.WindowStart)
+                      .HasDatabaseName("IX_RateLimitCounters_WindowStart");
+
+                // ⚠️ KHÔNG có global query filter IsDeleted ở đây, và cũng KHÔNG có cột đó.
+                // Đây là dữ liệu vận hành sống ngắn; soft-delete chỉ làm bảng phình.
+            });
+
             modelBuilder.Entity<UserProfile>(entity =>
             {
                 entity.ToTable("UserProfiles");

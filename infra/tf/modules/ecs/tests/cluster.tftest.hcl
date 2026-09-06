@@ -31,11 +31,11 @@ run "asg_mac_dinh_gioi_han_1_instance" {
 
   # Trần MẶC ĐỊNH vẫn là 1, và đó là điều đáng chốt.
   #
-  # Chốt cũ ghim cứng `max_size == 1` để chặn việc chạy 2 task API khi rate
-  # limiter còn đếm trong RAM tiến trình. Trần nay nâng được, nhưng chỉ khi khai
-  # tường minh `rate_limiter_is_distributed = true` — nên bất biến thật đã
-  # chuyển từ "trần luôn bằng 1" sang "trần chỉ vượt 1 khi tiền đề được khai".
-  # Hai run block dưới đây đo đúng hai nửa đó.
+  # Chốt cũ ghim cứng `max_size == 1` để chặn việc chạy 2 task API khi bộ đếm
+  # rate limit của các policy XÁC THỰC còn nằm trong RAM tiến trình. Trần nay
+  # nâng được, nhưng chỉ khi khai tường minh `rate_limiter_is_distributed = true`
+  # — nên bất biến thật đã chuyển từ "trần luôn bằng 1" sang "trần chỉ vượt 1
+  # khi tiền đề được khai". Hai run block dưới đây đo đúng hai nửa đó.
   assert {
     condition     = aws_autoscaling_group.this.max_size == 1
     error_message = "Với var.max_instance_count mặc định (1), max_size phải = 1. Trần là bán kính thiệt hại khi có gì scale ngoài ý muốn, nên nó không được tự nới."
@@ -64,6 +64,13 @@ run "asg_mac_dinh_gioi_han_1_instance" {
 # nâng max_instance_count = 2 mà quên cờ sẽ được `terraform validate` cho qua
 # nếu validation bị xoá, và không gì báo. Test này khẳng định validation THẬT SỰ
 # chặn — nó phải THẤT BẠI, và thất bại đúng ở biến max_instance_count.
+#
+# ⚠️ Cái mà cờ khai — và cái nó KHÔNG khai — đọc ở error_message của biến
+# max_instance_count trong ../variables.tf: nó chỉ nói 4 policy xác thực
+# (login/register/refresh/lookup) đã đếm chung giữa các task. `GlobalLimiter` và
+# `PublicReadRateLimit` cố ý vẫn per-instance và điều đó được chấp nhận, nên
+# ĐỪNG thêm một run block đòi chúng phải "chung" — không có gì để đo, và một
+# test như vậy sẽ ép người sau đi sửa thứ đang cố ý để vậy.
 run "tran_2_khong_co_loi_khai_thi_bi_chan" {
   command = plan
 
