@@ -10,6 +10,11 @@
 > - **Tài liệu này** — *vì sao nó chặn được*, và **trả lời được câu hỏi phản biện**
 >
 > Đọc mục 1, 2 và 6 là đủ để bảo vệ. Mục 3 là chi tiết từng lớp, tra khi cần.
+>
+> ⚠️ **Ngoại lệ:** nếu bạn chưa từng dùng AWS, đọc **hai đoạn đầu của mục 3.1 và
+> 3.2** trước — mục 1 dùng "Network ACL" và "Security Group" như thuật ngữ đã biết,
+> nhưng định nghĩa của chúng lại nằm ở mục 3. Rất ngắn: **NACL lọc theo dải IP, gắn
+> vào subnet, có DENY. Security Group lọc theo danh tính, gắn vào máy, chỉ có ALLOW.**
 
 ---
 
@@ -30,9 +35,10 @@ cần gì để chạy?"*, rồi cấp đúng thế, rồi **chứng minh** rằ
 làm được.
 
 Ví dụ cụ thể trong hệ thống này: container API cần ghi ảnh sản phẩm lên S3. Nên
-role của nó có `s3:PutObject` — và **không có** quyền nào với RDS, dù nó nói
+**role** của nó (*role* = một hồ sơ quyền do AWS cấp cho container, thay cho việc
+nhét mật khẩu vào code — xem Lớp 5 bên dưới) có `s3:PutObject` — và **không có** quyền nào với RDS, dù nó nói
 chuyện với database suốt ngày. Vì nó nói chuyện với database qua **kết nối
-SQL trên port 1433**, không qua **API của AWS**. Hai đường hoàn toàn khác nhau, và
+PostgreSQL trên port 5432**, không qua **API của AWS**. Hai đường hoàn toàn khác nhau, và
 gộp chúng lại là chỗ nhiều người mất điểm.
 
 ### Phòng thủ nhiều lớp (defense in depth)
@@ -65,14 +71,14 @@ flowchart TB
 
     subgraph L1["Lớp 1 — Network ACL (stateless, có DENY)"]
         L1a["nacl-public: chỉ 80, 443 vào<br/>rule 50 DENY được 1 IP cụ thể"]
-        L1b["nacl-app: rule 90 DENY 22<br/>rule 95 DENY 1433"]
-        L1c["nacl-db: CHỈ 1433 từ app CIDR"]
+        L1b["nacl-app: 3 rule DENY<br/>90 DENY 22 · 95 DENY 5432 · 115 DENY 8080"]
+        L1c["nacl-db: CHỈ 5432 từ app CIDR"]
     end
 
     subgraph L2["Lớp 2 — Security Group (stateful, chỉ allow)"]
         L2a["sg-alb: 80/443 ← internet<br/>egress CHỈ tới sg-web"]
         L2b["sg-web: 80/8080 ← CHỈ sg-alb<br/>KHÔNG có rule 22"]
-        L2c["sg-rds: 1433 ← CHỈ sg-web<br/>egress RỖNG"]
+        L2c["sg-rds: 5432 ← CHỈ sg-web<br/>egress RỖNG"]
     end
 
     subgraph L3["Lớp 3 — Application Load Balancer"]
@@ -81,7 +87,7 @@ flowchart TB
     end
 
     subgraph L4["Lớp 4 — Kiến trúc mạng"]
-        L4a["EC2 KHÔNG có IP public"]
+        L4a["EC2 (máy chủ chạy container) KHÔNG có IP public"]
         L4b["Subnet db KHÔNG có route ra Internet"]
     end
 
@@ -91,18 +97,18 @@ flowchart TB
     end
 
     subgraph L6["Lớp 6 — Bí mật"]
-        L6a["SSM SecureString, mã hoá bằng KMS"]
-        L6b["Hai tập bí mật giao nhau = RỖNG"]
+        L6a["SSM SecureString: kho mật khẩu của AWS<br/>mã hoá bằng KMS (dịch vụ quản lý khoá)"]
+        L6b["Bí mật container đọc được ∩<br/>bí mật máy chủ đọc được = RỖNG"]
     end
 
     subgraph L7["Lớp 7 — Ứng dụng"]
-        L7a["JWT: 4 phép kiểm, lệch giờ tối đa 1 phút"]
+        L7a["JWT: 4 phép kiểm (chữ ký · hạn dùng<br/>issuer · audience), lệch giờ tối đa 1 phút"]
         L7b["Rate limit đăng nhập: 5 lần/phút"]
         L7c["Truy vấn ĐÓNG KHUNG theo userId trong token"]
         L7d["EF Core tham số hoá → không SQL injection"]
     end
 
-    DB["🗄️ RDS SQL Server"]
+    DB["🗄️ RDS PostgreSQL 17"]
 
     A --> L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> DB
 
@@ -155,7 +161,7 @@ sequenceDiagram
     participant AP as container api (8080)
     participant ND as nacl-db
     participant SR as sg-rds
-    participant DB as RDS SQL Server
+    participant DB as RDS PostgreSQL
 
     Note over C: DNS: hushstore.io.vn → tên DNS của ALB
     C->>NP: TCP 443 (SYN)
@@ -166,17 +172,17 @@ sequenceDiagram
     Note over LB: handshake TLS bằng cert ACM<br/>ssl_policy chỉ cho TLS 1.2 / 1.3<br/>rồi kiểm Host header: 2 tên miền<br/>mọi Host khác → 403
     LB->>NP: OUT 100/110 → app tier 80,8080
     NP->>NA: tới app tier
-    Note over NA: IN 90 DENY 22 · IN 95 DENY 1433<br/>IN 100/110 allow ← public tier<br/>IN 115 DENY 8080 ← 0.0.0.0/0<br/>IN 120 allow 1024-65535 ← mọi nơi
+    Note over NA: IN 90 DENY 22 · IN 95 DENY 5432<br/>IN 100/110 allow ← public tier<br/>IN 115 DENY 8080 ← 0.0.0.0/0<br/>IN 120 allow 1024-65535 ← mọi nơi
     NA->>SW: qua
     Note over SW: ingress 80,8080 ← CHỈ sg-alb<br/>KHÔNG có rule port 22 nào
     SW->>AP: qua
     Note over AP: JWT 4 phép kiểm · rate limit 5/phút<br/>truy vấn ĐÓNG KHUNG theo userId trong token
-    AP->>NA: OUT 100 → db tier 1433
-    NA->>SW: EGRESS 1433 → sg-rds
+    AP->>NA: OUT 100 → db tier 5432
+    NA->>SW: EGRESS 5432 → sg-rds
     SW->>ND: tới db tier
-    Note over ND: IN 100 allow 1433 ← app tier<br/>(rule duy nhất)
+    Note over ND: IN 100 allow 5432 ← app tier<br/>(rule duy nhất)
     ND->>SR: qua
-    Note over SR: ingress 1433 ← CHỈ sg-web<br/>egress RỖNG
+    Note over SR: ingress 5432 ← CHỈ sg-web<br/>egress RỖNG
     SR->>DB: qua
 
     DB-->>ND: OUT 100 → app tier 1024-65535
@@ -192,14 +198,14 @@ sequenceDiagram
 | `nacl-public` IN | Gói tin có được vào **subnet** này? | Mất khả năng **chặn theo IP** — SG chỉ có allow-list, không có deny |
 | `sg-alb` IN | Gói tin có được vào **máy** này? | Không mất nhiều: 80/443 vốn mở cho cả Internet. Giá trị của `sg-alb` nằm ở chiều **egress** |
 | ALB | Request gửi tới **tên miền** nào? Có mã hoá không? | Mất chống Host header injection, và mất luôn TLS |
-| `nacl-app` IN | Gói tin có được vào **subnet app**? | Mất ba rule DENY 22/1433/8080 — tức mất lớp chặn ở tầng **subnet** cho ba port nguy hiểm nhất |
+| `nacl-app` IN | Gói tin có được vào **subnet app**? | Mất ba rule DENY 22/5432/8080 — tức mất lớp chặn ở tầng **subnet** cho ba port nguy hiểm nhất |
 | `sg-web` IN | Máy **nào** được gọi container? | Mất phép lọc theo **danh tính SG**. NACL chỉ lọc theo CIDR, nên mọi thứ trong public tier sẽ gọi được container |
 | container api | Người dùng này được xem **dữ liệu của ai**? | Mất tất cả. Tám chốt trên chỉ chặn *chạm tới*, chốt này chặn *lấy được* |
 | `nacl-db` IN | Ai được vào **subnet database**? | Còn `sg-rds` chặn — nhưng chỉ theo danh tính SG |
 | `sg-rds` IN | Ai được nói chuyện với **RDS**? | Còn `nacl-db` chặn — nhưng chỉ theo CIDR |
 
 Hai dòng cuối là chỗ đáng chú ý nhất của cả bảng: `nacl-db` và `sg-rds` **nói cùng
-một điều** (chỉ 1433, chỉ từ app tier), nhưng chúng **không thay thế nhau**, vì
+một điều** (chỉ 5432, chỉ từ app tier), nhưng chúng **không thay thế nhau**, vì
 chúng lọc theo hai tiêu chí khác nhau:
 
 - Bỏ `nacl-db`: ai chiếm được **một máy đang nằm trong `sg-web`** là đi thẳng tới
@@ -231,14 +237,14 @@ Chính ràng buộc này sinh ra ba rule DENY ở `nacl-app`:
 
 ```
 IN 90  DENY 22           ─┐
-IN 95  DENY 1433          ├─ tồn tại VÌ rule 120, không phải "thêm cho chắc"
+IN 95  DENY 5432          ├─ tồn tại VÌ rule 120, không phải "thêm cho chắc"
 IN 115 DENY 8080         ─┘
-IN 120 allow 1024-65535  ←  bắt buộc có, và nó chứa cả 1433 và 8080
+IN 120 allow 1024-65535  ←  bắt buộc có, và nó chứa cả 5432 và 8080
 ```
 
 Rule 120 phải mở dải 1024–65535 cho toàn Internet để nhận traffic trả về từ NAT
-Gateway. Mà **1433 và 8080 nằm trong dải đó**. Nếu không có ba rule DENY ở số nhỏ
-hơn, rule 120 sẽ vô tình mở SQL Server ra Internet **ở tầng NACL**.
+Gateway. Mà **5432 và 8080 nằm trong dải đó**. Nếu không có ba rule DENY ở số nhỏ
+hơn, rule 120 sẽ vô tình mở PostgreSQL ra Internet **ở tầng NACL**.
 
 Ba rule DENY đó không phải phòng thủ thêm. Chúng **vá đúng cái lỗ mà rule 120 mở
 ra**. Và đó là câu trả lời trực tiếp cho câu hỏi *"đã có Network ACL rồi thì cần
@@ -267,7 +273,7 @@ là một số ngẫu nhiên trong dải 1024–65535** (gọi là *cổng ephem
 inbound 120: allow TCP 1024-65535 ← 0.0.0.0/0
 ```
 
-Nhưng `1433` (SQL Server) và `8080` (API) **đều nằm trong dải đó**. Rule 120 vô
+Nhưng `5432` (PostgreSQL) và `8080` (API) **đều nằm trong dải đó**. Rule 120 vô
 tình mở chúng ra cả Internet ở tầng NACL.
 
 Bản sửa: đặt DENY ở **số nhỏ hơn**, vì NACL xét rule **theo thứ tự tăng dần và
@@ -275,7 +281,7 @@ dừng ở rule đầu tiên khớp**:
 
 ```
 inbound  90: DENY  TCP 22          ← 0.0.0.0/0    ← chặn SSH
-inbound  95: DENY  TCP 1433        ← 0.0.0.0/0    ← chặn trước rule 120
+inbound  95: DENY  TCP 5432        ← 0.0.0.0/0    ← chặn trước rule 120
 inbound 100: allow TCP 80          ← public CIDR
 inbound 110: allow TCP 8080        ← public CIDR  ← chỉ từ ALB subnet
 inbound 115: DENY  TCP 8080        ← 0.0.0.0/0    ← chặn mọi nguồn khác
@@ -415,7 +421,10 @@ Nên hai bản ghi đó nằm trong danh sách "đừng xoá" ở
 `terraform output` chứ không chỉ nằm trong state.
 
 > Điều kiện thứ nhất cũng có một hệ quả mà dự án này đụng phải: hệ thống **mặc
-> định tắt ALB**. Nếu ALB bị destroy suốt một thời gian dài rồi đúng mốc 45 ngày
+> định tắt ALB** — nhắc lại, vì đây là lần đầu điều đó xuất hiện trong tài liệu này:
+> **mọi resource tính tiền theo giờ (ALB, NAT Gateway, EC2, RDS) được tắt ngoài giờ
+> làm việc**, bằng tay qua `down.sh` hoặc tự động bằng một Lambda chạy lúc 00:00 mỗi
+> đêm. Đó là kiến trúc bật/tắt được nhắc tới bên dưới. Nếu ALB bị destroy suốt một thời gian dài rồi đúng mốc 45 ngày
 > rơi vào khoảng đó, chứng chỉ mất điều kiện "đang được dùng". Chưa xảy ra vì
 > khoảng tắt tính bằng ngày chứ không bằng tháng, nhưng nó là một rủi ro **có
 > thật** của kiến trúc bật/tắt này, và nó chưa được canh bằng cơ chế nào.
@@ -470,8 +479,13 @@ gặp trước khi biết nguyên nhân.
 > gọi `UseHsts()`. Nên không có header `Strict-Transport-Security`, tức trình
 > duyệt không được dặn "từ nay chỉ nói chuyện với tên miền này bằng HTTPS". Rủi ro
 > còn lại là kịch bản request **đầu tiên** đi bằng HTTP và bị chặn giữa đường
-> trước khi redirect 301 kịp xảy ra. Ở đây rủi ro đó nhỏ vì Cloudflare đứng trước
-> và đang bật Full (strict), nhưng **hệ thống tự nó** thì chưa có lớp này.
+> trước khi redirect 301 kịp xảy ra. Ở đây rủi ro đó nhỏ vì **Cloudflare** đứng
+> trước và đang bật **Full (strict)**, nhưng **hệ thống tự nó** thì chưa có lớp này.
+>
+> *(Cloudflare là dịch vụ DNS/CDN **bên ngoài AWS**, đứng trước ALB — nó không phải
+> một trong 7 lớp ở trên. "Full (strict)" là chế độ bắt Cloudflare **luôn nói HTTPS
+> với ALB và kiểm chứng chỉ của ALB**, thay vì nói HTTP ở chặng sau. Ta dùng nó vì
+> nó miễn phí và đã có sẵn cho tên miền này.)*
 
 ### Lớp 4 — Kiến trúc mạng: phòng thủ mạnh nhất không phải là một rule
 
@@ -690,16 +704,22 @@ tức tính chất bảo mật nằm trong mã Terraform, không nằm trong m�
 may mắn. Ba dòng cuối **chưa** được kiểm bằng máy tấn công, ghi rõ để không nhận
 công không có.
 
+> 🕰️ **Cả 12 kịch bản đo khi database còn là SQL Server, cổng `1433`.** Đợt 7 đổi
+> sang PostgreSQL, cổng `5432`. Cột mô tả bên dưới đã cập nhật theo cấu hình hiện
+> tại, nhưng **phép đo thì chưa chạy lại** — hình dạng rule không đổi (vẫn "chỉ một
+> cổng DB, chỉ từ app tier"), nên kết luận gần như chắc chắn giữ nguyên; chỉ là
+> **chưa có bằng chứng mới**. Kịch bản 3 và 5 là hai kịch bản rẻ nhất để chạy lại.
+
 | # | Tấn công | Lớp chặn đầu tiên | Lớp dự phòng |
 |---|---|---|---|
 | 1 | Quét toàn bộ port của ALB | `sg-alb` chỉ mở 80, 443 → 998 port `filtered` | `nacl-public` cũng chỉ allow 80, 443 |
 | 2 | Gọi thẳng IP riêng của EC2 | **Không có IP public để gọi** → timeout | app subnet không có route ra IGW |
-| 3 | Kết nối trực tiếp vào database | `publicly_accessible=false` → endpoint phân giải ra **IP riêng** | `sg-rds` chỉ nhận từ `sg-web`; `nacl-db` chỉ 1433 từ app CIDR; db subnet không route |
+| 3 | Kết nối trực tiếp vào database | `publicly_accessible=false` → endpoint phân giải ra **IP riêng** | `sg-rds` chỉ nhận từ `sg-web`; `nacl-db` chỉ 5432 từ app CIDR; db subnet không route |
 | 4 | Gọi port ứng dụng `:8080` qua ALB | ALB không có listener 8080 → **timeout**, không phải refused | `nacl-app` rule 115 DENY 8080 từ mọi nguồn khác |
 | 5 | SSH vào mọi hướng | Không có SG rule 22 nào tồn tại; hệ thống có **0 key pair** | `nacl-app` rule 90 DENY 22 |
 | 6 | Dò mật khẩu `/api/auth/login` | Rate limit → req 1-5 nhận 400, **req 6-20 nhận 429** | Identity hash mật khẩu; cờ khoá tài khoản |
 | 7 | Giả `Host: evil.com` | ALB allowlist → 403 (kể cả `www` và DNS thô của ALB) | Cert ACM không khớp tên miền lạ |
-| 8 | (Chứng minh) DENY đúng một IP | `nacl-public` rule 50 — A/B từ **cùng một máy**: đường trực tiếp timeout, đường qua Cloudflare 200 | — **SG không làm được việc này** |
+| 8 | (Chứng minh) DENY đúng một IP | `nacl-public` rule 50 — A/B từ **cùng một máy**: đường trực tiếp timeout, đường qua Cloudflare 200. *(Cloudflare ở đây chỉ là đường vòng để đổi IP nguồn: đi thẳng thì gói mang IP của laptop — IP đang bị DENY; đi vòng qua Cloudflare thì gói tới ALB mang IP của Cloudflare, không nằm trong rule DENY. Cùng một máy, hai kết quả — đó chính là điều cần chứng minh.)* | — **SG không làm được việc này** |
 | 9 | (Bằng chứng) Flow Logs có ghi `REJECT` | Khớp cả 3 nhóm: máy tấn công, egress EC2, scanner lạ | — đây là kịch bản *thu bằng chứng*, không phải phòng thủ |
 | 10 | Chiếm được một danh tính, thử với sang phạm vi khác | Ma trận **12 phép thử trên 7 role**; host nhận **explicitDeny** khi đọc secret | `sg-rds` egress rỗng nên không rút dữ liệu ra |
 | 11 | Giả OIDC token để đóng vai CI | JWT tự ký **đủ mọi claim** trust policy đòi vẫn bị `InvalidIdentityToken` — AWS chặn ở bước **xác thực chữ ký**, trước cả khi xét trust policy | trust condition ghim `aud` + `sub` theo repo và branch |
@@ -745,11 +765,11 @@ giới hợp lý cho phạm vi một đồ án.
 được từ chính máy build**, không phải suy đoán — nên nó là bằng chứng tốt cho
 luận điểm "kiểm soát chuỗi cung ứng phụ thuộc":
 
-| Gói | Phiên bản | Số advisory | Dùng ở |
-|---|---|---|---|
-| `System.Security.Cryptography.Xml` | 9.0.0 và 10.0.0 | **8** | Infrastructure, Service |
-| `AutoMapper` | 16.0.0 | 1 (GHSA-rvv3-g6hj-g44x) | API, Service |
-| `Microsoft.OpenApi` | 2.4.1 | 1 (GHSA-v5pm-xwqc-g5wc) | API |
+| Gói | Phiên bản lúc đo | Số advisory | Dùng ở | Trạng thái hôm nay |
+|---|---|---|---|---|
+| `System.Security.Cryptography.Xml` | 9.0.0 và 10.0.0 | **8** | Infrastructure, Service | ✅ **đã vá** — ghim `10.0.10` |
+| `AutoMapper` | 16.0.0 | 1 (GHSA-rvv3-g6hj-g44x) | API, Service | ✅ **đã GỠ HẲN** — không dòng code nào dùng |
+| `Microsoft.OpenApi` | 2.4.1 | 1 (GHSA-v5pm-xwqc-g5wc) | API | ✅ **đã vá** — ghim `2.7.5` |
 
 Ba điều đáng nói khi bảo vệ:
 
@@ -762,10 +782,26 @@ Ba điều đáng nói khi bảo vệ:
    --include-transitive` vào pipeline và cho nó fail build khi có mức High. Không
    tốn thêm đồng nào, và biến "cảnh báo trôi qua" thành "không merge được".
 
-⚠️ **Chưa vá trong đợt 2** vì nâng phiên bản là thay đổi có rủi ro hồi quy riêng
-(AutoMapper 16 → bản mới có breaking change ở cấu hình profile), và repo **không
-có test tự động nào** để đỡ. Việc này nên đi thành một PR riêng, làm cùng lúc với
-bước kiểm ở pipeline nói trên.
+✅ **Cả ba đã xử lý xong, và điều số 3 ở trên đã được làm.** Bảng trên là bản ghi
+của lần đo trong **đợt 2**; cột cuối là trạng thái hiện tại, nên đừng trích ba dòng
+đầu ra để trả lời "còn mấy lỗ hổng chưa vá" — câu trả lời đúng là **không còn cái
+nào**. Cách xử lý khác nhau theo từng gói, và sự khác nhau đó mới là chỗ đáng nói:
+
+- Hai gói `System.Security.Cryptography.Xml` và `Microsoft.OpenApi` là **phụ thuộc
+  gián tiếp** (*transitive*) — không dòng code nào của dự án `using` chúng, chúng bị
+  một gói khác kéo vào. Không nâng thẳng được, nên vá bằng cách **ghim tay** một
+  `PackageReference` vào `.csproj` để buộc NuGet chọn bản đã vá.
+- `AutoMapper` thì **gỡ hẳn**, không nâng. Lý do: đo lại thấy dự án có `0` chỗ dùng
+  nó — nó nằm trong `.csproj` mà không ai gọi. Không nâng một gói mà xoá nó đi là
+  cách vá rẻ nhất và triệt để nhất, khi có thể.
+
+Và điều số 3 ở trên **đã trở thành cổng CI thật**:
+[`devops/scripts/check-vulnerable-packages.sh`](../devops/scripts/check-vulnerable-packages.sh),
+chặn ở bước `dotnet build`. Nó **đọc nội dung báo cáo chứ không tin mã thoát** — vì
+đã đo được rằng `dotnet list package --vulnerable` trả về `0` (nghĩa là "thành công")
+**kể cả khi in ra đủ 10 advisory**. Một bước CI viết ngây thơ dạng
+`run: dotnet list package --vulnerable` sẽ **luôn xanh, vĩnh viễn** — đúng loại "bằng
+chứng an toàn giả" mà tài liệu này nhắc nhiều lần.
 
 ---
 
@@ -787,7 +823,7 @@ Ba lý do, nêu được lý do thứ nhất là đủ:
 
 Vì NACL **stateless**: phản hồi của request đi ra là một gói tin mới, cổng đích
 ngẫu nhiên trong dải đó. Không mở thì máy không tải được image từ ECR. Đã bù bằng
-**DENY 1433 ở rule 95 và DENY 8080 ở rule 115** — số nhỏ hơn nên được xét trước.
+**DENY 5432 ở rule 95 và DENY 8080 ở rule 115** — số nhỏ hơn nên được xét trước.
 Và Security Group ở lớp trong vẫn chỉ nhận đúng 2 port từ đúng 1 nguồn. **Đây
 chính là ví dụ vì sao cần cả hai lớp.**
 
@@ -836,8 +872,9 @@ Sợ, và đây là một giới hạn **có ý thức**, không phải sơ su�
 2. **Rate limiter đếm trong RAM** — 2 container API sẽ làm hạn mức 5 lần/phút
    thành 10.
 3. **Chốt cứng nhất là host port tĩnh 80/8080** — hai container không cùng bind
-   một port trên một máy. Mở ra thì phải chọn `awsvpc` (nhiều ENI hơn `t3.micro`
-   chịu nổi) hoặc mở dải ephemeral `32768–65535` trên `sg-web`.
+   một port trên một máy. Mở ra thì phải chọn `awsvpc` — chế độ mạng cấp cho
+   **mỗi container một card mạng ảo riêng** (ENI, *Elastic Network Interface*), mà
+   loại máy nhỏ `t3.micro` chỉ gắn được vài cái, không đủ cho nhiều container — hoặc mở dải ephemeral `32768–65535` trên `sg-web`.
 
 Lý do thứ ba là chỗ đáng nói nhất: **scale ngang buộc phải đánh đổi với "rule tối
 thiểu" — đúng chiều mà đề bài đang chấm.** Ta chọn bề mặt tấn công nhỏ hơn hàng
@@ -854,7 +891,7 @@ suất, và đã ghi ở Phần V của tài liệu thiết kế.
 **"Đã kiểm thử thật chưa, hay chỉ đọc cấu hình?"**
 
 Đã chạy thật 12 kịch bản từ laptop, có output lệnh và log CloudWatch làm bằng
-chứng trong `docs/evidence/acc-551897327153/`. Ngoài ra hạ tầng có **93 test tự động**
+chứng trong `docs/evidence/acc-551897327153/`. Ngoài ra hạ tầng có **105 test tự động**
 (`terraform test`) khoá lại từng khẳng định — ví dụ có một test sẽ **đỏ** nếu ai
 đó thêm rule port 22 vào bất kỳ Security Group nào.
 
