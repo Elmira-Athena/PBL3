@@ -120,13 +120,49 @@ chốt chống-rỗng khác (lỗi truyền tải, bắn quá ít) vẫn nguyên
 
 ---
 
+## 4. Đo ở mức hệ thống — 2 replica thật, có ca đối chứng âm
+
+Hạ tầng: `devops/docker/docker-compose.multi.yml` — **2 replica API + nginx round-robin**
+(xác nhận luân phiên `172.21.0.2` / `172.21.0.3` qua header `X-Upstream`), dùng chung
+`hushstore_postgres_dev`.
+
+Phép đo đổi **đúng một biến**: nơi bộ đếm sống. Filter, kịch bản, thân request, số replica —
+giữ nguyên.
+
+| Bộ đếm ở đâu | Qua limiter | Chặn 429 | Hàng `RateLimitCounters` | Kết luận |
+|---|---|---|---|---|
+| **PostgreSQL** (đang dùng) | **5** ✅ | 15 | `LoginRateLimit:192.168.65.1 → Count=20` | **ĐẠT** |
+| **RAM tiến trình** (ca đối chứng âm) | **10** 🔴 | 10 | KHÔNG CÓ | KHÔNG KẾT LUẬN |
+| **PostgreSQL** (khôi phục) | **5** ✅ | 15 | `Count=20` | **ĐẠT** |
+
+Ba dòng, theo thứ tự, chứng minh nhiều hơn dòng đầu một mình: kết quả **đảo được**, nên khác
+biệt đến từ đúng thứ ta đổi chứ không từ một yếu tố môi trường nào khác.
+
+**Con số `10` ở dòng giữa chính là lỗi cần chặn**, đo trực tiếp: 2 replica × 5 = 10 request
+lọt qua một hạn mức 5. Với 5 replica nó sẽ là 25.
+
+🎯 **Chú ý dòng giữa trả `KHÔNG KẾT LUẬN`, không phải `HỎNG`.** S11 không thấy hàng đếm nên nó
+**từ chối kết luận** thay vì báo đạt — đúng luật của repo (*"`KHÔNG KẾT LUẬN` ≠ `ĐẠT`"*). Con
+số `10` vẫn nằm trong phần chẩn đoán để đọc. Đây là hành vi đúng: mã HTTP một mình **không**
+phân biệt được "dùng chung" với "per-process mà tình cờ chỉ có một process".
+
+### Không hồi quy — chạy lại toàn bộ
+
+`dotnet run --project tools/LoadProbe -- --api http://localhost:8088` trên **2 instance**:
+
+> **10 đạt · 0 hỏng · 0 không kết luận** (S01–S09 + S11)
+
+Đáng chú ý **S09** (đua refresh-token) vẫn ĐẠT dù `RefreshRateLimit` nay đếm ở DB — nó chỉ bắn
+**2** request và **cố ý gieo cặp token thẳng vào DB** thay vì đăng nhập, đúng để không đốt suất
+rate limit. Ghi chú đó có sẵn trong code từ trước và hôm nay nó trả cổ tức.
+
+---
+
 ## Còn thiếu để coi là XONG
 
-- [ ] **LoadProbe S11** — 20 request đăng nhập song song qua nginx với **2 replica**, khẳng
-      định đúng 5 đi qua và 15 nhận `429`. Đây là phép đo duy nhất chứng minh tính chất "dùng
-      chung", vì nó là tính chất **chỉ sai khi có nhiều hơn một tiến trình**.
-- [ ] **Ca đối chứng âm ở mức hệ thống** — chạy lại S11 với bản cũ (in-process) và phải thấy
-      **10** đi qua thay vì 5.
+- [x] ✅ **LoadProbe S11 trên 2 replica** — 5 qua / 15 chặn / một ô đếm `Count=20`.
+- [x] ✅ **Ca đối chứng âm ở mức hệ thống** — bản in-process cho **10** qua, đúng như dự đoán.
+- [x] ✅ **Không hồi quy** — 10/10 kịch bản ĐẠT trên 2 instance.
 - [ ] **Lật `rate_limiter_is_distributed = true`** — chỉ sau khi hai gạch trên xanh. Cờ là
       **lời khai của người vận hành**, Terraform không kiểm được, nên khai trước khi đo là
       đúng thứ mà chính `error_message` của nó cảnh báo.
