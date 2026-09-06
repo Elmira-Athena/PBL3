@@ -249,3 +249,50 @@ run "seeder_khong_co_task_role_va_mat_khau_di_qua_secrets" {
     error_message = "Seeder là one-off task, không được map port nào."
   }
 }
+
+# ════════════════════════════════════════════════════════════════════════════
+# BỘ BA SỐ TẮT ÊM — KHOÁ CHÚNG LẠI VỚI NHAU, KHÔNG KHOÁ TỪNG SỐ
+# ════════════════════════════════════════════════════════════════════════════
+# Lỗi mà test này tồn tại để chặn ĐÃ XẢY RA THẬT: đợt 4 nâng ShutdownTimeout
+# 30 → 45 ở tầng app và KHÔNG nâng hai số Terraform. Kết quả 5 + 45 = 50 > 30,
+# tức ECS SIGKILL container giữa lúc .NET còn đang trả nốt request. Không test
+# nào bắt được, vì mỗi số riêng lẻ vẫn "hợp lệ".
+#
+# Nên test này KHÔNG khẳng định `stopTimeout == 90`. Nó khẳng định BẤT ĐẲNG THỨC,
+# và đọc cả ba số từ ba nguồn thật — kể cả nguồn nằm ngoài module này và ngoài
+# Terraform. Đổi bất kỳ số nào ở bất kỳ đâu mà quên hai số kia thì test đỏ.
+run "bo_ba_so_tat_em_phai_thoa_bat_dang_thuc" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
+      c.stopTimeout > (
+        tonumber(regex("deregistration_delay = (\\d+)", file("${path.module}/../alb/alb.tf"))[0])
+        +
+        tonumber(regex("ShutdownTimeout = TimeSpan\\.FromSeconds\\((\\d+)\\)", file("${path.module}/../../../../src/API/Program.cs"))[0])
+      )
+    ])
+    error_message = "VI PHẠM: deregistration_delay + ShutdownTimeout >= stopTimeout của container api. Ba số này là MỘT thay đổi: modules/alb/alb.tf, src/API/Program.cs, và modules/ecs/taskdef.tf. Sửa một số mà bỏ hai số kia thì ECS SIGKILL container giữa lúc .NET đang tắt êm — request đang bay bị cắt, không log nào báo."
+  }
+
+  # Trần mức AGENT là trần THỨ HAI và nó thắng: taskdef khai 90 mà
+  # ECS_CONTAINER_STOP_TIMEOUT còn 30s thì agent cắt ở 30. Mất đúng thứ vừa sửa,
+  # im lặng. Nên nó phải >= số lớn nhất mà taskdef khai.
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
+      tonumber(regex("ECS_CONTAINER_STOP_TIMEOUT=(\\d+)s", file("${path.module}/user_data.sh.tftpl"))[0]) >= c.stopTimeout
+    ])
+    error_message = "ECS_CONTAINER_STOP_TIMEOUT trong user_data.sh.tftpl nhỏ hơn stopTimeout của taskdef. Agent thắng, nên trần thật là số nhỏ hơn và dòng stopTimeout ở taskdef trở thành trang trí."
+  }
+
+  # web cũng phải có, không được để mặc định 30.
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.web.container_definitions) :
+      can(c.stopTimeout) && c.stopTimeout >= 90
+    ])
+    error_message = "Container web không khai stopTimeout ⇒ ECS lấy mặc định 30 giây, và nginx bị giết giữa lúc đang trả file .wasm lớn cho client chậm."
+  }
+}

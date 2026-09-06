@@ -1214,7 +1214,7 @@ trong [terraform-runbook.md](terraform-runbook.md).
 | Đề bài yêu cầu | Ở đâu trong hệ thống |
 |---|---|
 | **Tìm hiểu HĐH Linux + xây website trên đó** | Mục ["Linux — hệ điều hành chạy bên dưới tất cả"](#linux--hệ-điều-hành-chạy-bên-dưới-tất-cả): 3 bản phân phối, cloud-init/systemd, swap, namespace/cgroup, quyền file, không SSH |
-| **Tìm hiểu AWS Cloud + Terraform** | Phần II (khái niệm), và toàn bộ hạ tầng khai bằng Terraform: 8 module, 105 test tự động, không resource nào bấm tay |
+| **Tìm hiểu AWS Cloud + Terraform** | Phần II (khái niệm), và toàn bộ hạ tầng khai bằng Terraform: 8 module, 106 test tự động, không resource nào bấm tay |
 | VPC | `10.20.0.0/16`, 6 subnet, 3 tier, 2 AZ |
 | Security Group | 3 cái, rule tham chiếu SG, không có port 22 |
 | **Network ACL** | 3 cái, mỗi tier một cái, có rule DENY và thứ tự có ý nghĩa |
@@ -1360,12 +1360,12 @@ toàn, và `terraform plan`/`state`/`module` thì CloudFormation không có tư�
 | 3 | [Terraform Series — Bài 5: Module — tạo VPC trên AWS](https://viblo.asia/p/terraform-series-bai-5-terraform-module-create-virtual-private-cloud-on-aws-ORNZqp2MK0n) (Viblo) | 🇻🇳 | **Bài quan trọng nhất cho dự án này.** Cách gom resource thành module, truyền `variable`, lấy `output` — đúng cấu trúc `infra/tf/modules/` của ta | Dùng module VPC có sẵn từ Registry; ta tự viết module |
 | 4 | [Terraform Series — Bài 6: Module in depth — ứng dụng multi-tier](https://viblo.asia/p/terraform-series-bai-6-module-in-depth-create-multi-tier-application-1VgZvAb2KAw) (Viblo) | 🇻🇳 | Ghép **VPC + ALB + target group + listener + ASG + Launch Template + RDS** thành một hệ thống — gần kiến trúc của ta nhất trong mọi nguồn tiếng Việt tìm được | **Không có `aws_network_acl` nào.** Và dùng module từ Registry thay vì tự viết. Bài đăng 24/02/2022 nên cú pháp là Terraform 1.x đời đầu — vẫn đọc được |
 | 5 | [HashiCorp — AWS Get Started](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) | 🇬🇧 | Nguồn chính thức, luôn cập nhật. Nhất là hai chương **`Store remote state`** và **`Manage resource drift`** | Tiếng Anh |
-| 6 | [terraform-runbook.md](terraform-runbook.md) của chính dự án này | 🇻🇳 | Cách chạy stack thật: backend S3 + lockfile, biến toggle bật/tắt, thứ tự `up.sh`/`down.sh`, và **105 test `.tftest.hcl`** | — |
+| 6 | [terraform-runbook.md](terraform-runbook.md) của chính dự án này | 🇻🇳 | Cách chạy stack thật: backend S3 + lockfile, biến toggle bật/tắt, thứ tự `up.sh`/`down.sh`, và **106 test `.tftest.hcl`** | — |
 
 **Chỗ không nguồn tiếng Việt nào phủ**, và ta dùng thật:
 
 - **`terraform test`** (`.tftest.hcl`) — framework test tích hợp, có từ Terraform 1.6.
-  Đây là thứ khiến hạ tầng của dự án này khác một bài blog: 105 test khẳng định
+  Đây là thứ khiến hạ tầng của dự án này khác một bài blog: 106 test khẳng định
   các bất biến bảo mật (không rule 22 nào, NACL DENY đúng thứ tự, NAT tắt theo
   mặc định). Tài liệu chính thức:
   [developer.hashicorp.com/terraform/language/tests](https://developer.hashicorp.com/terraform/language/tests).

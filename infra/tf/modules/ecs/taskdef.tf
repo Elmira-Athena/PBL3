@@ -94,6 +94,25 @@ resource "aws_ecs_task_definition" "api" {
       memory            = var.api_memory_hard
       memoryReservation = var.api_memory_reservation
 
+      # ─── stopTimeout — SỐ LỚN NHẤT CỦA BỘ BA 30/45/90 ─────────────────────
+      # Ràng buộc mà src/API/Program.cs:178 tự khai và phụ thuộc vào:
+      #
+      #     deregistration_delay + ShutdownTimeout  <  stopTimeout
+      #
+      # Không khai trường này thì ECS lấy MẶC ĐỊNH 30 giây. Mà tầng app đã đặt
+      # `ShutdownTimeout = 45` (đợt 4, nửa code), nên khi thiếu dòng này ta có
+      # 5 + 45 = 50 > 30 — ECS SIGKILL container trong lúc .NET còn tưởng mình
+      # có thêm 15 giây để trả nốt request đang bay.
+      #
+      # 🚨 Đây là hồi quy do CHÍNH đợt 4 tạo ra, không phải thiếu sót từ đầu:
+      # trước đó ShutdownTimeout mặc định cũng là 30, bằng đúng stopTimeout, nên
+      # .NET tự dừng TRƯỚC khi bị giết. Nâng một số mà không nâng hai số kia làm
+      # tình hình xấu hơn lúc chưa đụng vào.
+      #
+      # 90 là TRẦN CHỜ, không phải thời gian chờ cố định: container thoát sớm thì
+      # ECS đi tiếp ngay. Nên đặt rộng không tốn gì, còn đặt hẹp thì cắt request.
+      stopTimeout = 90
+
       # Static host port 8080: nhờ vậy sg-web ingress giữ đúng 2 rule thay vì
       # phải mở dải ephemeral 32768-65535 như khi dùng dynamic port mapping.
       portMappings = [
@@ -151,6 +170,12 @@ resource "aws_ecs_task_definition" "web" {
 
       memory            = 192
       memoryReservation = 96
+
+      # Cùng lý lẽ với container `api` ở trên. nginx tắt gần như tức thì nên
+      # 90 giây gần như không bao giờ dùng tới — nhưng để mặc định 30 nghĩa là
+      # nginx bị SIGKILL giữa lúc đang trả một file .wasm lớn cho client chậm.
+      # stopTimeout là TRẦN, container thoát sớm thì ECS đi tiếp ngay.
+      stopTimeout = 90
 
       portMappings = [
         { containerPort = 80, hostPort = 80, protocol = "tcp" }

@@ -207,7 +207,7 @@ mặc định mở của AWS.
 và pipeline cùng muốn sở hữu một trường; `ignore_changes` là cách khai ai sở hữu.
 
 **③ Test chạy ở `command = plan`, nên có thứ nó KHÔNG kiểm được.**
-105 test đều không tạo resource thật → $0, nhưng cái giá là: giá trị nào chỉ biết
+106 test đều không tạo resource thật → $0, nhưng cái giá là: giá trị nào chỉ biết
 được **sau khi apply** thì không assert được. Ví dụ rõ nhất có comment dài ở
 [`modules/network/tests/vpc.tftest.hcl`](../infra/tf/modules/network/tests/vpc.tftest.hcl):
 không thể assert `length(aws_default_security_group.this.ingress) == 0`, vì hai

@@ -18,7 +18,7 @@
 >   ([bằng chứng](evidence/2026-09-05-postgresql-2-instance.md)). Ở 2 instance S03 ra
 >   `200×1, 400×6, 409×3` thay vì `409×9` — phân bố khác chính là thứ chứng minh hai lần chạy
 >   không phải một.
-> - `terraform test` **105/105** trên 8 module; `validate` + `fmt` sạch.
+> - `terraform test` **106/106** trên 8 module; `validate` + `fmt` sạch.
 > - Seeder (`psql 17`) chạy thật, kèm **2 ca đối chứng âm** cho `sslmode=verify-full`.
 > - Deadlock `40P01` ép thật → `ConflictClassifier` bắt được cả khi bọc 3 lớp; `42P01` trả `False`.
 >
@@ -385,16 +385,41 @@ downtime) đúng *tại thời điểm viết*; đợt 5 mới nâng `max_size`.
 | 2 | **Hoãn `deregistration_delay` sang gói 5** *(khuyến nghị)* | Giữ ba số shutdown thành một thay đổi nguyên khối, cùng lúc `max_size` được nâng |
 | 3 | Đổi số, `-target` cho test pass tạm | **Không khuyến nghị** — đó là tắt hợp đồng |
 
-#### Nửa hạ tầng — CHƯA làm
+#### Nửa hạ tầng — trạng thái đo lại 2026-09-06
 
-| Việc | Vị trí | Hiện tại | Đích |
-|---|---|---|---|
-| `deregistration_delay` | `modules/alb/alb.tf:58`, `:83` | `5` | `30` |
-| ECS `stopTimeout` | `modules/ecs/taskdef.tf`, container `api` + `web` | không khai | `90` |
-| `ECS_CONTAINER_STOP_TIMEOUT` | `modules/ecs/user_data.sh.tftpl:26` | `30s` | `90s` |
-| Connection pool | `modules/data/main.tf:126-134` | không có ⇒ mặc định **100/tiến trình** | `Max Pool Size=30; Min Pool Size=2; Connect Timeout=15` |
-| IAM task role | `modules/ecs/iam.tf` | chưa có | `ssm:GetParametersByPath` + `PutParameter` trên `/hushstore/prod/dataprotection/*` |
-| Env var | taskdef container `api` | chưa có | `DataProtection__SsmPrefix` |
+⚠️ **Bản trước của bảng này SAI ở hai dòng.** Đo lại bằng code, không theo trí nhớ:
+
+| Việc | Vị trí | Trạng thái |
+|---|---|---|
+| ECS `stopTimeout` → `90` | `modules/ecs/taskdef.tf`, container `api` + `web` | ✅ **XONG 2026-09-06** |
+| `ECS_CONTAINER_STOP_TIMEOUT` `30s → 90s` | `modules/ecs/user_data.sh.tftpl:26` | ✅ **XONG 2026-09-06** |
+| Connection pool | `modules/data/main.tf:225-227` | ✅ **ĐÃ XONG TỪ ĐỢT 7** — bảng cũ ghi "chưa có" là sai. Nó được thêm lúc viết lại chuỗi cho PostgreSQL; cả link `:126-134` cũng đã mục |
+| `deregistration_delay` `5 → 30` | `modules/alb/alb.tf:58`, `:83` | ⏸️ **HOÃN sang đợt 5** — xem lối 2 ở trên |
+| IAM task role + env var `DataProtection__SsmPrefix` | `modules/ecs/iam.tf`, `taskdef.tf` | ⏸️ hoãn — xem ghi chú dưới |
+
+🚨 **Hai số `stopTimeout` KHÔNG phải việc dọn dẹp — chúng vá một hồi quy do CHÍNH
+đợt 4 tạo ra.** Nửa code nâng `ShutdownTimeout` 30 → 45 và merge một mình, nên repo
+rơi vào đúng trạng thái mà `Program.cs:189` cảnh báo: `5 + 45 = 50 > 30`, ECS SIGKILL
+container giữa lúc .NET còn đang trả nốt request. Trước đợt 4 hai số bằng nhau nên
+.NET tự dừng trước khi bị giết — tức **nửa code đi một mình đã làm xấu hơn lúc chưa
+đụng vào**. Nay ba số là `30/45/90` với biên 15 giây.
+
+Khoá bằng test `bo_ba_so_tat_em_phai_thoa_bat_dang_thuc`
+([`modules/ecs/tests/taskdef.tftest.hcl`](../infra/tf/modules/ecs/tests/taskdef.tftest.hcl)).
+Nó **không** khẳng định `stopTimeout == 90` mà khẳng định **bất đẳng thức**, và đọc cả
+ba số từ ba nguồn thật — kể cả `src/API/Program.cs` (C#, ngoài Terraform) và
+`modules/alb/alb.tf` (module khác). Đổi số nào mà quên hai số kia thì test đỏ.
+**Đã đo 4 ca đối chứng:** hạ `stopTimeout` → 40 ⇒ đỏ · để 55 ⇒ xanh (chứng minh nó đo
+bất đẳng thức chứ không đo hằng số) · nâng `ShutdownTimeout` → 120 ⇒ đỏ · để agent ở
+`30s` ⇒ đỏ.
+
+📌 **DataProtection hoãn có lý do mới, không phải vì lười.** Tìm khắp `src/` (loại trừ
+`obj/`): **0** chỗ gọi `IDataProtector`/`CreateProtector`, **0** `ForgotPassword`,
+**0** `GeneratePasswordResetTokenAsync`, **0** `AddAntiforgery`. Ba thứ mà tài liệu nói
+sẽ chết im lặng — link đặt lại mật khẩu, link xác nhận email, antiforgery token —
+**chưa cái nào tồn tại trong app**. Nên đây là chuẩn bị cho tính năng chưa viết, không
+phải vá lỗi đang chảy máu. Vẫn **bắt buộc phải xong trước khi scale ra nhiều instance**
+(đợt 5), và khi làm thì IAM + env var phải vào **cùng một** deploy.
 
 ⚠️ **Sửa `user_data.sh.tftpl` ⇒ launch template version mới ⇒ `instance_refresh` kích hoạt ⇒
 instance BỊ THAY.** Lên lịch cùng cửa sổ với mọi thay đổi khác cũng recycle instance.

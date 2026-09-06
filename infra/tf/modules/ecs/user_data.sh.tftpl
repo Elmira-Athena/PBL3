@@ -23,7 +23,11 @@ fi
   echo "ECS_CLUSTER=${cluster_name}"
   echo "ECS_ENABLE_CONTAINER_METADATA=true"
   echo "ECS_ENABLE_SPOT_INSTANCE_DRAINING=false"
-  echo "ECS_CONTAINER_STOP_TIMEOUT=30s"
+  # 90s, không phải 30s: đây là TRẦN CHỜ mức AGENT, áp cho mọi container KHÔNG tự
+  # khai stopTimeout. Nó là trần thứ hai — task definition khai 90 mà agent còn 30
+  # thì agent thắng, và ta mất đúng thứ vừa sửa ở taskdef.tf mà không có lỗi nào
+  # báo ra. Ràng buộc: deregistration_delay + ShutdownTimeout < giá trị này.
+  echo "ECS_CONTAINER_STOP_TIMEOUT=90s"
 } >> /etc/ecs/ecs.config
 
 # ─── KHÔNG KHỞI ĐỘNG ECS AGENT Ở ĐÂY ─────────────────────────────
