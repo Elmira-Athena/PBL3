@@ -18,7 +18,7 @@
 >   ([bằng chứng](evidence/2026-09-05-postgresql-2-instance.md)). Ở 2 instance S03 ra
 >   `200×1, 400×6, 409×3` thay vì `409×9` — phân bố khác chính là thứ chứng minh hai lần chạy
 >   không phải một.
-> - `terraform test` **99/99** trên 8 module; `validate` + `fmt` sạch.
+> - `terraform test` **105/105** trên 8 module; `validate` + `fmt` sạch.
 > - Seeder (`psql 17`) chạy thật, kèm **2 ca đối chứng âm** cho `sslmode=verify-full`.
 > - Deadlock `40P01` ép thật → `ConflictClassifier` bắt được cả khi bọc 3 lớp; `42P01` trả `False`.
 >
@@ -903,10 +903,22 @@ thuyết: `--scenarios S01 --keep` để lại **60 serial `Available`** trên b
 (`VariantId` 1008), đủ để đặt đơn thật. Kiểm nhanh sau khi seed:
 
 ```bash
-PW=$(grep -o '^SA_PASSWORD=.*' Infrastructure/db/.env | cut -d= -f2-)
-docker exec hushstore_sqlserver_dev /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$PW" -C -I -d HushStoreDb \
-  -Q "SELECT v.Id, v.SKU, COUNT(s.Id) FROM ProductVariants v JOIN ProductSerials s ON s.VariantId=v.Id AND s.Status=0 WHERE v.SKU LIKE 'LP-%' GROUP BY v.Id, v.SKU;"
+# ⚠️ ĐỢT 7: lệnh cũ dùng sqlcmd vào hushstore_sqlserver_dev — không còn dùng được.
+PW=$(grep -oE '^(PG_PASSWORD|SA_PASSWORD)=.*' Infrastructure/db/.env | head -1 | cut -d= -f2-)
+docker exec -i -e PGPASSWORD="$PW" hushstore_postgres_dev \
+  psql -U hushstore -d HushStoreDb <<'SQL'
+SELECT v."Id", v."SKU", COUNT(s."Id")
+  FROM "ProductVariants" v
+  JOIN "ProductSerials" s ON s."VariantId" = v."Id" AND s."Status" = 0
+ WHERE v."SKU" LIKE 'LP-%'
+ GROUP BY v."Id", v."SKU";
+SQL
 ```
+
+> **Dấu nháy kép quanh tên bảng/cột là BẮT BUỘC.** PostgreSQL hạ mọi định danh
+> không nháy về **chữ thường**, trong khi EF Core tạo bảng đúng PascalCase — nên
+> `FROM ProductVariants` báo `relation "productvariants" does not exist`, một câu
+> lỗi đọc như "chưa migrate" chứ không như "thiếu dấu nháy".
 
 **Hai chi tiết đã mất thời gian, đừng vấp lại:**
 
@@ -1306,21 +1318,26 @@ ranh giới là *"có xoá gì / có mất thông tin gì không"*, không phả
 ### DB
 
 ```bash
-cd Infrastructure/db && docker-compose up -d      # container: hushstore_sqlserver_dev, cổng 1433
+cd Infrastructure/db && docker-compose up -d postgres   # container: hushstore_postgres_dev, cổng 5432
 ```
 
-Mật khẩu `sa` nằm ở `Infrastructure/db/.env` (khoá `SA_PASSWORD`). Đã khớp với volume hiện tại.
+Mật khẩu nằm ở `Infrastructure/db/.env` — khoá `PG_PASSWORD`, và nếu thiếu thì
+compose lấy `SA_PASSWORD` làm mặc định. Đã khớp với volume hiện tại.
 
 ```bash
-PW=$(grep -o '^SA_PASSWORD=.*' Infrastructure/db/.env | cut -d= -f2-)
-docker exec hushstore_sqlserver_dev /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "$PW" -C -I -d HushStoreDb -Q "SELECT COUNT(*) FROM Products;"
+PW=$(grep -oE '^(PG_PASSWORD|SA_PASSWORD)=.*' Infrastructure/db/.env | head -1 | cut -d= -f2-)
+docker exec -e PGPASSWORD="$PW" hushstore_postgres_dev \
+  psql -U hushstore -d HushStoreDb -c 'SELECT COUNT(*) FROM "Products";'
 ```
 
-> **Bắt buộc `-C` và `-I`.** `-C` bỏ qua kiểm chứng chỉ self-signed. `-I` bật
-> `QUOTED_IDENTIFIER` — thiếu nó thì `seed_data.sql` **hỏng ngay câu INSERT đầu tiên**
-> (`Msg 1934`), vì DB có filtered index / computed column.
-> Cũng lưu ý: `-y` và `-W` **loại trừ nhau**, đừng dùng chung.
+> **`docker-compose up -d` KHÔNG có tên service sẽ bật CẢ `sqlserver` lẫn `postgres`** —
+> file compose còn giữ service SQL Server để làm ca đối chứng cho `S10`. Gõ thiếu tên
+> là tốn RAM cho một container không ai dùng. Xoá service đó sau khi LoadProbe đạt
+> 10/10 trên PostgreSQL.
+>
+> **Cờ `-C`/`-I` của `sqlcmd` không còn liên quan.** Cái tương đương cần nhớ ở psql là
+> **dấu nháy kép quanh định danh** (xem ghi chú ở mục LoadProbe bên trên) và
+> `PGPASSWORD` truyền qua `-e` để mật khẩu không nằm lại trong `history` của host.
 
 ### API
 

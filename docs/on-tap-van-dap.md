@@ -13,7 +13,7 @@
 #### 1. Tại sao lại có dấu `?` ở kiểu dữ liệu (data)?
 Trong C#, dấu `?` biểu thị kiểu dữ liệu có thể nhận giá trị `null` (Nullable Types). Có hai loại chính cần phân biệt:
 *   **Nullable Value Types (Kiểu giá trị cho phép null - có từ C# 2.0):** Áp dụng cho các kiểu dữ liệu dạng số, ngày tháng, logic (ví dụ: `int?`, `decimal?`, `DateTime?`, `bool?`). Bản chất là cấu trúc `Nullable<T>`.
-    *   *Ứng dụng trong DB:* Ánh xạ tới cột cho phép chứa giá trị `NULL` trong SQL Server. Ví dụ: `decimal? OriginalPrice` trong lớp `ProductVariant` nghĩa là sản phẩm có thể không có giá trị giá gốc cũ (không giảm giá).
+    *   *Ứng dụng trong DB:* Ánh xạ tới cột cho phép chứa giá trị `NULL` trong cơ sở dữ liệu. Ví dụ: `decimal? OriginalPrice` trong lớp `ProductVariant` nghĩa là sản phẩm có thể không có giá trị giá gốc cũ (không giảm giá).
 *   **Nullable Reference Types (Kiểu tham chiếu cho phép null - từ C# 8.0 trở đi):** Áp dụng cho các lớp, chuỗi (ví dụ: `string? LogoUrl`, `Category? Parent`). Khi bật tính năng này, C# yêu cầu dev khai báo rõ ràng biến nào có khả năng bị `null` để tránh lỗi kinh điển `NullReferenceException` khi biên dịch.
     *   *Ý nghĩa:* Giúp trình biên dịch đưa ra cảnh báo sớm nếu lập trình viên truy cập vào một thuộc tính có thể null mà chưa kiểm tra (`null check`).
 
@@ -126,7 +126,7 @@ Việc viết hàm dựng cho Controller giúp ta khai báo các phụ thuộc c
 *   **So sánh:** Tránh lỗi **N+1 Query** nguy hiểm của Lazy Loading (cứ mỗi vòng lặp lấy thông tin liên quan lại phát sinh thêm một câu lệnh SQL truy vấn riêng lẻ gây nghẽn băng thông truyền tải).
 
 > [!TIP]
-> **Tối ưu hóa hiệu năng:** Mặc dù `.Include()` rất tiện lợi nhưng lạm dụng nó trên các bảng có dữ liệu lớn hoặc quan hệ lồng nhau quá sâu sẽ tạo ra hiện tượng **Bùng nổ dữ liệu (Cartesian Product)** ở phía SQL Server. Chuẩn doanh nghiệp khuyến khích sử dụng **Projection** (dùng lệnh `.Select()` để ánh xạ trực tiếp sang DTO) thay vì dùng `.Include()`.
+> **Tối ưu hóa hiệu năng:** Mặc dù `.Include()` rất tiện lợi nhưng lạm dụng nó trên các bảng có dữ liệu lớn hoặc quan hệ lồng nhau quá sâu sẽ tạo ra hiện tượng **Bùng nổ dữ liệu (Cartesian Product)** ở phía cơ sở dữ liệu. Chuẩn doanh nghiệp khuyến khích sử dụng **Projection** (dùng lệnh `.Select()` để ánh xạ trực tiếp sang DTO) thay vì dùng `.Include()`.
 
 #### 14. Fluent API và Data Annotations là gì? Nếu dùng cả hai thì sao?
 Đây là hai phương pháp định nghĩa cấu hình ánh xạ giữa thực thể C# (Entities) và bảng cơ sở dữ liệu (Database Schemas) trong EF Core.
@@ -167,7 +167,7 @@ Sự khác biệt cốt lõi nằm ở **Cơ chế xử lý bất đồng bộ (
 *   **Ý nghĩa:** Chuyển đổi một danh sách hoặc truy vấn về dạng `IQueryable<T>`. 
 *   **Mục đích:** Kích hoạt cơ chế **Hoãn thực thi (Deferred Execution)**.
 *   **Cơ chế hoạt động:** Khi bạn thao tác lọc (`.Where()`), sắp xếp (`.OrderBy()`), phân trang (`.Skip()`, `.Take()`) trên một đối tượng `IQueryable`, EF Core chỉ xây dựng cây biểu thức điều kiện (Expression Tree) mà **chưa hề chạy câu lệnh xuống Database**. Chỉ khi nào ta yêu cầu lấy dữ liệu thực tế bằng các hàm kết thúc như `.ToList()`, `.ToListAsync()`, `.Count()` hoặc duyệt vòng lặp `foreach`, lúc đó EF Core mới biên dịch toàn bộ cây biểu thức thành một câu lệnh SQL duy nhất và tối ưu nhất để thực thi tại Database Server.
-    *   *Ví dụ thực tế:* Giúp thực hiện phân trang và tìm kiếm ở phía SQL Server, chỉ tải đúng 10 bản ghi cần hiển thị lên bộ nhớ Web API thay vì tải toàn bộ bảng dữ liệu lên RAM rồi mới lọc.
+    *   *Ví dụ thực tế:* Giúp thực hiện phân trang và tìm kiếm ở phía cơ sở dữ liệu, chỉ tải đúng 10 bản ghi cần hiển thị lên bộ nhớ Web API thay vì tải toàn bộ bảng dữ liệu lên RAM rồi mới lọc.
 
 #### 19. Phương thức `ToDictionary()` trong LINQ dùng để làm gì?
 *   **Ý nghĩa:** Chuyển đổi một danh sách kết quả LINQ thành một cấu trúc dữ liệu kiểu `Dictionary<TKey, TValue>` (gồm cặp khóa và giá trị).
@@ -505,7 +505,7 @@ Hãy nhớ kỹ sơ đồ này trong đầu để khi thầy hỏi "Request đi 
 *   **Bước 1:** Trình duyệt khách gửi một request (ví dụ: lấy chi tiết sản phẩm). **API Controller** (`ProductsController.cs`) tiếp nhận request. Nó không tự xử lý mà chuyển tiếp dữ liệu xuống tầng dưới.
 *   **Bước 2:** Tầng **Service** (`ProductService.cs`) nhận yêu cầu, kiểm tra các logic nghiệp vụ (ví dụ: sản phẩm có bị khóa không, người dùng có đủ quyền xem không).
 *   **Bước 3:** Tầng Service gọi xuống tầng **Repository** (`ProductRepository.cs`) để yêu cầu lấy dữ liệu thô.
-*   **Bước 4:** Repository viết câu lệnh LINQ gọi vào **`DbContext`** để truy vấn trực tiếp xuống **SQL Server Database**.
+*   **Bước 4:** Repository viết câu lệnh LINQ gọi vào **`DbContext`** để truy vấn trực tiếp xuống **PostgreSQL 17**.
 *   **Đường về (Mapping):** Database trả về đối tượng dữ liệu thô (**Entity**). Repository đưa lên Service. Service thực hiện ánh xạ (map) từ Entity sang **DTO** (chỉ lấy những trường cần thiết) và bọc trong lớp kết quả chuẩn **`ApiResult<DTO>`** rồi đẩy ngược lên Controller để trả về cho Client.
 
 #### 2. DTO (Data Transfer Object) là cái gì? Tại sao phải sinh ra DTO mà không dùng luôn Entity của DB để trả về cho Frontend?
@@ -527,11 +527,11 @@ Hãy nhớ kỹ sơ đồ này trong đầu để khi thầy hỏi "Request đi 
     Nhờ cấu hình này, bất cứ khi nào bạn viết câu lệnh LINQ `_context.Products.ToList()`, EF Core sẽ tự động chèn thêm điều kiện `WHERE IsDeleted = 0` vào câu lệnh SQL gửi đi mà bạn không cần phải viết điều kiện này một cách thủ công.
 
 #### 4. Database Migrations là gì? Tại sao lại có thư mục `Migrations/` trong code?
-*   **Bản chất:** Code C# (Entities) và Database vật lý là hai thế giới độc lập. Khi bạn thêm một thuộc tính mới vào Class C# (ví dụ: thêm cột `WarrantyMonth` vào `ProductVariant`), database dưới SQL Server hoàn toàn chưa biết gì về sự thay đổi này.
+*   **Bản chất:** Code C# (Entities) và Database vật lý là hai thế giới độc lập. Khi bạn thêm một thuộc tính mới vào Class C# (ví dụ: thêm cột `WarrantyMonth` vào `ProductVariant`), database dưới PostgreSQL hoàn toàn chưa biết gì về sự thay đổi này.
 *   **Ý nghĩa của Migration:** Là cầu nối để đồng bộ hóa. 
     *   Mỗi khi bạn sửa đổi Entities, bạn chạy lệnh `dotnet ef migrations add <TenMigration>`. EF Core sẽ tự động so sánh code hiện tại với cấu trúc cũ và sinh ra một file C# mới trong thư mục `Migrations/`.
     *   File này chứa hai hàm: `Up()` (chứa mã lệnh để nâng cấp DB như `AddColumn`) và `Down()` (chứa mã lệnh để rollback lại cấu hình cũ như `DropColumn`).
-    *   Khi chạy lệnh `dotnet ef database update`, EF Core sẽ dịch các file Migration này thành mã SQL tương ứng và chạy trực tiếp dưới SQL Server để cập nhật cấu trúc bảng mà **không làm mất dữ liệu cũ** đang có sẵn trong database.
+    *   Khi chạy lệnh `dotnet ef database update`, EF Core sẽ dịch các file Migration này thành mã SQL tương ứng và chạy trực tiếp dưới PostgreSQL để cập nhật cấu trúc bảng mà **không làm mất dữ liệu cũ** đang có sẵn trong database.
 
 #### 5. Transaction (Giao dịch) là gì? Tại sao nó cực kỳ quan trọng đối với các nghiệp vụ lưu trữ dữ liệu?
 *   **Định nghĩa:** Transaction là một nhóm các hành động thao tác dữ liệu được gộp lại thành một khối duy nhất, tuân thủ tính chất **ACID** (Đặc biệt là tính nguyên tử - **Atomicity**): **Hoặc tất cả cùng thành công, hoặc tất cả cùng thất bại và không có gì thay đổi**.
@@ -685,9 +685,12 @@ Kiến trúc Component yêu cầu chia nhỏ giao diện thành các mảnh ghé
         *   Middleware sẽ lấy ra `UserId` từ Claims danh tính và kiểm tra trạng thái hoạt động của tài khoản này.
         *   Nếu phát hiện tài khoản đã bị khóa (`IsActive == false`), Middleware sẽ lập tức **ngắt luồng sớm (Short-circuit)**, cấu hình HTTP Status Code là `403 Forbidden`, trả về JSON báo lỗi chuẩn `ApiResult.Fail` và **hoàn toàn không gọi lệnh `await next()`**, chặn đứng không cho request xâm nhập sâu vào các Controller nghiệp vụ.
         *   Nếu tài khoản hoạt động bình thường, nó gọi `await next();` để cho phép yêu cầu đi tiếp sang chốt tiếp theo (chốt Authorization và Controller).
-    3.  **Tại sao lại phải sử dụng MemoryCache 30 giây?**
-        *   Đây là giải pháp **tối ưu hóa hiệu năng hệ thống cực kỳ quan trọng**. Nếu không sử dụng Cache, cứ mỗi request gọi API (dù là kiểm tra giỏ hàng, lấy danh sách sản phẩm hay load menu...), Web API lại phải truy vấn xuống SQL Server để tìm kiếm trạng thái tài khoản, gây ra gánh nặng truy vấn khổng lồ và làm giảm tốc độ API.
-        *   Việc cache trạng thái trong 30 giây giúp giảm hàng ngàn truy vấn DB thừa, tăng tốc độ phản hồi API gần như tức thì mà vẫn đảm bảo tính an toàn bảo mật (độ trễ khóa tài khoản tối đa chỉ là 30 giây)."*
+    3.  **Tại sao KHÔNG cache trạng thái này, dù cache sẽ nhanh hơn?**
+        *   Bản đầu tiên của tụi em **có** cache `IsActive` bằng `MemoryCache` 30 giây, đúng với lý lẽ hiệu năng: mỗi request đều phải hỏi DB một câu là lãng phí. **Tụi em đã gỡ nó ra ở đợt nâng cấp thứ nhất**, và lý do mới là phần đáng nói.
+        *   `MemoryCache` nằm trong RAM của **một tiến trình**. Khi hệ thống chạy **một** task thì không sao: admin khoá tài khoản, phiên của người đó sống thêm tối đa 30 giây — chấp nhận được. Nhưng hệ thống của tụi em chạy sau một Load Balancer và có thể có **nhiều task**. Lúc đó lệnh xoá cache chỉ chạm được cache của **đúng task nhận request khoá**; task còn lại vẫn giữ bản cũ và **vẫn cho người dùng đã bị khoá đi vào**.
+        *   Điểm mấu chốt là **hướng sai**: cache nói "còn hoạt động" trong khi DB đã ghi "đã khoá". Sai theo hướng **mở khoá** thì đó là **lỗi bảo mật**, không phải lỗi hiệu năng. Và triệu chứng của nó là *"lúc được lúc không, tuỳ Load Balancer định tuyến"* — loại lỗi **không tái hiện được**, nên gần như không thể phát hiện khi test.
+        *   Vậy chi phí hiệu năng giải quyết thế nào? Bằng **projection** thay vì bằng cache: câu truy vấn chỉ `SELECT` đúng **2 cột** (`IsActive`, `LockReason`) kèm `AsNoTracking()`, thay cho `FindByIdAsync` kéo nguyên một hàng `AppUsers`. Đây là một truy vấn theo khoá chính, có index, cực rẻ.
+        *   **Và đây chính là thứ khiến hệ thống chạy được nhiều task mà không cần Redis.** Nguyên tắc tụi em rút ra và ghi thành luật trong `CLAUDE.md`: dữ liệu **công khai, ít đổi** (danh mục, menu) thì cache thoải mái; còn **trạng thái phân quyền và khoá tài khoản thì đọc thẳng DB**, không bao giờ cache."*
 
 ---
 

@@ -433,7 +433,7 @@ Tầng code: `citext` cho 6 cột, `xmin` thay `RowVersion`, `ConflictClassifier
 `sqlcmd` → `psql 17`. Hạ tầng: `engine = "postgres"`, `gp3`, `db.t4g.micro`, cổng 5432, hai công
 tắc `enable_multi_az` / `enable_read_replica` (**cả hai mặc định `false`**), cost guard hết nói
 dối về read replica.
-Đo được: **LoadProbe 9/9 ở CẢ 1 lẫn 2 instance**, `0 KHÔNG KẾT LUẬN`; `terraform test` **99/99**;
+Đo được: **LoadProbe 9/9 ở CẢ 1 lẫn 2 instance**, `0 KHÔNG KẾT LUẬN`; `terraform test` **105/105**;
 seeder chạy thật với 2 ca đối chứng âm
 ([bằng chứng](docs/evidence/2026-09-05-postgresql-2-instance.md)).
 

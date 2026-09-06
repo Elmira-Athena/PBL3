@@ -75,10 +75,10 @@ Cột cuối là cột đáng dùng: **file nào là file đáng đọc nhất c
 
 | Module | Tạo gì | Dòng | Mở file này trước |
 |---|---|---|---|
-| [`network`](../infra/tf/modules/network/) | VPC, 6 subnet, IGW, NAT, 3 route table, **3 Network ACL**, S3 endpoint, Flow Logs | ~490 | [`nacl.tf`](../infra/tf/modules/network/nacl.tf) — 173 dòng, phần kỹ thuật đáng nhất của cả đồ án |
-| [`security`](../infra/tf/modules/security/) | 3 Security Group | 172 | [`main.tf`](../infra/tf/modules/security/main.tf) — cả module chỉ 1 file |
+| [`network`](../infra/tf/modules/network/) | VPC, 6 subnet, IGW, NAT, 3 route table, **3 Network ACL**, S3 endpoint, Flow Logs | ~470 | [`nacl.tf`](../infra/tf/modules/network/nacl.tf) — 178 dòng, phần kỹ thuật đáng nhất của cả đồ án |
+| [`security`](../infra/tf/modules/security/) | 3 Security Group | 188 | [`main.tf`](../infra/tf/modules/security/main.tf) — cả module chỉ 1 file |
 | [`storage`](../infra/tf/modules/storage/) | 4 ECR repo, 3 S3 bucket + policy/lifecycle/CORS | ~285 | [`s3.tf`](../infra/tf/modules/storage/s3.tf) |
-| [`data`](../infra/tf/modules/data/) | RDS SQL Server Express, subnet group, 3 SSM SecureString | 146 | [`main.tf`](../infra/tf/modules/data/main.tf) |
+| [`data`](../infra/tf/modules/data/) | RDS PostgreSQL 17 (Multi-AZ), subnet group, read replica tuỳ chọn, 4 SSM SecureString | ~290 | [`main.tf`](../infra/tf/modules/data/main.tf) |
 | [`ecs`](../infra/tf/modules/ecs/) | Cluster, capacity provider, ASG, launch template, **4 task definition**, 2 service, **5 IAM role** | ~810 | [`iam.tf`](../infra/tf/modules/ecs/iam.tf) — chứa chữ `Deny` tường minh, xem [§6](#6-ba-chỗ-dễ-hiểu-sai) |
 | [`alb`](../infra/tf/modules/alb/) | ALB, 2 target group, 2 listener + rule, ACM cert + validation | 219 | [`alb.tf`](../infra/tf/modules/alb/alb.tf) |
 | [`cicd`](../infra/tf/modules/cicd/) | OIDC provider của GitHub, 2 IAM role (deploy + plan) | ~490 | [`policy.tf`](../infra/tf/modules/cicd/policy.tf) — 282 dòng, đây là chỗ chặn pipeline tự bật hạ tầng |
@@ -207,7 +207,7 @@ mặc định mở của AWS.
 và pipeline cùng muốn sở hữu một trường; `ignore_changes` là cách khai ai sở hữu.
 
 **③ Test chạy ở `command = plan`, nên có thứ nó KHÔNG kiểm được.**
-93 test đều không tạo resource thật → $0, nhưng cái giá là: giá trị nào chỉ biết
+105 test đều không tạo resource thật → $0, nhưng cái giá là: giá trị nào chỉ biết
 được **sau khi apply** thì không assert được. Ví dụ rõ nhất có comment dài ở
 [`modules/network/tests/vpc.tftest.hcl`](../infra/tf/modules/network/tests/vpc.tftest.hcl):
 không thể assert `length(aws_default_security_group.this.ingress) == 0`, vì hai

@@ -16,6 +16,18 @@ nguyên tắc tối thiểu và **đã thực sự ngăn được tấn công**.
 
 Kiểm thử thực hiện trên hạ tầng **do chính nhóm sở hữu**, trong phạm vi đề bài.
 
+> 🕰️ **Đây là BẢN GHI của một phép đo, không phải mô tả hệ thống hôm nay.** Mọi số,
+> IP, cổng và commit ở đây là những gì đã đo ngày **2026-08-24** và **không được sửa**
+> — sửa số trong một bản ghi là làm giả bằng chứng.
+>
+> **Đợt 7 (2026-09-05) đã đổi database từ SQL Server sang PostgreSQL 17**, nên cổng DB
+> `1433` trong báo cáo này giờ là `5432`, và hạ tầng đã thêm NAT Gateway thứ hai cùng
+> Multi-AZ. **Cả 12 kịch bản chưa được chạy lại trên cấu hình mới.** Hình dạng rule
+> không đổi (vẫn "đúng một cổng DB, chỉ từ app tier"), nên kết luận gần như chắc chắn
+> giữ nguyên — nhưng *gần như chắc chắn* không phải *đã đo*. Kịch bản **3** (kết nối
+> thẳng vào DB) và **5** (SSH) là hai kịch bản rẻ nhất để chạy lại và cũng là hai
+> kịch bản chịu ảnh hưởng trực tiếp nhất của việc đổi cổng.
+
 ---
 
 > ## ✅ Đã chạy lại toàn bộ trên account mới — 2026-08-24

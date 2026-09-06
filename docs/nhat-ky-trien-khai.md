@@ -10,6 +10,14 @@
 > Chưa từng dùng AWS thì làm workshop tay trước cho có cảm giác về resource:
 > xem **Phần VI — Lộ trình học** trong tài liệu thiết kế, có bản đồ từ mỗi thành
 > phần của hệ thống sang workshop tiếng Việt tương ứng.
+>
+> 🕰️ **Nhật ký kể chuyện đã xảy ra, nên nó KHÔNG được cập nhật khi hệ thống đổi.**
+> Phần lớn tài liệu này viết khi database còn là **SQL Server** (cổng `1433`) và
+> hạ tầng còn **một** NAT Gateway. Đợt 7 (2026-09-05) đổi sang **PostgreSQL 17**
+> (cổng `5432`), thêm NAT thứ hai và bật **Multi-AZ**. Những chỗ nhắc SQL Server
+> hoặc `1433` bên dưới là **đúng với thời điểm chúng được viết** — muốn biết hệ
+> thống *hiện tại* thì đọc [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md)
+> và [terraform-runbook.md](terraform-runbook.md).
 
 ---
 

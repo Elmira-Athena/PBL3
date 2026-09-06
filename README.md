@@ -1,6 +1,6 @@
 # HushStore — IT Hardware E-commerce & Management System
 
-Hệ thống thương mại điện tử và quản lý phần cứng IT, xây dựng trên ASP.NET Core 10 (API) + Blazor WebAssembly (Frontend) + SQL Server 2025.
+Hệ thống thương mại điện tử và quản lý phần cứng IT, xây dựng trên ASP.NET Core 10 (API) + Blazor WebAssembly (Frontend) + PostgreSQL 17.
 
 ---
 
@@ -16,15 +16,15 @@ launch type** — container thật, nhưng vẫn là EC2 instance thật.
       ▼
     VPC 10.20.0.0/16 — 3 tier × 2 AZ, mỗi tier một Network ACL riêng
       │
-      ├── public tier   ALB (ACM cert, listener 80→443) + NAT Gateway
+      ├── public tier   ALB (ACM cert, listener 80→443) + 2 NAT Gateway (mỗi AZ một)
       │                 └── allowlist Host header; Host lạ → 403
       │
       ├── app tier      EC2 t3.micro, KHÔNG public IP, ECS container instance
       │                 ├── container web  nginx :80   (Blazor WASM bake trong image)
       │                 ├── container api  .NET :8080
-      │                 └── one-off task   migrator (EF bundle) · seeder (sqlcmd)
+      │                 └── one-off task   migrator (EF bundle) · seeder (psql 17)
       │
-      └── db tier       RDS SQL Server Express, isolated, chỉ nhận :1433 từ app tier
+      └── db tier       RDS PostgreSQL 17 Multi-AZ, isolated, chỉ nhận :5432 từ app tier
 
 **Không có SSH.** Hệ thống không có key pair nào và không có Security Group rule
 nào mở port 22. Truy cập quản trị đi qua **SSM Session Manager** (vào host) và
@@ -38,8 +38,8 @@ inject từ SSM Parameter Store.
 | Tier | Rule vào | Rule ra |
 |---|---|---|
 | ALB | 80, 443 ← `0.0.0.0/0` | chỉ tới `sg-web` cổng 80 và 8080 |
-| app | 80, 8080 ← **chỉ từ `sg-alb`** | 1433 → `sg-rds`, 80/443 → internet (ECR, SSM) |
-| db | 1433 ← **chỉ từ `sg-web`** | **rỗng** |
+| app | 80, 8080 ← **chỉ từ `sg-alb`** | 5432 → `sg-rds`, 80/443 → internet (ECR, SSM) |
+| db | 5432 ← **chỉ từ `sg-web`** | **rỗng** |
 
 ---
 
@@ -140,7 +140,10 @@ resource nằm ngoài Terraform state, và chúng mở port 22 kèm SSH key pair
 00:00 giờ Việt Nam, tắt được RDS + EC2 container instance + ECS service nếu bị
 bỏ quên bật — nhưng **không** tắt được NAT Gateway và ALB, vì hai resource đó
 do Terraform quản lý và xoá bằng API sẽ làm lệch state. Sau khi Lambda chạy,
-hoá đơn giảm 55% (còn ~$0.0882/giờ), không phải về $0. Nó cũng là thứ chặn rủi
+hoá đơn giảm ~41% (còn ~$0.1512/giờ), không phải về $0. ⚠️ Tỉ lệ này **giảm
+so với trước đợt 7** (khi đó là 55%) — không phải Lambda kém đi, mà vì phần nó
+**không** chạm tới được đã phình ra: 2 NAT + ALB = $0.1432/giờ, tự nó đã là 95%
+của hoá đơn sau khi Lambda chạy. Muốn về gần $0 thì phải `down.sh`. Nó cũng là thứ chặn rủi
 ro AWS tự bật lại một RDS đã `stopped` sau 7 ngày. Gate bằng
 `var.enable_auto_stop` (mặc định `true`) — tắt biến này là bỏ luôn lưới an
 toàn đó. Chi tiết ở mục "Tự tắt hằng đêm" trong
@@ -166,7 +169,9 @@ hạn nằm trong GitHub Secrets.
 
 **Pipeline không tự bật hạ tầng.** Push khi stack đang tắt vẫn xanh và vẫn
 push đủ 4 image lên ECR, nhưng chưa deploy — summary của job nói rõ điều đó.
-Lý do: mỗi giờ bật tốn $0.1954 nên để pipeline tự bật là chi phí không có
+Lý do: mỗi giờ bật tốn ~$0.2544 (2 NAT $0.1180 + ALB $0.0252 + EC2 $0.0132 +
+RDS $0.098 — số RDS là **cận trên đo trên SQL Server**, PostgreSQL Multi-AZ
+niêm yết $0.051, chưa xác nhận bằng hoá đơn thật) nên để pipeline tự bật là chi phí không có
 trần; IAM role của nó cũng không có quyền `autoscaling:SetDesiredCapacity`
 hay `rds:StartDBInstance`.
 
@@ -179,8 +184,10 @@ Migration vẫn là gate của deploy — xem mục "Deploy lên AWS" ở trên.
 ## Development (local)
 
 ```bash
-# Khởi động SQL Server
-docker compose -f Infrastructure/db/docker-compose.yml up -d
+# Khởi động PostgreSQL 17
+# Chỉ định rõ `postgres`: file compose còn service `sqlserver` của đợt trước,
+# gõ thiếu tên service là bật cả hai và tốn RAM vô ích.
+docker compose -f Infrastructure/db/docker-compose.yml up -d postgres
 
 # Chạy API (https://localhost:7010)
 dotnet run --project src/API/API.csproj
@@ -226,14 +233,14 @@ docker compose -f Infrastructure/db/docker-compose.yml ps
 dotnet run --project src/API/API.csproj
 ```
 
-**Lỗi kết nối SQL Server:**
+**Lỗi kết nối PostgreSQL:**
 ```bash
 docker compose -f Infrastructure/db/docker-compose.yml logs --tail=50
 ```
 
 Nếu mật khẩu trong `.env` không có tác dụng, khả năng cao volume cũ vẫn còn dữ
-liệu của lần chạy trước — `MSSQL_SA_PASSWORD` chỉ có tác dụng khi khởi tạo volume
-mới.
+liệu của lần chạy trước — `POSTGRES_PASSWORD` chỉ có tác dụng khi khởi tạo volume
+mới. Xoá bằng `docker volume rm hushstore_postgres_data`.
 
 **Schema chưa có:**
 ```bash

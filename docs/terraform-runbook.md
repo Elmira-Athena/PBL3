@@ -232,8 +232,10 @@ bash ../../scripts/wait-for-capacity.sh
 `/health/ready`, mà endpoint đó có `AddDbContextCheck` nên nó **mở kết nối tới
 RDS**. Target group đặt `interval = 15`, `unhealthy_threshold = 3`, tức ALB kết
 luận unhealthy sau 45 giây. `health_check_grace_period_seconds = 120` bảo vệ được
-app khởi động chậm, nhưng RDS SQL Server Express mất **5–10 phút** để từ
-`starting` sang nhận kết nối. Bật service khi RDS chưa lên thì task API bị giết
+app khởi động chậm, nhưng RDS mất **nhiều phút** để từ `starting` sang nhận
+kết nối. 📏 Con số đo được là **5–10 phút**, nhưng đo trên **SQL Server Express**
+trước đợt 7; PostgreSQL 17 thường lên nhanh hơn nhưng **chưa đo lần nào trên AWS**
+— đừng trích số này như số của cấu hình hiện tại. Bật service khi RDS chưa lên thì task API bị giết
 và replace liên tục — đo được ~8 phút crash-loop trong lần chạy thật. Không phải
 lỗi cấu hình: readiness probe đang làm đúng việc của nó. Nhưng nó gây nhiễu và
 có thể che mất một lỗi thật.
@@ -655,13 +657,15 @@ order tham chiếu tới product thì `DELETE` sẽ vướng khoá ngoại.
 ALB=$(terraform output -raw alb_dns_name)
 
 # Kịch bản 1 + 4: chỉ 80 và 443 mở
-for p in 22 80 443 1433 8080; do
+for p in 22 80 443 5432 8080; do
   printf "%-5s " $p; nc -z -G 4 -w 4 "$ALB" $p && echo OPEN || echo "chặn"
 done
-# đo được: 80 OPEN, 443 OPEN, còn 22/1433/8080 chặn
+# đo được: 80 OPEN, 443 OPEN, còn 22/5432/8080 chặn
+# ⚠️ Lần đo thật dùng cổng 1433 (SQL Server). Đợt 7 đổi sang 5432; kết luận không
+# đổi vì không rule nào mở cổng DB ra ngoài, nhưng đây là lệnh CẦN CHẠY LẠI.
 
 # Kịch bản 3: RDS không tới được từ ngoài
-nc -z -G 4 -w 4 "$(terraform output -raw rds_endpoint)" 1433 || echo "chặn"
+nc -z -G 4 -w 4 "$(terraform output -raw rds_endpoint)" 5432 || echo "chặn"
 
 # Kịch bản 7: Host lạ không lọt sang tg-api
 curl -sk -o /dev/null -w "%{http_code}\n" -H "Host: evil.com" "https://${ALB}/health/ready"
@@ -698,6 +702,13 @@ phải bọc ngoặc nhọn: `$ACCT:role` bị zsh hiểu `:r` là modifier và 
 ## Chi phí
 
 ### RDS không miễn phí — CPU credit surplus là khoản lớn nhất
+
+> 🕰️ **Toàn bộ mục này là BẢN GHI của một phép đo trên `sqlserver-ex` + `gp2`,
+> ngày 2026-08-20 — tức TRƯỚC đợt 7.** Số không được sửa, vì sửa số trong một bản
+> ghi là làm giả bằng chứng. Nó vẫn còn giá trị: chính khoản `CPUCredits` dưới đây
+> là **lý do đổi engine**. Cấu hình hiện tại (`postgres` 17 + `gp3` + `db.t4g.micro`
+> Multi-AZ) **chưa có phép đo nào trên AWS** — xem "Cái gì đã đổi sau đợt 7" ở cuối
+> mục này.
 
 Đo bằng Cost Explorer ngày 2026-08-20 sau 13.67 giờ uptime thật, tách theo
 `RECORD_TYPE` để thấy phần usage trước khi credit bù:
@@ -792,15 +803,39 @@ là sai và đã được sửa.
 
 | Khoản | Lượng | $/tháng |
 |---|---|---|
-| RDS storage gp2 (tính cả khi `stopped`) | 20 GB | **~$2.30** |
-| ECR — 12 image trên 4 repo | 0.56 GB | ~$0.06 |
-| S3 (assets + artifacts + alb-logs) + CloudWatch Logs | vài trăm MB | ~$0.10 |
-| **Sàn** | | **~$2.45/tháng** |
+| 📏 RDS storage gp2 (tính cả khi `stopped`) | 20 GB | **~$2.30** |
+| 📏 ECR — 12 image trên 4 repo | 0.56 GB | ~$0.06 |
+| 📏 S3 (assets + artifacts + alb-logs) + CloudWatch Logs | vài trăm MB | ~$0.10 |
+| **Sàn đo được ngày 2026-08-23** | | **~$2.45/tháng** |
 
 20 GB là **mức tối thiểu** của gp2 cho `sqlserver-ex` — không hạ được. Đường duy
 nhất xuống thấp hơn là xoá RDS và giữ snapshot (snapshot chỉ tính dung lượng dữ
 liệu thật, vài trăm MB), nhưng đổi lấy rủi ro vận hành trên một deliverable đang
 được chấm. Không đáng.
+
+#### Cái gì đã đổi sau đợt 7 — và vì sao sàn CAO LÊN
+
+Đợt 7 đổi engine sang PostgreSQL 17 và bật **Multi-AZ**. Multi-AZ giữ một bản sao
+đồng bộ ở AZ thứ hai, và AWS **tính tiền storage cho cả hai bản** — kể cả khi
+instance đang `stopped`. Nên dòng storage của bảng trên **nhân đôi**, và đó là
+khoản `down.sh` **không** gỡ được:
+
+| Khoản | Trước đợt 7 | Sau đợt 7 |
+|---|---|---|
+| Storage tính khi `stopped` | 20 GB (1 AZ) | **40 GB** (2 AZ) |
+| 🏷️ Quy ra $/giờ dùng trong script | `HS_RATE_RDS_STOPPED=0.004` | **`0.008`** |
+| 🏷️ Sàn ước tính | ~$2.45/tháng | **~$4.75/tháng** |
+
+🏷️ = **suy ra từ giá niêm yết, chưa có hoá đơn xác nhận.** Đây là cái giá có ý
+thức của việc đổi lấy Multi-AZ: mất thêm ~$2.3/tháng ở sàn, nhưng **giá lúc BẬT
+lại rẻ hơn** — PostgreSQL Multi-AZ niêm yết $0.051/giờ so với $0.098/giờ đo được
+của SQL Server single-AZ, vì không còn khoản CPU surplus ở bảng trên. Đổi engine
+vừa mua được tính sẵn sàng vừa giảm tiền lúc chạy; khoản đắt lên nằm ở lúc tắt.
+
+⚠️ `HS_RATE_RDS_UP` trong [`scripts/lib.sh`](../infra/tf/scripts/lib.sh) **vẫn để
+`0.098`** — cố ý. Đó là **cận trên** đo trên SQL Server, giữ nguyên cho tới khi có
+24–48h dữ liệu billing thật của PostgreSQL. Script báo đắt hơn thực tế thì an
+toàn; báo rẻ hơn thực tế mới nguy hiểm.
 
 ### Rủi ro AWS tự bật lại RDS — có ngày cụ thể
 

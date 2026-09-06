@@ -95,7 +95,7 @@ Ba job, chạy song song:
 
 ```
                     ┌─ terraform-static ── fmt -check + validate mọi module
-pull request ───────┼─ terraform-test ──── 93 test trên 8 module
+pull request ───────┼─ terraform-test ──── 105 test trên 8 module
                     └─ dotnet-build ────── build toàn solution
 ```
 
@@ -104,7 +104,7 @@ pull request ───────┼─ terraform-test ──── 93 test tr�
 đỏ. Nghe khắt khe vô ích, nhưng nó giữ `git diff` sạch, nên khi review bạn thấy
 được **thay đổi thật** chứ không phải nhiễu do khoảng trắng.
 
-**`terraform-test`** — 93 test tự động trên 8 module. Đây là lưới an toàn chính
+**`terraform-test`** — 105 test tự động trên 8 module. Đây là lưới an toàn chính
 của hạ tầng. Chúng chạy ở `command = plan`: Terraform tính ra *sẽ* tạo gì rồi
 kiểm khẳng định trên kết quả đó, **không tạo resource thật** → $0.
 
