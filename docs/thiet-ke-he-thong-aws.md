@@ -9,6 +9,22 @@
 > Phần III. Trong Phần III, mục **"Linux — hệ điều hành chạy bên dưới tất cả"**
 > trả lời gạch đầu dòng đầu tiên của đề bài và đọc được độc lập.
 
+**Cập nhật 2026-09-06 — ba thay đổi kiến trúc, tài liệu này đã phản ánh hết:**
+
+| | Trước | Nay |
+|---|---|---|
+| Database | SQL Server Express, single-AZ | **PostgreSQL 17, Multi-AZ** (`db.t4g.micro`, `gp3`) |
+| NAT Gateway | 1 cái, hai AZ đi chung | **2 cái, mỗi AZ một cái** + route table tách theo AZ |
+| Read replica | không làm được (đòi SQL Server Enterprise ≥ 4 vCPU) | hạ tầng đã có, **mặc định tắt** |
+
+Cả ba đã **apply thật lên AWS** ngày 2026-09-06 và `terraform plan` sau đó trả
+`No changes`. Trước mốc này toàn bộ hạ tầng mới chỉ tồn tại dưới dạng mã và test.
+
+⚠️ **Một điều tài liệu này KHÔNG khẳng định:** hệ thống chưa chạy đủ lâu để đo
+chi phí thật sau khi đổi engine. Mọi con số tiền bên dưới là **giá niêm yết**,
+cộng một số đo cũ trên SQL Server được giữ lại làm **cận trên** — chỗ nào như vậy
+đều có ghi rõ.
+
 ---
 
 # Phần I — Kiến thức mạng tối thiểu
@@ -22,7 +38,8 @@ Mỗi máy trong mạng có một địa chỉ IP, ví dụ `10.20.10.37`. Bốn
 
 **CIDR** là cách viết gọn một *dải* địa chỉ: `10.20.0.0/16`.
 
-Con số sau dấu `/` cho biết **bao nhiêu bit đầu bị cố định**. IP có 32 bit, nên:
+Con số sau dấu `/` cho biết **bao nhiêu bit đầu bị cố định**. IP có 32 bit, nên
+**số địa chỉ = 2^(số bit tự do)**, với *bit tự do = 32 − số sau dấu `/`*:
 
 | CIDR | Bit cố định | Bit tự do | Số địa chỉ | Nghĩa |
 |---|---|---|---|---|
@@ -65,7 +82,20 @@ biết đường thì đẩy ra đây".
 
 Điểm cốt tử: **một subnet không có dòng `0.0.0.0/0` trỏ ra Internet thì máy
 trong đó không thể ra Internet, và Internet cũng không có đường vào.** Không cần
-firewall nào cả. Đây là cách app tier và db tier của ta được bảo vệ.
+firewall nào cả. Đây là cách **db tier** của ta được bảo vệ.
+
+⚠️ **Đọc kỹ chữ "trỏ ra Internet" — nó là chỗ dễ hiểu nhầm nhất của cả mục này.**
+Có ba trạng thái, không phải hai:
+
+| Route table của subnet | Máy trong đó | Internet vào được? |
+|---|---|---|
+| `0.0.0.0/0` → **Internet Gateway** | ra được Internet | **được** (nếu máy có IP public) |
+| `0.0.0.0/0` → **NAT Gateway** | ra được Internet | **KHÔNG** — xem mục 6 |
+| **không có** dòng `0.0.0.0/0` nào | **không ra được** | không |
+
+App tier của ta nằm ở **hàng giữa**: nó *có* một dòng `0.0.0.0/0`, nhưng trỏ vào
+NAT chứ không phải Internet Gateway — nên nó đi ra được mà không ai vào được. Db
+tier nằm ở hàng cuối. Mục 6 giải thích vì sao NAT tạo ra được sự bất đối xứng đó.
 
 ## 4. Cổng (port) và TCP
 
@@ -77,7 +107,7 @@ mỗi port thường ứng với một loại dịch vụ:
 | 22 | SSH — điều khiển máy Linux từ xa | **cố ý đóng hoàn toàn** |
 | 80 | HTTP — web không mã hoá | chỉ để redirect sang 443 |
 | 443 | HTTPS — web có mã hoá | cửa chính duy nhất |
-| 1433 | SQL Server | chỉ mở giữa app tier và db tier |
+| 5432 | PostgreSQL | chỉ mở giữa app tier và db tier |
 | 8080 | API .NET | chỉ mở giữa ALB và container |
 
 **Ephemeral port (cổng tạm).** Khi máy A gọi máy B ở port 443, máy A tự mở một
@@ -98,8 +128,12 @@ ra, đều bị xét lại từ đầu như thể chưa từng thấy. **Network
 vậy** — phải viết rule cho **cả hai chiều**, kể cả chiều trả lời.
 
 Hệ quả trực tiếp: NACL bắt buộc phải mở dải ephemeral 1024–65535, vì câu trả lời
-luôn đi về một port trong dải đó. Và vì mở dải đó, một số port nguy hiểm (1433,
+luôn đi về một port trong dải đó. Và vì mở dải đó, một số port nguy hiểm (5432,
 8080) vô tình nằm trong khoảng mở — nên phải chặn chúng bằng rule *số nhỏ hơn*.
+
+*(NACL đánh **số** cho từng rule và xét theo **thứ tự tăng dần**; rule khớp đầu tiên
+thắng và dừng luôn, không xét tiếp. Nên muốn chặn thứ đang lọt qua một rule mở, phải
+đặt rule chặn ở **số nhỏ hơn**. Phần III nói kỹ.)*
 Toàn bộ phần NACL ở Phần III chỉ là hệ quả của một câu này.
 
 ## 6. NAT — vì sao máy không có IP public vẫn tải được phần mềm
@@ -139,6 +173,12 @@ Việc thứ nhất chỉ cần thuật toán. Việc thứ hai cần **chứng 
 
 ### Chứng chỉ là gì
 
+Trước hết, **cặp khoá** — nền của cả mục này. Máy chủ giữ hai khoá đi liền nhau:
+**khoá riêng** giữ kín tuyệt đối, **khoá công khai** đem công bố cho cả thế giới. Thứ
+khoá công khai mã hoá thì chỉ khoá riêng tương ứng giải được; ngược lại, thứ khoá riêng
+**ký** thì ai cũng dùng khoá công khai để kiểm chứng được. Vì vậy công bố khoá công
+khai vẫn an toàn.
+
 Chứng chỉ là một file chứa: **tên miền**, **khoá công khai** của máy chủ, **thời
 hạn**, và **chữ ký số** của một tổ chức tên là **CA** (Certificate Authority).
 
@@ -163,7 +203,9 @@ này thuộc về tên miền này. Mã hoá là việc của bước sau, dùng
 ### Thời hạn — và vì sao nó đang ngắn dần rất nhanh
 
 Mỗi chứng chỉ có ngày hết hạn. Trước 2020 thời hạn thường là **2–3 năm**. Hiện
-trần là **200 ngày**, và theo lịch đã được CA/Browser Forum thông qua tháng 4/2025
+trần là **200 ngày**, và theo lịch đã được CA/Browser Forum (nhóm gồm các nhà cấp
+chứng chỉ và các hãng trình duyệt, tự thoả thuận luật chung với nhau — không phải cơ
+quan nhà nước) thông qua tháng 4/2025
 ([ballot SC-081v3](https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/)):
 
 | Từ ngày | Thời hạn tối đa |
@@ -257,18 +299,28 @@ chỉ có một.
 | **AMI** | Ảnh đĩa để tạo máy | Bản Amazon Linux đã cài sẵn ECS agent |
 | **Launch Template** | Khuôn mẫu tạo EC2 | Định nghĩa máy sẽ được tạo thế nào |
 | **Auto Scaling Group (ASG)** | Quản lý số lượng EC2 | Đặt 0 để tắt, 1 để bật |
-| **ECS** | Bộ điều phối container | Quyết định container nào chạy ở đâu |
+| **ECS** | Bộ điều phối container | Quyết định container nào chạy ở đâu *(hiện 1 máy nên gần như không phải chọn — vai trò này rõ khi nhiều máy)* |
 | **Task Definition** | Bản mô tả một container sẽ chạy thế nào | 4 cái: web, api, migrator, seeder |
 | **ECS Service** | Giữ cho container luôn chạy đủ số lượng | 2 cái: web, api |
 | **ECR** | Kho chứa container image | 4 repo |
-| **RDS** | Database do AWS quản lý hộ | SQL Server Express |
-| **IAM Role** | Danh tính có quyền, không có mật khẩu | 4 role, mỗi role một phạm vi |
+| **RDS** | Database do AWS quản lý hộ | PostgreSQL 17, Multi-AZ |
+| **IAM Role** | Danh tính có quyền, **không có mật khẩu** — gán cho máy hoặc container, AWS tự cấp khoá tạm và tự đổi liên tục | 4 role, mỗi role một phạm vi |
 | **SSM Parameter Store** | Kho lưu bí mật, mã hoá | Mật khẩu DB, connection string, khoá JWT |
 | **SSM Session Manager** | Vào máy chủ **không cần SSH** | Đường quản trị duy nhất |
 | **CloudWatch Logs** | Nơi tập trung log | Log của mọi container |
 | **VPC Flow Logs** | Ghi lại mọi kết nối bị chặn/cho phép | Bằng chứng tầng mạng cho báo cáo |
 | **ACM** | Cấp chứng chỉ TLS miễn phí | Chứng chỉ cho ALB, tự gia hạn |
 | **S3** | Lưu file | Ảnh sản phẩm, log, state của Terraform |
+
+**Thứ tự lắp ráp — đọc xong bảng trên thì nối lại theo đường này:**
+
+```
+Internet → ALB → Target Group → EC2 ← (ASG dựng ra, theo Launch Template, từ một AMI)
+                                 └─ trên EC2: ECS chạy container theo Task Definition,
+                                    ECS Service lo giữ đúng số bản đang chạy
+                                                   ↓
+                                                  RDS
+```
 
 ## Terraform — và vì sao dùng nó
 
@@ -306,13 +358,28 @@ người apply cùng lúc thì người thứ hai bị chặn, tránh hỏng h�
 ## Đường đi của một request
 
 Người dùng mở `https://hushstore.io.vn` và bấm xem sản phẩm. Gói tin đi qua
-**bảy** lớp kiểm soát:
+**bảy** lớp kiểm soát (ở db tier, NACL và SG gộp chung một số vì chúng luôn đi liền
+nhau, không có bước nào chen giữa — tách ra thì thành tám):
+
+**Trước khi đọc sơ đồ — Cloudflare là ai và vì sao nó ở đây.** Tên miền
+`hushstore.io.vn` được quản lý DNS bởi **Cloudflare** (dịch vụ miễn phí, KHÔNG
+thuộc AWS). Nhóm bật chế độ *proxy* của nó, nghĩa là Cloudflare đứng chắn phía
+trước và chuyển tiếp request vào ALB, thay vì chỉ trả về địa chỉ của ALB. Hệ quả
+phải nắm:
+
+- **Có hai lớp TLS nối tiếp nhau:** người dùng ↔ Cloudflare dùng chứng chỉ của
+  Cloudflare; Cloudflare ↔ ALB dùng chứng chỉ ACM của ta. Không phải hai lớp
+  chồng lên nhau, mà hai chặng riêng biệt, mỗi chặng mã hoá độc lập.
+- **Câu "ALB là cửa vào duy nhất" vẫn đúng, nhưng đúng ở phạm vi AWS:** trong VPC
+  của ta không có đường nào khác đi vào. Cloudflare nằm *ngoài* AWS, ở phía trước.
+- Cloudflare **không** nằm trong phạm vi đề bài và không do Terraform quản. Nó có
+  mặt vì tên miền cần DNS, và bản miễn phí tiện nhất.
 
 ```
 Người dùng
    │  ① DNS: hushstore.io.vn → Cloudflare → ALB
    ▼
-Cloudflare (proxy, TLS lớp ngoài)
+Cloudflare (proxy, TLS lớp ngoài — NGOÀI AWS, không do Terraform quản)
    │  ② NACL public (stateless) — cho vào 443?
    ▼
    │  ③ SG alb (stateful) — cho vào 443?
@@ -328,9 +395,11 @@ Application Load Balancer  ── bóc TLS, đọc header Host
    │  ⑥ SG web (stateful) — cho vào 80/8080 từ sg-alb?
    ▼
 EC2 (không có IP public) ── container nginx :80 · container API :8080
-   │  ⑦ NACL db + SG rds — cho vào 1433 từ app tier?
+   │  ⑦ NACL db + SG rds — cho vào 5432 từ app tier?
    ▼
-RDS SQL Server (không có đường ra Internet)
+RDS PostgreSQL — Multi-AZ (không có đường ra Internet)
+   ⋮  standby đồng bộ ở AZ thứ hai, AWS tự failover
+   ⋮  standby KHÔNG phục vụ đọc — đó là việc của read replica
 ```
 
 Điểm cần hiểu: **các lớp không trùng lặp vô ích, chúng bù cho nhau.** SG không
@@ -345,25 +414,52 @@ tầng cũ trong lúc chuyển đổi song song.
 
 | Subnet | CIDR | AZ | Chứa | Có IP public? | Có đường ra Internet? |
 |---|---|---|---|---|---|
-| `public-a` | `10.20.0.0/24` | 1a | ALB, NAT Gateway | Có | Trực tiếp qua IGW |
-| `public-b` | `10.20.1.0/24` | 1b | ALB | Có | Trực tiếp qua IGW |
-| `app-a` | `10.20.10.0/24` | 1a | EC2 chạy container | **Không** | Chỉ đi ra, qua NAT |
-| `app-b` | `10.20.11.0/24` | 1b | (dự phòng AZ) | **Không** | Chỉ đi ra, qua NAT |
+| `public-a` | `10.20.0.0/24` | 1a | ALB, **NAT Gateway A** | Có | Trực tiếp qua IGW |
+| `public-b` | `10.20.1.0/24` | 1b | ALB, **NAT Gateway B** | Có | Trực tiếp qua IGW |
+| `app-a` | `10.20.10.0/24` | 1a | EC2 chạy container | **Không** | Chỉ đi ra, qua **NAT A** |
+| `app-b` | `10.20.11.0/24` | 1b | EC2 chạy container | **Không** | Chỉ đi ra, qua **NAT B** |
 | `db-a` | `10.20.20.0/24` | 1a | RDS | **Không** | **Không có** |
 | `db-b` | `10.20.21.0/24` | 1b | RDS (subnet group) | **Không** | **Không có** |
+
+*(**DB subnet group** = danh sách subnet ta khai cho RDS, để AWS biết được phép đặt
+database vào những chỗ nào.)*
 
 **Vì sao 3 tier chứ không phải 2?** Vì db tier tách riêng thì mới viết được rule
 "chỉ app tier mới được nói chuyện với database" ở tầng subnet. Nếu app và db
 cùng subnet, rule đó không tồn tại được. Subnet không tốn phí, nên tách là lựa
 chọn miễn phí đổi lấy một lớp phòng thủ thật.
 
-**Vì sao mỗi tier 2 AZ?** ALB bắt buộc 2 AZ. Và db subnet group của RDS cũng đòi
-tối thiểu 2 subnet ở 2 AZ, dù ta chỉ chạy single-AZ.
+**Vì sao mỗi tier 2 AZ?** ALB bắt buộc 2 AZ. Db subnet group của RDS cũng đòi tối
+thiểu 2 subnet ở 2 AZ — **và đây là chỗ dễ đọc nhầm sơ đồ**: subnet group phủ 2 AZ
+là yêu cầu của AWS cho *mọi* RDS, kể cả single-AZ. Nhìn thấy "RDS ở cả hai AZ"
+trên sơ đồ **không** phải bằng chứng Multi-AZ. Bằng chứng là cờ `multi_az`, và
+hiện nó **bật**.
 
-**Định tuyến:**
-- Public subnet: `0.0.0.0/0` → **Internet Gateway**. Có đường vào và ra.
-- App subnet: `0.0.0.0/0` → **NAT Gateway**. Chỉ có đường ra.
+**Định tuyến — một route table cho MỖI app subnet, không dùng chung:**
+- Public subnet: `0.0.0.0/0` → **Internet Gateway**. Có đường vào và ra. Cả hai
+  public subnet dùng chung một route table, vì đích của chúng giống hệt nhau.
+- App subnet: **hai route table riêng**. `app-a` → NAT A, `app-b` → NAT B.
 - Db subnet: **không có dòng `0.0.0.0/0` nào**. Không đường ra, không đường vào.
+
+**Vì sao app tier phải tách route table, còn public tier thì không?** Vì một route
+table chỉ chứa được **một** dòng `0.0.0.0/0`. Dùng chung một route table thì hai
+AZ buộc đi chung một NAT — và lúc đó dựng NAT thứ hai cũng vô nghĩa, vì không có
+cách nào trỏ `app-b` sang nó. Tách route table là **điều kiện cần** của NAT theo
+AZ, không phải một tuỳ chọn làm cho đẹp. Route table không tính phí.
+
+**Vì sao hai NAT chứ không phải một?** NAT Gateway nằm *trong* một subnet, nên nó
+gắn chặt với đúng một AZ và **không tự chuyển sang AZ khác** khi AZ đó hỏng. Với
+một NAT:
+- Mọi byte từ `app-b` đi ra Internet phải sang AZ-a trước ⇒ chịu thêm phí
+  **cross-AZ $0.01/GB mỗi chiều**, cộng trên $0.045/GB xử lý của NAT. Khoản này
+  không hiện ở bất kỳ dòng hoá đơn nào tên "NAT".
+- Mất AZ-a là `app-b` mất luôn đường ra: không pull được image từ ECR ⇒ ECS
+  **không dựng lại được task**, và SSM cũng đứt.
+
+⚠️ **Nhưng phải nói đúng thứ NAT thứ hai mua được:** nó chỉ cứu **egress** —
+deploy, ECR, SSM. Đường phục vụ người dùng là ALB → EC2 → RDS, **đi hoàn toàn
+trong VPC và không chạm NAT**. Muốn hệ thống sống sót khi mất một AZ thì thứ phải
+bật là **Multi-AZ của RDS**, không phải NAT. Giá: **$0.059/giờ mỗi cái**.
 
 Đó là lý do database an toàn: không phải vì firewall giỏi, mà vì **không tồn tại
 con đường nào** từ Internet tới nó.
@@ -379,8 +475,8 @@ Ba SG. Điểm đặc biệt: **hầu hết rule dùng SG khác làm nguồn, kh
 | SG | Cho vào (ingress) | Cho ra (egress) |
 |---|---|---|
 | `sg-alb` | 80 ← `0.0.0.0/0`<br>443 ← `0.0.0.0/0` | 80 → `sg-web`<br>8080 → `sg-web`<br>*(không gì khác)* |
-| `sg-web` | 80 ← **chỉ `sg-alb`**<br>8080 ← **chỉ `sg-alb`**<br>**không có rule port 22 nào** | 1433 → `sg-rds`<br>80, 443 → `0.0.0.0/0` *(tải image, gọi API AWS)* |
-| `sg-rds` | 1433 ← **chỉ `sg-web`** | **rỗng hoàn toàn** |
+| `sg-web` | 80 ← **chỉ `sg-alb`**<br>8080 ← **chỉ `sg-alb`**<br>**không có rule port 22 nào** | 5432 → `sg-rds`<br>80, 443 → `0.0.0.0/0` *(tải image, gọi API AWS)* |
+| `sg-rds` | 5432 ← **chỉ `sg-web`** | **rỗng hoàn toàn** |
 
 **Vì sao tham chiếu SG thay vì ghi dải IP?** Vì IP của EC2 thay đổi mỗi lần máy
 được tạo lại, còn SG thì không. Viết `80 ← sg-alb` nghĩa là "cho vào nếu gói tin
@@ -425,8 +521,8 @@ Muốn chặn một kẻ tấn công cụ thể mà vẫn phục vụ mọi ngư
 
 | # | Vào | # | Ra |
 |---|---|---|---|
-| **90** | **DENY 22** ← `0.0.0.0/0` | 100 | allow 1433 → db tier |
-| **95** | **DENY 1433** ← `0.0.0.0/0` | 110 | allow 80 → `0.0.0.0/0` |
+| **90** | **DENY 22** ← `0.0.0.0/0` | 100 | allow 5432 → db tier |
+| **95** | **DENY 5432** ← `0.0.0.0/0` | 110 | allow 80 → `0.0.0.0/0` |
 | 100 | allow 80 ← public tier | 115 | allow 443 → `0.0.0.0/0` |
 | 110 | allow 8080 ← public tier | 120 | allow 1024–65535 → public tier |
 | **115** | **DENY 8080** ← `0.0.0.0/0` | `*` | **deny** |
@@ -441,13 +537,32 @@ từ Internet qua NAT, câu trả lời quay về sẽ đi tới một ephemeral
 đó, với địa chỉ nguồn là `0.0.0.0/0` (vì server ở đâu trên Internet ta không
 biết trước). Không mở rule 120 thì EC2 không tải được gì.
 
-Nhưng `1433` và `8080` **nằm trong khoảng 1024–65535**. Nghĩa là rule 120 vô
+Nhưng `5432` và `8080` **nằm trong khoảng 1024–65535**. Nghĩa là rule 120 vô
 tình mở database port và API port ra Internet ở tầng NACL.
 
-Cách xử lý: đặt **DENY ở số nhỏ hơn**. Rule 95 (`DENY 1433`) và rule 115
+Cách xử lý: đặt **DENY ở số nhỏ hơn**. Rule 95 (`DENY 5432`) và rule 115
 (`DENY 8080`) được xét *trước* rule 120, nên gói tin nhắm vào hai port đó bị
 chặn trước khi rule 120 kịp cho qua. Rule 90 (`DENY 22`) cũng vậy — chặn SSH
 tường minh ở tầng mạng, thêm một lớp nữa bên cạnh việc SG không có rule 22.
+
+🚨 **Rule 115 có ràng buộc THỨ HAI, và bỏ sót nó là tự chặn chính mình.** Nói
+"DENY phải đứng trước rule 120" mới là một nửa. Với rule 115 (`DENY 8080 ← 0.0.0.0/0`), số của nó bị kẹp giữa **hai** ràng buộc:
+
+```
+110  allow 8080  ← public tier      ← 115 phải đứng SAU cái này
+115  DENY  8080  ← 0.0.0.0/0
+120  allow 1024-65535 ← 0.0.0.0/0   ← 115 phải đứng TRƯỚC cái này
+```
+
+- Đứng **sau 120** ⇒ vô dụng: rule 120 đã cho 8080 qua rồi.
+- Đứng **trước 110** ⇒ tai hại hơn nhiều: nó chặn luôn traffic **hợp lệ từ ALB**,
+  vì `0.0.0.0/0` bao gồm cả dải public tier. Website chết, mà NACL vẫn "trông
+  đúng".
+
+Rule 95 (`DENY 5432`) **không** có ràng buộc dưới, vì bảng này không có rule nào
+allow 5432 vào app tier cả — chẳng ai gọi database *vào* app tier. Đó là lý do
+hai rule nhìn giống nhau nhưng số của chúng bị ràng buộc khác nhau, và là ví dụ
+rõ nhất cho câu "với NACL, **thứ tự là một phần của cấu hình**".
 
 Ba điều rút ra, đều là ý hay để nói khi báo cáo:
 
@@ -464,7 +579,7 @@ Ba điều rút ra, đều là ý hay để nói khi báo cáo:
 
 | # | Vào | # | Ra |
 |---|---|---|---|
-| 100 | allow 1433 ← **chỉ app tier** | 100 | allow 1024–65535 → **chỉ app tier** |
+| 100 | allow 5432 ← **chỉ app tier** | 100 | allow 1024–65535 → **chỉ app tier** |
 | `*` | **deny mọi thứ khác** | `*` | **deny mọi thứ khác** |
 
 Không có rule nào khác. Chiều ra chỉ mở dải ephemeral về app tier — tức
@@ -559,9 +674,13 @@ cùng lúc**, mỗi bản chọn có lý do.
 | **Máy EC2** (host) | Amazon Linux 2023, bản ECS-optimized | AWS đã cài sẵn `docker` và `ecs-agent`. Không phải cài gì → `user_data` gần như không phải làm gì |
 | **Container `web`** | Alpine (`nginx:alpine`) | Nhỏ nhất — image ~50MB. Chỉ cần serve file tĩnh nên không cần gì hơn |
 | **Container `api`** | Debian (`aspnet:10.0`) | Microsoft build image .NET trên Debian. Đây là lý do trong `Dockerfile` ta gõ `useradd` và `update-ca-certificates` — đó là lệnh của Debian, Alpine dùng `adduser` và cơ chế khác |
-| **Task `migrator` / `seeder`** | Debian (`runtime-deps:10.0`, `debian:12-slim`) | Chạy-một-lần-rồi-thoát. `seeder` cần `mssql-tools18`, mà Microsoft chỉ phát hành package apt cho Debian |
+| **Task `migrator` / `seeder`** | Debian (`runtime-deps:10.0`, `debian:12-slim`) | Chạy-một-lần-rồi-thoát. `seeder` cần `postgresql-client-17` từ apt repo của PostgreSQL |
 
 Alpine dùng thư viện C tên **musl**, còn Debian và Amazon Linux dùng **glibc**.
+(**Thư viện C** là lớp trung gian mà gần như mọi chương trình gọi để nhờ kernel làm
+việc — mở file, mở socket, cấp bộ nhớ. Một file thực thi build sẵn không tự chứa lớp
+đó, nó chỉ *gọi tên hàm* và trông chờ tìm thấy lúc chạy. Hai thư viện khác nhau nghĩa
+là tên hàm và cách gọi lệch nhau, nên file build cho bên này thiếu thứ bên kia cần.)
 Đây là khác biệt sâu nhất giữa chúng, và là lý do một file thực thi build trên
 Debian không chắc chạy được trên Alpine. Ta không gặp vấn đề này vì mỗi container
 tự mang runtime của nó.
@@ -576,7 +695,7 @@ là `arm64` — và lúc đó **hai trong bốn** image sẽ gãy, mỗi cái v�
 | `web` | không | nginx + file tĩnh; base image tự chọn đúng kiến trúc |
 | `api` | không | .NET *framework-dependent* — `.dll` là bytecode IL, runtime kiến trúc nào cũng chạy |
 | `migrator` | **có** | build *self-contained* `-r linux-x64` → ra file thực thi máy, chỉ chạy trên x64 |
-| `seeder` | **có** | cài `mssql-tools18` từ apt repo của Microsoft, mà dòng repo ghi rõ `arch=amd64` — không có bản arm64 |
+| `seeder` | không | `postgresql-client-17` có cả `amd64` lẫn `arm64` trong apt repo của PostgreSQL. ⚠️ Trước đợt 7 thì **có** phụ thuộc: `mssql-tools18` của Microsoft ghi cứng `arch=amd64`. Đổi engine đã gỡ luôn ràng buộc kiến trúc này |
 
 Chỗ gãy của `migrator` là kiểu lỗi khó tìm nhất: stage 1 build binary x64, stage 2
 lấy base image theo kiến trúc **máy build**. Trên máy arm64 sẽ ra một image arm64
@@ -697,7 +816,12 @@ swap trước, ghi `ecs.config` sau. Cũng có một test tự động khoá th�
 
 ### Container, nhìn từ phía Linux
 
-Container **không phải máy ảo**. Nó là một tiến trình Linux bình thường, bị kernel
+Container **không phải máy ảo**. Khác biệt gốc rễ nằm ở **kernel**: máy ảo có kernel
+riêng của nó (phần cứng được ảo hoá, nên phải boot cả một hệ điều hành); container thì
+**dùng chung kernel của máy host** — không boot gì cả. Đó là lý do container nhẹ và
+khởi động trong mili-giây, còn máy ảo mất hàng chục giây.
+
+Nó là một tiến trình Linux bình thường, bị kernel
 giới hạn tầm nhìn bằng hai tính năng có sẵn:
 
 - **namespace** — quyết định tiến trình *thấy* được gì. Nó có `/` riêng, danh
@@ -745,7 +869,7 @@ của RDS** phải nằm **trước** `USER appuser`, vì `update-ca-certificate
 `/etc/ssl/certs` — chỉ `root` mới ghi được ở đó.
 
 Đó cũng là một điểm Linux đáng nói: **trust store**. Connection string dùng
-`Encrypt=True;TrustServerCertificate=False`, nghĩa là API *thật sự kiểm tra* chứng
+`SSL Mode=VerifyFull`, nghĩa là API *thật sự kiểm tra* chứng
 chỉ của RDS thay vì tin bừa. Muốn kiểm được thì trong container phải có CA của
 Amazon RDS, nên `Dockerfile` tải nó về `/usr/local/share/ca-certificates/` rồi
 gọi `update-ca-certificates` để nạp vào trust store hệ thống.
@@ -777,7 +901,7 @@ Khác biệt về bảo mật là bản chất, không phải hình thức:
 | Cần port mở | 22 | **không** |
 | Cần credential trên máy | khoá riêng `.pem` | **không** — dùng IAM |
 | Thu hồi quyền | phải xoá `authorized_keys` trên từng máy | sửa IAM policy, có hiệu lực ngay |
-| Nhật ký | phải tự cấu hình `sshd`, và log nằm **trên chính máy** bị chiếm | `ssm:StartSession` là management event nên hiện trong **CloudTrail Event History** (bật sẵn, miễn phí, giữ 90 ngày) — ở ngoài máy, không sửa được từ trong |
+| Nhật ký | phải tự cấu hình `sshd`, và log nằm **trên chính máy** bị chiếm | `ssm:StartSession` là management event nên hiện trong **CloudTrail Event History** (bật sẵn, miễn phí, giữ 90 ngày) *— CloudTrail ghi lại mọi lời gọi API tới AWS; mức mặc định này xem được trên console, còn muốn giữ lâu hơn hay đẩy ra S3 để truy vấn thì phải tự tạo thêm một **trail**, dự án chưa tạo* — ở ngoài máy, không sửa được từ trong |
 
 > **Nói cho đúng:** dự án **chưa tạo CloudTrail trail** nào, nên chỉ có Event
 > History mặc định: 90 ngày, chỉ management event, không lưu ra S3 và không
@@ -791,19 +915,23 @@ Khác biệt về bảo mật là bản chất, không phải hình thức:
   trong `/var/log/cloud-init-output.log` — đây là chỗ đầu tiên phải xem khi máy
   boot sai), `o pipefail` để lỗi giữa một pipeline không bị che bởi lệnh cuối.
   Không có mấy cờ này, một lệnh gãy giữa `user_data` sẽ đi qua im lặng.
-- **Đồng hồ hệ thống.** `sg-web` egress chỉ mở `80`, `443`, `1433` — không có
+- **Đồng hồ hệ thống.** `sg-web` egress chỉ mở `80`, `443`, `5432` — không có
   `123` (NTP), nên về lý máy không đồng bộ được giờ. **Đã đo được 8 bản ghi
   `REJECT`** đúng như vậy: `chrony` thử các NTP công khai của AWS và bị chặn.
   Nhưng thực tế vẫn đúng giờ vì nó dùng được đường chính —
   **Amazon Time Sync** ở `169.254.169.123`, một địa chỉ
-  *link-local*: nó không đi qua route table, không qua NAT, nên không cần rule
+  *link-local* — dải `169.254.0.0/16`, loại IP thứ ba bên cạnh private và public: nó
+  chỉ có nghĩa **trên đúng một đường mạng**, không định tuyến đi đâu được, nên kernel
+  gửi thẳng ra card mạng mà không tra route table, không qua NAT, không cần rule
   nào — và cũng vì thế **không xuất hiện** trong Flow Logs. Các bản ghi `REJECT`
   port 123 vì thế **không phải sự cố**.
 
   Chứng minh gián tiếp rằng đồng hồ đúng, không cần vào máy: (1) task migrator
-  nối RDS với `TrustServerCertificate=False`, tức **có xác thực** certificate —
+  nối RDS với `SSL Mode=VerifyFull`, tức **có xác thực** certificate —
   lệch giờ thì cert bị coi là chưa hiệu lực hoặc đã hết hạn, và nó exit 0;
-  (2) ECS agent pull được image từ ECR, mà request tới AWS ký **SigV4** và bị từ
+  (2) ECS agent pull được image từ ECR, mà request tới AWS ký **SigV4** (cách AWS bắt
+  mọi lời gọi API phải ký bằng khoá bí mật **kèm dấu thời gian**, để chống phát lại
+  request cũ) và bị từ
   chối nếu lệch quá ~15 phút. Hai điều đó bất khả nếu đồng hồ sai.
 - **`gzip_static on`** trong nginx thay vì nén lúc chạy: `dotnet publish` đã sinh
   sẵn `.gz` cạnh mỗi file, nginx chỉ việc gửi file có sẵn. Đổi CPU lấy đĩa — đúng
@@ -831,22 +959,99 @@ Vào máy bằng `aws ssm start-session --target <instance-id>`, rồi:
 
 ## RDS — database do AWS quản
 
-SQL Server Express, `db.t3.micro`, 20GB, single-AZ, nằm trong db subnet.
+**PostgreSQL 17**, `db.t4g.micro`, 20GB `gp3`, **Multi-AZ**, nằm trong db subnet.
+
+**Vì sao đổi khỏi SQL Server Express (đợt 7)** — lý do là **edition**, không phải
+kiến trúc. Ba giới hạn của Express, cái nào cũng không vá được bằng cấu hình:
+
+| | `sqlserver-ex` | `postgres` |
+|---|---|---|
+| Multi-AZ | **không hỗ trợ** (`MultiAZCapable = False`) | **có** (`True` cho cả `db.t3.micro` lẫn `db.t4g.micro`) |
+| Read replica | chỉ có ở Enterprise Edition, và đòi ≥ 4 vCPU | có |
+| Trần dung lượng | **10 GB — vượt là TỪ CHỐI GHI** | không có |
+| **Họ instance** khả dụng *(mỗi họ là một dòng máy có đặc tính riêng)* | **1** (chỉ `t3`) | **20**, có cả **Graviton** *(CPU kiến trúc ARM do AWS tự thiết kế, rẻ hơn Intel cùng cỡ)* |
+| CPU lúc rảnh | **~36%** (baseline `t3.micro` là 10%) ⇒ luôn phải trả CPU surplus | dưới baseline |
+
+*(Hai dòng đầu **tự kiểm chứng lại được**, không phải khẳng định suông — gõ:
+`aws rds describe-orderable-db-instance-options --engine postgres --db-instance-class
+db.t4g.micro --query 'OrderableDBInstanceOptions[0].MultiAZCapable'`, đổi `postgres`
+thành `sqlserver-ex` để so. Lệnh chỉ đọc, miễn phí.)*
+
+*(**CPU surplus / baseline**: `t3`/`t4g` là máy **burstable** — AWS chỉ cho dùng miễn
+phí một mức CPU nền (10% với cỡ `micro`), vượt lên thì "vay" credit và bị tính tiền
+phần vay. Mục [Điều khiển chi phí](#điều-khiển-chi-phí) nói kỹ, kể cả con số thật.)*
+
+Trần 10 GB là thứ nguy hiểm nhất trong bảng: nó không làm chậm hệ thống mà làm
+**hỏng** hệ thống, và hỏng ở thời điểm không ai chọn.
+
+**Multi-AZ nghĩa là gì, và không nghĩa là gì.** AWS giữ một bản **standby đồng bộ**
+ở AZ thứ hai và tự chuyển sang đó khi primary hỏng. Nhưng:
+
+> *"You can't configure the secondary DB instance to accept database read activity."*
+
+Standby **không phục vụ đọc**. Multi-AZ là **tính sẵn sàng**, không phải chia tải
+đọc — muốn chia tải đọc thì cần **read replica**, là một resource khác. Báo cáo
+phải nói đúng hai chuyện đó, đừng gộp.
+
+**Điều làm Multi-AZ khả thi ở đồ án này:**
+
+> *"RDS for SQL Server doesn't support stopping a DB instance in a Multi-AZ deployment."*
+
+PostgreSQL thì **stop được**. Nghĩa là bật Multi-AZ **không phá** cơ chế tắt tiền
+(`down.sh` + cost guard) — trên SQL Server thì có. Đây là khác biệt quyết định,
+không phải chi tiết phụ.
+
+**Read replica khác standby của Multi-AZ ở đúng một chữ: ĐỒNG BỘ hay KHÔNG.** Standby
+chép **đồng bộ** — mỗi thay đổi phải ghi xong ở cả hai nơi mới báo thành công, nên nó
+luôn khớp tuyệt đối với bản chính, và đó là điều kiện để failover mà không mất dữ liệu.
+Read replica chép **bất đồng bộ** — bản chính báo xong trước, replica đuổi theo sau vài
+mili-giây tới vài giây. Nhờ vậy nó **không** làm chậm bản chính và **được phép** phục
+vụ truy vấn đọc; cái giá là dữ liệu đọc từ nó có thể **cũ hơn một chút**.
+
+**Read replica: hạ tầng đã có, mặc định TẮT.** `enable_read_replica = false`, và
+đó là **default an toàn chứ không phải default tiết kiệm**:
+
+> *"You can't stop a DB instance that has a read replica, or that is a read replica."*
+
+Còn replica thì AWS **từ chối** stop primary ⇒ `down.sh` và cost guard mất tác
+dụng, mà RDS lại tự khởi động lại sau 7 ngày stopped. `down.sh` đã tự huỷ replica
+trước khi stop và hỏi thẳng AWS chứ không tin file cấu hình, nhưng nó chỉ chạy khi
+có người gõ. ⚠️ Và phải biết trước: **chưa có dòng code nào trong `src/` đọc từ
+replica** (1 `AddDbContext`, 1 `UseNpgsql`, 0 tham chiếu replica) — bật nó lên là
+thêm một instance tính tiền mà primary không được giảm tải chút nào.
 
 **`publicly_accessible = false`** — và cần hiểu chính xác nó làm gì. Nó **không**
 ẩn tên DNS của database; tên đó vẫn tra được từ Internet. Nó làm việc khác: tên
 đó **phân giải ra một IP private** (`10.20.21.81`). Kẻ tấn công tra được tên,
 nhưng nhận về một địa chỉ không tồn tại trên Internet — nên không kết nối được.
-Kiểm chứng thực tế: dò cổng 1433 tới endpoint đó từ laptop → **timeout**, không
-phải "từ chối kết nối". Đúng như mong đợi.
+Kiểm chứng thực tế: dò cổng 5432 tới endpoint đó từ laptop → **timeout**, không
+phải "từ chối kết nối".
 
-**Vì sao dùng RDS thay vì tự cài SQL Server lên EC2?** Vì AWS lo hộ: backup tự
+**Và sự khác nhau giữa hai câu trả lời đó chính là bằng chứng.** *"Connection
+refused"* nghĩa là gói tin **đã tới nơi** và có thứ gì đó chủ động trả lời "cổng này
+đóng" — tức đường đi tồn tại. *"Timeout"* nghĩa là gói tin **đi vào hư không**: không
+ai trả lời, vì không có đường nào dẫn tới địa chỉ đó. Ta muốn vế thứ hai, và đo được
+đúng vế thứ hai.
+
+**`SSL Mode=VerifyFull` — thuộc tính bảo mật dễ mất nhất.** Npgsql mặc định
+`Prefer`: **mã hoá nhưng KHÔNG xác thực chứng chỉ**, tức không chống được
+man-in-the-middle (kẻ đứng giữa: chen vào đường truyền, giả làm máy chủ để đọc và sửa
+dữ liệu mà hai đầu không biết). `Require` cũng chưa đủ — ở Npgsql nó vẫn không kiểm
+chain. Chỉ
+`VerifyFull` mới vừa xác thực cert vừa kiểm hostname. Tụt về mặc định là mất lớp
+đó **trong im lặng**: kết nối vẫn thành công, log vẫn sạch. Vì cert của RDS do
+Amazon RDS CA cấp mà CA đó không nằm trong trust store mặc định, image `api` và
+`migrator` phải cài sẵn bundle CA và chuỗi kết nối trỏ thẳng `Root Certificate`
+vào file đó — Npgsql/libpq **không** đọc trust store hệ thống.
+
+**Vì sao dùng RDS thay vì tự cài PostgreSQL lên EC2?** Vì AWS lo hộ: backup tự
 động, vá lỗi, chứng chỉ TLS, snapshot, khôi phục theo thời điểm. Tự cài thì
 những việc đó thành việc của nhóm, và đó chính là loại việc dễ bị bỏ quên nhất.
 
 ## IAM — bốn danh tính, mỗi cái một phạm vi
 
-Điểm least-privilege mạnh nhất của thiết kế nằm ở đây. Thay vì một danh tính có
+Điểm **least-privilege** (chỉ cấp đúng quyền tối thiểu để làm được việc, không hơn
+một quyền nào) mạnh nhất của thiết kế nằm ở đây. Thay vì một danh tính có
 mọi quyền, có **bốn** danh tính tách rời:
 
 | Role | Gắn vào | Được làm gì |
@@ -911,22 +1116,80 @@ ra nó.
 
 NAT Gateway và ALB tính theo giờ. Nên hệ thống được thiết kế để **tắt được**:
 
-| Biến | Bật/tắt cái gì | Giá APS1 |
+| Biến | Bật/tắt cái gì | Giá (ap-southeast-1) |
 |---|---|---|
-| `enable_nat` | NAT Gateway | $0.0590/giờ |
+| `enable_nat` | NAT Gateway (số lượng theo `nat_gateway_count`) | **$0.0590/giờ mỗi cái** |
 | `enable_alb` | ALB + target group + 2 ECS service | $0.0252/giờ |
-| `instance_count` | 0 hoặc 1 EC2 | $0.0132/giờ |
+| `instance_count` | 0 … `max_instance_count` EC2 | $0.0132/giờ mỗi cái |
 | `enable_flow_logs` | VPC Flow Logs | phí ingest |
 | `enable_deny_demo` | NACL rule 50 | $0 |
 
 RDS bật/tắt bằng lệnh riêng, không qua Terraform.
 
-**Con số cần nhớ, và nó phản trực giác:** RDS là khoản đắt nhất — $0.098/giờ,
-trong đó **$0.0674 là CPU credit surplus**. `db.t3.micro` là loại máy
-*burstable*: nó chỉ được dùng miễn phí 10% CPU, vượt lên thì bị tính tiền. SQL
-Server Express **không tải** vẫn ngồi ở ~36% CPU. Nên riêng phần vượt hạn mức đã
-đắt xấp xỉ NAT + ALB cộng lại. Chi tiết đo được nằm trong
-[terraform-runbook.md](terraform-runbook.md).
+**Hai giá trị KHÔNG phải công tắc, mà là kiến trúc — ghim trong mã đã commit:**
+`nat_gateway_count = 2` và `enable_multi_az = true`, đặt ở default của
+`envs/prod/variables.tf`.
+
+*(Cần luật ưu tiên của Terraform thì đoạn dưới mới có nghĩa: giá trị khai trong
+`terraform.tfvars` **đè lên** `default` viết trong `variables.tf`; không có `.tfvars`
+hoặc không có dòng đó thì Terraform tự dùng `default`. Nên "khai ở tfvars" và "đặt
+default" nghe giống nhau nhưng khác hẳn về **độ bền**: một cái theo máy, một cái theo
+mã nguồn.)*
+
+Cố ý **không** khai trong `terraform.tfvars`: file đó bị
+`.gitignore` (`*.tfvars`), nên giá trị khai ở đó không sang máy khác và không sang
+CI — một lần clone lại là hạ tầng âm thầm rơi về 1 NAT / không Multi-AZ, trong khi
+cả hai đều là thuộc tính đã ghi vào báo cáo này.
+
+🔖 **ĐỌC BẢNG GIÁ Ở MỤC NÀY THEO HAI LOẠI SỐ — ĐỪNG TRỘN:**
+> - 📏 **Số ĐO THẬT** — lấy từ hoá đơn/Cost Explorer của chính tài khoản này, sau khi
+>   hệ thống đã chạy. Đáng tin nhất, nhưng chỉ có cho cấu hình **cũ** (SQL Server).
+> - 🏷️ **Số NIÊM YẾT** — tra từ bảng giá công bố của AWS (Price List API). Đúng về đơn
+>   giá, nhưng **chưa gồm** những khoản chỉ lộ ra khi chạy thật, mà CPU surplus là ví
+>   dụ đắt nhất.
+>
+> Cấu hình PostgreSQL hiện tại **chưa có số đo thật nào** — nó mới chạy từ 2026-09-06.
+> Mọi con số cho nó bên dưới đều là 🏷️.
+
+**Con số phản trực giác, và nó vừa thay đổi:** trước đợt 7, RDS là khoản đắt nhất
+— 📏 **$0.098/giờ**, trong đó 📏 **$0.0674 là CPU credit surplus** *(cả hai là số ĐO
+THẬT từ Cost Explorer sau 13,67 giờ chạy, không phải ước lượng)*. `db.t3.micro` là máy
+*burstable*: chỉ được miễn phí 10% CPU, vượt lên thì tính tiền, mà SQL Server
+Express **không tải** vẫn ngồi ~36% CPU. Riêng phần vượt hạn mức đã đắt xấp xỉ
+NAT + ALB cộng lại. Tệ hơn: EC2 cho chọn giữa hai chế độ — `standard` (hết credit thì
+chạy chậm lại, **không** tính thêm tiền) và `unlimited` (cho vay credit rồi tính tiền
+phần vay). **RDS chỉ có `unlimited`**, không có tham số nào để đổi. Nên
+đòn bẩy duy nhất là đổi engine.
+
+Sau khi đổi sang PostgreSQL (idle dưới baseline), giá niêm yết đo bằng Price List
+API cho `ap-southeast-1`:
+
+| | Single-AZ | Multi-AZ | Loại số |
+|---|---|---|---|
+| `postgres` `db.t4g.micro` | $0.025/giờ | **$0.051/giờ** | 🏷️ niêm yết |
+| `sqlserver-ex` `db.t3.micro` — phần instance | $0.031/giờ | không tồn tại | 🏷️ niêm yết |
+| `sqlserver-ex` — **CPU surplus thực tế phải trả thêm** | **+$0.067/giờ** | — | 📏 **đo thật** |
+
+Dòng cuối là chỗ hai loại số gặp nhau, và là lý do bảng này phải tách cột: nhìn riêng
+giá niêm yết thì SQL Server ($0.031) chỉ đắt hơn PostgreSQL ($0.025) một chút — nhưng
+khoản surplus **đo thật** mới là thứ nhân đôi hoá đơn, và nó **không xuất hiện ở bảng
+giá niêm yết nào cả**.
+
+Cộng storage (🏷️ ~$0.006/giờ) thì Multi-AZ PostgreSQL khoảng **$0.057/giờ** —
+**vẫn rẻ hơn $0.098 của SQL Server single-AZ trước đây.** Tức đổi engine vừa tăng
+khả dụng vừa giảm tiền, và đó là lý lẽ chính của đợt 7.
+
+🔴 **Một khoản Multi-AZ thêm vào mà `down.sh` KHÔNG tắt được:** storage được cấp
+phát ở cả hai AZ và AWS tính tiền cả hai **kể cả khi instance đã stopped**. Sàn chi
+phí của dự án vì thế tăng khoảng **+$2.3/tháng chạy vĩnh viễn**. Nhỏ, nhưng nó là
+loại chi phí không có công tắc nào chạm tới, nên phải nằm trong bảng chứ không
+nằm trong đầu ai đó.
+
+⚠️ `HS_RATE_RDS_UP = 0.098` trong `lib.sh` **cố ý chưa sửa**: nó là số **đo được**
+trên SQL Server, nay thành **cận trên** cho PostgreSQL. Thay bằng một con số ước
+lượng sẽ biến bảng chi phí từ "đã đo" thành "nghe hợp lý" mà không có gì đánh dấu
+sự khác nhau đó. Chỉ sửa khi có số thật sau 24–48h chạy. Chi tiết đo được nằm
+trong [terraform-runbook.md](terraform-runbook.md).
 
 ---
 
@@ -938,7 +1201,7 @@ Server Express **không tải** vẫn ngồi ở ~36% CPU. Nên riêng phần v�
 | Đề bài yêu cầu | Ở đâu trong hệ thống |
 |---|---|
 | **Tìm hiểu HĐH Linux + xây website trên đó** | Mục ["Linux — hệ điều hành chạy bên dưới tất cả"](#linux--hệ-điều-hành-chạy-bên-dưới-tất-cả): 3 bản phân phối, cloud-init/systemd, swap, namespace/cgroup, quyền file, không SSH |
-| **Tìm hiểu AWS Cloud + Terraform** | Phần II (khái niệm), và toàn bộ hạ tầng khai bằng Terraform: 8 module, 93 test tự động, không resource nào bấm tay |
+| **Tìm hiểu AWS Cloud + Terraform** | Phần II (khái niệm), và toàn bộ hạ tầng khai bằng Terraform: 8 module, 105 test tự động, không resource nào bấm tay |
 | VPC | `10.20.0.0/16`, 6 subnet, 3 tier, 2 AZ |
 | Security Group | 3 cái, rule tham chiếu SG, không có port 22 |
 | **Network ACL** | 3 cái, mỗi tier một cái, có rule DENY và thứ tự có ý nghĩa |
@@ -972,18 +1235,21 @@ bảo vệ:
 
 | Giới hạn | Vì sao chấp nhận |
 |---|---|
-| `nacl-app` buộc mở dải 1024–65535 ra Internet | Bản chất của NACL stateless. Đã bù bằng DENY 1433/8080 số nhỏ hơn, và bằng SG ở lớp trong |
+| `nacl-app` buộc mở dải 1024–65535 ra Internet | Bản chất của NACL stateless. Đã bù bằng DENY 5432/8080 số nhỏ hơn, và bằng SG ở lớp trong |
 | NAT Gateway không gắn được Security Group | Khác NAT instance. Kiểm soát egress dồn vào `sg-web` và `nacl-app` |
 | Không lọc egress theo tên miền | Cần AWS Network Firewall (~$300/tháng), không khả thi |
 | Chỉ 1 EC2, deploy có downtime 20–40s | Đổi lấy bề mặt SG nhỏ hơn hàng nghìn lần. Lựa chọn có ý thức |
-| Rate limiter đếm trong RAM | 2 instance sẽ thành 2× hạn mức. Cần Redis nếu scale thật |
+| Rate limiter đếm trong RAM | 2 instance sẽ thành 2× hạn mức, làm kịch bản KB6 của báo cáo bảo mật **sai sự thật**. Đây là lý do `max_instance_count` vẫn ghim 1: Terraform chặn nâng trần nếu chưa khai `rate_limiter_is_distributed = true`, và cờ đó chỉ được khai sau khi sửa tầng app |
+| **NAT thứ hai chỉ cứu egress, không cứu đường phục vụ** | ALB → EC2 → RDS đi hoàn toàn trong VPC. Mất AZ chứa NAT thì instance còn lại **vẫn phục vụ**, chỉ mất deploy/ECR/SSM |
+| **Read replica dựng được nhưng chưa ai dùng** | `src/` có 1 `AddDbContext`, 1 `UseNpgsql`, 0 tham chiếu replica. Bật lên là thêm một instance tính tiền mà primary không giảm tải. Cần một `DbContext` chỉ-đọc cho các truy vấn `AsNoTracking()` — ứng viên sạch nhất là `AnalyticsService` (10 chỗ, 0 `SaveChanges`) và `StorefrontService` (12 chỗ, 0 `SaveChanges`) |
+| **Đọc từ replica có hai chỗ TUYỆT ĐỐI không được dùng** | Replication bất đồng bộ ⇒ (1) mọi đường "ghi rồi đọc lại để map DTO" phải ở primary, nếu không người dùng lưu xong xem lại thấy bản cũ; (2) `IsActive`/role/quyền không bao giờ đọc từ replica — hướng nguy hiểm là hướng **mở khoá** |
 | **Không scale ngang được** dù đã có ASG + ALB | Bộ máy có đủ, nhưng bị ghim: `max_size = 1`, `managed_scaling = DISABLED`, và chốt cứng nhất là **host port tĩnh** 80/8080 — hai task không cùng bind một port trên một máy. Mở ra thì phải chọn `awsvpc` (nhiều ENI hơn `t3.micro` chịu nổi) hoặc dải ephemeral `32768–65535` trên `sg-web` — tức **đánh đổi trực tiếp với chiều đề bài đang chấm**. Đã chọn tối thiểu rule, chấp nhận một máy |
-| **Default security group của VPC** mở mọi port từ chính nó | AWS tạo sẵn một cái cho mỗi VPC và không cho xoá. Đo được **0 ENI** dùng nó nên chưa có bề mặt thật, nhưng ai launch instance mà không chỉ định SG sẽ rơi vào nó. Bịt bằng `aws_default_security_group` rỗng — chưa làm |
+| **Default security group của VPC** mở mọi port từ chính nó | AWS tạo sẵn một cái cho mỗi VPC và không cho xoá. Đo được **0 ENI** dùng nó nên chưa có bề mặt thật, nhưng ai launch instance mà không chỉ định SG sẽ rơi vào nó. ✅ **Đã bịt** bằng `aws_default_security_group` rỗng (apply 2026-09-06) |
 | Không có CloudTrail trail | Chỉ có Event History mặc định: 90 ngày, chỉ management event, không lưu ra S3. Tạo trail tốn ~$0.03/tháng cho S3 — đã cân nhắc, hoãn vì mọi thao tác hạ tầng đều đi qua Terraform và Git đã là nhật ký |
 | Không có alarm nào | Lambda cost guard lỗi thì im lặng. Một CloudWatch alarm trên metric `Errors` là ~$0.10/tháng — đã cân nhắc, hoãn |
 | Không WAF | ALB có allowlist Host nhưng không lọc SQL injection ở tầng mạng. Phòng thủ nằm ở tầng ứng dụng (EF Core tham số hoá) |
-| Single-AZ RDS | SQL Server Express không hỗ trợ Multi-AZ |
 | Giữa hai phiên làm việc, domain không hoạt động | ALB chạy 24/7 tốn $18/tháng cho một đồ án |
+| **Chưa đo chi phí thật sau khi đổi engine** | Giá đang dùng là niêm yết + một số đo cũ trên SQL Server giữ làm cận trên. Cần 24–48h chạy thật mới biết CPU surplus của PostgreSQL có thực sự về 0 không |
 
 ---
 
@@ -1007,7 +1273,7 @@ lại đọc phần tương ứng ở Phần III để hiểu vì sao ta cấu h
 | Launch Template, ASG, **Load Balancer** | [Triển khai ứng dụng với Auto Scaling Group](https://000006.awsstudygroup.com/vi/) — chương 3 và 4 | Đây là chỗ duy nhất trên site dạy **Launch Template + ALB + target group** cùng nhau | Không có allowlist Host header, không có listener rule theo tên miền |
 | ECS, task definition, service, ALB | [Triển khai ứng dụng trên Amazon ECS](https://000016.awsstudygroup.com/vi/) | **Workshop sát kiến trúc của ta nhất.** Có đủ cluster → task definition → ALB + target group → service, và cả chiến lược deploy | Dùng Fargate + `awsvpc`; ta dùng **EC2 launch type + `bridge`**. Khác biệt này chính là lý do SG của ta chỉ mở 2 port |
 | Docker, ECR | [Triển khai ứng dụng trên Docker với AWS](https://000015.awsstudygroup.com/vi/) — chương 8 "Image Registry" | Build image, đẩy lên ECR, xác thực bằng IAM | Không bật IMMUTABLE tag — phần làm rollback có nghĩa |
-| RDS | [Bắt đầu với Amazon RDS](https://000005.awsstudygroup.com/vi/) — chương 2 có sẵn phần **Security Group + DB Subnet Group** | Đúng ba thứ ta cần: subnet group 2 AZ, SG chỉ mở 1433, backup/restore | Không nói về `publicly_accessible`, và **không nói về CPU credit của lớp `t3`** — đúng cái đã làm ta trả tiền |
+| RDS | [Bắt đầu với Amazon RDS](https://000005.awsstudygroup.com/vi/) — chương 2 có sẵn phần **Security Group + DB Subnet Group** | Đúng ba thứ ta cần: subnet group 2 AZ, SG chỉ mở 5432, backup/restore | Không nói về `publicly_accessible`, và **không nói về CPU credit của lớp `t3`** — đúng cái đã làm ta trả tiền |
 | IAM cơ bản | [Quản trị quyền truy cập với AWS IAM](https://000002.awsstudygroup.com/vi/) | User, group, policy, role, và cơ chế chuyển role | Không có Deny tường minh — kỹ thuật ta dùng để bịt managed policy |
 | **IAM Role cho ứng dụng** | [Cấp quyền cho ứng dụng với IAM Role](https://000048.awsstudygroup.com/vi/) | **Nên làm sớm.** Workshop so sánh trực tiếp access key với IAM role và giải thích vì sao role tốt hơn — đúng thay đổi thứ 3 ta làm trong code | Chỉ có role cho EC2, không có task role của ECS |
 | Vào máy không cần SSH | [Systems Manager Session Manager](https://000058.awsstudygroup.com/vi/) | Chính đường quản trị của ta. Có cả session log và port forwarding | — |
@@ -1081,12 +1347,12 @@ toàn, và `terraform plan`/`state`/`module` thì CloudFormation không có tư�
 | 3 | [Terraform Series — Bài 5: Module — tạo VPC trên AWS](https://viblo.asia/p/terraform-series-bai-5-terraform-module-create-virtual-private-cloud-on-aws-ORNZqp2MK0n) (Viblo) | 🇻🇳 | **Bài quan trọng nhất cho dự án này.** Cách gom resource thành module, truyền `variable`, lấy `output` — đúng cấu trúc `infra/tf/modules/` của ta | Dùng module VPC có sẵn từ Registry; ta tự viết module |
 | 4 | [Terraform Series — Bài 6: Module in depth — ứng dụng multi-tier](https://viblo.asia/p/terraform-series-bai-6-module-in-depth-create-multi-tier-application-1VgZvAb2KAw) (Viblo) | 🇻🇳 | Ghép **VPC + ALB + target group + listener + ASG + Launch Template + RDS** thành một hệ thống — gần kiến trúc của ta nhất trong mọi nguồn tiếng Việt tìm được | **Không có `aws_network_acl` nào.** Và dùng module từ Registry thay vì tự viết. Bài đăng 24/02/2022 nên cú pháp là Terraform 1.x đời đầu — vẫn đọc được |
 | 5 | [HashiCorp — AWS Get Started](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) | 🇬🇧 | Nguồn chính thức, luôn cập nhật. Nhất là hai chương **`Store remote state`** và **`Manage resource drift`** | Tiếng Anh |
-| 6 | [terraform-runbook.md](terraform-runbook.md) của chính dự án này | 🇻🇳 | Cách chạy stack thật: backend S3 + lockfile, biến toggle bật/tắt, thứ tự `up.sh`/`down.sh`, và **93 test `.tftest.hcl`** | — |
+| 6 | [terraform-runbook.md](terraform-runbook.md) của chính dự án này | 🇻🇳 | Cách chạy stack thật: backend S3 + lockfile, biến toggle bật/tắt, thứ tự `up.sh`/`down.sh`, và **105 test `.tftest.hcl`** | — |
 
 **Chỗ không nguồn tiếng Việt nào phủ**, và ta dùng thật:
 
 - **`terraform test`** (`.tftest.hcl`) — framework test tích hợp, có từ Terraform 1.6.
-  Đây là thứ khiến hạ tầng của dự án này khác một bài blog: 93 test khẳng định
+  Đây là thứ khiến hạ tầng của dự án này khác một bài blog: 105 test khẳng định
   các bất biến bảo mật (không rule 22 nào, NACL DENY đúng thứ tự, NAT tắt theo
   mặc định). Tài liệu chính thức:
   [developer.hashicorp.com/terraform/language/tests](https://developer.hashicorp.com/terraform/language/tests).
@@ -1109,7 +1375,7 @@ là nguồn chính, không phải phần bổ trợ.**
 
 | Nguồn | Ngôn ngữ | Phủ được | Không phủ |
 |---|---|---|---|
-| [Phân biệt Security Group và Network ACL trong AWS](https://indaacademy.vn/aws/phan-biet-security-group-va-network-acl-trong-aws/) (INDA Academy) | 🇻🇳 | Bài tiếng Việt tốt nhất tìm được. Nói đúng **cả ba** điều quan trọng: NACL stateless nên *"inbound và outbound traffic được đánh giá hoàn toàn độc lập"*; rule xét theo số, *"rule có số nhỏ hơn sẽ được đánh giá trước"*; và cảnh báo *"không tính đến ephemeral ports … là một lỗi thường gặp"* | Không có ví dụ DENY theo IP, không có bài toán "rule 120 vô tình mở 1433" |
+| [Phân biệt Security Group và Network ACL trong AWS](https://indaacademy.vn/aws/phan-biet-security-group-va-network-acl-trong-aws/) (INDA Academy) | 🇻🇳 | Bài tiếng Việt tốt nhất tìm được. Nói đúng **cả ba** điều quan trọng: NACL stateless nên *"inbound và outbound traffic được đánh giá hoàn toàn độc lập"*; rule xét theo số, *"rule có số nhỏ hơn sẽ được đánh giá trước"*; và cảnh báo *"không tính đến ephemeral ports … là một lỗi thường gặp"* | Không có ví dụ DENY theo IP, không có bài toán "rule 120 vô tình mở 5432" |
 | [AWS — Sự khác biệt giữa Security Group và Network ACL](https://viblo.asia/p/aws-su-khac-biet-giua-security-group-va-network-access-controll-list-V3m5WQLvZO7) (Viblo) | 🇻🇳 | Bảng so sánh gọn: SG **chỉ có allow**, NACL có **cả allow và deny**; SG gắn từng instance, NACL gắn cả subnet; một subnet chỉ 1 NACL, một instance nhiều SG | Không đi vào thứ tự rule |
 | [AWS Docs — Network ACLs](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html) | 🇬🇧 | Nguồn thẩm quyền. Cần đọc mục **"Ephemeral ports"** và **"Custom network ACL examples"** | Tiếng Anh |
 
@@ -1119,7 +1385,7 @@ là nguồn chính, không phải phần bổ trợ.**
    một địa chỉ IP thì chỉ NACL làm được. Đây chính là kịch bản KB-08 trong
    [security-validation-report.md](security-validation-report.md).
 2. *Vì sao rule 95 và 115 phải tồn tại?* Vì rule 120 buộc phải mở dải ephemeral
-   `1024-65535` cho return traffic qua NAT — mà `1433` và `8080` nằm **trong**
+   `1024-65535` cho return traffic qua NAT — mà `5432` và `8080` nằm **trong**
    dải đó. Phải đặt DENY ở số nhỏ hơn để chặn trước khi rule 120 được xét.
 3. *Vì sao vẫn cần SG khi đã có NACL?* Vì chính điểm 2: NACL stateless buộc ta mở
    một dải rộng, nên tầng lọc chặt phải nằm ở SG stateful.
@@ -1160,7 +1426,8 @@ và [ECS](https://000016.awsstudygroup.com/vi/) (chương 7), không có worksho
 | Dùng key pair + SSH vào EC2 | Không có key pair, vào bằng SSM | SSH là bề mặt tấn công lớn nhất; Flow Logs bắt được máy quét dò port 22 trong đúng một giờ |
 | ECS trên Fargate, network mode `awsvpc` | ECS trên **EC2 launch type**, `bridge` | Đề bài yêu cầu "triển khai website thông qua EC2 Instance" |
 | Secrets Manager | Parameter Store SecureString | Miễn phí, và ta không cần tự động luân chuyển mật khẩu |
-| Bật Multi-AZ cho RDS | Single-AZ | SQL Server Express không hỗ trợ Multi-AZ |
+| Bật Multi-AZ cho RDS | **Cũng bật Multi-AZ** | Từ đợt 7 engine là PostgreSQL nên làm được — và quan trọng hơn, PostgreSQL vẫn `stop` được khi Multi-AZ, nên nó không phá cơ chế tắt tiền |
+| Một NAT Gateway cho cả VPC | **Hai — mỗi AZ một cái** | Một route table chỉ chứa được một dòng `0.0.0.0/0`, nên NAT theo AZ đòi tách route table theo AZ. Đổi lại: hết phí cross-AZ, và mất một AZ không cắt egress của AZ kia |
 
 ---
 
