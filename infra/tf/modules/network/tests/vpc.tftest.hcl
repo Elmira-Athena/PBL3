@@ -256,3 +256,82 @@ run "default_security_group_bi_khoa_ve_rong" {
     error_message = "Phải khai báo aws_default_security_group để Terraform QUẢN default SG của VPC. Bỏ resource này đi thì default SG quay về mặc định của AWS: cho phép mọi protocol/mọi port từ chính nó, kể cả 22 — và mọi instance launch mà không chỉ định SG sẽ rơi vào đó."
   }
 }
+
+# ═══ ECR INTERFACE ENDPOINT ══════════════════════════════════════
+# Ba bất biến, theo thứ tự nguy hiểm giảm dần:
+#   1. Mặc định KHÔNG dựng. Đây là resource tính tiền không được công tắc nào
+#      khác che chắn, nên "quên tắt" phải là trạng thái không biểu diễn được.
+#   2. Bật thì phải có ĐÚNG 2 cái — ecr.api một mình không pull được image, và
+#      ecr.dkr một mình không lấy được auth token. Thiếu một cái = trả tiền cho
+#      một endpoint vô dụng.
+#   3. private_dns_enabled phải TRUE. Đây là chế độ hỏng im lặng: false thì
+#      endpoint vẫn dựng, vẫn tính tiền, mà containerd vẫn phân giải tên ECR ra
+#      IP công khai rồi đi qua NAT — không lỗi, không log, chỉ tốn tiền hai lần.
+
+run "mac_dinh_khong_dung_ecr_endpoint" {
+  command = plan
+
+  assert {
+    condition     = length(aws_vpc_endpoint.ecr) == 0
+    error_message = "enable_ecr_endpoints mặc định phải là false — endpoint tính tiền ngay khi apply, không đợi up.sh."
+  }
+
+  assert {
+    condition     = length(aws_security_group.vpce) == 0
+    error_message = "Không dựng endpoint thì cũng không dựng SG của nó."
+  }
+}
+
+run "bat_thi_dung_2_endpoint_va_private_dns_phai_bat" {
+  command = plan
+
+  variables {
+    enable_ecr_endpoints = true
+  }
+
+  assert {
+    condition     = length(aws_vpc_endpoint.ecr) == 2
+    error_message = "Phải có ĐÚNG 2 endpoint: ecr.api (auth token) và ecr.dkr (kéo layer). Một cái không đủ."
+  }
+
+  assert {
+    condition = alltrue([
+      for e in aws_vpc_endpoint.ecr : e.private_dns_enabled == true
+    ])
+    error_message = "private_dns_enabled phải TRUE — false thì trả tiền endpoint mà traffic vẫn đi qua NAT, và không có gì báo."
+  }
+
+  assert {
+    condition = alltrue([
+      for e in aws_vpc_endpoint.ecr : e.vpc_endpoint_type == "Interface"
+    ])
+    error_message = "ECR chỉ có Interface endpoint. Gateway endpoint chỉ tồn tại cho S3 và DynamoDB."
+  }
+
+  # Mỗi endpoint đặt 1 ENI vào MỖI subnet khai ở đây — đây chính là đơn vị tính
+  # tiền. 2 subnet × 2 endpoint = 4 ENI ≈ $0,04/giờ.
+  assert {
+    condition = alltrue([
+      for e in aws_vpc_endpoint.ecr : length(e.subnet_ids) == 2
+    ])
+    error_message = "Endpoint phải nằm ở cả 2 app subnet — một AZ chết thì AZ kia vẫn pull được image."
+  }
+}
+
+run "sg_endpoint_chi_mo_443_cho_app_tier" {
+  command = plan
+
+  variables {
+    enable_ecr_endpoints = true
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.vpce_443[0].from_port == 443
+    error_message = "Endpoint chỉ nói HTTPS. Mở port khác là mở thừa."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.vpce_443[0].cidr_ipv4 == "10.20.10.0/23"
+    error_message = "Nguồn phải là CIDR /23 của app tier, KHÔNG phải 0.0.0.0/0 và cũng không rộng ra cả VPC."
+  }
+}

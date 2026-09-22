@@ -227,6 +227,83 @@ resource "aws_vpc_endpoint" "s3" {
 
 data "aws_region" "current" {}
 
+# ─── ECR INTERFACE ENDPOINTS (toggle, mặc định TẮT) ──────────────
+# Thầy góp ý "thêm VPC Endpoint cho ECR, SSM, CloudWatch Logs, Secrets Manager
+# để giảm traffic qua NAT". Đúng về bảo mật, nhưng ở quy mô 2 AZ thì lý lẽ CHI
+# PHÍ đảo chiều — đã tính bằng đơn giá ap-southeast-1:
+#
+#   Đủ bộ thầy đề nghị = 7 interface endpoint (ecr.api, ecr.dkr, ssm,
+#   ssmmessages, ec2messages, logs, secretsmanager). Interface endpoint tính
+#   tiền THEO ENI, mỗi AZ một ENI ⇒ 7 × 2 = 14 ENI × ~$0,01/giờ ≈ $0,14/giờ.
+#   Hai NAT Gateway đang dùng: 2 × $0,059 = $0,118/giờ.
+#
+#   Và endpoint KHÔNG thay được NAT: task vẫn cần egress cho `yum update` và
+#   cho API bên ngoài, nên đủ bộ là CỘNG THÊM $0,14/giờ chứ không phải thay.
+#
+# Nên ở đây chỉ dựng ĐÚNG HAI cái có lãi thật: ecr.api + ecr.dkr = 4 ENI ≈
+# $0,04/giờ. Layer image nằm trên S3, mà S3 Gateway Endpoint bên trên đã miễn
+# phí — nghĩa là phần BYTE lớn nhất của một lần pull đã không đi qua NAT từ
+# trước. Hai endpoint này gỡ nốt phần metadata + auth token, và quan trọng hơn:
+# chúng làm việc pull image chạy được NGAY CẢ KHI enable_nat = false.
+#
+# 🚨 Đây là resource CÓ TÍNH TIỀN và KHÔNG được enable_nat che chắn — đúng cùng
+# loại bẫy với enable_read_replica. Mặc định false, chỉ bật trong cửa sổ đo.
+resource "aws_security_group" "vpce" {
+  count = var.enable_ecr_endpoints ? 1 : 0
+
+  name        = "${var.project}-sg-vpce"
+  description = "Interface VPC Endpoint: chi nhan 443 tu app tier"
+  vpc_id      = aws_vpc.this.id
+
+  tags = { Name = "${var.project}-sg-vpce" }
+}
+
+# Nguồn là CIDR của app tier, KHÔNG phải sg-web. Module security phụ thuộc vào
+# module network để lấy vpc_id; tham chiếu ngược lại sg-web ở đây sẽ tạo vòng
+# lặp giữa hai module. CIDR /23 của app tier là đúng tập hợp cần mở, không rộng
+# hơn: chỉ ECS container instance nằm trong đó.
+resource "aws_vpc_security_group_ingress_rule" "vpce_443" {
+  count = var.enable_ecr_endpoints ? 1 : 0
+
+  security_group_id = aws_security_group.vpce[0].id
+  description       = "HTTPS tu app tier toi ECR endpoint"
+  cidr_ipv4         = local.app_tier_cidr
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+}
+
+# Không khai egress rule nào: SG có state nên endpoint vẫn trả lời được, và
+# endpoint không tự khởi tạo kết nối đi đâu cả.
+
+locals {
+  ecr_endpoint_services = var.enable_ecr_endpoints ? {
+    # API control plane: GetAuthorizationToken, BatchGetImage, image manifest.
+    api = "ecr.api"
+    # Docker Registry API: cái mà containerd/docker thật sự nói chuyện.
+    dkr = "ecr.dkr"
+  } : {}
+}
+
+resource "aws_vpc_endpoint" "ecr" {
+  for_each = local.ecr_endpoint_services
+
+  vpc_id            = aws_vpc.this.id
+  service_name      = "com.amazonaws.${data.aws_region.current.region}.${each.value}"
+  vpc_endpoint_type = "Interface"
+
+  # Một ENI trong MỖI app subnet — đây chính là đơn vị tính tiền.
+  subnet_ids         = aws_subnet.app[*].id
+  security_group_ids = [aws_security_group.vpce[0].id]
+
+  # 🚨 BẮT BUỘC true. Thiếu nó thì endpoint vẫn dựng, vẫn tính tiền, mà
+  # `docker pull` vẫn phân giải tên ECR ra IP công khai rồi đi qua NAT như cũ —
+  # tức trả tiền hai lần và không có gì báo sai. Đây là chế độ hỏng im lặng.
+  private_dns_enabled = true
+
+  tags = { Name = "${var.project}-vpce-${each.key}" }
+}
+
 # ─── VPC FLOW LOGS (toggle, default tắt) ─────────────────────────
 resource "aws_cloudwatch_log_group" "flow" {
   count = var.enable_flow_logs ? 1 : 0

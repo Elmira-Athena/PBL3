@@ -99,7 +99,13 @@ jobs:
         run: |
           set -euo pipefail
           fail=0
-          for dir in infra/tf/envs/prod infra/tf/modules/*/; do
+          # `envs/*/` chứ không liệt kê tay từng env: thêm envs/staging sau này
+          # là tự được validate, không phải nhớ sửa file này. Và quan trọng hơn —
+          # envs/dev có main.tf là SYMLINK sang ../prod/main.tf, nên validate ở
+          # đây chính là cái chặn drift giữa hai môi trường: thêm một var vào
+          # prod/main.tf mà quên khai trong dev/variables.tf sẽ đỏ NGAY Ở PR,
+          # không đợi tới lúc ai đó apply dev.
+          for dir in infra/tf/envs/*/ infra/tf/modules/*/; do
             echo "── $dir"
             # `init` cũng phải `|| continue`, không chỉ `validate`. Dưới `set -e`
             # một init lỗi sẽ giết cả bước và bỏ qua toàn bộ module còn lại —

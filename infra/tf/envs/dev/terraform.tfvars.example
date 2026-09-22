@@ -1,0 +1,39 @@
+# ═══ MÔI TRƯỜNG DEV — chép file này thành terraform.tfvars ════════
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars bị .gitignore (dòng 119: *.tfvars), nên MỌI giá trị đặt ở
+# đây chỉ tồn tại trên máy này. Thứ gì phải bền qua một lần clone thì đặt
+# default trong variables.tf — file được commit.
+
+# IP công cộng của laptop. Kiểm bằng: curl -s https://checkip.amazonaws.com
+my_ip = "203.0.113.45/32"
+
+# Cùng major version với prod. Dev chạy version khác thì nó không còn là nơi
+# thử migration trước khi đụng prod nữa — mà đó là lý do duy nhất nó tồn tại.
+db_engine_version = "17"
+
+# Email nhận cảnh báo. enable_budget của dev mặc định false nên đường báo động
+# duy nhất là SNS của Lambda cost guard — địa chỉ này phải bấm xác nhận trong
+# mail AWS gửi, nếu không thì im lặng hoàn toàn.
+alert_email = "dia-chi-cua-ban@example.com"
+
+# ⚠️ 4 repo ECR của dev (hushstore-dev-api / -web / -migrator / -seeder) là
+# repo RIÊNG và đang RỖNG. Pipeline .github/workflows/deploy.yml hiện chỉ push
+# vào repo của prod, nên tag dưới đây là "cái ta muốn deploy", KHÔNG phải "cái
+# đã có trên registry". Terraform không kiểm tra image tồn tại ⇒ apply vẫn
+# xanh; lỗi chỉ nổ lúc ECS cố pull, mà chuyện đó bị chặn bởi instance_count = 0
+# và enable_alb = false.
+image_tag = "0000000000000000000000000000000000000000"
+
+# ═══ CÔNG TẮC CHI PHÍ ════════════════════════════════════════════
+# Cả bốn mặc định đã TẮT trong variables.tf. Khai lại ở đây chỉ khi muốn bật
+# — và nhớ xoá dòng đi sau khi xong.
+# enable_nat           = true
+# enable_alb           = true
+# instance_count       = 1
+# enable_ecr_endpoints = true   # 🚨 tính tiền NGAY, không đợi up.sh
+
+# ═══ KHÔNG KHAI LẠI project, vpc_cidr, *_subnet_cidrs ════════════
+# Ba thứ đó là cái ngăn dev giẫm lên prod. Chúng có validation chặn giá trị
+# của prod, nhưng validation chỉ chặn đúng hai giá trị đã biết — đổi sang một
+# giá trị thứ ba vẫn đi lọt. Để yên default.

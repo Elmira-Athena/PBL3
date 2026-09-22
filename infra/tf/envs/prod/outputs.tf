@@ -140,3 +140,13 @@ output "multi_az_enabled" {
   description = "RDS có đang cấu hình Multi-AZ hay không — script dùng để in đúng đơn giá"
   value       = var.enable_multi_az
 }
+
+output "ecr_endpoint_ids" {
+  description = "ID của 2 interface endpoint ECR (rỗng khi enable_ecr_endpoints = false)"
+  value       = module.network.ecr_endpoint_ids
+}
+
+output "ecr_endpoint_count" {
+  description = "Số interface endpoint ECR đang dựng — 0 hoặc 2. status.sh dùng để tính $0,01/giờ mỗi ENI"
+  value       = module.network.ecr_endpoint_count
+}

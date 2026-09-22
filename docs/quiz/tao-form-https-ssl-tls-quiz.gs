@@ -1,0 +1,155 @@
+/**
+ * HushStore — sinh Google Form trắc nghiệm về HTTPS / SSL / TLS (50 câu).
+ *
+ * CÁCH DÙNG
+ *   1. Mở https://script.google.com  ->  New project
+ *   2. Dán TOÀN BỘ file này vào, thay nội dung mẫu
+ *   3. Chọn hàm `taoQuiz` ở thanh trên  ->  Run
+ *   4. Lần chạy đầu Google hỏi cấp quyền: Review permissions -> chọn tài khoản
+ *      -> Advanced -> Go to <tên project> (unsafe) -> Allow
+ *      (cảnh báo "unsafe" là do script chưa được Google thẩm định; script này
+ *       chạy trong chính tài khoản của bạn)
+ *   5. Xem tab Execution log: link sửa form và link gửi cho người làm được in ra
+ *   6. XÁC NHẬN người làm xem được điểm + câu sai ngay sau khi nộp: mở link sửa
+ *      form -> biểu tượng Cài đặt (⚙️) -> tab "Câu đố" (Quizzes) -> mục
+ *      "Công bố điểm" (Release grade) chọn "Ngay khi nộp bài" (Immediately
+ *      after each submission), và tick đủ ba ô trong "Người trả lời có thể
+ *      xem": Câu hỏi bị bỏ lỡ (Missed questions), Câu trả lời đúng
+ *      (Correct answers), Giá trị điểm (Point values).
+ *      Google thường đã bật sẵn cả bốn mục này khi `setIsQuiz(true)` chạy,
+ *      nhưng FormApp (Apps Script) không có API để đặt/đọc lại các mục này,
+ *      nên PHẢI tự mắt kiểm tra trong giao diện — đừng tin ngầm định.
+ *
+ * Form sinh ra đã ở chế độ QUIZ: mỗi câu 1 điểm, đáp án đúng đã đánh dấu sẵn,
+ * chấm điểm tự động. Không kèm giải thích đáp án trong các phương án — người
+ * làm chỉ thấy đúng/sai và đáp án đúng sau khi nộp (theo bước 6 ở trên).
+ *
+ * QUY TẮC RA ĐỀ ĐÃ ÁP DỤNG
+ *   • Phương án là mệnh đề ngắn, KHÔNG chứa lời giải thích — phần ngữ cảnh
+ *     nằm ở thân câu hỏi, không nằm trong lựa chọn.
+ *   • Bốn phương án của mỗi câu có độ dài tương đương (chênh lệch trung bình
+ *     ~6 ký tự, lớn nhất 10 ký tự), nên độ dài không gợi ý đáp án.
+ *   • Vị trí đáp án đúng chia đều: A 13 · B 13 · C 12 · D 12.
+ *   • Nội dung là KIẾN THỨC HTTPS/SSL/TLS CỐT LÕI (không thiên về code);
+ *     dự án HushStore chỉ đóng vai trò bối cảnh ở một số câu vận dụng.
+ *
+ * Phân bố: 25 câu nhận biết/thông hiểu · 15 câu vận dụng · 10 câu vận dụng cao.
+ */
+
+// ─── CẤU HÌNH ────────────────────────────────────────────────────
+var TIEU_DE  = "Kiểm tra HTTPS / SSL / TLS — Dự án HushStore (PBL3)";
+var MO_TA    = "50 câu trắc nghiệm, mỗi câu 1 điểm. Phạm vi: nguyên lý mã hóa và xác thực của TLS, chứng chỉ số và chuỗi tin cậy, cơ chế bắt tay và trao đổi khóa, thu hồi chứng chỉ, và các tình huống vận hành HTTPS thường gặp.";
+var TRON_CAU = false;   // true = đảo thứ tự câu hỏi cho mỗi người làm
+var TRON_DAP_AN = true; // true = đảo thứ tự lựa chọn trong mỗi câu
+
+var CAU_HOI = [
+{"n": 1, "level": "NB", "q": "HTTPS là gì?", "opts": ["Một giao thức HTTP được mã hóa bằng SSL/TLS trước khi truyền", "Một phiên bản HTTP nén dữ liệu để truyền nhanh hơn qua mạng", "Một giao thức thay thế HTTP, dùng riêng cho API nội bộ", "Một tiêu chuẩn nén ảnh giúp trang web tải nhanh hơn"], "ans": 0},
+{"n": 2, "level": "NB", "q": "Mục tiêu chính mà TLS mang lại cho kết nối web là gì?", "opts": ["Giảm dung lượng dữ liệu truyền đi bằng cách nén nội dung", "Mã hóa, xác thực máy chủ và bảo toàn dữ liệu khi truyền", "Tăng tốc độ tải trang bằng cách bỏ qua bước xác thực", "Cân bằng tải giữa nhiều máy chủ trong cùng một cụm"], "ans": 1},
+{"n": 3, "level": "TH", "q": "Trong TLS, mã hóa đối xứng và bất đối xứng được phối hợp ra sao?", "opts": ["Đối xứng trao đổi khóa, bất đối xứng mã hóa dữ liệu phiên", "Cả hai cùng mã hóa song song mọi gói tin trong phiên", "Bất đối xứng trao đổi khóa, đối xứng mã hóa dữ liệu phiên", "Chỉ dùng bất đối xứng, đối xứng chỉ dự phòng khi lỗi"], "ans": 2},
+{"n": 4, "level": "NB", "q": "Chứng chỉ số (certificate) trong TLS dùng để làm gì?", "opts": ["Nén dữ liệu trước khi gửi đi nhằm tiết kiệm băng thông", "Lưu mật khẩu người dùng để đăng nhập tự động lần sau", "Ghi lại nhật ký truy cập của trình duyệt vào máy chủ", "Ràng buộc khóa công khai với danh tính của máy chủ"], "ans": 3},
+{"n": 5, "level": "NB", "q": "Certificate Authority (CA) đóng vai trò gì trong hệ thống TLS?", "opts": ["Bên thứ ba đáng tin cấp và xác thực chứng chỉ số", "Cung cấp băng thông mạng cho máy chủ chạy HTTPS", "Lưu trữ toàn bộ dữ liệu người dùng của website", "Giám sát hiệu năng máy chủ và cảnh báo khi quá tải"], "ans": 0},
+{"n": 6, "level": "TH", "q": "Chuỗi tin cậy (chain of trust) trong TLS được xây dựng như thế nào?", "opts": ["Mỗi chứng chỉ tự ký cho chính nó, không phụ thuộc bên nào", "Root CA tin cậy sẵn ký cho Intermediate, Intermediate ký lá", "Trình duyệt tự tạo chứng chỉ tạm cho từng phiên truy cập", "Máy chủ ký chứng chỉ cho chính CA để xác nhận qua lại"], "ans": 1},
+{"n": 7, "level": "NB", "q": "TLS handshake diễn ra nhằm mục đích gì?", "opts": ["Xóa cache cũ của trình duyệt trước khi tải trang mới", "Đồng bộ đồng hồ hệ thống giữa client và máy chủ", "Thỏa thuận khóa phiên và xác thực danh tính máy chủ", "Nén nội dung trang trước khi gửi về cho trình duyệt"], "ans": 2},
+{"n": 8, "level": "TH", "q": "Trong bước trao đổi khóa của handshake, khóa công khai và khóa riêng được dùng thế nào?", "opts": ["Khóa riêng mã hóa dữ liệu, khóa công khai lo giải mã", "Cả hai khóa đều được giữ bí mật tuyệt đối như nhau", "Khóa công khai chỉ dùng ở phía client, không ở máy chủ", "Khóa công khai mã hóa hoặc xác minh, khóa riêng giải mã"], "ans": 3},
+{"n": 9, "level": "NB", "q": "HTTP và HTTPS khác nhau ở cổng mặc định như thế nào?", "opts": ["HTTP dùng cổng 80, HTTPS dùng cổng 443 mặc định", "HTTP dùng cổng 8080, HTTPS dùng cổng 8443 mặc định", "HTTP dùng cổng 21, HTTPS dùng cổng 22 mặc định", "HTTP dùng cổng 443, HTTPS dùng cổng 80 mặc định"], "ans": 0},
+{"n": 10, "level": "NB", "q": "Biểu tượng ổ khóa trên thanh địa chỉ trình duyệt cho biết điều gì?", "opts": ["Trang web đã được xác minh không chứa nội dung lừa đảo", "Kết nối hiện tại giữa trình duyệt và máy chủ được mã hóa", "Máy chủ đã được kiểm duyệt nội dung bởi nhà cung cấp CA", "Trình duyệt đã chặn toàn bộ quảng cáo trên trang này"], "ans": 1},
+{"n": 11, "level": "TH", "q": "Cơ chế SNI trong TLS handshake giải quyết vấn đề gì?", "opts": ["Cho phép một chứng chỉ dùng chung cho mọi tên miền bất kỳ", "Cho phép máy chủ nén nội dung trước khi gửi cho trình duyệt", "Cho phép nhiều tên miền dùng chung IP vẫn chọn đúng chứng chỉ", "Cho phép trình duyệt bỏ qua bước xác thực chứng chỉ máy chủ"], "ans": 2},
+{"n": 12, "level": "NB", "q": "Session resumption trong TLS mang lại lợi ích gì?", "opts": ["Cho phép trình duyệt lưu mật khẩu đăng nhập vĩnh viễn", "Cho phép máy chủ đổi chứng chỉ mà không cần khởi động lại", "Cho phép nhiều người dùng chia sẻ chung một khóa riêng", "Cho phép rút gọn bước bắt tay ở lần kết nối lại sau đó"], "ans": 3},
+{"n": 13, "level": "TH", "q": "Forward secrecy (bảo mật hướng tới) trong TLS nghĩa là gì?", "opts": ["Lộ khóa dài hạn không giúp giải mã được các phiên đã qua", "Mỗi phiên dùng lại đúng một khóa cố định suốt vòng đời chứng chỉ", "Dữ liệu người dùng được lưu vĩnh viễn để phục vụ điều tra", "Máy chủ tự động xóa nhật ký truy cập sau một khoảng thời gian"], "ans": 0},
+{"n": 14, "level": "NB", "q": "Cipher suite trong TLS là gì?", "opts": ["Danh sách các tên miền được phép truy cập vào máy chủ này", "Tổ hợp thuật toán trao đổi khóa, mã hóa và băm được thống nhất", "Bộ quy tắc nén ảnh riêng được áp dụng cho các kết nối HTTPS", "Tập hợp các cổng mạng mà máy chủ mở ra để lắng nghe kết nối"], "ans": 1},
+{"n": 15, "level": "NB", "q": "HSTS (HTTP Strict Transport Security) yêu cầu điều gì từ trình duyệt?", "opts": ["Luôn xóa cookie sau mỗi lần đóng tab của trình duyệt", "Luôn hiển thị quảng cáo bảo mật trước khi tải trang", "Luôn dùng HTTPS cho tên miền đó, kể cả khi người dùng gõ HTTP", "Luôn chuyển hướng người dùng sang một tên miền dự phòng"], "ans": 2},
+{"n": 16, "level": "TH", "q": "Mixed content trên một trang HTTPS là tình huống nào?", "opts": ["Trang chứa cả nội dung tiếng Việt lẫn tiếng Anh trên cùng URL", "Trang dùng hai chứng chỉ khác nhau cho hai tên miền phụ", "Trang gửi dữ liệu form tới hai máy chủ backend cùng lúc", "Trang tải xen kẽ tài nguyên qua HTTP dù trang chính đã là HTTPS"], "ans": 3},
+{"n": 17, "level": "TH", "q": "Chứng chỉ tự ký (self-signed) khác chứng chỉ do CA công cộng cấp ở điểm nào?", "opts": ["Tự ký không có bên thứ ba xác nhận nên trình duyệt cảnh báo", "Tự ký không hỗ trợ được thuật toán mã hóa đối xứng", "Tự ký chỉ dùng được với giao thức HTTP, không dùng cho HTTPS", "Tự ký bắt buộc phải trả phí cao hơn chứng chỉ CA công cộng"], "ans": 0},
+{"n": 18, "level": "NB", "q": "Chứng chỉ wildcard (*.example.com) dùng để làm gì?", "opts": ["Cho phép một chứng chỉ bảo vệ mọi tên miền cấp một bất kỳ", "Cho phép một chứng chỉ bảo vệ mọi subdomain cấp một của tên miền", "Cho phép máy chủ dùng chung một khóa riêng cho mọi khách hàng", "Cho phép chứng chỉ có hiệu lực vĩnh viễn không cần gia hạn"], "ans": 1},
+{"n": 19, "level": "NB", "q": "Trường SAN (Subject Alternative Name) trong chứng chỉ dùng để làm gì?", "opts": ["Lưu mật khẩu quản trị dùng để gia hạn chứng chỉ sau này", "Ghi lại lịch sử các phiên bản trước đó của chứng chỉ", "Liệt kê thêm các tên miền hoặc IP mà chứng chỉ đó bảo vệ", "Xác định múi giờ mà máy chủ cấp chứng chỉ đang hoạt động"], "ans": 2},
+{"n": 20, "level": "TH", "q": "mTLS (mutual TLS) khác TLS thông thường ở điểm nào?", "opts": ["mTLS bỏ qua bước xác thực máy chủ để tăng tốc độ kết nối", "mTLS chỉ áp dụng được cho kết nối nội bộ trong một máy", "mTLS thay thế hoàn toàn nhu cầu dùng mật khẩu đăng nhập", "mTLS bắt cả client lẫn máy chủ đều phải trình chứng chỉ"], "ans": 3},
+{"n": 21, "level": "NB", "q": "Giao thức OCSP dùng để làm gì?", "opts": ["Kiểm tra trực tuyến xem một chứng chỉ có bị thu hồi hay không", "Nén dữ liệu truyền giữa client và máy chủ trong phiên TLS", "Đồng bộ thời gian hệ thống giữa các máy chủ trong cụm", "Sinh khóa riêng mới cho máy chủ mỗi khi khởi động lại"], "ans": 0},
+{"n": 22, "level": "NB", "q": "CRL (Certificate Revocation List) là gì?", "opts": ["Danh sách tên miền được phép cấp chứng chỉ miễn phí", "Danh sách các chứng chỉ đã bị thu hồi trước khi hết hạn", "Danh sách khóa riêng bị lộ được công khai để cảnh báo", "Danh sách cipher suite bị cấm sử dụng trên toàn hệ thống"], "ans": 1},
+{"n": 23, "level": "TH", "q": "So với TLS 1.2, TLS 1.3 có thay đổi đáng chú ý nào?", "opts": ["Bỏ hẳn khái niệm chứng chỉ số, chuyển sang xác thực khác", "Chỉ hoạt động được trên nền giao thức UDP thay vì TCP", "Handshake rút gọn hơn và loại bỏ các thuật toán yếu cũ", "Yêu cầu bắt buộc mọi kết nối phải dùng mTLS hai chiều"], "ans": 2},
+{"n": 24, "level": "NB", "q": "ALPN trong TLS handshake dùng để làm gì?", "opts": ["Xác thực địa chỉ IP của client trước khi cho kết nối", "Nén phần header của gói tin TLS để giảm băng thông", "Chọn múi giờ hiển thị cho chứng chỉ khi hết hạn", "Thỏa thuận giao thức ứng dụng sẽ dùng, ví dụ HTTP/2"], "ans": 3},
+{"n": 25, "level": "TH", "q": "Let's Encrypt đóng vai trò gì trong hệ sinh thái TLS hiện nay?", "opts": ["Một CA miễn phí, tự động hóa cấp chứng chỉ qua giao thức ACME", "Một trình duyệt mã nguồn mở hỗ trợ riêng cho TLS 1.3", "Một chuẩn thay thế hoàn toàn cho giao thức HTTPS hiện tại", "Một công cụ quét lỗ hổng dành riêng cho cấu hình TLS"], "ans": 0},
+{"n": 26, "level": "VD", "q": "Vì sao access token JWT của hệ thống bắt buộc truyền qua HTTPS thay vì HTTP?", "opts": ["Vì HTTP không hỗ trợ được định dạng chuỗi Base64 của JWT", "Vì HTTP để lộ token trên đường truyền cho kẻ nghe lén", "Vì HTTPS nén token nên payload gửi đi nhẹ hơn đáng kể", "Vì máy chủ chỉ chấp nhận Header Authorization qua HTTPS"], "ans": 1},
+{"n": 27, "level": "VD", "q": "Lệnh dotnet dev-certs https sinh ra loại chứng chỉ nào và phục vụ mục đích gì?", "opts": ["Chứng chỉ CA công cộng, dùng thẳng được cho môi trường production", "Chứng chỉ wildcard dùng cho mọi tên miền mà công ty đang sở hữu", "Chứng chỉ tự ký cho môi trường local, tránh phải cần CA thật", "Chứng chỉ mTLS bắt buộc client phải xác thực khi gọi vào local"], "ans": 2},
+{"n": 28, "level": "VD", "q": "Khi load balancer chấm dứt TLS (TLS termination) trước khi chuyển tiếp vào container nội bộ, điều gì thường xảy ra?", "opts": ["Container nhận thẳng traffic mã hóa và tự giải mã lại lần nữa", "Load balancer từ chối chuyển tiếp mọi traffic đã được mã hóa", "Container bắt buộc phải giữ private key giống hệt load balancer", "Traffic nội bộ sau điểm chấm dứt thường đi dưới dạng HTTP thường"], "ans": 3},
+{"n": 29, "level": "VD", "q": "Vì sao ổ khóa HTTPS trên trình duyệt không đồng nghĩa trang đó an toàn hay đáng tin?", "opts": ["Vì ổ khóa chỉ xác nhận kênh truyền mã hóa, không xét nội dung", "Vì trình duyệt hiện đại đã bỏ hẳn việc kiểm tra chứng chỉ hợp lệ", "Vì ổ khóa chỉ xuất hiện khi trang không yêu cầu đăng nhập gì", "Vì chứng chỉ HTTPS chỉ có giá trị trong một vài phút mỗi lần"], "ans": 0},
+{"n": 30, "level": "VD", "q": "Khi chứng chỉ TLS của một trang đã hết hạn, trình duyệt phản ứng ra sao và vì sao?", "opts": ["Tự động gia hạn ngầm rồi tải trang bình thường cho người dùng", "Cảnh báo lỗi kết nối vì không còn xác thực được danh tính máy chủ", "Chuyển hướng người dùng sang bản HTTP không mã hóa để tiếp tục", "Bỏ qua cảnh báo nếu người dùng đã từng truy cập trang trước đó"], "ans": 1},
+{"n": 31, "level": "VD", "q": "Vì sao tấn công hạ cấp giao thức (downgrade attack) ép dùng SSL/TLS phiên bản cũ lại nguy hiểm?", "opts": ["Vì phiên bản cũ tải trang chậm hơn gây trải nghiệm kém", "Vì phiên bản cũ không tương thích với trình duyệt hiện đại", "Vì phiên bản cũ thường mang theo lỗ hổng mã hóa đã biết", "Vì phiên bản cũ yêu cầu chứng chỉ đắt hơn để vận hành"], "ans": 2},
+{"n": 32, "level": "VD", "q": "Vì sao quản trị nên chủ động tắt các cipher suite yếu như RC4 trên máy chủ?", "opts": ["Vì cipher suite yếu làm tăng đáng kể độ trễ của handshake", "Vì cipher suite yếu chiếm nhiều dung lượng lưu trữ chứng chỉ", "Vì cipher suite yếu không tương thích với giao thức HTTP/2", "Vì cipher suite yếu có điểm yếu mã hóa cho phép bị phá được"], "ans": 3},
+{"n": 33, "level": "VD", "q": "Sau khi gia hạn chứng chỉ nhưng quên reload tiến trình máy chủ web, hệ quả thường là gì?", "opts": ["Máy chủ vẫn phục vụ bằng chứng chỉ cũ cho tới khi được nạp lại", "Máy chủ tự phát hiện và nạp lại chứng chỉ mới ngay lập tức", "Máy chủ ngừng phục vụ toàn bộ kết nối HTTPS ngay tức thì", "Trình duyệt tự lấy chứng chỉ mới trực tiếp từ CA thay máy chủ"], "ans": 0},
+{"n": 34, "level": "VD", "q": "HSTS preload giúp chống downgrade attack tốt hơn HSTS thường ở điểm nào?", "opts": ["Preload giúp chứng chỉ có thời hạn hiệu lực dài hơn hẳn", "Trình duyệt buộc dùng HTTPS ngay từ lần đầu, không qua HTTP trước", "Preload cho phép bỏ qua hoàn toàn bước xác thực chứng chỉ", "Trình duyệt chỉ preload được với chứng chỉ do một CA cấp"], "ans": 1},
+{"n": 35, "level": "VD", "q": "Theo nguyên tắc đồng bộ của hệ thống, vì sao thao tác thanh toán bắt buộc phải qua kênh TLS chứ không thể trì hoãn xác thực?", "opts": ["Vì cổng thanh toán chỉ hỗ trợ giao thức TLS phiên bản mới nhất", "Vì TLS giúp nén dữ liệu thanh toán để gửi đi nhanh hơn hẳn", "Vì thanh toán cần nhất quán dữ liệu ngay, không chấp nhận trễ", "Vì thao tác thanh toán luôn được xử lý riêng ở tác vụ nền"], "ans": 2},
+{"n": 36, "level": "VD", "q": "Certificate pinning có thể gây rủi ro vận hành nào khi tổ chức xoay vòng chứng chỉ định kỳ?", "opts": ["Chứng chỉ mới sẽ tự động được ghim thay thế mà không cần cập nhật", "Pinning chỉ ảnh hưởng tới tốc độ tải trang, không ảnh hưởng kết nối", "Pinning khiến chứng chỉ mới không cần CA nào ký xác nhận nữa", "Ứng dụng đã ghim chứng chỉ cũ có thể từ chối kết nối với bản mới"], "ans": 3},
+{"n": 37, "level": "VD", "q": "Khi nhiều tên miền cùng chia sẻ một địa chỉ IP trên load balancer, cơ chế nào giúp chọn đúng chứng chỉ cho từng tên miền?", "opts": ["SNI, dựa trên tên miền client gửi kèm ngay khi bắt tay", "ALPN, dựa trên giao thức ứng dụng mà client đề nghị dùng", "OCSP, dựa trên trạng thái thu hồi của từng chứng chỉ", "HSTS, dựa trên chính sách buộc dùng HTTPS đã lưu trước"], "ans": 0},
+{"n": 38, "level": "VD", "q": "Vì sao chứng chỉ wildcard *.example.com không bảo vệ được tên miền sub.sub.example.com?", "opts": ["Vì wildcard chỉ có hiệu lực với tên miền cấp cao nhất duy nhất", "Vì wildcard chỉ khớp đúng một cấp subdomain, không khớp nhiều cấp", "Vì wildcard bắt buộc phải đi kèm chứng chỉ mTLS mới hoạt động", "Vì wildcard chỉ được các trình duyệt cũ hỗ trợ đầy đủ tính năng"], "ans": 1},
+{"n": 39, "level": "VD", "q": "Vì sao HTTP/2 trong thực tế hầu như luôn chạy kèm TLS dù chuẩn không bắt buộc điều đó?", "opts": ["Vì giao thức HTTP/2 về mặt kỹ thuật không thể hoạt động thiếu TLS", "Vì TLS là điều kiện bắt buộc để nén được phần thân dữ liệu", "Vì phần lớn trình duyệt chỉ hỗ trợ HTTP/2 khi có TLS đi kèm", "Vì máy chủ web hiện đại đã ngừng hỗ trợ hoàn toàn HTTP/1.1"], "ans": 2},
+{"n": 40, "level": "VD", "q": "Vì sao việc lộ private key của máy chủ được xem là sự cố nghiêm trọng bậc nhất với TLS?", "opts": ["Vì private key bị lộ khiến băng thông máy chủ giảm rõ rệt", "Vì private key là thứ duy nhất trình duyệt dùng để hiển thị ổ khóa", "Vì private key bị lộ chỉ ảnh hưởng tới một phiên kết nối duy nhất", "Vì kẻ tấn công có thể giả mạo máy chủ và can thiệp kết nối"], "ans": 3},
+{"n": 41, "level": "VDC", "q": "Một lỗi tràn bộ đệm kiểu Heartbleed trong thư viện TLS rò rỉ vùng nhớ tiến trình ra ngoài. Hệ quả nguy hiểm nhất là gì?", "opts": ["Kẻ tấn công có thể đọc được private key hoặc dữ liệu phiên đang xử lý", "Máy chủ chỉ giảm hiệu năng tạm thời rồi tự phục hồi bình thường", "Lỗi chỉ ảnh hưởng tới phiên bản HTTP, không liên quan tới HTTPS", "Trình duyệt sẽ tự phát hiện và từ chối kết nối máy chủ bị lỗi"], "ans": 0},
+{"n": 42, "level": "VDC", "q": "Với các bộ trao đổi khóa hỗ trợ forward secrecy như ECDHE, việc private key dài hạn của máy chủ bị lộ sau này có hệ quả gì với traffic đã ghi lại từ trước?", "opts": ["Traffic cũ vẫn giải mã được ngay vì khóa dài hạn kiểm soát mọi phiên", "Traffic cũ vẫn an toàn vì khóa phiên đã được tạo tạm thời và huỷ đi", "Chỉ traffic của phiên gần nhất trước khi lộ khóa mới giải mã được", "Toàn bộ traffic cũ tự động bị xóa khỏi máy chủ ngay khi khóa lộ"], "ans": 1},
+{"n": 43, "level": "VDC", "q": "Kẻ tấn công cài được một root CA giả vào kho tin cậy của máy nạn nhân rồi thực hiện MITM. Vì sao HTTPS thông thường không phát hiện ra, và cơ chế nào có thể giúp chặn được?", "opts": ["Vì trình duyệt không kiểm tra chứng chỉ khi kết nối cùng mạng nội bộ", "Vì HTTPS chỉ xác thực một chiều nên máy chủ không biết bị giả mạo", "Vì chuỗi chứng chỉ giả hợp lệ với kho tin cậy bị chèn, pinning giúp lộ", "Vì CA giả luôn bị OCSP đánh dấu thu hồi ngay khi vừa được cài vào"], "ans": 2},
+{"n": 44, "level": "VDC", "q": "So với tra cứu qua CRL, OCSP stapling cải thiện điều gì trong việc kiểm tra thu hồi chứng chỉ?", "opts": ["OCSP stapling loại bỏ hoàn toàn nhu cầu có Certificate Authority", "CRL luôn cập nhật nhanh hơn OCSP nên ít khi cần dùng stapling", "Stapling chuyển việc kiểm tra thu hồi sang phía client tự xử lý", "Máy chủ tự đính kèm phản hồi OCSP mới, đỡ trình duyệt tự truy vấn"], "ans": 3},
+{"n": 45, "level": "VDC", "q": "Khi OCSP responder không phản hồi được, sự khác biệt giữa chính sách hard-fail và soft-fail là gì?", "opts": ["Hard-fail chặn kết nối khi không xác minh được; soft-fail vẫn cho qua", "Hard-fail chỉ áp dụng cho mTLS; soft-fail áp dụng cho TLS một chiều", "Hard-fail cho qua kết nối; soft-fail chặn hẳn mọi kết nối đến", "Cả hai chính sách đều chặn kết nối như nhau, chỉ khác thời gian chờ"], "ans": 0},
+{"n": 46, "level": "VDC", "q": "TLS 1.3 loại bỏ cơ chế trao đổi khóa RSA tĩnh và renegotiation giữa phiên. Điều này liên hệ thế nào tới forward secrecy?", "opts": ["Việc loại bỏ chỉ nhằm tăng tốc độ, không liên quan gì tới forward secrecy", "Loại bỏ RSA tĩnh buộc mọi phiên phải dùng khóa tạm, đảm bảo forward secrecy", "Renegotiation vốn là cơ chế duy nhất từng cung cấp forward secrecy", "RSA tĩnh vẫn đảm bảo forward secrecy tốt hơn các khóa trao đổi tạm"], "ans": 1},
+{"n": 47, "level": "VDC", "q": "Hai microservice giao tiếp nội bộ trong cùng một VPC riêng có nên vẫn dùng TLS (thậm chí mTLS) hay không, và đánh đổi là gì?", "opts": ["Không cần vì mạng riêng đã đủ an toàn, thêm TLS chỉ gây lãng phí", "Chỉ nên dùng khi hai service khác region, cùng region thì bỏ qua", "Nên dùng để phòng thủ theo chiều sâu, đổi lại thêm chi phí vận hành khóa", "Nên dùng nhưng chỉ cần mã hóa một chiều, không cần xác thực lẫn nhau"], "ans": 2},
+{"n": 48, "level": "VDC", "q": "Chế độ 0-RTT của TLS 1.3 giảm độ trễ bằng cách gửi dữ liệu ngay ở lần bắt tay lại. Rủi ro tiềm ẩn của cơ chế này là gì?", "opts": ["0-RTT làm tăng đáng kể kích thước của mọi chứng chỉ máy chủ gửi", "0-RTT chỉ hoạt động được khi bỏ hoàn toàn bước xác thực máy chủ", "0-RTT buộc mỗi phiên phải đổi sang thuật toán mã hóa đối xứng khác", "Dữ liệu gửi sớm dễ bị phát lại, nguy hiểm với yêu cầu không idempotent"], "ans": 3},
+{"n": 49, "level": "VDC", "q": "Máy chủ cấu hình thiếu chứng chỉ trung gian (intermediate CA) trong chuỗi gửi đi. Vì sao một số trình duyệt vẫn chạy được trong khi số khác báo lỗi chuỗi tin cậy?", "opts": ["Vì trình duyệt chạy được đã có sẵn bản trung gian trong cache trước đó", "Vì HTTPS không thực sự cần có chứng chỉ trung gian để hoạt động", "Vì lỗi chuỗi tin cậy chỉ xảy ra trên trình duyệt di động, không desktop", "Vì máy chủ đã tự động gửi bù chứng chỉ trung gian cho các bên còn thiếu"], "ans": 0},
+{"n": 50, "level": "VDC", "q": "Vì sao thời hạn hiệu lực của chứng chỉ TLS công khai bị rút ngắn dần qua từng năm, và đánh đổi đi kèm là gì?", "opts": ["Rút ngắn giúp CA thu phí nhiều lần hơn từ mỗi khách hàng sử dụng dịch vụ", "Rút ngắn giảm thiệt hại nếu khóa lộ, đổi lại buộc tự động hoá gia hạn", "Rút ngắn chỉ nhằm ép buộc website chuyển sang dùng chứng chỉ wildcard", "Rút ngắn không kèm đánh đổi nào vì quy trình gia hạn vẫn luôn thủ công"], "ans": 1}
+]
+;
+
+var NHAN_MUC = {
+  NB:  "Nhận biết",
+  TH:  "Thông hiểu",
+  VD:  "Vận dụng",
+  VDC: "Vận dụng cao"
+};
+
+var TIEU_DE_PHAN = {
+  NB:  "Phần A — Nhận biết & Thông hiểu (câu 1–25)",
+  VD:  "Phần B — Vận dụng (câu 26–40)",
+  VDC: "Phần C — Vận dụng cao (câu 41–50)"
+};
+
+function taoQuiz() {
+  var form = FormApp.create(TIEU_DE);
+
+  form.setDescription(MO_TA)
+      .setIsQuiz(true)
+      .setShuffleQuestions(TRON_CAU)
+      .setCollectEmail(true)
+      .setProgressBar(true)
+      .setAllowResponseEdits(false)
+      .setLimitOneResponsePerUser(false);
+
+  var phanDaMo = {};
+
+  for (var i = 0; i < CAU_HOI.length; i++) {
+    var c = CAU_HOI[i];
+
+    // Mở tiêu đề phần khi gặp câu đầu tiên của phần đó.
+    // NB và TH gộp chung một phần nên TH không mở phần mới.
+    var khoaPhan = (c.level === "TH") ? "NB" : c.level;
+    if (!phanDaMo[khoaPhan]) {
+      form.addSectionHeaderItem().setTitle(TIEU_DE_PHAN[khoaPhan]);
+      phanDaMo[khoaPhan] = true;
+    }
+
+    var item = form.addMultipleChoiceItem();
+    var luaChon = [];
+    for (var j = 0; j < c.opts.length; j++) {
+      luaChon.push(item.createChoice(c.opts[j], j === c.ans));
+    }
+
+    item.setTitle("Câu " + c.n + ". " + c.q)
+        .setHelpText("[" + NHAN_MUC[c.level] + "]")
+        .setChoices(luaChon)
+        .setPoints(1)
+        .setRequired(true);
+  }
+
+  Logger.log("Đã tạo %s câu hỏi.", CAU_HOI.length);
+  Logger.log("Link CHỈNH SỬA form  : %s", form.getEditUrl());
+  Logger.log("Link GỬI người làm   : %s", form.getPublishedUrl());
+  Logger.log("NHỚ KIỂM TRA: Cài đặt (⚙️) -> tab Câu đố -> Công bố điểm = " +
+      "'Ngay khi nộp bài', và tick đủ Câu hỏi bị bỏ lỡ / Câu trả lời đúng / " +
+      "Giá trị điểm — FormApp không đặt được mục này qua code.");
+}

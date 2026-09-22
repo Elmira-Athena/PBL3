@@ -66,6 +66,11 @@ HS_RATE_ALB=0.0252        # APS1, không phải $0.0225 của us-east-1
 HS_RATE_NAT=0.0590        # APS1, không phải $0.045 của us-east-1
 HS_RATE_EIP_IDLE=0.005
 HS_RATE_EC2=0.0132        # t3.micro APS1
+# Interface VPC Endpoint tính theo ENI-giờ, KHÔNG theo endpoint. Mỗi endpoint
+# đặt 1 ENI vào MỖI subnet được khai, nên 2 endpoint ECR × 2 app subnet = 4 ENI
+# ≈ $0,04/giờ. Đây là con số NIÊM YẾT ($0,01/ENI-giờ ở APS1), chưa phải số đo —
+# khác với HS_RATE_ALB/NAT bên trên. Cộng thêm $0,01/GB xử lý, không tính ở đây.
+HS_RATE_VPCE=0.01         # mỗi ENI-giờ, APS1 — giá niêm yết, chưa đối chiếu hoá đơn
 # ⚠️ HAI SỐ DƯỚI ĐÂY ĐO TRÊN sqlserver-ex/db.t3.micro/gp2 VÀ CỐ Ý CHƯA SỬA SAU
 # KHI CHUYỂN POSTGRESQL (đợt 7). Chúng đáng tin CHÍNH VÌ là số đo, không phải số
 # ước lượng — thay bằng một con số đoán là biến bảng chi phí từ "đã đo" thành

@@ -67,3 +67,9 @@ variable "enable_deny_demo" {
   type        = bool
   default     = false
 }
+
+variable "enable_ecr_endpoints" {
+  description = "Dựng 2 interface VPC Endpoint cho ECR (ecr.api + ecr.dkr). ~$0,04/giờ (4 ENI × $0,01) + $0,01/GB. KHÔNG được enable_nat che chắn — apply là tính tiền ngay. Đổi lại: pull image không cần NAT và không ra Internet"
+  type        = bool
+  default     = false
+}

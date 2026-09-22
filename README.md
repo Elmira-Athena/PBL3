@@ -1,248 +1,237 @@
-# HushStore — IT Hardware E-commerce & Management System
+# HushStore
 
-Hệ thống thương mại điện tử và quản lý phần cứng IT, xây dựng trên ASP.NET Core 10 (API) + Blazor WebAssembly (Frontend) + PostgreSQL 17.
+**Production-shaped AWS infrastructure for a .NET 10 e-commerce platform — built with Terraform, deployed by GitHub Actions with zero long-lived credentials, and verified by tests and captured evidence rather than by assertion.**
+
+🇻🇳 Bản tiếng Việt: **[README.vi.md](README.vi.md)** · All design documents in [`docs/`](docs/) are written in Vietnamese.
 
 ---
 
-## Kiến trúc
+| | |
+|---|---|
+| **Application** | ASP.NET Core 10 Web API · Blazor WebAssembly · PostgreSQL 17 · EF Core |
+| **Infrastructure** | Terraform (8 modules, ~6,300 lines HCL) on AWS `ap-southeast-1` |
+| **Compute** | ECS on EC2 launch type · 4 container images · one-off tasks for migrate & seed |
+| **Network** | 3-tier VPC across 2 AZ, one Network ACL per tier, no public IP on app tier |
+| **CI/CD** | GitHub Actions + OIDC — **no AWS access key exists anywhere** |
+| **Testing** | 109 `terraform test` assertions across 12 files · 12 security scenarios with raw output committed |
+| **Cost control** | Every billable resource behind a toggle · nightly shutdown Lambda · cost telemetry in `status.sh` |
 
-Hạ tầng dựng hoàn toàn bằng **Terraform** (`infra/tf/`), chạy trên **ECS EC2
-launch type** — container thật, nhưng vẫn là EC2 instance thật.
+> **Note on placeholders.** This README uses `<AWS_ACCOUNT_ID>`, `<YOUR_IP>` and `<ALERT_EMAIL>` where the working tree holds real values. `terraform.tfvars` is git-ignored by design; only `*.tfvars.example` is committed.
 
-    Internet
-      │
-      ├── Cloudflare DNS (proxied, Full strict)
-      │
-      ▼
-    VPC 10.20.0.0/16 — 3 tier × 2 AZ, mỗi tier một Network ACL riêng
-      │
-      ├── public tier   ALB (ACM cert, listener 80→443) + 2 NAT Gateway (mỗi AZ một)
-      │                 └── allowlist Host header; Host lạ → 403
-      │
-      ├── app tier      EC2 t3.micro, KHÔNG public IP, ECS container instance
-      │                 ├── container web  nginx :80   (Blazor WASM bake trong image)
-      │                 ├── container api  .NET :8080
-      │                 └── one-off task   migrator (EF bundle) · seeder (psql 17)
-      │
-      └── db tier       RDS PostgreSQL 17 Multi-AZ, isolated, chỉ nhận :5432 từ app tier
+---
 
-**Không có SSH.** Hệ thống không có key pair nào và không có Security Group rule
-nào mở port 22. Truy cập quản trị đi qua **SSM Session Manager** (vào host) và
-**ECS Exec** (vào trong container).
+## Why this repo is worth reading
 
-**Không có credential dài hạn nào.** Đã kiểm chứng từ bên trong container đang
-chạy: 0 static AWS key trong env, 0 file `.env` trên disk; credential đến từ ECS
-task role qua `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`, connection string do ECS
-inject từ SSM Parameter Store.
+Most portfolio projects prove that infrastructure *can be created*. This one is organised around a harder question: **how do you know it is correct, and how do you know it stayed correct?**
 
-| Tier | Rule vào | Rule ra |
+Three things follow from that, and they are the parts worth your time:
+
+1. **Security properties live in code, not in a lucky console session.** The entire stack was destroyed on one AWS account (132 resources) and rebuilt from the same Terraform on a blank account. All 12 security scenarios produced identical results — see [`docs/security-validation-report.md`](docs/security-validation-report.md) and the raw command output in [`docs/evidence/`](docs/evidence/).
+2. **Cost is treated as a design constraint, not an afterthought.** NAT Gateway and ALB have no free tier and bill by the hour. Every such resource sits behind an explicit toggle that defaults to *off*, and a Lambda enforces the default nightly in case a human forgets.
+3. **Claims are qualified.** Where something has been measured, this README says on what date and what configuration. Where it has *not*, it says so — see [Known limitations](#known-limitations). A green `terraform apply` is not evidence that a system works, and this repo does not treat it as such.
+
+---
+
+## Architecture
+
+```
+                         Internet
+                            │
+                   Cloudflare DNS (proxied, Full strict)
+                            │
+    ┌───────────────────────▼────────────────────────────────────────────┐
+    │  VPC 10.20.0.0/16 — 3 tiers × 2 AZ, one Network ACL per tier       │
+    │                                                                    │
+    │  public tier   ALB (ACM cert, 80→443 redirect)                     │
+    │                └─ Host-header allowlist; unknown Host → 403         │
+    │                2 × NAT Gateway (one per AZ)                        │
+    │                            │                                       │
+    │  app tier      EC2 t3.micro — NO public IP, ECS container instance  │
+    │                ├─ container  web       nginx :80  (Blazor WASM)    │
+    │                ├─ container  api       .NET :8080                  │
+    │                └─ one-off    migrator (EF bundle) · seeder (psql)   │
+    │                            │                                       │
+    │  db tier       RDS PostgreSQL 17 Multi-AZ — isolated,              │
+    │                accepts :5432 from app tier only, egress empty      │
+    └────────────────────────────────────────────────────────────────────┘
+```
+
+### Security group matrix
+
+| Tier | Ingress | Egress |
 |---|---|---|
-| ALB | 80, 443 ← `0.0.0.0/0` | chỉ tới `sg-web` cổng 80 và 8080 |
-| app | 80, 8080 ← **chỉ từ `sg-alb`** | 5432 → `sg-rds`, 80/443 → internet (ECR, SSM) |
-| db | 5432 ← **chỉ từ `sg-web`** | **rỗng** |
+| ALB | 80, 443 ← `0.0.0.0/0` | only to `sg-web` on 80 and 8080 |
+| app | 80, 8080 ← **`sg-alb` only** | 5432 → `sg-rds`; 80/443 → internet (ECR, SSM) |
+| db  | 5432 ← **`sg-web` only** | **empty** |
+
+**There is no SSH.** No key pair exists and no security group rule opens port 22. Administrative access goes through **SSM Session Manager** (to the host) and **ECS Exec** (into the container). This was verified by scanning the ALB from an external host — see [`docs/evidence/`](docs/evidence/).
+
+**There are no long-lived credentials.** Verified from inside a running container: zero static AWS keys in the environment, zero `.env` files on disk. Credentials arrive from the ECS task role via `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`; the connection string is injected by ECS from SSM Parameter Store.
 
 ---
 
-## Tài liệu cho người mới
+## Infrastructure as Code
 
-Mục lục đầy đủ: **[docs/README.md](docs/README.md)** — bảng "tôi muốn X thì mở file nào", thứ tự đọc, và ba điều cần biết trước khi chạy lệnh.
-
-**Sơ đồ hệ thống** — hai bản, cùng bộ icon AWS 2026, mở bằng
-[app.diagrams.net](https://app.diagrams.net) hoặc extension *Draw.io Integration*
-của VS Code:
-
-- [hushstore-aws-don-gian.drawio](docs/diagrams/hushstore-aws-don-gian.drawio) —
-  **3 trang, để in báo cáo và làm slide.** Trang 1 vừa khổ A4 ngang, trang 2 và 3
-  vừa slide 16:9.
-- [hushstore-aws-2026.drawio](docs/diagrams/hushstore-aws-2026.drawio) —
-  **5 trang, đầy đủ mọi resource, để tra cứu.** Mở nó ra **trước** khi đọc tài
-  liệu, và để mở bên cạnh.
-
-Ba tài liệu dành cho thành viên chưa dùng AWS, đọc theo thứ tự:
-
-1. **[thiet-ke-he-thong-aws.md](docs/thiet-ke-he-thong-aws.md)** — *cái gì* và
-   *vì sao thiết kế vậy*. Có phần kiến thức nền về mạng máy tính và AWS ở đầu,
-   rồi giải thích từng thành phần, và đối chiếu với yêu cầu đề bài. Trong đó mục
-   **"Linux — hệ điều hành chạy bên dưới tất cả"** đọc được độc lập: ba bản phân
-   phối trong một hệ thống, thứ tự boot và deadlock đã gặp thật, swap,
-   namespace/cgroup, và vì sao không có port 22 mà vẫn vào được máy.
-2. **[nhat-ky-trien-khai.md](docs/nhat-ky-trien-khai.md)** — *làm thế nào*. Cách
-   doanh nghiệp triển khai hạ tầng và vì sao, nhật ký 10 giai đoạn với bảng cấu
-   hình cụ thể từng resource, và 12 issue chính đã gặp kèm bài học.
-3. **[bao-mat-he-thong.md](docs/bao-mat-he-thong.md)** — *vì sao nó chặn được*.
-   Bảy lớp phòng thủ và điều mỗi lớp làm được mà lớp khác không làm được, bảng
-   12 tấn công → lớp chặn → lớp dự phòng, danh sách thẳng thắn những gì hệ thống
-   **không** chặn được, và mục **câu hỏi phản biện** kèm câu trả lời. Đọc mục này
-   trước khi bảo vệ.
-
-Hai tài liệu nữa, đọc khi cần:
-
-- **[cicd-cho-nguoi-moi.md](docs/cicd-cho-nguoi-moi.md)** — CI/CD giải thích từ
-  con số không: workflow/job/step/runner là gì, vì sao dùng OIDC thay vì secret,
-  vì sao tag bằng git SHA, và cách đọc một lần chạy để biết **có deploy hay
-  chưa**. Đọc được độc lập với AWS.
-- **[doc-code-terraform.md](docs/doc-code-terraform.md)** — bản đồ 68 file trong
-  `infra/tf/`: bảy khối cú pháp HCL cần biết, đọc module theo thứ tự nào, và ba
-  chỗ dễ hiểu sai trong code này.
-
-Chưa từng dùng AWS: bắt đầu ở **Phần VI — Lộ trình học** của tài liệu số 1. Nó
-gắn từng thành phần trong hệ thống với workshop tiếng Việt tương ứng trên
-[cloudjourney.awsstudygroup.com](https://cloudjourney.awsstudygroup.com/vi/), kèm
-lộ trình 3 tuần và ghi rõ ba chỗ workshop **không** dạy mà đồ án cần.
-
-## Deploy lên AWS
-
-Toàn bộ quy trình nằm ở **[docs/terraform-runbook.md](docs/terraform-runbook.md)**
-— bật/tắt, deploy phiên bản mới, rollback, seed, chẩn đoán sự cố, và chi phí.
-
-Đường dùng hằng ngày là bốn script ở [infra/tf/scripts/](infra/tf/scripts/):
-
-```bash
-bash infra/tf/scripts/up.sh          # bật đủ để mở browser (~8-12 phút)
-bash infra/tf/scripts/status.sh -w   # đang chạy gì, bao lâu rồi, tốn bao nhiêu
-bash infra/tf/scripts/down.sh        # tắt sạch rồi tự kiểm chứng (~6-8 phút)
-bash infra/tf/scripts/nuke.sh        # terraform destroy — hỏi xác nhận
+```
+infra/tf/
+├── bootstrap/              S3 state backend, versioned + encrypted (chicken-and-egg layer)
+├── envs/prod/              root module — composes the eight modules below
+├── modules/
+│   ├── network/            VPC, 3×2 subnets, route tables, NACLs, flow logs, ECR endpoints
+│   ├── security/           security groups — the matrix above
+│   ├── storage/            4 × ECR repo, S3 assets, S3 ALB logs, S3 artifacts
+│   ├── data/               RDS PostgreSQL 17, subnet group, SSM parameters
+│   ├── ecs/                cluster, ASG, launch template, 4 task definitions, 2 services, IAM
+│   ├── alb/                ALB, ACM cert, listeners, target groups, Host allowlist
+│   ├── cicd/               GitHub OIDC provider + 2 IAM roles (deploy, plan)
+│   └── costguard/          Lambda + EventBridge Scheduler + SNS + Budgets
+└── scripts/                up.sh · down.sh · status.sh · nuke.sh · wait-for-capacity.sh
 ```
 
-`status.sh` in ý muốn (`terraform.tfvars`) cạnh thực tế (AWS API), kèm đồng hồ
-cho từng resource và chi phí đã phát sinh. Bật/tắt mất nhiều phút và
-`terraform apply` xanh **không** có nghĩa là hệ thống dùng được, nên đây là thứ
-trả lời câu "xong chưa".
-
-Ba điều cần biết trước khi chạy bất cứ thứ gì:
-
-**Mặc định NAT Gateway và ALB đều tắt.** Cả hai tính theo giờ và không có bậc free
-tier. Bật khi làm việc, tắt ngay khi xong. Giữa hai cửa sổ làm việc, domain cố ý
-không hoạt động.
-
-**Thứ tự bật là ràng buộc, không phải khuyến nghị.** RDS phải `available` trước
-khi bật ECS service, và phải chạy `infra/tf/scripts/wait-for-capacity.sh` sau khi
-apply — `terraform apply` xanh không có nghĩa là instance đã đăng ký vào cluster.
-Runbook giải thích vì sao.
-
-**Migration là gate của deploy.** Nó chạy như một one-off ECS task; exit code khác
-0 thì không deploy, bản cũ vẫn phục vụ. `MigrateAsync()` lúc app khởi động đã bị
-xoá khỏi `Program.cs`.
+**Testing.** `terraform test` runs **109 `run` blocks across 12 test files** with no AWS credentials and no state access. The assertions encode the security invariants directly — NACLs are stateless so return traffic must be allowed explicitly, no security group may open 22, IAM policies must stay least-privilege. Run them with:
 
 ```bash
-# Profile `hushstore` dùng IAM user thuần trên account 551897327153 — KHÔNG phải
-# SSO, nên không cần `aws sso login`. Kiểm tra credential còn dùng được:
-aws sts get-caller-identity --profile hushstore
-terraform -chdir=infra/tf/envs/prod init
-bash infra/tf/scripts/up.sh
+for m in infra/tf/modules/*/; do terraform -chdir="$m" init -backend=false && terraform -chdir="$m" test; done
 ```
 
-Thư mục **[infra/legacy-cli/](infra/legacy-cli/)** chứa bộ script bash + AWS CLI
-của kỳ trước, giữ lại làm spec tham chiếu. **Đừng chạy lại chúng** — chúng tạo
-resource nằm ngoài Terraform state, và chúng mở port 22 kèm SSH key pair.
+**Two decisions worth calling out:**
 
-**Một Lambda tắt hạ tầng mỗi đêm, có chủ ý.** `hushstore-cost-guard` chạy lúc
-00:00 giờ Việt Nam, tắt được RDS + EC2 container instance + ECS service nếu bị
-bỏ quên bật — nhưng **không** tắt được NAT Gateway và ALB, vì hai resource đó
-do Terraform quản lý và xoá bằng API sẽ làm lệch state. Sau khi Lambda chạy,
-hoá đơn giảm ~41% (còn ~$0.1512/giờ), không phải về $0. ⚠️ Tỉ lệ này **giảm
-so với trước đợt 7** (khi đó là 55%) — không phải Lambda kém đi, mà vì phần nó
-**không** chạm tới được đã phình ra: 2 NAT + ALB = $0.1432/giờ, tự nó đã là 95%
-của hoá đơn sau khi Lambda chạy. Muốn về gần $0 thì phải `down.sh`. Nó cũng là thứ chặn rủi
-ro AWS tự bật lại một RDS đã `stopped` sau 7 ngày. Gate bằng
-`var.enable_auto_stop` (mặc định `true`) — tắt biến này là bỏ luôn lưới an
-toàn đó. Chi tiết ở mục "Tự tắt hằng đêm" trong
-[docs/terraform-runbook.md](docs/terraform-runbook.md).
+- **`terraform plan` is deliberately absent from PR CI.** `plan` must read state, and Terraform state contains the RDS master password in plaintext (`random_password` always lands in state — that is Terraform's nature, not a misconfiguration here). On a `pull_request` trigger the OIDC `sub` claim cannot distinguish a maintainer's PR from a fork's. Rather than accept a blurred boundary around the DB password, the plan role carries an **explicit `Deny` on `s3:GetObject`** — the constraint lives in IAM, so it holds even if someone later adds a workflow that calls `plan`. The upgrade path (GitHub Environments with required reviewers) is documented in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+- **Trust policies use `StringEquals`, never `StringLike`.** A wildcard in an OIDC `sub` condition is how a repository named similarly to yours assumes your role.
+- **State locking uses the S3 backend's native lockfile** (`use_lockfile = true`, Terraform ≥ 1.10) rather than a DynamoDB table — one less billed resource and one less thing to drift.
+- **ECR repositories are `IMMUTABLE` with `scan_on_push`.** Because tags are git SHAs and can never be overwritten, rolling back by pointing at an older task-definition revision is genuinely trustworthy: that revision's image is byte-for-byte what was tested.
 
 ---
 
 ## CI/CD
 
-Deploy = push vào `main`. Hai workflow ở
-[.github/workflows/](.github/workflows/):
+Deploy is `git push` to `main`. Two workflows in [`.github/workflows/`](.github/workflows/):
 
-- **[deploy.yml](.github/workflows/deploy.yml)** — chạy khi push `main` (hoặc
-  `workflow_dispatch`): build 4 image, sinh script migration, rồi migrate +
-  deploy nếu hạ tầng đang bật.
-- **[ci.yml](.github/workflows/ci.yml)** — chạy trên PR và các nhánh khác:
-  `terraform fmt`/`validate`/`test`, và `dotnet build`.
+| Workflow | Trigger | Does |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | PR, push to `main`, manual | `terraform fmt` → `validate` → `test`, and `dotnet build` |
+| [`deploy.yml`](.github/workflows/deploy.yml) | push to `main`, manual | build 4 images → generate migration SQL → preflight → migrate → deploy |
 
-**Không còn credential dài hạn nào.** GitHub không giữ secret AWS nào — mỗi
-job xin một OIDC token ngắn hạn do GitHub ký, AWS đổi thành credential tạm 1
-giờ. Trước Phase 2, deploy đi bằng `EC2_SSH_KEY`, một private key không hết
-hạn nằm trong GitHub Secrets.
+**No AWS secret is stored in GitHub.** Each job requests a short-lived OIDC token signed by GitHub; AWS exchanges it for a 1-hour credential. The previous iteration deployed over SSH using an `EC2_SSH_KEY` private key in GitHub Secrets that never expired — removing that was the single largest security improvement in the project.
 
-**Pipeline không tự bật hạ tầng.** Push khi stack đang tắt vẫn xanh và vẫn
-push đủ 4 image lên ECR, nhưng chưa deploy — summary của job nói rõ điều đó.
-Lý do: mỗi giờ bật tốn ~$0.2544 (2 NAT $0.1180 + ALB $0.0252 + EC2 $0.0132 +
-RDS $0.098 — số RDS là **cận trên đo trên SQL Server**, PostgreSQL Multi-AZ
-niêm yết $0.051, chưa xác nhận bằng hoá đơn thật) nên để pipeline tự bật là chi phí không có
-trần; IAM role của nó cũng không có quyền `autoscaling:SetDesiredCapacity`
-hay `rds:StartDBInstance`.
+**Migration is the deploy gate.** It runs as a one-off ECS task. Non-zero exit means no deploy and the previous version keeps serving. `MigrateAsync()` at application startup was deliberately removed from `Program.cs` — running migrations from N application replicas at boot is a race, and it couples schema change to process restart.
 
-Migration vẫn là gate của deploy — xem mục "Deploy lên AWS" ở trên. Chi tiết
-đầy đủ (rollback, deploy tay, việc tay cấu hình GitHub) nằm ở
-**[docs/terraform-runbook.md](docs/terraform-runbook.md)**.
+**The pipeline will not start infrastructure.** Pushing while the stack is down still succeeds and still pushes all four images to ECR, but stops before deploy and says so in the job summary. Running hours cost real money, so an auto-starting pipeline is an unbounded bill; the deploy role also lacks `autoscaling:SetDesiredCapacity` and `rds:StartDBInstance`, so the restriction is enforced in IAM rather than in YAML.
+
+**Images are tagged by git SHA**, never `latest` — so a running task can always be traced back to a commit, and a rollback is a tag change rather than a rebuild.
 
 ---
 
-## Development (local)
+## Cost engineering
+
+This ran on a shared AWS account with a \$100 credit budget, which turned cost into an engineering constraint rather than a footnote. It is, unexpectedly, the part of the project that produced the most transferable lessons.
+
+- **Every billable resource is behind a toggle defaulting to off.** `enable_nat`, `enable_alb`, `instance_count`, `enable_flow_logs`. The toggles are separate from `max_instance_count`, which is a *ceiling* (free) rather than a *state* (billed) — conflating those two is how a blast radius grows silently.
+- **`hushstore-cost-guard`** — a Python Lambda on EventBridge Scheduler, firing at 00:00 ICT. It stops RDS, the EC2 container instance and the ECS services if a human left them running. It deliberately does **not** touch NAT Gateway or ALB: those are Terraform-managed, and deleting them via API would drift state. It also defends against RDS auto-restarting a `stopped` instance after 7 days.
+- **Honest accounting of what the guard achieves.** After it runs, the bill drops **~41%**, to roughly \$0.1512/hour — *not* to zero. That percentage fell from 55% earlier in the project, and the reason matters: the guard did not get worse, the part it cannot touch got bigger (2 NAT + ALB = \$0.1432/h, i.e. 95% of the post-guard bill). Getting close to \$0 requires `down.sh`.
+- **`status.sh` prints intent beside reality** — the values in `terraform.tfvars` next to what the AWS API actually reports, with a per-resource uptime clock and accrued cost. Because `terraform apply` returning green does not mean the system is usable, this is the script that answers "is it up yet?".
+
+---
+
+## Day-2 operations
+
+Full procedures — start/stop, deploying a version, rollback, seeding, incident diagnosis, cost — are in **[`docs/terraform-runbook.md`](docs/terraform-runbook.md)**.
 
 ```bash
-# Khởi động PostgreSQL 17
-# Chỉ định rõ `postgres`: file compose còn service `sqlserver` của đợt trước,
-# gõ thiếu tên service là bật cả hai và tốn RAM vô ích.
-docker compose -f Infrastructure/db/docker-compose.yml up -d postgres
-
-# Chạy API (https://localhost:7010)
-dotnet run --project src/API/API.csproj
-
-# Chạy Blazor WASM (https://localhost:7107)
-dotnet run --project src/Client/Client.csproj
-
-# Tạo migration mới
-dotnet ef migrations add <TênMigration> --project src/Infrastructure --startup-project src/API
-
-# Áp dụng migrations
-dotnet ef database update --project src/Infrastructure --startup-project src/API
+bash infra/tf/scripts/up.sh          # bring up enough to serve traffic (~8–12 min)
+bash infra/tf/scripts/status.sh -w   # what is running, for how long, at what cost
+bash infra/tf/scripts/down.sh        # tear down, then self-verify (~6–8 min)
+bash infra/tf/scripts/nuke.sh        # terraform destroy — prompts for confirmation
 ```
 
----
+Three constraints that are not optional:
 
-## Troubleshooting
-
-### Trên AWS
-
-Xem bảng "Sự cố thường gặp" trong
-**[docs/terraform-runbook.md](docs/terraform-runbook.md)** — nó liệt kê hiện
-tượng, nguyên nhân và cách xử lý cho 13 sự cố đã gặp thật, kèm cả hai trường hợp
-dễ đọc sai: gọi ALB bằng tên DNS thô trả **403** là *đúng thiết kế* (allowlist Host
-header), còn trả **503** mới là lỗi.
-
-Log và cách vào hệ thống:
+- **Start order is a dependency, not a suggestion.** RDS must reach `available` before the ECS service starts, and `wait-for-capacity.sh` must run after apply — a green apply does not mean the instance has registered with the cluster.
+- **Between working windows the domain is intentionally offline.** NAT and ALB are off. This is the default state.
+- **Do not enable `enable_read_replica` and walk away.** With a replica present, AWS refuses to stop the primary, which disables both `down.sh` and the cost guard. `down.sh` destroys the replica first; `status.sh` prints a red line when it sees one — but both only run when a human types them.
 
 ```bash
+# Logs and shell access — no SSH, no certbot (ACM issues and renews TLS at the ALB)
 aws logs tail /ecs/hushstore-api --since 15m --follow --profile hushstore
 aws ecs execute-command --cluster hushstore --task <arn> --container api \
   --interactive --command /bin/sh --profile hushstore
 ```
 
-Không dùng `ssh` và không dùng `certbot` — TLS do ACM cấp và ALB terminate, gia
-hạn tự động.
+---
 
-### Local
+## Verification & evidence
 
-**API không start:**
+| What | Where | Status |
+|---|---|---|
+| 12 security scenarios (port scan, direct DB access, SSH, IAM blast radius, OIDC spoofing, rate limiting, Host allowlist, NACL, flow logs, cost guard) | [`docs/security-validation-report.md`](docs/security-validation-report.md), raw output in [`docs/evidence/`](docs/evidence/) | 12/12 pass, measured 2026-08-24 — see caveat below |
+| Terraform module assertions | [`infra/tf/modules/*/tests/`](infra/tf/) | 109 `run` blocks, executed in CI on every PR |
+| Application correctness under concurrency | [`tools/LoadProbe/`](tools/LoadProbe/), [`docs/evidence/loadprobe/`](docs/evidence/loadprobe/) | 9/9 invariants hold at both 1 and 2 instances |
+| Rebuild-from-scratch reproducibility | [`docs/security-validation-report.md`](docs/security-validation-report.md) | Stack destroyed (132 resources) and rebuilt on a blank account; identical results |
+
+**`tools/LoadProbe/` is not a load-testing tool.** It fires concurrent requests and then asserts invariants with LINQ against the database, because every data-correctness bug found in this project returned HTTP 200. Vouchers exceeding their limit, duplicated ledger entries, two tickets on one serial — all "succeeded" at the HTTP layer. It also distinguishes `INCONCLUSIVE` from `PASS`: a scenario blocked by the rate limiter satisfies every invariant because the code under test never ran, which is false assurance and worse than no evidence.
+
+---
+
+## Known limitations
+
+Stated plainly, because a DevOps reviewer will find them anyway and because the reasoning is more interesting than a clean-looking list.
+
+- **The 12 security scenarios were measured against SQL Server on port 1433**, before the PostgreSQL 17 migration changed it to 5432 and added a second NAT Gateway plus Multi-AZ. The *shape* of every rule is unchanged ("exactly one DB port, from the app tier only"), so the conclusions almost certainly hold — but *almost certainly* is not *measured*, and this repo does not round that up.
+- **The RDS hourly rate (`$0.098`) is a SQL Server measurement** carried forward as an upper bound. PostgreSQL Multi-AZ lists at \$0.051. It stays unchanged until a real invoice confirms it.
+- **Single application instance by default.** Running two requires the rate-limit counter to be shared across tasks first; `terraform validate` blocks raising `max_instance_count` without also setting `rate_limiter_is_distributed`, so the unsafe state is not representable. The distributed counter has since been implemented and measured — see [`docs/evidence/2026-09-06-rate-limit-dung-chung.md`](docs/evidence/2026-09-06-rate-limit-dung-chung.md).
+- **No automated test suite for application code.** `tools/LoadProbe/` covers concurrency invariants; conventional unit tests do not exist. This is a real gap, not a considered trade-off.
+- **A read replica exists in code but nothing reads from it.** Enabling it adds a billed instance without relieving the primary. It is there to demonstrate the topology, not to serve traffic.
+
+---
+
+## Running it locally
+
 ```bash
-docker compose -f Infrastructure/db/docker-compose.yml ps
-dotnet run --project src/API/API.csproj
+# PostgreSQL 17 — name the service explicitly; the compose file still carries a
+# sqlserver service from an earlier iteration
+docker compose -f Infrastructure/db/docker-compose.yml up -d postgres
+
+dotnet run --project src/API/API.csproj       # https://localhost:7010
+dotnet run --project src/Client/Client.csproj # https://localhost:7107
+
+dotnet ef migrations add <Name> --project src/Infrastructure --startup-project src/API
+dotnet ef database update      --project src/Infrastructure --startup-project src/API
 ```
 
-**Lỗi kết nối PostgreSQL:**
+Multi-replica local stack (for anything that only breaks with more than one process — account lockout, boot-time seeding, sessions hopping instances):
+
 ```bash
-docker compose -f Infrastructure/db/docker-compose.yml logs --tail=50
+docker compose -f devops/docker/docker-compose.multi.yml up -d   # 2 replicas behind nginx
 ```
 
-Nếu mật khẩu trong `.env` không có tác dụng, khả năng cao volume cũ vẫn còn dữ
-liệu của lần chạy trước — `POSTGRES_PASSWORD` chỉ có tác dụng khi khởi tạo volume
-mới. Xoá bằng `docker volume rm hushstore_postgres_data`.
+**Deploying to AWS** requires the `hushstore` profile (a plain IAM user — not SSO, so no `aws sso login`):
 
-**Schema chưa có:**
 ```bash
-dotnet ef database update --project src/Infrastructure --startup-project src/API
+aws sts get-caller-identity --profile hushstore
+terraform -chdir=infra/tf/envs/prod init
+bash infra/tf/scripts/up.sh
 ```
+
+---
+
+## Repository map
+
+| Path | Contents |
+|---|---|
+| [`infra/tf/`](infra/tf/) | Terraform — 8 modules, root env, bootstrap, operational scripts |
+| [`.github/workflows/`](.github/workflows/) | `ci.yml` (validate + test + build) · `deploy.yml` (build → migrate → deploy) |
+| [`devops/`](devops/) | Local compose stacks, nginx config, CI guard scripts |
+| [`src/`](src/) | Application — Core · Shared · Infrastructure · Service · API · Client |
+| [`tools/LoadProbe/`](tools/LoadProbe/) | Concurrency invariant harness |
+| [`docs/`](docs/) | Design, runbook, security report, deployment journal (Vietnamese) |
+| [`infra/legacy-cli/`](infra/legacy-cli/) | Previous bash + AWS CLI deployment. **Reference only — do not run.** It creates resources outside Terraform state and opens port 22 with an SSH key pair. |
+
+**Documentation starting points** (all Vietnamese — full index at [`docs/README.md`](docs/README.md)):
+
+- [`docs/thiet-ke-he-thong-aws.md`](docs/thiet-ke-he-thong-aws.md) — *what* and *why*, from networking fundamentals up
+- [`docs/nhat-ky-trien-khai.md`](docs/nhat-ky-trien-khai.md) — *how*: 10-phase deployment journal, 12 real incidents with lessons
+- [`docs/bao-mat-he-thong.md`](docs/bao-mat-he-thong.md) — 7 defence layers, 12 attacks → blocking layer → fallback, and what the system does **not** stop
+- [`docs/terraform-runbook.md`](docs/terraform-runbook.md) — operational procedures
+- [`docs/cicd-cho-nguoi-moi.md`](docs/cicd-cho-nguoi-moi.md) — CI/CD from zero: why OIDC over secrets, why tag by git SHA
+
+Architecture diagrams (AWS 2026 icon set, open with [app.diagrams.net](https://app.diagrams.net)): [`docs/diagrams/`](docs/diagrams/) — a 3-page version for slides and a 5-page version with every resource.

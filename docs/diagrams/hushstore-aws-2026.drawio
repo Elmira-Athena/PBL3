@@ -67,14 +67,26 @@
         <mxCell id="dbb" value="db-b · 10.20.21.0/24" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_security_group;grStroke=0;strokeColor=#147EBA;fillColor=#E6F2F8;verticalAlign=top;align=left;spacingLeft=30;fontColor=#147EBA;dashed=0;" vertex="1" parent="1">
           <mxGeometry x="813" y="900" width="372" height="200" as="geometry" />
         </mxCell>
-        <mxCell id="nat" value="NAT Gateway&lt;br&gt;+ EIP" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.nat_gateway;" vertex="1" parent="1">
+        <mxCell id="nat2" value="NAT Gateway 2/2&lt;br&gt;+ EIP · AZ-b" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.nat_gateway;" vertex="1" parent="1">
+          <mxGeometry x="843" y="428" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="rdsb" value="RDS standby&lt;br&gt;Multi-AZ · đồng bộ" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#C925D1;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;opacity=60;shape=mxgraph.aws4.rds_postgresql_instance;" vertex="1" parent="1">
+          <mxGeometry x="843" y="945" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="ecrep" value="ECR Interface Endpoint ×2&lt;br&gt;ecr.api + ecr.dkr" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.endpoint;" vertex="1" parent="1">
+          <mxGeometry x="1218" y="1200" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="ecrepn" value="enable_ecr_endpoints — MẶC ĐỊNH TẮT, và là resource DUY NHẤT tính tiền ngay khi apply (không được enable_nat che chắn): 4 ENI × $0,01/giờ = $0,04/giờ. Bật thì pull image không qua NAT, không ra Internet.&lt;br&gt;Chỉ dựng 2 cái ECR chứ không đủ bộ 7 cái: 7 endpoint × 2 AZ ≈ $0,14/giờ, ĐẮT HƠN cả 2 NAT Gateway ($0,118) — mà vẫn phải giữ NAT." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="620" y="1200" width="580" height="68" as="geometry" />
+        </mxCell>
+        <mxCell id="nat" value="NAT Gateway 1/2&lt;br&gt;+ EIP · AZ-a" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.nat_gateway;" vertex="1" parent="1">
           <mxGeometry x="428" y="428" width="52" height="52" as="geometry" />
         </mxCell>
         <mxCell id="alb" value="Application Load Balancer&lt;br&gt;TLS 1.2/1.3 · 2 target group" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.application_load_balancer;" vertex="1" parent="1">
           <mxGeometry x="756" y="435" width="70" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="pbn" value="Node thứ hai của ALB nằm ở AZ này — ALB bắt buộc ≥ 2 AZ. Nhưng CHỈ 1 NAT Gateway cho cả VPC: max_size = 1 nên không bao giờ có instance ở 2 AZ cùng lúc." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
-          <mxGeometry x="843" y="428" width="330" height="74" as="geometry" />
+        <mxCell id="pbn" value="nat_gateway_count = 2 (ghim trong envs/prod/variables.tf): MỖI AZ một NAT Gateway + EIP riêng, và private route table của mỗi AZ trỏ vào NAT của CHÍNH AZ đó. Mất AZ-a thì app subnet ở đây vẫn có egress. Giá: +$0,059/giờ." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="915" y="420" width="258" height="92" as="geometry" />
         </mxCell>
         <mxCell id="asg" value="Auto Scaling Group · min 0 / max 1" style="points=[[0,0],[0.25,0],[0.5,0],[0.75,0],[1,0],[1,0.25],[1,0.5],[1,0.75],[1,1],[0.75,1],[0.5,1],[0.25,1],[0,1],[0,0.75],[0,0.5],[0,0.25]];outlineConnect=0;gradientColor=none;html=1;whiteSpace=wrap;fontSize=12;fontStyle=0;shape=mxgraph.aws4.group;grIcon=mxgraph.aws4.group_auto_scaling_group;grStroke=1;strokeColor=#D86613;fillColor=none;verticalAlign=top;align=left;spacingLeft=30;fontColor=#D86613;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="410" y="625" width="350" height="225" as="geometry" />
@@ -85,16 +97,16 @@
         <mxCell id="ec2n" value="instance_count&lt;br&gt;= 0 hoặc 1&lt;br&gt;(0 = xoá cả EBS)" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=9;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
           <mxGeometry x="405" y="752" width="100" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="cweb" value="web · nginx :80  (bundle Blazor WASM)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="cweb" value="task web · nginx :80 — thuộc ECS Service hushstore-web" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="518" y="660" width="232" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="capi" value="api · .NET 10 :8080" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="capi" value="task api · .NET 10 :8080 — thuộc ECS Service hushstore-api" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="518" y="690" width="232" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="cmig" value="migrator · EF bundle (chạy 1 lần rồi thoát)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="cmig" value="task migrator · EF bundle — run-task, KHÔNG có Service" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="518" y="720" width="232" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="csee" value="seeder · nạp dữ liệu mẫu (chạy 1 lần)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="csee" value="task seeder · dữ liệu mẫu — run-task, KHÔNG có Service" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="518" y="750" width="232" height="26" as="geometry" />
         </mxCell>
         <mxCell id="bridgen" value="network_mode = bridge, host port TĨNH 80 và 8080 → sg-web chỉ cần 2 rule, không phải mở dải 32768-65535." style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=9;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
@@ -103,14 +115,14 @@
         <mxCell id="apbn" value="ASG khai báo CẢ hai app subnet. AZ-a hết capacity thì instance mới lên ở đây, không phải sửa gì. Bình thường AZ này rỗng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="843" y="640" width="330" height="74" as="geometry" />
         </mxCell>
-        <mxCell id="rds" value="RDS SQL Server&lt;br&gt;Express · db.t3.micro" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#C925D1;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.rds_sql_server_instance;" vertex="1" parent="1">
+        <mxCell id="rds" value="RDS PostgreSQL 17&lt;br&gt;db.t4g.micro · gp3 20GB" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#C925D1;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.rds_postgresql_instance;" vertex="1" parent="1">
           <mxGeometry x="428" y="945" width="52" height="52" as="geometry" />
         </mxCell>
-        <mxCell id="rdsn" value="publicly_accessible = false  ·  chỉ nghe :1433  ·  TLS bắt buộc (TrustServerCertificate = False)" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=9;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
+        <mxCell id="rdsn" value="publicly_accessible = false  ·  chỉ nghe :5432  ·  SSL Mode=VerifyFull + Root Certificate (bundle CA của AWS)" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=9;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
           <mxGeometry x="405" y="1038" width="350" height="44" as="geometry" />
         </mxCell>
-        <mxCell id="dbbn" value="DB subnet group của RDS bắt buộc 2 AZ nên subnet này PHẢI tồn tại. Nhưng SQL Server Express KHÔNG hỗ trợ Multi-AZ → không có standby ở đây." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
-          <mxGeometry x="843" y="950" width="330" height="74" as="geometry" />
+        <mxCell id="dbbn" value="enable_multi_az = true (ghim trong envs/prod/variables.tf) → standby ĐỒNG BỘ của RDS nằm ở AZ này, tự failover. Standby KHÔNG phục vụ đọc — đây là tính sẵn sàng, không phải read scaling.&lt;br&gt;&lt;br&gt;Cái giá: storage tính tiền ở CẢ HAI AZ, kể cả khi instance đã stopped." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="915" y="928" width="258" height="120" as="geometry" />
         </mxCell>
         <mxCell id="naclh" value="Network ACL" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;fontSize=12;fontColor=#3B4A57;align=left;verticalAlign=top;" vertex="1" parent="1">
           <mxGeometry x="1218" y="330" width="160" height="20" as="geometry" />
@@ -124,16 +136,16 @@
         <mxCell id="nacl_pub" value="nacl-public&lt;br&gt;IN  100 allow 80&lt;br&gt;IN  110 allow 443&lt;br&gt;IN  120 allow 1024-65535&lt;br&gt;IN  50  DENY var.my_ip&lt;br&gt;OUT 100/110 → app 80/8080&lt;br&gt;OUT 120/125 → 0.0.0.0/0 80/443&lt;br&gt;OUT 130 → 1024-65535" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#8C4FFF;fontColor=#232F3E;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="1218" y="400" width="160" height="138" as="geometry" />
         </mxCell>
-        <mxCell id="nacl_app" value="nacl-app&lt;br&gt;IN  90  DENY 22&lt;br&gt;IN  95  DENY 1433&lt;br&gt;IN  100 allow 80 ← public&lt;br&gt;IN  110 allow 8080 ← public&lt;br&gt;IN  115 DENY 8080 ← mọi nơi&lt;br&gt;IN  120 allow 1024-65535&lt;br&gt;OUT 100 → db 1433&lt;br&gt;OUT 110/115 → 80/443&lt;br&gt;OUT 120 → public 1024-65535&lt;br&gt;&lt;br&gt;rule 90/95/115 tồn tại VÌ&lt;br&gt;rule 120 buộc phải mở&lt;br&gt;dải ephemeral" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#8C4FFF;fontColor=#232F3E;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="nacl_app" value="nacl-app&lt;br&gt;IN  90  DENY 22&lt;br&gt;IN  95  DENY 5432&lt;br&gt;IN  100 allow 80 ← public&lt;br&gt;IN  110 allow 8080 ← public&lt;br&gt;IN  115 DENY 8080 ← mọi nơi&lt;br&gt;IN  120 allow 1024-65535&lt;br&gt;OUT 100 → db 5432&lt;br&gt;OUT 110/115 → 80/443&lt;br&gt;OUT 120 → public 1024-65535&lt;br&gt;&lt;br&gt;rule 90/95/115 tồn tại VÌ&lt;br&gt;rule 120 buộc phải mở&lt;br&gt;dải ephemeral" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#8C4FFF;fontColor=#232F3E;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="1218" y="585" width="160" height="250" as="geometry" />
         </mxCell>
-        <mxCell id="nacl_db" value="nacl-db&lt;br&gt;IN  100 allow 1433 ← app&lt;br&gt;OUT 100 → app 1024-65535&lt;br&gt;&lt;br&gt;Hết. Không rule nào khác.&lt;br&gt;Mọi thứ còn lại: deny." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#8C4FFF;fontColor=#232F3E;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="nacl_db" value="nacl-db&lt;br&gt;IN  100 allow 5432 ← app&lt;br&gt;OUT 100 → app 1024-65535&lt;br&gt;&lt;br&gt;Hết. Không rule nào khác.&lt;br&gt;Mọi thứ còn lại: deny." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#8C4FFF;fontColor=#232F3E;fontSize=9;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="1218" y="900" width="160" height="110" as="geometry" />
         </mxCell>
         <mxCell id="mz" value="Dịch vụ AWS quản lý — KHÔNG có địa chỉ IP trong VPC" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#5A6C7D;fontColor=#3B4A57;fontSize=11;dashed=1;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="1420" y="200" width="570" height="1070" as="geometry" />
         </mxCell>
-        <mxCell id="ecs" value="ECS Cluster&lt;br&gt;hushstore" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecs;" vertex="1" parent="1">
+        <mxCell id="ecs" value="ECS Cluster hushstore&lt;br&gt;capacity provider = ASG" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecs;" vertex="1" parent="1">
           <mxGeometry x="1462" y="262" width="52" height="52" as="geometry" />
         </mxCell>
         <mxCell id="ecr" value="ECR ×4&lt;br&gt;api·web·migrator·seeder" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecr;" vertex="1" parent="1">
@@ -178,6 +190,15 @@
         <mxCell id="bud" value="AWS Budgets&lt;br&gt;ngưỡng chi phí" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.budgets_2;" vertex="1" parent="1">
           <mxGeometry x="1842" y="790" width="52" height="52" as="geometry" />
         </mxCell>
+        <mxCell id="svcweb" value="ECS Service&lt;br&gt;hushstore-web" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecs_service;" vertex="1" parent="1">
+          <mxGeometry x="1462" y="922" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="svcapi" value="ECS Service&lt;br&gt;hushstore-api" style="sketch=0;outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecs_service;" vertex="1" parent="1">
+          <mxGeometry x="1652" y="922" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="taskdefn" value="4 TASK DEFINITION&lt;br&gt;api · web (có Service, desired = instance_count)&lt;br&gt;migrator · seeder (chạy bằng run-task, KHÔNG có Service)" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+          <mxGeometry x="1790" y="915" width="190" height="110" as="geometry" />
+        </mxCell>
         <mxCell id="mzn" value="VÌ SAO CÁC DỊCH VỤ NÀY VẼ NGOÀI VPC&lt;br&gt;Chúng là dịch vụ AWS quản lý, gọi qua API endpoint công khai — không nằm trong dải 10.20.0.0/16, nên Security Group và Network ACL KHÔNG kiểm soát được chúng. Lớp phòng thủ cho nhóm này là IAM: role nào được gọi API nào.&lt;br&gt;Hệ quả cụ thể: EC2 trong app subnet muốn PULL image từ ECR thì phải đi qua NAT Gateway ra Internet. Riêng S3 đi qua S3 Gateway Endpoint (miễn phí) nên vẫn hoạt động khi NAT đã tắt." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#5A6C7D;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="1440" y="1050" width="530" height="200" as="geometry" />
         </mxCell>
@@ -199,7 +220,7 @@
         <mxCell id="e3" value="nmap -p- → chỉ 80, 443 mở" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#DD344C;strokeWidth=2;dashPattern=8 4;" edge="1" parent="1" source="atk" target="alb">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e4" value=":22 · :1433 · :8080 → chặn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#DD344C;strokeWidth=2;dashPattern=8 4;endArrow=cross;" edge="1" parent="1" source="atk" target="nacl_app">
+        <mxCell id="e4" value=":22 · :5432 · :8080 → chặn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;dashed=1;strokeColor=#DD344C;strokeWidth=2;dashPattern=8 4;endArrow=cross;" edge="1" parent="1" source="atk" target="nacl_app">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeColor=#8C4FFF;endArrow=none;strokeWidth=2;" edge="1" parent="1" source="igw" target="alb">
@@ -214,7 +235,7 @@
         <mxCell id="e8" value="tg-api :8080&lt;br&gt;Host = api.hushstore.io.vn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#248814;" edge="1" parent="1" source="alb" target="capi">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e9" value=":1433" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#C925D1;" edge="1" parent="1" source="capi" target="rds">
+        <mxCell id="e9" value=":5432" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#C925D1;" edge="1" parent="1" source="capi" target="rds">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e10" value="egress: pull ECR, SSM, yum" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeColor=#ED7100;" edge="1" parent="1" source="ec2" target="nat">
@@ -324,7 +345,7 @@
         <mxCell id="s7" value="⑦ nacl-app · INBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="50" y="734" width="340" height="78" as="geometry" />
         </mxCell>
-        <mxCell id="s7x" value="Chốt quan trọng nhất của cả sơ đồ. Rule 90 DENY 22 và rule 95 DENY 1433 đứng TRƯỚC rule 120 (allow 1024-65535 ← mọi nơi). Rule 120 buộc phải có để nhận traffic trả về từ Internet qua NAT — mà 1433 và 8080 nằm TRONG dải đó. Nếu không có 3 rule DENY số nhỏ hơn, rule 120 sẽ vô tình mở SQL Server ra Internet ở tầng NACL." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="s7x" value="Chốt quan trọng nhất của cả sơ đồ. Rule 90 DENY 22 và rule 95 DENY 5432 đứng TRƯỚC rule 120 (allow 1024-65535 ← mọi nơi). Rule 120 buộc phải có để nhận traffic trả về từ Internet qua NAT — mà 5432 và 8080 nằm TRONG dải đó. Nếu không có 3 rule DENY số nhỏ hơn, rule 120 sẽ vô tình mở PostgreSQL ra Internet ở tầng NACL." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="410" y="734" width="590" height="78" as="geometry" />
         </mxCell>
         <mxCell id="f6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s6" target="s7">
@@ -351,7 +372,7 @@
         <mxCell id="s10" value="⑩ nacl-app · OUTBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="50" y="1046" width="340" height="78" as="geometry" />
         </mxCell>
-        <mxCell id="s10x" value="Rule 100: cho 1433 đi tới db tier (10.20.20.0/23). Chỉ tới db tier — không phải 0.0.0.0/0." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="s10x" value="Rule 100: cho 5432 đi tới db tier (10.20.20.0/23). Chỉ tới db tier — không phải 0.0.0.0/0." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="410" y="1046" width="590" height="78" as="geometry" />
         </mxCell>
         <mxCell id="f9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s9" target="s10">
@@ -360,7 +381,7 @@
         <mxCell id="s11" value="⑪ sg-web · EGRESS" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EAF6EC;strokeColor=#248814;fontColor=#1B6310;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="50" y="1150" width="340" height="78" as="geometry" />
         </mxCell>
-        <mxCell id="s11x" value="1433 → sg-rds. Cộng thêm 80/443 ra 0.0.0.0/0 cho việc pull image và gọi SSM. Đây là chỗ duy nhất kiểm soát được egress của instance: NAT Gateway KHÔNG gắn được Security Group, khác với NAT instance." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="s11x" value="5432 → sg-rds. Cộng thêm 80/443 ra 0.0.0.0/0 cho việc pull image và gọi SSM. Đây là chỗ duy nhất kiểm soát được egress của instance: NAT Gateway KHÔNG gắn được Security Group, khác với NAT instance." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="410" y="1150" width="590" height="78" as="geometry" />
         </mxCell>
         <mxCell id="f10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s10" target="s11">
@@ -369,13 +390,13 @@
         <mxCell id="s12" value="⑫ nacl-db · INBOUND  +  sg-rds · INBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="50" y="1254" width="340" height="78" as="geometry" />
         </mxCell>
-        <mxCell id="s12x" value="nacl-db có ĐÚNG một rule mỗi chiều: vào 1433 từ app tier, ra 1024-65535 về app tier. sg-rds: ingress 1433 từ sg-web, egress RỖNG. Hai lớp độc lập cùng nói một điều — và cần cả hai, vì NACL lọc theo CIDR còn SG lọc theo danh tính SG." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="s12x" value="nacl-db có ĐÚNG một rule mỗi chiều: vào 5432 từ app tier, ra 1024-65535 về app tier. sg-rds: ingress 5432 từ sg-web, egress RỖNG. Hai lớp độc lập cùng nói một điều — và cần cả hai, vì NACL lọc theo CIDR còn SG lọc theo danh tính SG." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="410" y="1254" width="590" height="78" as="geometry" />
         </mxCell>
         <mxCell id="f11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#232F3E;" edge="1" parent="1" source="s11" target="s12">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="s13" value="⑬ RDS SQL Server" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="s13" value="⑬ RDS PostgreSQL 17" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="50" y="1358" width="340" height="78" as="geometry" />
         </mxCell>
         <mxCell id="s13x" value="publicly_accessible = false, subnet không có route 0.0.0.0/0. Kết nối bắt buộc TLS: connection string đặt TrustServerCertificate = False, nên container phải có sẵn CA gốc của Amazon RDS — đó là lý do Dockerfile gọi update-ca-certificates." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
@@ -408,7 +429,7 @@
         <mxCell id="r3" value="→ nacl-app INBOUND" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#F3EDFF;strokeColor=#8C4FFF;fontColor=#4B2E93;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="1030" y="830" width="470" height="34" as="geometry" />
         </mxCell>
-        <mxCell id="r3x" value="Đây là chỗ rule 120 phải tồn tại. Và chính vì nó tồn tại nên mới cần rule 95 DENY 1433 đứng trước." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="r3x" value="Đây là chỗ rule 120 phải tồn tại. Và chính vì nó tồn tại nên mới cần rule 95 DENY 5432 đứng trước." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="1030" y="866" width="470" height="62" as="geometry" />
         </mxCell>
         <mxCell id="rr2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;fontSize=10;fontColor=#232F3E;labelBackgroundColor=#ffffff;strokeWidth=2;strokeColor=#8C4FFF;" edge="1" parent="1" source="r2x" target="r3">
@@ -625,7 +646,7 @@
         <mxCell id="on" value="TRẠNG THÁI BẬT  =  $0,1954 / giờ" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFF7E6;strokeColor=#D86613;fontColor=#8A4B0A;fontSize=13;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;fontStyle=1;align=center;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
           <mxGeometry x="860" y="110" width="480" height="470" as="geometry" />
         </mxCell>
-        <mxCell id="onl" value="Khoản tính theo giờ:&lt;br&gt;• NAT Gateway  $0,045/giờ + $0,045/GB&lt;br&gt;• ALB  $0,0225/giờ + LCU&lt;br&gt;• EC2 t3.micro&lt;br&gt;• RDS db.t3.micro (+ CPU credit surplus)&lt;br&gt;&lt;br&gt;Account 551897327153 KHÔNG có free tier 12 tháng — đã kiểm bằng cách liệt kê free tier: chỉ có nhóm Always Free, không có dòng nào '12 Months Free'.&lt;br&gt;&lt;br&gt;NAT Gateway là khoản đắt nhất và KHÔNG có bậc free tier nào cả. Đó là lý do down.sh không phải tuỳ chọn.&lt;br&gt;&lt;br&gt;Bật 3 giờ/ngày ≈ $18/tháng. Bật 24/7 ≈ $140/tháng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
+        <mxCell id="onl" value="Khoản tính theo giờ:&lt;br&gt;• NAT Gateway  $0,045/giờ + $0,045/GB&lt;br&gt;• ALB  $0,0225/giờ + LCU&lt;br&gt;• EC2 t3.micro&lt;br&gt;• RDS db.t4g.micro (+ CPU credit surplus)&lt;br&gt;&lt;br&gt;Account 551897327153 KHÔNG có free tier 12 tháng — đã kiểm bằng cách liệt kê free tier: chỉ có nhóm Always Free, không có dòng nào '12 Months Free'.&lt;br&gt;&lt;br&gt;NAT Gateway là khoản đắt nhất và KHÔNG có bậc free tier nào cả. Đó là lý do down.sh không phải tuỳ chọn.&lt;br&gt;&lt;br&gt;Bật 3 giờ/ngày ≈ $18/tháng. Bật 24/7 ≈ $140/tháng." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C6CDD4;fontColor=#3B4A57;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">
           <mxGeometry x="880" y="150" width="440" height="410" as="geometry" />
         </mxCell>
         <mxCell id="up" value="up.sh — THỨ TỰ BẮT BUỘC&lt;br&gt;① RDS trước tiên, và CHỜ tới trạng thái available&lt;br&gt;② NAT + ALB (instance vẫn để 0)&lt;br&gt;③ instance — chỉ SAU khi NAT đã có đường ra&lt;br&gt;④ chờ instance đăng ký được vào ECS cluster&lt;br&gt;&lt;br&gt;Vì sao ③ phải sau ②: instance mới lên sẽ pull image từ ECR. Không có NAT thì không pull được, task fail, ECS thử lại vòng vòng — và thông báo lỗi không nói gì về NAT." style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#EEF0F3;strokeColor=#3B4A57;fontColor=#232F3E;fontSize=10;dashed=0;fontStyle=0;verticalAlign=middle;align=left;spacingLeft=8;spacingRight=8;" vertex="1" parent="1">

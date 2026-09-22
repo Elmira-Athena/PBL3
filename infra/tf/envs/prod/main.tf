@@ -27,6 +27,10 @@ module "network" {
   nat_gateway_count   = var.nat_gateway_count
   enable_flow_logs    = var.enable_flow_logs
   enable_deny_demo    = var.enable_deny_demo
+
+  # Công tắc TÍNH TIỀN, không được enable_nat che chắn. Xem lý do ở
+  # modules/network/vpc.tf, khối "ECR INTERFACE ENDPOINTS".
+  enable_ecr_endpoints = var.enable_ecr_endpoints
 }
 
 module "security" {

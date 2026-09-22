@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(curl -s \"https://provinces.open-api.vn/api/v2/p\")",
+      "Bash(curl -sv \"https://provinces.open-api.vn/api/v2/p\")",
+      "Bash(dotnet ef *)",
+      "Bash(grep -E \"^.*\\(error|Error|warning.*VoucherList|warning.*VoucherForm\\).*$\")",
+      "Bash(git -C /Users/ml/Athena/Code/PBL3 status)",
+      "Bash(git -C /Users/ml/Athena/Code/PBL3 log --oneline)"
+    ]
+  }
+}

@@ -87,3 +87,18 @@ output "db_tier_cidr" {
   description = "CIDR /23 gộp của db tier"
   value       = local.db_tier_cidr
 }
+
+output "ecr_endpoint_ids" {
+  description = "ID của 2 interface endpoint ECR. Rỗng khi enable_ecr_endpoints = false"
+  value       = { for k, v in aws_vpc_endpoint.ecr : k => v.id }
+}
+
+output "ecr_endpoint_count" {
+  description = "Số interface endpoint ECR đang dựng (0 hoặc 2) — dùng cho status.sh tính tiền đúng"
+  value       = length(aws_vpc_endpoint.ecr)
+}
+
+output "vpce_sg_id" {
+  description = "ID Security Group của interface endpoint. Rỗng khi enable_ecr_endpoints = false"
+  value       = var.enable_ecr_endpoints ? aws_security_group.vpce[0].id : ""
+}

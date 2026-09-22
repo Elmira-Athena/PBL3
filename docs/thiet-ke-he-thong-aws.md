@@ -351,6 +351,39 @@ người apply cùng lúc thì người thứ hai bị chặn, tránh hỏng h�
 
 **Provider.** Thư viện biết cách nói chuyện với AWS. Ta dùng AWS provider 6.60.
 
+### Hai môi trường — tách bằng THƯ MỤC, không phải workspace
+
+```
+infra/tf/envs/
+├── prod/   key = "prod/terraform.tfstate"   project = hushstore       10.20.0.0/16
+└── dev/    key = "dev/terraform.tfstate"    project = hushstore-dev   10.30.0.0/16
+```
+
+`envs/dev/main.tf` và `outputs.tf` là **symlink** sang `envs/prod/`. Cố ý: hai
+môi trường phải dựng **cùng một kiến trúc**, khác nhau ở *giá trị* chứ không ở
+*cấu trúc*. Chép 200 dòng `main.tf` sang là tạo hai nguồn sự thật — và loại lỗi
+sinh ra từ đó là loại tệ nhất: dev xanh, prod đỏ, vì một `module` block chỉ được
+thêm ở một bên.
+
+Toàn bộ khác biệt nằm gọn trong `dev/variables.tf`. Thêm một `var` mới vào
+`prod/main.tf` mà quên khai ở dev thì `terraform validate` của dev **đỏ** — hỏng
+to tiếng, có chủ ý, và CI chạy validate cho `envs/*/` nên nó bị chặn ngay ở PR.
+
+**Vì sao không dùng `terraform workspace`:** workspace dùng chung một backend key
+và một file cấu hình, phân biệt bằng `terraform.workspace` rải khắp code. Quên
+`workspace select` một lần là apply thẳng vào prod — không có ranh giới cứng nào
+chặn. Thư mục thì `cd` sai là thấy ngay, và `backend.tf` khai key khác nhau nên
+state không thể lẫn.
+
+**Dev cố ý rẻ hơn prod:** `nat_gateway_count = 1` (prod 2), `enable_multi_az =
+false` (prod true), `enable_budget = false` — vì dev tồn tại để thử một thay đổi
+Terraform *trước khi* đụng vào prod, không phải để chứng minh tính sẵn sàng cao.
+
+⚠️ Còn nợ: bộ script `up.sh`/`down.sh`/`status.sh` hiện hardcode prod
+(`HS_PROJECT=hushstore`, `-chdir=envs/prod`), và 4 repo ECR của dev đang rỗng vì
+`deploy.yml` chỉ push vào repo của prod. Dev dựng được hạ tầng, chưa deploy được
+ứng dụng.
+
 ---
 
 # Phần III — Thiết kế hệ thống HushStore
@@ -480,6 +513,41 @@ con đường nào** từ Internet tới nó.
 **S3 Gateway Endpoint.** Một cửa riêng đi tới S3 ngay trong VPC, miễn phí. Nhờ
 nó, traffic đọc/ghi ảnh sản phẩm không đi qua NAT Gateway — tiết kiệm phí data
 ($0.045/GB) và vẫn hoạt động khi NAT đã bị tắt.
+
+**ECR Interface Endpoint ×2 — `enable_ecr_endpoints`, mặc định TẮT.** Hai cửa
+riêng đi tới ECR (`ecr.api` cho auth token + manifest, `ecr.dkr` cho Docker
+Registry API). Bật thì việc kéo image chạy được **ngay cả khi `enable_nat =
+false`**, và không gói tin nào ra Internet.
+
+Vì sao chỉ 2 cái, không phải đủ bộ 7 như tài liệu AWS thường khuyên
+(`ecr.api`, `ecr.dkr`, `ssm`, `ssmmessages`, `ec2messages`, `logs`,
+`secretsmanager`) — đây là phép tính, không phải cảm tính:
+
+| | số ENI | $/giờ |
+|---|---|---|
+| Đủ bộ 7 endpoint × 2 AZ | 14 | **≈ $0.14** |
+| 2 NAT Gateway hiện dùng | — | $0.118 |
+| Chỉ `ecr.api` + `ecr.dkr` × 2 AZ | 4 | **$0.04** |
+
+Interface endpoint tính tiền **theo ENI**, mà mỗi endpoint đặt một ENI vào *mỗi*
+subnet được khai. Ở 2 AZ, đủ bộ **đắt hơn** cả hai NAT Gateway — và vẫn **không
+thay được NAT**, vì task còn cần egress cho `yum update` và cho API bên ngoài.
+Nên đủ bộ là *cộng thêm* $0.14/giờ chứ không phải *thay thế*.
+
+Hai cái ECR thì khác: phần byte lớn nhất của một lần pull là layer, mà layer nằm
+trên S3 — S3 Gateway Endpoint ở trên đã gánh phần đó **miễn phí** từ trước. Hai
+endpoint này gỡ nốt phần metadata + auth, đổi lấy khả năng pull image mà không
+cần NAT.
+
+> 🚨 **Đây là resource duy nhất trong stack tính tiền mà KHÔNG được
+> `enable_nat` / `enable_alb` / `instance_count` che chắn.** Một `terraform
+> apply` bình thường với công tắc này bật là đồng hồ chạy ngay, kể cả khi mọi
+> thứ khác đã tắt. `status.sh` in một dòng riêng cho nó vì lý do đó.
+>
+> Và `private_dns_enabled` **bắt buộc** `true`. Đặt `false` thì endpoint vẫn
+> dựng, vẫn tính tiền, mà containerd vẫn phân giải tên ECR ra IP công khai rồi
+> đi qua NAT như cũ — trả tiền hai lần, không lỗi, không log. `status.sh` in một
+> dòng **đỏ** khi gặp trạng thái đó.
 
 ## Security Group — firewall stateful, chỉ có danh sách cho phép
 
@@ -1136,6 +1204,7 @@ NAT Gateway và ALB tính theo giờ. Nên hệ thống được thiết kế đ
 | `instance_count` | 0 … `max_instance_count` EC2 | $0.0132/giờ mỗi cái |
 | `enable_flow_logs` | VPC Flow Logs | phí ingest |
 | `enable_deny_demo` | NACL rule 50 | $0 |
+| `enable_ecr_endpoints` | 2 interface endpoint ECR (4 ENI) | **$0.01/giờ mỗi ENI ≈ $0.04** — 🚨 tính tiền ngay khi apply, không đợi `up.sh` |
 
 RDS bật/tắt bằng lệnh riêng, không qua Terraform.
 

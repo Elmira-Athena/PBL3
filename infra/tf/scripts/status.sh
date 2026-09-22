@@ -43,6 +43,13 @@ collect() {
   aws ec2 describe-addresses --filters "Name=tag:Project,Values=${HS_PROJECT}" \
     "${AWSQ[@]}" >"$TMP/eip.json" 2>/dev/null || echo '{}' >"$TMP/eip.json" &
 
+  # Interface VPC Endpoint (ECR). Lọc bỏ Gateway endpoint của S3: nó MIỄN PHÍ
+  # và luôn tồn tại, in nó ra chỉ làm loãng bảng tiền.
+  aws ec2 describe-vpc-endpoints \
+    --filters "Name=tag:Project,Values=${HS_PROJECT}" \
+              "Name=vpc-endpoint-type,Values=Interface" \
+    "${AWSQ[@]}" >"$TMP/vpce.json" 2>/dev/null || echo '{}' >"$TMP/vpce.json" &
+
   aws ec2 describe-instances \
     --filters "Name=tag:Project,Values=${HS_PROJECT}" \
               "Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped" \
@@ -197,6 +204,38 @@ render() {
     fi
   else
     row EIP "0" "-" "-" "-" ""
+  fi
+
+  # ── Interface VPC Endpoint (ECR) ─────────────────────────────
+  # 🚨 Đây là loại resource DUY NHẤT trong stack tính tiền mà KHÔNG được
+  # enable_nat / enable_alb / instance_count che chắn: một `terraform apply`
+  # bình thường với enable_ecr_endpoints = true là đồng hồ chạy ngay, kể cả khi
+  # mọi công tắc khác đang tắt. Nếu nó không có dòng ở đây thì down.sh chạy
+  # xong, bảng báo "tất cả đã tắt", mà tiền vẫn chảy $0,04/giờ.
+  #
+  # Đơn vị tính tiền là ENI, không phải endpoint: mỗi endpoint đặt một ENI vào
+  # MỖI subnet được khai. 2 endpoint × 2 app subnet = 4 ENI.
+  vpce_n="$(jq -r '(.VpcEndpoints // []) | length' "$TMP/vpce.json")"
+  if [ "${vpce_n:-0}" -gt 0 ]; then
+    eni_n="$(jq -r '[.VpcEndpoints[]?.NetworkInterfaceIds[]?] | length' "$TMP/vpce.json")"
+    for i in $(seq 0 $((vpce_n - 1))); do
+      st="$(jq -r --argjson i "$i" '.VpcEndpoints[$i].State // ""' "$TMP/vpce.json")"
+      svc="$(jq -r --argjson i "$i" '.VpcEndpoints[$i].ServiceName // "?" | split(".") | .[3:] | join(".")' "$TMP/vpce.json")"
+      enis="$(jq -r --argjson i "$i" '(.VpcEndpoints[$i].NetworkInterfaceIds // []) | length' "$TMP/vpce.json")"
+      age="$(hs_age "$(jq -r --argjson i "$i" '.VpcEndpoints[$i].CreationTimestamp // ""' "$TMP/vpce.json")")"
+      rate="$(awk -v r="$HS_RATE_VPCE" -v n="${enis:-0}" 'BEGIN { printf "%.4f", r * n }')"
+      c="$(hs_cost "${age:-0}" "$rate")"; add_spent "$c"
+      case "$st" in available) tally up ;; *) tally transit ;; esac
+      # private_dns_enabled = false nghĩa là endpoint vẫn tính tiền mà không ai
+      # dùng nó — traffic ECR vẫn phân giải ra IP công khai rồi đi qua NAT.
+      # Hỏng im lặng, nên phải đỏ ở đây.
+      pdns="$(jq -r --argjson i "$i" '.VpcEndpoints[$i].PrivateDnsEnabled // false' "$TMP/vpce.json")"
+      if [ "$pdns" = "true" ]; then note="${enis:-0} ENI · pull image không qua NAT"
+      else note="${C_RED}private DNS TẮT — trả tiền mà traffic vẫn đi qua NAT${C_RESET}"; fi
+      row "VPCE ${svc}" "$st" "$(hs_hms "${age:-0}")" "$rate" "$c" "$note"
+    done
+  else
+    row "VPC Endpoint (ECR)" "-" "-" "-" "-" "chưa dựng (enable_ecr_endpoints = false) · S3 Gateway Endpoint luôn có và miễn phí"
   fi
 
   # ── EC2 container instance ───────────────────────────────────

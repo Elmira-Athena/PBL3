@@ -217,3 +217,9 @@ variable "stop_cron" {
   type        = string
   default     = "cron(0 0 * * ? *)"
 }
+
+variable "enable_ecr_endpoints" {
+  description = "Dựng 2 interface VPC Endpoint cho ECR. ~$0,04/giờ — TÍNH TIỀN NGAY khi apply, không đợi up.sh. Trả lời góp ý của thầy về VPC Endpoint: chỉ 2 cái ECR có lãi thật, đủ bộ 7 cái đắt hơn cả 2 NAT Gateway"
+  type        = bool
+  default     = false
+}
