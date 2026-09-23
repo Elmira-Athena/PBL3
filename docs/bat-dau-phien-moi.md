@@ -1,5 +1,11 @@
 # Bắt đầu phiên mới — đọc file này trước
 
+> 🎯 **Nếu phiên này mở ra để làm CỬA SỔ ĐO của đợt 7, đọc
+> [`ban-giao-cua-so-do-dot-7.md`](ban-giao-cua-so-do-dot-7.md) thay cho file này.**
+> Nó tự chứa: việc cần làm, trình tự bật/tắt, bẫy đã gặp, chi phí, và định nghĩa
+> "xong". Bước 0 của nó là kiểm xem RDS có tự khởi động lại sau 7 ngày `stopped`
+> hay không — làm trước mọi thứ khác.
+
 > ## 🟢 ĐỢT 7 — ĐÃ CHUYỂN SANG POSTGRESQL 17 (2026-09-05)
 >
 > **Đọc khối này trước phần còn lại của file.** Mọi thứ bên dưới viết khi repo còn chạy SQL
