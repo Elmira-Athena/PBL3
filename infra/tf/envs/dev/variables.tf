@@ -224,8 +224,9 @@ variable "shared_notifications" {
   description = "Ngưỡng cảnh báo ngân sách của người khác dùng chung account. Để rỗng ở dev"
 
   type = list(object({
-    threshold = number
-    emails    = list(string)
+    threshold         = number
+    notification_type = string
+    emails            = list(string)
   }))
 
   default = []

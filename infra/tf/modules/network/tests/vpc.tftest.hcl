@@ -310,11 +310,23 @@ run "bat_thi_dung_2_endpoint_va_private_dns_phai_bat" {
 
   # Mỗi endpoint đặt 1 ENI vào MỖI subnet khai ở đây — đây chính là đơn vị tính
   # tiền. 2 subnet × 2 endpoint = 4 ENI ≈ $0,04/giờ.
+  #
+  # ⚠️ Bản đầu của assertion này viết `length(e.subnet_ids) == 2` và ĐỎ trên CI:
+  # `subnet_ids` là set(string) toàn giá trị unknown ở plan-time, nên `length()`
+  # của nó cũng unknown (set không biết phần tử có trùng nhau không khi chính các
+  # phần tử chưa biết). Đúng cùng một cái bẫy với `route_table_ids` của S3
+  # endpoint ở run "app_subnet_di_internet_qua_nat" phía trên — và cách chữa cũng
+  # là cách đó: kiểm trên MÃ NGUỒN thay vì trên giá trị.
+  #
+  # Bất biến thật sự cần giữ: phải dùng SPLAT. Viết `aws_subnet.app[0].id` thì
+  # endpoint chỉ có ENI ở một AZ — vẫn apply được, vẫn không lỗi, chỉ là AZ kia
+  # mất đường pull image mà không gì báo.
   assert {
-    condition = alltrue([
-      for e in aws_vpc_endpoint.ecr : length(e.subnet_ids) == 2
-    ])
-    error_message = "Endpoint phải nằm ở cả 2 app subnet — một AZ chết thì AZ kia vẫn pull được image."
+    condition = length([
+      for l in split("\n", file("${path.module}/vpc.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "aws_subnet.app[*].id")
+    ]) == 1
+    error_message = "Endpoint phải phủ CẢ 2 app subnet bằng splat `aws_subnet.app[*].id`. Dùng chỉ số cố định là sót một AZ: AZ đó không pull được image mà không có cảnh báo nào."
   }
 }
 
