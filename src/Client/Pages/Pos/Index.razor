@@ -402,6 +402,10 @@
         {
             Snackbar.Add($"Tìm thấy {result.Data.Count} đơn chờ.", Severity.Info);
         }
+        else if (!result.Success)
+        {
+            Snackbar.Add(result.Message, Severity.Error);
+        }
     }
 
     private void ClearScreen()

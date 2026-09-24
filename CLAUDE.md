@@ -154,9 +154,9 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
   chuyện khác — vì vậy `grep -rn 'catch (InvalidOperationException' src/` **phải luôn rỗng**.
   ✅ **Cả ba tầng đã sạch:** Service + API (mục 🅷) và **Client** (mục 🅸, xong 2026-09-01) —
   `0` chỗ chở `ex.Message` của hạ tầng ra cho người dùng. Ở tầng Client, 124 chỗ đã đổi sang câu
-  tiếng Việt cố định **có tính hành động**, và **18/24 client service nay inject `ILogger<T>`**
-  (trước đó `0`; 6 lớp còn lại chưa có: `BuildPc`, `Cart`, `UserAddress`, `Image`,
-  `InventoryExport`, `Review` — đúng 6 lớp còn nhiều vấn đề nhất) — vì "thay chuỗi" mà không log là **vứt sạch chẩn đoán**. Khuôn:
+  tiếng Việt cố định **có tính hành động**, và **20/25 client service nay inject `ILogger<T>`**
+  (trước đó `0`; mục 🅹 thêm `Review` và `ProvinceClientService` mới; 5 lớp còn lại chưa có:
+  `BuildPc`, `Cart`, `UserAddress`, `Image`, `InventoryExport` — đúng 5 lớp còn nhiều vấn đề nhất) — vì "thay chuỗi" mà không log là **vứt sạch chẩn đoán**. Khuôn:
   ```csharp
   catch (Exception ex)
   {
