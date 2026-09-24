@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
+using Client.Services.Common;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Inventory;
 
@@ -37,39 +38,29 @@ namespace Client.Services.Inventory
 
         public async Task<ApiResult<PagedResult<ProductSerialListDto>>> GetPagedListAsync(ProductSerialFilterRequest filter)
         {
-            try
-            {
-                var queryParams = new List<string>();
-                if (!string.IsNullOrWhiteSpace(filter.Keyword))
-                    queryParams.Add($"keyword={Uri.EscapeDataString(filter.Keyword)}");
-                if (filter.ProductId.HasValue)
-                    queryParams.Add($"productId={filter.ProductId}");
-                if (filter.VariantId.HasValue)
-                    queryParams.Add($"variantId={filter.VariantId}");
-                if (filter.Status.HasValue)
-                    queryParams.Add($"status={filter.Status}");
-                if (filter.FromDate.HasValue)
-                    queryParams.Add($"fromDate={filter.FromDate:yyyy-MM-dd}");
-                if (filter.ToDate.HasValue)
-                    queryParams.Add($"toDate={filter.ToDate:yyyy-MM-dd}");
-                queryParams.Add($"pageNumber={filter.PageNumber}");
-                queryParams.Add($"pageSize={filter.PageSize}");
-                if (!string.IsNullOrWhiteSpace(filter.SortBy))
-                    queryParams.Add($"sortBy={Uri.EscapeDataString(filter.SortBy)}");
-                queryParams.Add($"sortDescending={filter.SortDescending}");
+            var queryParams = new List<string>();
+            if (!string.IsNullOrWhiteSpace(filter.Keyword))
+                queryParams.Add($"keyword={Uri.EscapeDataString(filter.Keyword)}");
+            if (filter.ProductId.HasValue)
+                queryParams.Add($"productId={filter.ProductId}");
+            if (filter.VariantId.HasValue)
+                queryParams.Add($"variantId={filter.VariantId}");
+            if (filter.Status.HasValue)
+                queryParams.Add($"status={filter.Status}");
+            if (filter.FromDate.HasValue)
+                queryParams.Add($"fromDate={filter.FromDate:yyyy-MM-dd}");
+            if (filter.ToDate.HasValue)
+                queryParams.Add($"toDate={filter.ToDate:yyyy-MM-dd}");
+            queryParams.Add($"pageNumber={filter.PageNumber}");
+            queryParams.Add($"pageSize={filter.PageSize}");
+            if (!string.IsNullOrWhiteSpace(filter.SortBy))
+                queryParams.Add($"sortBy={Uri.EscapeDataString(filter.SortBy)}");
+            queryParams.Add($"sortDescending={filter.SortDescending}");
 
-                var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
-                var response = await _httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode)
-                    return ApiResult<PagedResult<ProductSerialListDto>>.Fail($"Lỗi HTTP {(int)response.StatusCode}.");
-                var result = await response.Content.ReadFromJsonAsync<ApiResult<PagedResult<ProductSerialListDto>>>();
-                return result ?? ApiResult<PagedResult<ProductSerialListDto>>.Fail("Không thể lấy danh sách Serial.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách serial");
-                return ApiResult<PagedResult<ProductSerialListDto>>.Fail("Không tải được danh sách serial. Vui lòng thử lại.");
-            }
+            var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
+            return await ApiCall.SendAsync<PagedResult<ProductSerialListDto>>(
+                () => _httpClient.GetAsync(url),
+                "tải danh sách serial", _logger);
         }
 
         public async Task<ApiResult<ProductSerialStatisticsDto>> GetStatisticsAsync(int? productId = null, int? variantId = null)

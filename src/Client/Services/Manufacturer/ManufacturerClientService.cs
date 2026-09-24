@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
@@ -19,62 +20,38 @@ namespace Client.Services.Manufacturer
 
         public async Task<ApiResult<PagedResult<ManufacturerDto>>> GetListAsync(ManufacturerFilterRequest request)
         {
-            try
-            {
-                var queryParams = new List<string>();
+            var queryParams = new List<string>();
 
-                if (!string.IsNullOrWhiteSpace(request.Keyword))
-                    queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
+            if (!string.IsNullOrWhiteSpace(request.Keyword))
+                queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
 
-                queryParams.Add($"PageNumber={request.PageNumber}");
-                queryParams.Add($"PageSize={request.PageSize}");
+            queryParams.Add($"PageNumber={request.PageNumber}");
+            queryParams.Add($"PageSize={request.PageSize}");
 
-                if (!string.IsNullOrWhiteSpace(request.SortBy))
-                    queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
-                if (request.SortDescending)
-                    queryParams.Add("SortDescending=true");
+            if (!string.IsNullOrWhiteSpace(request.SortBy))
+                queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
+            if (request.SortDescending)
+                queryParams.Add("SortDescending=true");
 
-                var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
+            var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
 
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<PagedResult<ManufacturerDto>>>(url);
-                return result ?? ApiResult<PagedResult<ManufacturerDto>>.Fail("Không thể tải danh sách hãng sản xuất.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách hãng sản xuất");
-                return ApiResult<PagedResult<ManufacturerDto>>.Fail("Không tải được danh sách hãng sản xuất. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<PagedResult<ManufacturerDto>>(
+                () => _httpClient.GetAsync(url),
+                "tải danh sách hãng sản xuất", _logger);
         }
 
         public async Task<ApiResult<List<ManufacturerSummaryDto>>> GetDropdownAsync()
         {
-            try
-            {
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<List<ManufacturerSummaryDto>>>($"{BaseUrl}/dropdown");
-                return result ?? ApiResult<List<ManufacturerSummaryDto>>.Fail("Không thể tải danh sách hãng.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải hãng sản xuất cho ô chọn");
-                return ApiResult<List<ManufacturerSummaryDto>>.Fail("Không tải được danh sách hãng sản xuất. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<List<ManufacturerSummaryDto>>(
+                () => _httpClient.GetAsync($"{BaseUrl}/dropdown"),
+                "tải hãng sản xuất cho ô chọn", _logger);
         }
 
         public async Task<ApiResult<ManufacturerDto>> GetByIdAsync(int id)
         {
-            try
-            {
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<ManufacturerDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<ManufacturerDto>.Fail("Không tìm thấy hãng sản xuất.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin hãng sản xuất");
-                return ApiResult<ManufacturerDto>.Fail("Không tải được thông tin hãng sản xuất. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<ManufacturerDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải thông tin hãng sản xuất", _logger);
         }
 
         public async Task<ApiResult<ManufacturerDto>> CreateAsync(CreateManufacturerRequest request)

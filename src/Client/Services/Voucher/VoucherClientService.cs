@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
@@ -19,50 +20,36 @@ namespace Client.Services.Voucher
 
         public async Task<ApiResult<PagedResult<VoucherDto>>> GetListAsync(VoucherFilterRequest request)
         {
-            try
-            {
-                var queryParams = new List<string>();
+            var queryParams = new List<string>();
 
-                if (!string.IsNullOrWhiteSpace(request.Keyword))
-                    queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
-                if (!string.IsNullOrWhiteSpace(request.StatusFilter))
-                    queryParams.Add($"StatusFilter={Uri.EscapeDataString(request.StatusFilter)}");
-                if (request.FromDate.HasValue)
-                    queryParams.Add($"FromDate={Uri.EscapeDataString(request.FromDate.Value.ToString("o"))}");
-                if (request.ToDate.HasValue)
-                    queryParams.Add($"ToDate={Uri.EscapeDataString(request.ToDate.Value.ToString("o"))}");
+            if (!string.IsNullOrWhiteSpace(request.Keyword))
+                queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
+            if (!string.IsNullOrWhiteSpace(request.StatusFilter))
+                queryParams.Add($"StatusFilter={Uri.EscapeDataString(request.StatusFilter)}");
+            if (request.FromDate.HasValue)
+                queryParams.Add($"FromDate={Uri.EscapeDataString(request.FromDate.Value.ToString("o"))}");
+            if (request.ToDate.HasValue)
+                queryParams.Add($"ToDate={Uri.EscapeDataString(request.ToDate.Value.ToString("o"))}");
 
-                queryParams.Add($"PageNumber={request.PageNumber}");
-                queryParams.Add($"PageSize={request.PageSize}");
+            queryParams.Add($"PageNumber={request.PageNumber}");
+            queryParams.Add($"PageSize={request.PageSize}");
 
-                if (!string.IsNullOrWhiteSpace(request.SortBy))
-                    queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
-                if (request.SortDescending)
-                    queryParams.Add("SortDescending=true");
+            if (!string.IsNullOrWhiteSpace(request.SortBy))
+                queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
+            if (request.SortDescending)
+                queryParams.Add("SortDescending=true");
 
-                var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<VoucherDto>>>(url);
-                return result ?? ApiResult<PagedResult<VoucherDto>>.Fail("Không thể tải danh sách voucher.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách mã giảm giá");
-                return ApiResult<PagedResult<VoucherDto>>.Fail("Không tải được danh sách mã giảm giá. Vui lòng thử lại.");
-            }
+            var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
+            return await ApiCall.SendAsync<PagedResult<VoucherDto>>(
+                () => _httpClient.GetAsync(url),
+                "tải danh sách mã giảm giá", _logger);
         }
 
         public async Task<ApiResult<VoucherDto>> GetByIdAsync(int id)
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<VoucherDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<VoucherDto>.Fail("Không tìm thấy voucher.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin mã giảm giá");
-                return ApiResult<VoucherDto>.Fail("Không tải được thông tin mã giảm giá. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<VoucherDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải thông tin mã giảm giá", _logger);
         }
 
         public async Task<ApiResult<VoucherDto>> CreateAsync(CreateVoucherRequest request)

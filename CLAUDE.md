@@ -164,12 +164,16 @@ JWT Bearer: 15-min access token + 7-day refresh token. Three roles: `Admin`, `Em
       return ApiResult<T>.Fail("Không tải được danh sách nhà cung cấp. Vui lòng thử lại.");
   }
   ```
-  ⚠️ **Còn một biến thể CHƯA đóng ở tầng Client** (mục 🅹): **`GetFromJsonAsync` tự gọi
-  `EnsureSuccessStatusCode` bên trong**, nên **35** lời gọi GET vẫn **vứt thân phản hồi** — câu
-  tiếng Việt server soạn mất trắng. Mục 🅸 chỉ làm chúng đỡ hơn (câu cố định thay chuỗi EF), không
-  đóng được. **Viết client service mới thì dùng `ApiCall.SendAsync`**
+  🟡 **Mục 🅹 — code đã đổi, CHƯA build, CHƯA đo bằng mắt** (nhánh `fix/muc-J-apicall-get`):
+  **`GetFromJsonAsync` tự gọi `EnsureSuccessStatusCode` bên trong**, nên nó **vứt thân phản hồi**
+  — câu tiếng Việt server soạn mất trắng. Quy mô thật là **40** lời gọi (35 `.cs` + 5 `.razor`),
+  không phải 35 như bản trước ghi — cùng điểm mù `.razor` của §6.4. Nay `grep -rn
+  GetFromJsonAsync src/Client/` → **0**. **Viết client service mới thì dùng `ApiCall.SendAsync`**
   (`src/Client/Services/Common/`) — nó đọc thân phản hồi để lấy đúng câu đó, phân biệt
   `HttpRequestException` với `TaskCanceledException`, và có sẵn ánh xạ `409`.
+  🚨 **Luôn truyền `_logger`**: `ApiCall` tự nuốt exception, nên bỏ `catch` ở client service mà
+  không truyền logger là vứt sạch chẩn đoán. Truyền cả `cancellationToken` nếu có — huỷ do người
+  gọi được ném lại, không bị báo nhầm thành "máy chủ phản hồi quá lâu".
 - **Chốt chống hồi quy — chạy `devops/scripts/check-error-message-leaks.sh`** cho **cả ba tầng**
   (nay quét cả `.razor`: bản trước chỉ quét `src/Client/**/*.cs` nên mù 108 file `.razor`,
   nơi còn 15 chỗ rò rỉ thật — xem `docs/nhat-ky-sua-loi-nang-cap.md` §6.4)
@@ -476,7 +480,7 @@ primary ⇒ `down.sh` và cost guard mất tác dụng, mà RDS còn tự khởi
 `down.sh` đã tự huỷ replica trước khi stop, `status.sh` in một dòng đỏ khi thấy replica — nhưng
 cả hai chỉ chạy khi có người gõ.
 
-Còn lại: **mục 🅹** (35 lời gọi GET chuyển sang `ApiCall.SendAsync`), **nửa HẠ TẦNG của đợt 4**
+Còn lại: **mục 🅹** (40 lời gọi GET — code đã chuyển sang `ApiCall.SendAsync`, còn chờ `dotnet build` + một lần đo bằng mắt ép `400`), **nửa HẠ TẦNG của đợt 4**
 (chờ review), **phần còn lại của cửa sổ đo đợt 7** (failover Multi-AZ · `ReplicaLag`
 · đối chiếu `HS_RATE_RDS_UP` với hoá đơn), và **đợt 5 → 6**.
 

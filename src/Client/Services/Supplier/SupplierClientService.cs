@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
@@ -20,47 +21,31 @@ namespace Client.Services.Supplier
 
         public async Task<ApiResult<PagedResult<SupplierDto>>> GetListAsync(SupplierFilterRequest request)
         {
-            try
-            {
-                var queryParams = new List<string>();
+            var queryParams = new List<string>();
 
-                if (!string.IsNullOrWhiteSpace(request.Keyword))
-                    queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
+            if (!string.IsNullOrWhiteSpace(request.Keyword))
+                queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
 
-                queryParams.Add($"PageNumber={request.PageNumber}");
-                queryParams.Add($"PageSize={request.PageSize}");
+            queryParams.Add($"PageNumber={request.PageNumber}");
+            queryParams.Add($"PageSize={request.PageSize}");
 
-                if (!string.IsNullOrWhiteSpace(request.SortBy))
-                    queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
-                if (request.SortDescending)
-                    queryParams.Add("SortDescending=true");
+            if (!string.IsNullOrWhiteSpace(request.SortBy))
+                queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
+            if (request.SortDescending)
+                queryParams.Add("SortDescending=true");
 
-                var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
+            var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
 
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<PagedResult<SupplierDto>>>(url);
-                return result ?? ApiResult<PagedResult<SupplierDto>>.Fail("Không thể tải danh sách nhà cung cấp.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách nhà cung cấp");
-                return ApiResult<PagedResult<SupplierDto>>.Fail("Không tải được danh sách nhà cung cấp. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<PagedResult<SupplierDto>>(
+                () => _httpClient.GetAsync(url),
+                "tải danh sách nhà cung cấp", _logger);
         }
 
         public async Task<ApiResult<SupplierDto>> GetByIdAsync(int id)
         {
-            try
-            {
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<SupplierDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<SupplierDto>.Fail("Không tìm thấy nhà cung cấp.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin nhà cung cấp");
-                return ApiResult<SupplierDto>.Fail("Không tải được thông tin nhà cung cấp. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<SupplierDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải thông tin nhà cung cấp", _logger);
         }
 
         public async Task<ApiResult<SupplierDto>> CreateAsync(CreateSupplierRequest request)

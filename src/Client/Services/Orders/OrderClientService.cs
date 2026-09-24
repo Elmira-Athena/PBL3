@@ -55,7 +55,7 @@ namespace Client.Services.Orders
                 // thành công bằng một trang rỗng. Xem Client/Services/Common/ApiCall.cs.
                 return await ApiCall.SendAsync<PagedResult<OrderSummaryResponse>>(
                     () => _httpClient.GetAsync($"/api/orders{queryString}"),
-                    "tải danh sách đơn hàng");
+                    "tải danh sách đơn hàng", _logger);
             }
         }
 

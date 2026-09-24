@@ -65,7 +65,7 @@ builder.Services.AddHttpClient(TokenRefreshCoordinator.RawClientName, client =>
 });
 
 // HttpClient cho Provinces API (public, không cần auth)
-builder.Services.AddHttpClient("ProvincesAPI", client =>
+builder.Services.AddHttpClient(Client.Services.Address.ProvinceClientService.HttpClientName, client =>
 {
     client.BaseAddress = new Uri("https://provinces.open-api.vn");
 });
@@ -103,5 +103,6 @@ builder.Services.AddScoped<Client.Services.Reviews.IReviewClientService, Client.
 builder.Services.AddScoped<IBannerClientService, BannerClientService>();
 builder.Services.AddScoped<IComparisonService, ComparisonService>();
 builder.Services.AddScoped<IInventoryCheckClientService, InventoryCheckClientService>();
+builder.Services.AddScoped<Client.Services.Address.IProvinceClientService, Client.Services.Address.ProvinceClientService>();
 
 await builder.Build().RunAsync();

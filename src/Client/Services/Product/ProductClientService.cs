@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
@@ -19,57 +20,41 @@ namespace Client.Services.Product
 
         public async Task<ApiResult<PagedResult<ProductListDto>>> GetListAsync(ProductFilterRequest request)
         {
-            try
-            {
-                var queryParams = new List<string>();
+            var queryParams = new List<string>();
 
-                if (!string.IsNullOrWhiteSpace(request.Keyword))
-                    queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
-                if (request.CategoryId.HasValue)
-                    queryParams.Add($"CategoryId={request.CategoryId}");
-                if (request.ManufacturerId.HasValue)
-                    queryParams.Add($"ManufacturerId={request.ManufacturerId}");
-                if (request.PriceMin.HasValue)
-                    queryParams.Add($"PriceMin={request.PriceMin}");
-                if (request.PriceMax.HasValue)
-                    queryParams.Add($"PriceMax={request.PriceMax}");
-                if (request.Status.HasValue)
-                    queryParams.Add($"Status={(int)request.Status}");
+            if (!string.IsNullOrWhiteSpace(request.Keyword))
+                queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
+            if (request.CategoryId.HasValue)
+                queryParams.Add($"CategoryId={request.CategoryId}");
+            if (request.ManufacturerId.HasValue)
+                queryParams.Add($"ManufacturerId={request.ManufacturerId}");
+            if (request.PriceMin.HasValue)
+                queryParams.Add($"PriceMin={request.PriceMin}");
+            if (request.PriceMax.HasValue)
+                queryParams.Add($"PriceMax={request.PriceMax}");
+            if (request.Status.HasValue)
+                queryParams.Add($"Status={(int)request.Status}");
 
-                queryParams.Add($"PageNumber={request.PageNumber}");
-                queryParams.Add($"PageSize={request.PageSize}");
+            queryParams.Add($"PageNumber={request.PageNumber}");
+            queryParams.Add($"PageSize={request.PageSize}");
 
-                if (!string.IsNullOrWhiteSpace(request.SortBy))
-                    queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
-                if (request.SortDescending)
-                    queryParams.Add("SortDescending=true");
+            if (!string.IsNullOrWhiteSpace(request.SortBy))
+                queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
+            if (request.SortDescending)
+                queryParams.Add("SortDescending=true");
 
-                var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
+            var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
 
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<PagedResult<ProductListDto>>>(url);
-                return result ?? ApiResult<PagedResult<ProductListDto>>.Fail("Không thể tải danh sách sản phẩm.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách sản phẩm");
-                return ApiResult<PagedResult<ProductListDto>>.Fail("Không tải được danh sách sản phẩm. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<PagedResult<ProductListDto>>(
+                () => _httpClient.GetAsync(url),
+                "tải danh sách sản phẩm", _logger);
         }
 
         public async Task<ApiResult<ProductDetailDto>> GetByIdAsync(int id)
         {
-            try
-            {
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<ProductDetailDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<ProductDetailDto>.Fail("Không tìm thấy sản phẩm.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết sản phẩm");
-                return ApiResult<ProductDetailDto>.Fail("Không tải được chi tiết sản phẩm. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<ProductDetailDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải chi tiết sản phẩm", _logger);
         }
 
         public async Task<ApiResult<ProductDetailDto>> CreateAsync(CreateProductRequest request)
@@ -121,17 +106,9 @@ namespace Client.Services.Product
 
         public async Task<ApiResult<ProductVariantDto>> GetVariantAsync(int variantId)
         {
-            try
-            {
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<ProductVariantDto>>($"{BaseUrl}/variants/{variantId}");
-                return result ?? ApiResult<ProductVariantDto>.Fail("Không tìm thấy phiên bản.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin phiên bản sản phẩm");
-                return ApiResult<ProductVariantDto>.Fail("Không tải được thông tin phiên bản sản phẩm. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<ProductVariantDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/variants/{variantId}"),
+                "tải thông tin phiên bản sản phẩm", _logger);
         }
 
         public async Task<ApiResult<ProductVariantDto>> CreateVariantAsync(int productId, SaveVariantRequest request)

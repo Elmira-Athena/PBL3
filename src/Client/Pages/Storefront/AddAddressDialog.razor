@@ -1,6 +1,5 @@
 @using PBL3.Shared.DTOs.Customers
-@using System.Text.Json
-@using System.Text.Json.Serialization
+@using Client.Services.Address
 
 <MudDialog>
     <TitleContent>
@@ -115,7 +114,7 @@
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
     [Inject] private IUserAddressClientService AddressService { get; set; } = null!;
     [Inject] private ISnackbar Snackbar { get; set; } = null!;
-    [Inject] private IHttpClientFactory HttpClientFactory { get; set; } = null!;
+    [Inject] private IProvinceClientService ProvinceService { get; set; } = null!;
 
     private MudForm _form = null!;
     private AddressFormModel _model = new();
@@ -131,20 +130,12 @@
     protected override async Task OnInitializedAsync()
     {
         _isLoadingProvinces = true;
-        try
-        {
-            var http = HttpClientFactory.CreateClient("ProvincesAPI");
-            var provinces = await http.GetFromJsonAsync<List<ProvinceItem>>("api/v2/p/");
-            _provinces = provinces ?? new List<ProvinceItem>();
-        }
-        catch
-        {
-            _errorMessage = "Không thể tải danh sách tỉnh/thành phố. Vui lòng thử lại.";
-        }
-        finally
-        {
-            _isLoadingProvinces = false;
-        }
+        var result = await ProvinceService.GetProvincesAsync();
+        if (result.Success)
+            _provinces = result.Data ?? new List<ProvinceItem>();
+        else
+            _errorMessage = result.Message;
+        _isLoadingProvinces = false;
     }
 
     private async Task OnProvinceChanged(ProvinceItem? province)
@@ -157,21 +148,13 @@
 
         _isLoadingWards = true;
         StateHasChanged();
-        try
-        {
-            var http = HttpClientFactory.CreateClient("ProvincesAPI");
-            var detail = await http.GetFromJsonAsync<ProvinceDetail>($"api/v2/p/{province.Code}?depth=2");
-            _wards = detail?.Wards ?? new List<WardItem>();
-        }
-        catch
-        {
-            _errorMessage = "Không thể tải danh sách phường/xã.";
-        }
-        finally
-        {
-            _isLoadingWards = false;
-            StateHasChanged();
-        }
+        var result = await ProvinceService.GetWardsAsync(province.Code);
+        if (result.Success)
+            _wards = result.Data ?? new List<WardItem>();
+        else
+            _errorMessage = result.Message;
+        _isLoadingWards = false;
+        StateHasChanged();
     }
 
     private static string? ValidatePhone(string? phone)
@@ -235,25 +218,5 @@
         public string PhoneNumber { get; set; } = string.Empty;
         public string Street { get; set; } = string.Empty;
         public bool IsDefault { get; set; }
-    }
-
-    // ===== PROVINCES API v2 MODELS =====
-    private class ProvinceItem
-    {
-        [JsonPropertyName("code")] public int Code { get; set; }
-        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
-    }
-
-    private class ProvinceDetail
-    {
-        [JsonPropertyName("code")] public int Code { get; set; }
-        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
-        [JsonPropertyName("wards")] public List<WardItem> Wards { get; set; } = new();
-    }
-
-    private class WardItem
-    {
-        [JsonPropertyName("code")] public int Code { get; set; }
-        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
     }
 }

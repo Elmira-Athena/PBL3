@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
+using Client.Services.Common;
 using PBL3.Shared.DTOs.Common;
 using PBL3.Shared.DTOs.Reviews;
 
@@ -7,25 +9,21 @@ namespace Client.Services.Reviews
     public class ReviewClientService : IReviewClientService
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<ReviewClientService> _logger;
         private const string BaseUrl = "api/reviews";
 
-        public ReviewClientService(HttpClient httpClient)
+        public ReviewClientService(HttpClient httpClient, ILogger<ReviewClientService> logger)
         {
             _httpClient = httpClient;
+            _logger = logger;
         }
 
         public async Task<ApiResult<PagedResult<ReviewDto>>?> GetReviewsAsync(
             int productId, int page, int pageSize)
         {
-            try
-            {
-                return await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<ReviewDto>>>(
-                    $"{BaseUrl}?productId={productId}&page={page}&pageSize={pageSize}");
-            }
-            catch
-            {
-                return ApiResult<PagedResult<ReviewDto>>.Fail("Không thể tải danh sách đánh giá.");
-            }
+            return await ApiCall.SendAsync<PagedResult<ReviewDto>>(
+                () => _httpClient.GetAsync($"{BaseUrl}?productId={productId}&page={page}&pageSize={pageSize}"),
+                "tải danh sách đánh giá", _logger);
         }
 
         public async Task<ApiResult<ReviewDto>?> CreateAsync(CreateReviewRequest request)

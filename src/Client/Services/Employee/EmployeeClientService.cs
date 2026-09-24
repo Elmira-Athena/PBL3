@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
@@ -22,51 +23,37 @@ namespace Client.Services.Employee
 
         public async Task<ApiResult<PagedResult<EmployeeListDto>>> GetListAsync(EmployeeFilterRequest request)
         {
-            try
-            {
-                var queryParams = new List<string>();
+            var queryParams = new List<string>();
 
-                if (!string.IsNullOrWhiteSpace(request.Keyword))
-                    queryParams.Add($"keyword={Uri.EscapeDataString(request.Keyword)}");
+            if (!string.IsNullOrWhiteSpace(request.Keyword))
+                queryParams.Add($"keyword={Uri.EscapeDataString(request.Keyword)}");
 
-                if (request.IsActive.HasValue)
-                    queryParams.Add($"isActive={request.IsActive.Value.ToString().ToLower()}");
+            if (request.IsActive.HasValue)
+                queryParams.Add($"isActive={request.IsActive.Value.ToString().ToLower()}");
 
-                if (request.Gender.HasValue)
-                    queryParams.Add($"gender={request.Gender.Value}");
+            if (request.Gender.HasValue)
+                queryParams.Add($"gender={request.Gender.Value}");
 
-                queryParams.Add($"pageNumber={request.PageNumber}");
-                queryParams.Add($"pageSize={request.PageSize}");
+            queryParams.Add($"pageNumber={request.PageNumber}");
+            queryParams.Add($"pageSize={request.PageSize}");
 
-                if (!string.IsNullOrWhiteSpace(request.SortBy))
-                    queryParams.Add($"sortBy={Uri.EscapeDataString(request.SortBy)}");
+            if (!string.IsNullOrWhiteSpace(request.SortBy))
+                queryParams.Add($"sortBy={Uri.EscapeDataString(request.SortBy)}");
 
-                if (request.SortDescending)
-                    queryParams.Add("sortDescending=true");
+            if (request.SortDescending)
+                queryParams.Add("sortDescending=true");
 
-                var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<EmployeeListDto>>>(url);
-                return result ?? ApiResult<PagedResult<EmployeeListDto>>.Fail("Không thể tải danh sách nhân viên.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách nhân viên");
-                return ApiResult<PagedResult<EmployeeListDto>>.Fail("Không tải được danh sách nhân viên. Vui lòng thử lại.");
-            }
+            var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
+            return await ApiCall.SendAsync<PagedResult<EmployeeListDto>>(
+                () => _httpClient.GetAsync(url),
+                "tải danh sách nhân viên", _logger);
         }
 
         public async Task<ApiResult<EmployeeListDto>> GetByIdAsync(Guid id)
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<EmployeeListDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<EmployeeListDto>.Fail("Không tìm thấy nhân viên.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin nhân viên");
-                return ApiResult<EmployeeListDto>.Fail("Không tải được thông tin nhân viên. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<EmployeeListDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải thông tin nhân viên", _logger);
         }
 
         public async Task<ApiResult<EmployeeListDto>> CreateAsync(CreateEmployeeRequest request)
@@ -134,16 +121,9 @@ namespace Client.Services.Employee
 
         public async Task<ApiResult<List<EmployeeDto>>> GetTechniciansAsync()
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<List<EmployeeDto>>>($"{BaseUrl}/technicians");
-                return result ?? ApiResult<List<EmployeeDto>>.Fail("Không thể tải danh sách kỹ thuật viên.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách kỹ thuật viên");
-                return ApiResult<List<EmployeeDto>>.Fail("Không tải được danh sách kỹ thuật viên. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<List<EmployeeDto>>(
+                () => _httpClient.GetAsync($"{BaseUrl}/technicians"),
+                "tải danh sách kỹ thuật viên", _logger);
         }
     }
 }

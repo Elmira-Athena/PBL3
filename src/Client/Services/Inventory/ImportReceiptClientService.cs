@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
@@ -57,32 +58,21 @@ namespace Client.Services.Inventory
                     queryParams.Add("SortDescending=true");
 
                 var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<ImportReceiptDto>>>(url, cancellationToken);
-                return result ?? ApiResult<PagedResult<ImportReceiptDto>>.Fail("Không thể tải danh sách phiếu nhập.");
+                return await ApiCall.SendAsync<PagedResult<ImportReceiptDto>>(
+                    () => _httpClient.GetAsync(url, cancellationToken),
+                    "tải danh sách phiếu nhập kho", _logger, cancellationToken);
             }
             catch (OperationCanceledException)
             {
                 return ApiResult<PagedResult<ImportReceiptDto>>.Fail(string.Empty);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách phiếu nhập kho");
-                return ApiResult<PagedResult<ImportReceiptDto>>.Fail("Không tải được danh sách phiếu nhập kho. Vui lòng thử lại.");
-            }
         }
 
         public async Task<ApiResult<ImportReceiptDto>> GetByIdAsync(int id)
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<ImportReceiptDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<ImportReceiptDto>.Fail("Không tìm thấy phiếu nhập.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết phiếu nhập kho");
-                return ApiResult<ImportReceiptDto>.Fail("Không tải được chi tiết phiếu nhập kho. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<ImportReceiptDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải chi tiết phiếu nhập kho", _logger);
         }
     }
 }

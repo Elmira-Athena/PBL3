@@ -3,10 +3,10 @@
 @using PBL3.Shared.DTOs.Vouchers
 @using Client.Services
 @using Client.Services.Voucher
-@using System.Text.Json.Serialization
+@using Client.Services.Address
 @inject IPosClientService PosService
 @inject IVoucherClientService VoucherService
-@inject IHttpClientFactory HttpClientFactory
+@inject IProvinceClientService ProvinceService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
@@ -273,14 +273,14 @@
     protected override async Task OnInitializedAsync()
     {
         _isLoadingProvinces = true;
-        try
-        {
-            var http = HttpClientFactory.CreateClient("ProvincesAPI");
-            var list = await http.GetFromJsonAsync<List<ProvinceItem>>("api/v2/p/");
-            _provinces = list ?? new();
-        }
-        catch { /* địa chỉ là tuỳ chọn, không chặn trang nếu API province lỗi */ }
-        finally { _isLoadingProvinces = false; }
+        // Địa chỉ là tuỳ chọn ở POS: lỗi tra cứu không chặn trang, chỉ báo nhẹ.
+        // (ProvinceClientService đã log chi tiết.)
+        var result = await ProvinceService.GetProvincesAsync();
+        if (result.Success)
+            _provinces = result.Data ?? new();
+        else
+            Snackbar.Add(result.Message, Severity.Warning);
+        _isLoadingProvinces = false;
     }
 
     private async Task HandleKeyPress(KeyboardEventArgs e)
@@ -370,14 +370,13 @@
 
         _isLoadingWards = true;
         StateHasChanged();
-        try
-        {
-            var http = HttpClientFactory.CreateClient("ProvincesAPI");
-            var detail = await http.GetFromJsonAsync<ProvinceDetail>($"api/v2/p/{province.Code}?depth=2");
-            _wards = detail?.Wards ?? new();
-        }
-        catch { }
-        finally { _isLoadingWards = false; StateHasChanged(); }
+        var result = await ProvinceService.GetWardsAsync(province.Code);
+        if (result.Success)
+            _wards = result.Data ?? new();
+        else
+            Snackbar.Add(result.Message, Severity.Warning);
+        _isLoadingWards = false;
+        StateHasChanged();
     }
 
     private async Task SaveDraft()
@@ -462,24 +461,4 @@
     }
 
     private void AddNewCustomer() => Snackbar.Add("Chức năng thêm khách mới đang được tích hợp", Severity.Info);
-
-    // ===== PROVINCES API v2 MODELS =====
-    private class ProvinceItem
-    {
-        [JsonPropertyName("code")] public int Code { get; set; }
-        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
-    }
-
-    private class ProvinceDetail
-    {
-        [JsonPropertyName("code")] public int Code { get; set; }
-        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
-        [JsonPropertyName("wards")] public List<WardItem> Wards { get; set; } = new();
-    }
-
-    private class WardItem
-    {
-        [JsonPropertyName("code")] public int Code { get; set; }
-        [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
-    }
 }

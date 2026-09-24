@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Banners;
@@ -19,45 +20,31 @@ namespace Client.Services.Banner
 
         public async Task<ApiResult<PagedResult<BannerDto>>> GetListAsync(BannerFilterRequest request)
         {
-            try
-            {
-                var queryParams = new List<string>();
+            var queryParams = new List<string>();
 
-                if (!string.IsNullOrWhiteSpace(request.Keyword))
-                    queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
+            if (!string.IsNullOrWhiteSpace(request.Keyword))
+                queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
 
-                queryParams.Add($"PageNumber={request.PageNumber}");
-                queryParams.Add($"PageSize={request.PageSize}");
+            queryParams.Add($"PageNumber={request.PageNumber}");
+            queryParams.Add($"PageSize={request.PageSize}");
 
-                if (!string.IsNullOrWhiteSpace(request.SortBy))
-                    queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
-                if (request.SortDescending)
-                    queryParams.Add("SortDescending=true");
+            if (!string.IsNullOrWhiteSpace(request.SortBy))
+                queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
+            if (request.SortDescending)
+                queryParams.Add("SortDescending=true");
 
-                var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
+            var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
 
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<BannerDto>>>(url);
-                return result ?? ApiResult<PagedResult<BannerDto>>.Fail("Không thể tải danh sách banner.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách banner");
-                return ApiResult<PagedResult<BannerDto>>.Fail("Không tải được danh sách banner. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<PagedResult<BannerDto>>(
+                () => _httpClient.GetAsync(url),
+                "tải danh sách banner", _logger);
         }
 
         public async Task<ApiResult<BannerDto>> GetByIdAsync(int id)
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<BannerDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<BannerDto>.Fail("Không tìm thấy banner.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin banner");
-                return ApiResult<BannerDto>.Fail("Không tải được thông tin banner. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<BannerDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải thông tin banner", _logger);
         }
 
         public async Task<ApiResult<BannerDto>> CreateAsync(CreateBannerRequest request)
@@ -107,16 +94,9 @@ namespace Client.Services.Banner
 
         public async Task<ApiResult<List<BannerPublicDto>>> GetActiveAsync()
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<List<BannerPublicDto>>>($"{BaseUrl}/active");
-                return result ?? ApiResult<List<BannerPublicDto>>.Fail("Không thể tải banner trang chủ.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải banner đang hiển thị");
-                return ApiResult<List<BannerPublicDto>>.Fail("Không tải được banner trang chủ. Vui lòng tải lại trang.");
-            }
+            return await ApiCall.SendAsync<List<BannerPublicDto>>(
+                () => _httpClient.GetAsync($"{BaseUrl}/active"),
+                "tải banner đang hiển thị", _logger);
         }
     }
 }

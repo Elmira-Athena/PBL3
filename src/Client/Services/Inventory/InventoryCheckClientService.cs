@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
@@ -56,46 +57,28 @@ namespace Client.Services.Inventory
                     q.Add("SortDescending=true");
 
                 var url = $"{BaseUrl}?{string.Join("&", q)}";
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<InventoryCheckListItemDto>>>(url, cancellationToken);
-                return result ?? ApiResult<PagedResult<InventoryCheckListItemDto>>.Fail("Không thể tải danh sách phiếu kiểm kê.");
+                return await ApiCall.SendAsync<PagedResult<InventoryCheckListItemDto>>(
+                    () => _httpClient.GetAsync(url, cancellationToken),
+                    "tải danh sách phiếu kiểm kê", _logger, cancellationToken);
             }
             catch (OperationCanceledException)
             {
                 return ApiResult<PagedResult<InventoryCheckListItemDto>>.Fail(string.Empty);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách phiếu kiểm kê");
-                return ApiResult<PagedResult<InventoryCheckListItemDto>>.Fail("Không tải được danh sách phiếu kiểm kê. Vui lòng thử lại.");
-            }
         }
 
         public async Task<ApiResult<InventoryCheckDto>> GetByIdAsync(int id)
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<InventoryCheckDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<InventoryCheckDto>.Fail("Không tìm thấy phiếu kiểm kê.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải chi tiết phiếu kiểm kê");
-                return ApiResult<InventoryCheckDto>.Fail("Không tải được chi tiết phiếu kiểm kê. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<InventoryCheckDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải chi tiết phiếu kiểm kê", _logger);
         }
 
         public async Task<ApiResult<InventoryCheckDashboardDto>> GetDashboardAsync(int id)
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<InventoryCheckDashboardDto>>($"{BaseUrl}/{id}/dashboard");
-                return result ?? ApiResult<InventoryCheckDashboardDto>.Fail("Không tải được dashboard.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải bảng theo dõi kiểm kê");
-                return ApiResult<InventoryCheckDashboardDto>.Fail("Không tải được bảng theo dõi kiểm kê. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<InventoryCheckDashboardDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}/dashboard"),
+                "tải bảng theo dõi kiểm kê", _logger);
         }
 
         public async Task<ApiResult<PagedResult<InventoryCheckSerialDto>>> GetSerialsAsync(
@@ -112,17 +95,13 @@ namespace Client.Services.Inventory
                 q.Add($"PageSize={filter.PageSize}");
 
                 var url = $"{BaseUrl}/{checkId}/serials?{string.Join("&", q)}";
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<InventoryCheckSerialDto>>>(url, cancellationToken);
-                return result ?? ApiResult<PagedResult<InventoryCheckSerialDto>>.Fail("Không thể tải danh sách serial.");
+                return await ApiCall.SendAsync<PagedResult<InventoryCheckSerialDto>>(
+                    () => _httpClient.GetAsync(url, cancellationToken),
+                    "tải danh sách serial của phiếu kiểm kê", _logger, cancellationToken);
             }
             catch (OperationCanceledException)
             {
                 return ApiResult<PagedResult<InventoryCheckSerialDto>>.Fail(string.Empty);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách serial của phiếu kiểm kê");
-                return ApiResult<PagedResult<InventoryCheckSerialDto>>.Fail("Không tải được danh sách serial của phiếu kiểm kê. Vui lòng thử lại.");
             }
         }
 

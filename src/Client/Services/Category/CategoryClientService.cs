@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Categories;
@@ -19,32 +20,16 @@ namespace Client.Services.Category
 
         public async Task<ApiResult<List<CategoryTreeDto>>> GetTreeAsync()
         {
-            try
-            {
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<List<CategoryTreeDto>>>($"{BaseUrl}/tree");
-                return result ?? ApiResult<List<CategoryTreeDto>>.Fail("Không thể tải danh sách danh mục.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải cây danh mục");
-                return ApiResult<List<CategoryTreeDto>>.Fail("Không tải được cây danh mục. Vui lòng tải lại trang.");
-            }
+            return await ApiCall.SendAsync<List<CategoryTreeDto>>(
+                () => _httpClient.GetAsync($"{BaseUrl}/tree"),
+                "tải cây danh mục", _logger);
         }
 
         public async Task<ApiResult<CategoryDto>> GetByIdAsync(int id)
         {
-            try
-            {
-                var result = await _httpClient
-                    .GetFromJsonAsync<ApiResult<CategoryDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<CategoryDto>.Fail("Không tìm thấy danh mục.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin danh mục");
-                return ApiResult<CategoryDto>.Fail("Không tải được thông tin danh mục. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<CategoryDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải thông tin danh mục", _logger);
         }
 
         public async Task<ApiResult<CategoryDto>> CreateAsync(CreateCategoryRequest request)

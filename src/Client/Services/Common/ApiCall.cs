@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.Extensions.Logging;
 using PBL3.Shared.DTOs.Common;
 
 namespace Client.Services.Common;
@@ -23,8 +24,19 @@ public static class ApiCall
     /// <param name="action">
     /// Mô tả ngắn việc đang làm, dùng để ghép câu ("tải danh sách đơn hàng").
     /// </param>
+    /// <param name="logger">
+    /// Logger của client service gọi tới. Lớp này NUỐT mọi exception để trả về
+    /// ApiResult, nên nếu không truyền logger thì chẩn đoán mất sạch — khối catch
+    /// ở client service đã bị bỏ, logger của nó không còn thấy exception nào nữa.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Huỷ DO NGƯỜI GỌI yêu cầu (MudTable ServerData huỷ request cũ khi đổi trang)
+    /// được ném lại nguyên vẹn — đó không phải lỗi, và cũng KHÔNG phải "máy chủ phản
+    /// hồi quá lâu". Người gọi tự quyết định xử lý.
+    /// </param>
     public static async Task<ApiResult<T>> SendAsync<T>(
-        Func<Task<HttpResponseMessage>> send, string action)
+        Func<Task<HttpResponseMessage>> send, string action,
+        ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         HttpResponseMessage response;
 
@@ -32,14 +44,20 @@ public static class ApiCall
         {
             response = await send();
         }
-        catch (HttpRequestException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            throw;
+        }
+        catch (HttpRequestException ex)
+        {
+            logger?.LogWarning(ex, "Lỗi kết nối khi {Action}.", action);
             return ApiResult<T>.Fail(
                 $"Không kết nối được tới máy chủ khi {action}. " +
                 "Vui lòng kiểm tra đường truyền rồi thử lại.");
         }
-        catch (TaskCanceledException)
+        catch (TaskCanceledException ex)
         {
+            logger?.LogWarning(ex, "Hết thời gian chờ khi {Action}.", action);
             return ApiResult<T>.Fail(
                 $"Máy chủ phản hồi quá lâu khi {action}. Vui lòng thử lại.");
         }
@@ -48,12 +66,18 @@ public static class ApiCall
         {
             try
             {
-                var body = await response.Content.ReadFromJsonAsync<ApiResult<T>>();
+                var body = await response.Content.ReadFromJsonAsync<ApiResult<T>>(cancellationToken);
                 if (body is not null) return body;
+                logger?.LogError("Thân phản hồi rỗng khi {Action}.", action);
             }
-            catch
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                // rơi xuống câu báo lỗi phía dưới
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Thường là lệch kiểu: truyền cả ApiResult<T> thay vì T bên trong.
+                logger?.LogError(ex, "Không đọc được thân phản hồi khi {Action}.", action);
             }
 
             return ApiResult<T>.Fail(
@@ -61,6 +85,8 @@ public static class ApiCall
         }
 
         // Ưu tiên thông báo do server soạn — nó biết ngữ cảnh nghiệp vụ rõ hơn ta.
+        logger?.LogWarning("HTTP {StatusCode} khi {Action}.", (int)response.StatusCode, action);
+
         var serverMessage = await TryReadMessageAsync(response);
         if (!string.IsNullOrWhiteSpace(serverMessage))
         {

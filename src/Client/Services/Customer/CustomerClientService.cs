@@ -1,3 +1,4 @@
+using Client.Services.Common;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using PBL3.Shared.DTOs.Common;
@@ -20,51 +21,37 @@ namespace Client.Services.Customer
 
         public async Task<ApiResult<PagedResult<CustomerDto>>> GetListAsync(CustomerFilterRequest request)
         {
-            try
-            {
-                var queryParams = new List<string>();
+            var queryParams = new List<string>();
 
-                if (!string.IsNullOrWhiteSpace(request.Keyword))
-                    queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
+            if (!string.IsNullOrWhiteSpace(request.Keyword))
+                queryParams.Add($"Keyword={Uri.EscapeDataString(request.Keyword)}");
 
-                if (request.IsActive.HasValue)
-                    queryParams.Add($"IsActive={request.IsActive.Value.ToString().ToLower()}");
+            if (request.IsActive.HasValue)
+                queryParams.Add($"IsActive={request.IsActive.Value.ToString().ToLower()}");
 
-                if (request.Gender.HasValue)
-                    queryParams.Add($"Gender={request.Gender.Value}");
+            if (request.Gender.HasValue)
+                queryParams.Add($"Gender={request.Gender.Value}");
 
-                queryParams.Add($"PageNumber={request.PageNumber}");
-                queryParams.Add($"PageSize={request.PageSize}");
+            queryParams.Add($"PageNumber={request.PageNumber}");
+            queryParams.Add($"PageSize={request.PageSize}");
 
-                if (!string.IsNullOrWhiteSpace(request.SortBy))
-                    queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
-                if (request.SortDescending)
-                    queryParams.Add("SortDescending=true");
+            if (!string.IsNullOrWhiteSpace(request.SortBy))
+                queryParams.Add($"SortBy={Uri.EscapeDataString(request.SortBy)}");
+            if (request.SortDescending)
+                queryParams.Add("SortDescending=true");
 
-                var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
+            var url = $"{BaseUrl}?{string.Join("&", queryParams)}";
 
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<PagedResult<CustomerDto>>>(url);
-                return result ?? ApiResult<PagedResult<CustomerDto>>.Fail("Không thể tải danh sách khách hàng.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải danh sách khách hàng");
-                return ApiResult<PagedResult<CustomerDto>>.Fail("Không tải được danh sách khách hàng. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<PagedResult<CustomerDto>>(
+                () => _httpClient.GetAsync(url),
+                "tải danh sách khách hàng", _logger);
         }
 
         public async Task<ApiResult<CustomerDetailDto>> GetByIdAsync(Guid id)
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<CustomerDetailDto>>($"{BaseUrl}/{id}");
-                return result ?? ApiResult<CustomerDetailDto>.Fail("Không tìm thấy khách hàng.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin khách hàng");
-                return ApiResult<CustomerDetailDto>.Fail("Không tải được thông tin khách hàng. Vui lòng thử lại.");
-            }
+            return await ApiCall.SendAsync<CustomerDetailDto>(
+                () => _httpClient.GetAsync($"{BaseUrl}/{id}"),
+                "tải thông tin khách hàng", _logger);
         }
 
         public async Task<ApiResult<CustomerDto>> CreateAsync(CreateCustomerRequest request)
@@ -132,16 +119,9 @@ namespace Client.Services.Customer
 
         public async Task<ApiResult<CustomerDto>> GetMyProfileAsync()
         {
-            try
-            {
-                var result = await _httpClient.GetFromJsonAsync<ApiResult<CustomerDto>>("api/storefront/profile/me");
-                return result ?? ApiResult<CustomerDto>.Fail("Không thể tải thông tin cá nhân.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lỗi khi {Action}.", "tải thông tin cá nhân");
-                return ApiResult<CustomerDto>.Fail("Không tải được thông tin cá nhân. Vui lòng tải lại trang.");
-            }
+            return await ApiCall.SendAsync<CustomerDto>(
+                () => _httpClient.GetAsync("api/storefront/profile/me"),
+                "tải thông tin cá nhân", _logger);
         }
 
         public async Task<ApiResult<CustomerDto>> UpdateMyProfileAsync(UpdateCustomerRequest request)

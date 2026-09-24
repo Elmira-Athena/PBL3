@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using PBL3.Shared.DTOs.Pos;
 using PBL3.Shared.DTOs.Common;
+using Client.Services.Common;
 
 namespace Client.Services.Pos
 {
@@ -96,8 +97,9 @@ namespace Client.Services.Pos
 
         public async Task<ApiResult<List<PosDraftDto>>> GetDraftsAsync()
         {
-            return await _httpClient.GetFromJsonAsync<ApiResult<List<PosDraftDto>>>("/api/pos/drafts")
-                ?? ApiResult<List<PosDraftDto>>.Fail("Lỗi hệ thống khi lấy danh sách đơn chờ.");
+            return await ApiCall.SendAsync<List<PosDraftDto>>(
+                () => _httpClient.GetAsync("/api/pos/drafts"),
+                "tải danh sách đơn chờ", _logger);
         }
     }
 }
