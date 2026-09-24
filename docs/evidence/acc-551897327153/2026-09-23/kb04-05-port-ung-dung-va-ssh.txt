@@ -1,0 +1,19 @@
+### KB-04 + KB-05 (dot 7): port ung dung :8080 va SSH :22
+### Account 551897327153 — 2026-09-24T02:28:56Z
+
+--- KB-04: goi :8080 qua ALB (ky vong: timeout) ---
+$ curl -sS --max-time 15 http://hushstore-alb-718170503.ap-southeast-1.elb.amazonaws.com:8080/
+curl: (28) Connection timed out after 15006 milliseconds
+http=000
+curl exit=28
+
+--- KB-05: SSH vao ALB IP va EC2 private ---
+$ nc -vz -w 10 56.10.32.28 22
+nc: connectx to 56.10.32.28 port 22 (tcp) failed: Operation timed out
+nc exit=1
+$ nc -vz -w 10 10.20.11.176 22
+nc: connectx to 10.20.11.176 port 22 (tcp) failed: Operation timed out
+nc exit=1
+
+--- Bang chung cau hinh: so key pair EC2 trong region ---
+so key pair = 0

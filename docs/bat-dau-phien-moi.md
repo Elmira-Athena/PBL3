@@ -1,10 +1,14 @@
 # Bắt đầu phiên mới — đọc file này trước
 
-> 🎯 **Nếu phiên này mở ra để làm CỬA SỔ ĐO của đợt 7, đọc
-> [`ban-giao-cua-so-do-dot-7.md`](ban-giao-cua-so-do-dot-7.md) thay cho file này.**
-> Nó tự chứa: việc cần làm, trình tự bật/tắt, bẫy đã gặp, chi phí, và định nghĩa
-> "xong". Bước 0 của nó là kiểm xem RDS có tự khởi động lại sau 7 ngày `stopped`
-> hay không — làm trước mọi thứ khác.
+> 🎯 **Phiên này mở ra để làm một gói việc cụ thể? Đọc bản bàn giao của nó thay
+> cho file này** — mỗi bản tự chứa và ngắn hơn file này rất nhiều:
+>
+> | Gói việc | Đọc | Trạng thái |
+> |---|---|---|
+> | Mục 🅹 — 40 lời gọi `GetFromJsonAsync` | [`ban-giao-no-code-muc-J.md`](ban-giao-no-code-muc-J.md) | 🔴 chưa bắt đầu |
+> | Cửa sổ đo đợt 7 | [`ban-giao-cua-so-do-dot-7.md`](ban-giao-cua-so-do-dot-7.md) | 🟡 còn failover + `ReplicaLag` |
+>
+> File này là **hồ sơ tra cứu của cả dự án** — dùng nó cho mọi việc khác.
 
 > ## 🟢 ĐỢT 7 — ĐÃ CHUYỂN SANG POSTGRESQL 17 (2026-09-05)
 >
@@ -24,7 +28,7 @@
 >   ([bằng chứng](evidence/2026-09-05-postgresql-2-instance.md)). Ở 2 instance S03 ra
 >   `200×1, 400×6, 409×3` thay vì `409×9` — phân bố khác chính là thứ chứng minh hai lần chạy
 >   không phải một.
-> - `terraform test` **106/106** trên 8 module; `validate` + `fmt` sạch.
+> - `terraform test` **109/109** trên 8 module; `validate` + `fmt` sạch.
 > - Seeder (`psql 17`) chạy thật, kèm **2 ca đối chứng âm** cho `sslmode=verify-full`.
 > - Deadlock `40P01` ép thật → `ConflictClassifier` bắt được cả khi bọc 3 lớp; `42P01` trả `False`.
 >

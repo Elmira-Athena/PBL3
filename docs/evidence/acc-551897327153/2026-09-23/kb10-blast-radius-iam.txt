@@ -1,0 +1,33 @@
+### KB-10: ban kinh anh huong (blast radius) cua tung IAM role
+### Account 551897327153 — do lai cho dot 7 (PostgreSQL 17, cong 5432)
+### 2026-09-23T09:06:50Z
+Dung iam simulate-principal-policy — danh gia truc tiep tren policy that dang gan.
+
+-- doc secret db-password (chi seeder duoc phep) --
+hushstore-container-instance-role          ssm:GetParameter             explicitDeny       arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/db-password
+hushstore-task-app-role                    ssm:GetParameter             implicitDeny       arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/db-password
+hushstore-task-execution-role              ssm:GetParameters            implicitDeny       arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/db-password
+hushstore-task-execution-seeder-role       ssm:GetParameters            allowed            arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/db-password
+
+-- bon action doc parameter con lai tren host: phai deu explicitDeny --
+hushstore-container-instance-role          ssm:GetParameter             explicitDeny       arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/db-password
+hushstore-container-instance-role          ssm:GetParameters            explicitDeny       arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/db-password
+hushstore-container-instance-role          ssm:GetParameterHistory      explicitDeny       arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/db-password
+hushstore-container-instance-role          ssm:GetParametersByPath      explicitDeny       arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/db-password
+
+-- doc connection-string (chi execution role cua app duoc phep) --
+hushstore-task-execution-role              ssm:GetParameters            allowed            arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/connection-string
+hushstore-task-execution-seeder-role       ssm:GetParameters            implicitDeny       arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/connection-string
+
+-- doc jwt-secret --
+hushstore-task-execution-role              ssm:GetParameters            allowed            arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/jwt-secret
+hushstore-container-instance-role          ssm:GetParameter             explicitDeny       arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/jwt-secret
+
+-- ghi anh len bucket assets (chi task role cua app) --
+hushstore-task-app-role                    s3:PutObject                 allowed            arn:aws:s3:::hushstore-public-assets-551897327153/*
+hushstore-container-instance-role          s3:PutObject                 implicitDeny       arn:aws:s3:::hushstore-public-assets-551897327153/*
+
+-- thao tac RDS: khong role nao duoc phep --
+hushstore-task-app-role                    rds:DescribeDBInstances      implicitDeny       arn:aws:rds:ap-southeast-1:551897327153:db:hushstore-db-tf
+hushstore-task-app-role                    rds:DeleteDBInstance         implicitDeny       arn:aws:rds:ap-southeast-1:551897327153:db:hushstore-db-tf
+hushstore-container-instance-role          rds:DeleteDBInstance         implicitDeny       arn:aws:rds:ap-southeast-1:551897327153:db:hushstore-db-tf

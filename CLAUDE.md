@@ -433,7 +433,7 @@ Tầng code: `citext` cho 6 cột, `xmin` thay `RowVersion`, `ConflictClassifier
 `sqlcmd` → `psql 17`. Hạ tầng: `engine = "postgres"`, `gp3`, `db.t4g.micro`, cổng 5432, hai công
 tắc `enable_multi_az` / `enable_read_replica`, cost guard hết nói
 dối về read replica.
-Đo được: **LoadProbe 9/9 ở CẢ 1 lẫn 2 instance**, `0 KHÔNG KẾT LUẬN`; `terraform test` **106/106**;
+Đo được: **LoadProbe 9/9 ở CẢ 1 lẫn 2 instance**, `0 KHÔNG KẾT LUẬN`; `terraform test` **109/109**;
 seeder chạy thật với 2 ca đối chứng âm
 ([bằng chứng](docs/evidence/2026-09-05-postgresql-2-instance.md)).
 
@@ -449,14 +449,27 @@ seeder chạy thật với 2 ca đối chứng âm
 2. Bản trước ghi *"Chưa chạy lên AWS lần nào"*. **Apply ĐÃ chạy và đã xong** — AWS trả về
    `hushstore-db-tf`, `db.t4g.micro`, `MultiAZ: True`, trạng thái `stopped`.
 
-**Thứ thật sự còn thiếu là CỬA SỔ ĐO, không phải apply.** Chưa có: seeder vào RDS qua
-`verify-full` với CA thật · **12 kịch bản bảo mật chạy lại trên cổng 5432** (bản đã nộp đo trên
-`1433`) · failover Multi-AZ · `ReplicaLag` · **ca đối chứng cho bản vá cost guard khi replica
-đang tồn tại**. Chi phí `HS_RATE_RDS_UP = 0.098` vẫn là số đo trên SQL Server — nay là **cận
-trên**, cố ý chưa sửa cho tới khi có hoá đơn thật.
+✅ **CỬA SỔ ĐO ĐỢT 7 — PHẦN LỚN ĐÃ CHẠY (2026-09-24).** Bản ghi mới:
+[`docs/security-validation-report-2026-09-24.md`](docs/security-validation-report-2026-09-24.md)
+(KHÔNG sửa bản cũ `security-validation-report.md` — nó là bản ghi phép đo 2026-08-24).
+Bằng chứng thô: [`docs/evidence/acc-551897327153/2026-09-23/`](docs/evidence/acc-551897327153/2026-09-23/).
+Đã đo trên PostgreSQL 17.9 / cổng 5432 / Multi-AZ, commit `d050c35`, chi phí **$0.1765**:
 
-📊 **Trạng thái AWS đo lúc 2026-09-06:** RDS `stopped` (Multi-AZ) · **0** ALB · **0** NAT ·
-**0** EC2 đang chạy. Tức chỉ còn chảy tiền storage.
+- **12/12 kịch bản bảo mật + 2 kịch bản mới ĐẠT** — trùng khớp bản cũ trừ những thứ đổi có
+  chủ ý (cổng 5432 thay 1433 ở kb03/kb09, role Technician làm `AppRoles=4`).
+- **seeder vào RDS thật qua `verify-full` + CA thật** → exit 0, kèm **ca đối chứng âm** (bỏ CA
+  → exit 2, kết nối gãy). Migrator exit 0 (lần migrate đầu lên Postgres).
+- **Multi-AZ** (primary 1b / standby 1a, không public) và **2 NAT** (mỗi app subnet ra NAT
+  cùng AZ) đo trên AWS thật.
+- Thời gian start RDS PostgreSQL lần đầu: **~4–5 phút** (số cũ ~14m là của SQL Server).
+
+⚠️ **CÒN THIẾU — cần đo ở phiên có người canh** (xem mục 5 của báo cáo mới): **failover
+Multi-AZ** (`reboot --force-failover`), **`ReplicaLag` + ca đối chứng cost guard khi có
+replica**, và đối chiếu `HS_RATE_RDS_UP=0.098` với hoá đơn thật (vẫn là **cận trên**).
+
+📊 **Trạng thái AWS sau cửa sổ đo (2026-09-24):** RDS `stopped` (Multi-AZ) · **0** ALB ·
+**0** NAT · **0** EC2 · **0** Flow Log. Chỉ còn chảy tiền storage. RDS tự bật lại sau 7 ngày
+`stopped` — nếu không đo tiếp trước ~2026-10-01 thì chạy lại `down.sh`.
 
 ⚠️ **Đừng bật `enable_read_replica` rồi để qua đêm.** Có replica thì AWS **từ chối** stop
 primary ⇒ `down.sh` và cost guard mất tác dụng, mà RDS còn tự khởi động lại sau 7 ngày stopped.
@@ -464,7 +477,8 @@ primary ⇒ `down.sh` và cost guard mất tác dụng, mà RDS còn tự khởi
 cả hai chỉ chạy khi có người gõ.
 
 Còn lại: **mục 🅹** (35 lời gọi GET chuyển sang `ApiCall.SendAsync`), **nửa HẠ TẦNG của đợt 4**
-(chờ review), **cửa sổ đo trên AWS của đợt 7**, và **đợt 5 → 6**.
+(chờ review), **phần còn lại của cửa sổ đo đợt 7** (failover Multi-AZ · `ReplicaLag`
+· đối chiếu `HS_RATE_RDS_UP` với hoá đơn), và **đợt 5 → 6**.
 
 🟡 **Nửa CODE của đợt 4 đã xong và đã đo** — `ICacheService`, `ShutdownTimeout = 45`,
 DataProtection → SSM ([bằng chứng](docs/evidence/ui/2026-09-01-goi-4-nua-code.md)). **Nửa hạ

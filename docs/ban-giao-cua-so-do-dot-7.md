@@ -202,13 +202,30 @@ Một cửa sổ đo 4 tiếng ≈ **$1**. Rẻ. Thứ đắt là **quên tắt*
 
 ## 7. Xong là như thế nào
 
-- [ ] `docs/security-validation-report-2026-09-xx.md` — bản ghi **mới**, không sửa bản cũ
-- [ ] `docs/evidence/acc-551897327153/` có bộ `kb*.txt` mới, **output thô, không viết tay số nào**
-- [ ] Mọi chỗ ghi `1433` trong bản mới là `5432`
-- [ ] Có ca đối chứng âm cho `verify-full` (bỏ CA → phải hỏng)
-- [ ] `HS_RATE_RDS_UP` cập nhật theo hoá đơn thật, hoặc ghi rõ vì sao chưa
-- [ ] `status.sh` xác nhận ALB=0 NAT=0 EC2=0 ASG=0 RDS=stopped
-- [ ] `CLAUDE.md` + `docs/bat-dau-phien-moi.md` cập nhật trạng thái
+Cập nhật 2026-09-24 — cửa sổ đo đã chạy, kết quả ở
+`docs/security-validation-report-2026-09-24.md`:
+
+- [x] `docs/security-validation-report-2026-09-24.md` — bản ghi **mới**, KHÔNG sửa bản cũ
+- [x] `docs/evidence/acc-551897327153/2026-09-23/` có bộ `kb*.txt` mới, output thô từ `tee`
+- [x] Mọi chỗ ghi `1433` trong bản mới là `5432` (kb03, kb09)
+- [x] Có ca đối chứng âm cho `verify-full` (bỏ CA → exit 2, kết nối gãy — kb00)
+- [ ] `HS_RATE_RDS_UP` cập nhật theo hoá đơn thật — **CHƯA**, vẫn giữ `0.098` làm cận trên
+      (cần hoá đơn thật của `db.t4g.micro` Postgres)
+- [x] `status.sh` xác nhận ALB=0 NAT=0 EC2=0 RDS=stopped (sau `down.sh`)
+- [x] `CLAUDE.md` cập nhật trạng thái (khối "CỬA SỔ ĐO ĐỢT 7")
+
+### 🔔 CÒN PHẢI ĐO SAU — nhắc người vận hành (bỏ qua có chủ ý phiên 2026-09-24)
+
+Hai việc dưới cần một phiên **có người ngồi canh** vì rủi ro chi phí, và vì lệnh
+`aws rds ...` state-changing bị bộ lọc an toàn chặn qua tool (phải chạy tay hoặc
+thêm permission rule):
+
+- [ ] **§3.3 Failover Multi-AZ** — chạy tay:
+      `aws rds reboot-db-instance --db-instance-identifier hushstore-db-tf --force-failover --profile hushstore --region ap-southeast-1`
+      rồi đo cửa sổ đứt kết nối qua `/health/ready` và xác nhận AZ swap (1b↔1a).
+- [ ] **§3.4 `ReplicaLag` + ca đối chứng cost guard khi có replica** — cần
+      `enable_read_replica = true`. 🚨 BẬT → ĐO → TẮT trong CÙNG một phiên, KHÔNG
+      để qua đêm (có replica thì không stop được primary, RDS tự bật lại sau 7 ngày).
 
 ---
 

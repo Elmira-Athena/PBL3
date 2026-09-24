@@ -1,0 +1,67 @@
+### KB-00 (dot 7): migration + seed tren RDS PostgreSQL 17 qua verify-full, kem ca doi chung am
+### Account 551897327153 — 2026-09-24T02:18:15Z
+### Image tag: d050c353463a6e98b6d44ded2bbad842b625181d (ca 4 repo ECR)
+
+== Thoi gian start RDS (PostgreSQL 17, db.t4g.micro, Multi-AZ) — lan do dau tien ==
+   start-db-instance -> available: ~4-5 phut (NAT 2m chay chong + cho 2m)
+   (so cu ~14 phut la cua SQL Server Express, khong dung cho PostgreSQL)
+
+== MIGRATOR ==
+task-definition : arn:aws:ecs:ap-southeast-1:551897327153:task-definition/hushstore-migrator:4
+image           : 551897327153.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator:d050c353463a6e98b6d44ded2bbad842b625181d
+task            : arn:aws:ecs:ap-southeast-1:551897327153:task/hushstore/2c4c6a207d44481bb487569444c11f1c
+exitCode        : 0   (Essential container in task exited)
+-- trich log nguyen van --
+2026-09-24T02:15:44 Cannot load library libgssapi_krb5.so.2
+2026-09-24T02:15:44 Error: libgssapi_krb5.so.2: cannot open shared object file: No such file or directory
+2026-09-24T02:15:45       Failed executing DbCommand (158ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-09-24T02:15:45       FROM "__EFMigrationsHistory"
+2026-09-24T02:15:45 Failed executing DbCommand (158ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+2026-09-24T02:15:45 FROM "__EFMigrationsHistory"
+2026-09-24T02:15:48       CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+2026-09-24T02:15:48 CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+2026-09-24T02:15:48       FROM "__EFMigrationsHistory"
+2026-09-24T02:15:48 FROM "__EFMigrationsHistory"
+2026-09-24T02:15:48 Applying migration '20260903162736_InitialCreatePostgres'.
+2026-09-24T02:15:50 Applying migration '20260906130624_AddRateLimitCounters'.
+2026-09-24T02:15:51 Done.
+
+Ghi chu: 'Failed executing ... FROM __EFMigrationsHistory' la EF do bang lich su tren DB TRONG
+(bang chua ton tai) roi tu tao — tuc day la LAN MIGRATE DAU TIEN len RDS PostgreSQL.
+'libgssapi_krb5.so.2' la Npgsql thu nap GSSAPI, khong co trong image slim, roi dung password auth.
+
+== SEEDER — ca duong: verify-full + CA that ==
+task-definition : arn:aws:ecs:ap-southeast-1:551897327153:task-definition/hushstore-seeder:5
+task            : arn:aws:ecs:ap-southeast-1:551897327153:task/hushstore/d727aa6f9ac847b3bdb7a5d488572bf7
+exitCode        : 0
+-- trich log nguyen van --
+2026-09-24T02:16:44  host     : hushstore-db-tf.c50q0csm6p6z.ap-southeast-1.rds.amazonaws.com:5432
+2026-09-24T02:16:44 [1/3] Kiểm tra kết nối và schema đã tồn tại chưa ...
+2026-09-24T02:16:44 NOTICE:  Schema OK
+2026-09-24T02:16:45 psql:/seed/01-seed_data.sql:93: NOTICE:  Seed data with verified hash completed successfully. AppRoles = 4.
+2026-09-24T02:16:45 [3/3] Đếm lại để xác nhận seed có tác dụng thật ...
+2026-09-24T02:16:45  AppRoles        = 4
+2026-09-24T02:16:45  AppUsers        = 1
+2026-09-24T02:16:45  Categories      = 18
+2026-09-24T02:16:45  Manufacturers   = 21
+2026-09-24T02:16:45  Products        = 49
+2026-09-24T02:16:45  ProductVariants = 52
+2026-09-24T02:16:45 [3b/3] Kiểm sequence đã vượt qua dữ liệu seed chưa ...
+2026-09-24T02:16:45 NOTICE:  Manufacturers : max(Id)=21, next=22 OK
+2026-09-24T02:16:45 NOTICE:  Categories : max(Id)=200, next=201 OK
+2026-09-24T02:16:45 NOTICE:  Products : max(Id)=49, next=50 OK
+2026-09-24T02:16:45 NOTICE:  ProductVariants : max(Id)=52, next=53 OK
+2026-09-24T02:16:45  Seed xong. Exit code 0.
+
+So voi lan seed 2026-08-24: khop 5/6 (Categories 18, Manufacturers 21, Products 49,
+ProductVariants 52, AppUsers 1). AppRoles = 4 thay vi 3: role 'Technician' (KTV) duoc them vao
+seed o commit b4bc7de (2026-09-05, dot 7); commit 2941d31 dung ngay 2026-08-24 co 0 dong 'Technician'.
+
+== SEEDER — CA DOI CHUNG AM: PGSSLROOTCERT tro vao file KHONG ton tai (qua containerOverrides) ==
+task            : arn:aws:ecs:ap-southeast-1:551897327153:task/hushstore/af57066c8ef64774bdfeb9352cc4ae59
+exitCode        : 2
+-- log nguyen van --
+2026-09-24T02:17:34 psql: error: connection to server at "hushstore-db-tf.c50q0csm6p6z.ap-southeast-1.rds.amazonaws.com" (10.20.21.49), port 5432 failed: root certificate file "/khong-ton-tai/root.crt" does not exist
+
+Ket luan: bo CA thi ket noi GAY (exit 2), khong tut ve che do khong xac thuc.
+=> verify-full dang THAT SU xac thuc cert. IP rieng hien tai cua RDS: 10.20.21.49

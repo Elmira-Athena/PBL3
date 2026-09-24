@@ -1,0 +1,17 @@
+### KB-02 + KB-03 (dot 7): EC2 IP rieng va RDS tu Internet — cong DB nay la 5432
+### Account 551897327153 — 2026-09-24T02:27:56Z   May tan cong: 113.185.109.227
+
+== KB-03: RDS tu Internet ==
+Endpoint cong khai: hushstore-db-tf.c50q0csm6p6z.ap-southeast-1.rds.amazonaws.com
+$ dig +short hushstore-db-tf.c50q0csm6p6z.ap-southeast-1.rds.amazonaws.com -> 10.20.21.49  (dai 10.20.x.x = IP RIENG, publicly_accessible=False)
+  connect_ex(('hushstore-db-tf.c50q0csm6p6z.ap-southeast-1.rds.amazonaws.com',5432)) rc=35 sau 10.0s -> DROP IM LANG (timeout)
+
+== KB-02: EC2 IP rieng ==
+IP rieng container instance: 10.20.11.176   (PublicIp: None)
+  connect_ex(('10.20.11.176',8080)) rc=35 sau 10.0s -> DROP IM LANG (timeout)
+  connect_ex(('10.20.11.176',22)) rc=35 sau 10.0s -> DROP IM LANG (timeout)
+  connect_ex(('10.20.11.176',80)) rc=35 sau 10.0s -> DROP IM LANG (timeout)
+
+== Bang chung cau hinh ==
+RDS PubliclyAccessible = False
+EC2 PublicIpAddress    = None

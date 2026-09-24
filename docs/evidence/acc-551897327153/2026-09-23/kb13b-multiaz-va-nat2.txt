@@ -1,0 +1,41 @@
+### KB-13b (dot 7): hai phat hien MOI cau hinh dot 7 mo ra — Multi-AZ + NAT thu hai
+### Account 551897327153 — 2026-09-24T02:35:18Z
+
+== Multi-AZ: standby o AZ khac, va publicly_accessible=false ==
+{
+    "MultiAZ": true,
+    "PrimaryAZ": "ap-southeast-1b",
+    "SecondaryAZ": "ap-southeast-1a",
+    "PubliclyAccessible": false,
+    "Engine": "postgres",
+    "EngineVersion": "17.9",
+    "Port": 5432
+}
+
+== NAT thu hai: moi AZ co NAT gateway rieng trong public subnet cua chinh no ==
+   nat-0ae7a2c5def4a9cd9  subnet=subnet-03f0b2bd38d65cd2c  AZ=ap-southeast-1b
+   AZ  subnet=subnet-03f0b2bd38d65cd2c  AZ=ap-southeast-1b
+   nat-01e5f7ea832201c82  subnet=subnet-0ab590fba699728de  AZ=ap-southeast-1a
+   AZ  subnet=subnet-0ab590fba699728de  AZ=ap-southeast-1a
+
+== Route table cua moi private/app subnet tro ra NAT cua CUNG AZ ==
+[
+    {
+        "RT": "rtb-0ce8f4883b7f9b11e",
+        "NAT": "nat-01e5f7ea832201c82",
+        "Subnets": [
+            "subnet-03705b1983b7b0830"
+        ]
+    },
+    {
+        "RT": "rtb-0897c1520b185672f",
+        "NAT": "nat-0ae7a2c5def4a9cd9",
+        "Subnets": [
+            "subnet-06cff125f76fd9c71"
+        ]
+    }
+]
+
+== Xac nhan egress CUNG AZ (khong cheo AZ) ==
+   app subnet subnet-03705b1983b7b0830 (AZ ap-southeast-1a) -> nat-01e5f7ea832201c82 (AZ ap-southeast-1a)  => CUNG AZ OK
+   app subnet subnet-06cff125f76fd9c71 (AZ ap-southeast-1b) -> nat-0ae7a2c5def4a9cd9 (AZ ap-southeast-1b)  => CUNG AZ OK

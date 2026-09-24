@@ -1,0 +1,10 @@
+### KB-07 (dot 7): allowlist Host header tren ALB
+### Account 551897327153 — 2026-09-24T02:32:39Z   ALB_IP=56.10.32.28
+
+Host: evil.com  ->  HTTP 403
+Host: www.hushstore.io.vn  ->  HTTP 403
+Host: hushstore-alb-718170503.ap-southeast-1.elb.amazonaws.com  ->  HTTP 403
+
+-- duong hop le qua --resolve --
+hushstore.io.vn -> HTTP 200
+api.hushstore.io.vn/health/ready -> HTTP 200

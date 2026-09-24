@@ -1,0 +1,36 @@
+### KB-06 (dot 7): rate limit tren /api/auth/login (mo phong brute-force)
+### Account 551897327153 — 2026-09-24T02:32:54Z
+### Cau hinh: PermitLimit=5, Window=1 phut. Goi qua --resolve toi ALB_IP=56.10.32.28
+
+20 request lien tiep, mat khau sai:
+  req  1 -> HTTP 400
+  req  2 -> HTTP 400
+  req  3 -> HTTP 400
+  req  4 -> HTTP 400
+  req  5 -> HTTP 400
+  req  6 -> HTTP 429
+  req  7 -> HTTP 429
+  req  8 -> HTTP 429
+  req  9 -> HTTP 429
+  req 10 -> HTTP 400
+  req 11 -> HTTP 400
+  req 12 -> HTTP 400
+  req 13 -> HTTP 400
+  req 14 -> HTTP 400
+  req 15 -> HTTP 429
+  req 16 -> HTTP 429
+  req 17 -> HTTP 429
+  req 18 -> HTTP 429
+  req 19 -> HTTP 429
+  req 20 -> HTTP 429
+
+== Dien giai ==
+Ky vong co ban: 5 request dau 400 (mat khau sai, DA vao handler), phan con lai 429
+(bi rate limiter chan). Lan nay day la FIXED WINDOW 1 phut: chuoi 20 request keo dai
+qua mot RANH GIOI cua so (req 10-14 tro lai 400 vi cua so 1 phut moi bat dau, dem lai
+tu 0), roi lai 429 khi vuot 5. Bat bien "toi da 5 request/cua so/IP" VAN GIU:
+  burst 1: req 1-5 = 400, req 6-9 = 429  (het cua so cu)
+  burst 2: req 10-14 = 400, req 15-20 = 429 (cua so moi)
+
+Day la 1 INSTANCE (max_instance_count=1) nen bo dem trong RAM khong bi chia doi giua
+cac task — moi lo ngai "2 task -> 10 lan/phut" ghi trong tfvars KHONG ap dung o cau hinh nay.

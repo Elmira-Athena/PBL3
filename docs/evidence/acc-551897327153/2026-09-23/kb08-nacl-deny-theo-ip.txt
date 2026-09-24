@@ -1,0 +1,43 @@
+### KB-08 (dot 7): NACL rule 50 DENY theo IP — dieu Security Group KHONG lam duoc
+### Account 551897327153 — 2026-09-24T02:45:03Z
+### IP may tan cong: 113.185.109.227  (tfvars my_ip khop /32 nay)
+### ALB_IP=56.10.32.28
+
+Phuong phap: so sanh TRUOC/SAU khi bat rule tren CUNG MOT MAY, chi doi mot bien
+Terraform (enable_deny_demo). Kem 2 control de loai moi cach giai thich khac:
+  control-1: mot site khac van 200  -> mang cua toi khong chet
+  control-2: target group van healthy (health check tu trong VPC) -> ALB khong chet
+
+== TRUOC KHI BAT RULE (enable_deny_demo = false) ==
+[A] truc tiep toi ALB (Host hop le, IP that cua toi):
+    HTTP 200  (tong 0.395240s)
+[control] toi mot site khac (chung minh mang cua toi song):
+    checkip HTTP 200  (2.394290s)
+
+== Rule that dang co tren nacl-public sau khi bat ==
+   CidrBlock=113.185.109.227/32  Protocol=-1  RuleAction=deny  RuleNumber=50
+
+== SAU KHI BAT RULE (enable_deny_demo = true) ==
+[A] truc tiep toi ALB (IP that cua toi 113.185.109.227):
+    HTTP 000  (tong 25.003049s)  exit=28
+    curl THAT BAI (exit 28) — TIMEOUT la ket qua DUNG
+[control-1] mang cua toi van song (site khac):
+    checkip HTTP 200 (0.331197s)
+[control-2] ALB van song — target group van healthy (health check tu trong VPC, khong phai IP cua toi):
+    hushstore-tg-api: healthy
+    hushstore-tg-web: healthy
+
+== SAU KHI TAT RULE lai (khoi phuc) ==
+[A sau khi TAT rule] truc tiep toi ALB:
+    HTTP 200  (0.364338s)
+
+== KET LUAN ==
+                    TRUOC(tat)   SAU(bat)              TAT lai
+  [A] truc tiep     HTTP 200     TIMEOUT exit28 25s   HTTP 200
+  [ctrl-1 mang]     HTTP 200     HTTP 200             -
+  [ctrl-2 ALB]      -            tg healthy           -
+
+Chi [A] chet khi bat rule, trong khi mang toi va ALB deu song. Day la dieu Security
+Group KHONG the lam: SG chi co danh sach CHO PHEP, khong co cu phap deny. Muon chan
+dung mot IP thi BUOC dung Network ACL. Rule so 50 < 100/110 (allow 80/443) nen duoc
+xet truoc — dat o 150 thi vo dung vi goi tin da khop rule allow tu truoc.

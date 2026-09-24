@@ -1,0 +1,34 @@
+### KB-11: gia mao OIDC assume-role
+### Account 551897327153 — do lai cho dot 7
+### 2026-09-23T09:07:21Z
+Role: arn:aws:iam::551897327153:role/hushstore-github-actions-deploy-role
+
+-- Phep thu 1: chuoi bat ky lam token --
+
+aws: [ERROR]: An error occurred (InvalidIdentityToken) when calling the AssumeRoleWithWebIdentity operation: The ID Token provided is not a valid JWT. (You may see this error if you sent an Access Token)
+
+-- Kiem chung trust policy bang cach doc thang no --
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "GitHubOidcMainBranchOnly",
+            "Effect": "Allow",
+            "Principal": {
+                "Federated": "arn:aws:iam::551897327153:oidc-provider/token.actions.githubusercontent.com"
+            },
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Condition": {
+                "StringEquals": {
+                    "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                    "token.actions.githubusercontent.com:sub": "repo:Elmira-Athena/PBL3:ref:refs/heads/main"
+                }
+            }
+        }
+    ]
+}
+
+-- Phep thu 2: JWT tu ky, claim (iss/aud/sub/iat/exp) khop dung trust policy --
+Token (payload decode): iss=token.actions.githubusercontent.com aud=sts.amazonaws.com sub=repo:Elmira-Athena/PBL3:ref:refs/heads/main
+
+aws: [ERROR]: An error occurred (InvalidIdentityToken) when calling the AssumeRoleWithWebIdentity operation: Couldn't retrieve verification key from your identity provider,  please reference AssumeRoleWithWebIdentity documentation for requirements

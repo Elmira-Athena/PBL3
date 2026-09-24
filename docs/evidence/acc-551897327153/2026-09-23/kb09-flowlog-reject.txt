@@ -1,0 +1,47 @@
+### KB-09 (dot 7): VPC Flow Logs ghi lai cac goi tin bi REJECT
+### Account 551897327153 — 2026-09-24T02:34:35Z
+### Log group /vpc/hushstore/flowlogs — filter REJECT tu IP tan cong 113.185.109.227
+
+Tong so ban ghi REJECT tu may tan cong (113.185.109.227): 2028
+Dich den (ENI cua ALB o public subnet, dai 10.20.0-1.x): 10.20.0.213 10.20.1.249 
+
+Cac port bi tu choi — 25 port dau, sap theo so lan:
+   port 22       x8
+   port 8080     x6
+   port 9200     x4
+   port 8443     x4
+   port 5432     x4
+   port 5001     x4
+   port 5000     x4
+   port 3389     x4
+   port 3306     x4
+   port 1723     x4
+   port 1433     x4
+   port 9999     x2
+   port 9998     x2
+   port 999      x2
+   port 9968     x2
+   port 995      x2
+   port 9944     x2
+   port 9943     x2
+   port 993      x2
+   port 9929     x2
+   port 992      x2
+   port 9917     x2
+   port 9900     x2
+   port 990      x2
+   port 99       x2
+
+Kiem 3 port dang chu y nhat (LUU Y: cong DB nay la 5432, KHONG con 1433):
+   port 22 : 8 ban ghi REJECT
+   port 5432 : 4 ban ghi REJECT
+   port 8080 : 6 ban ghi REJECT
+
+Mot ban ghi nguyen van (port 22):
+   2 551897327153 eni-05ea83f21fabad258 113.185.109.227 10.20.1.249 4665 22 6 1 64 1790216611 1790216641 REJECT OK
+   Truong: version account eni srcaddr dstaddr srcport dstport proto packets bytes start end action status
+
+Ghi chu doc cho dung: ca 1433 LAN 5432 deu co x4 vi dot quet nmap o KB-01 probe CA HAI
+cong. Diem dang ke la 5432 (PostgreSQL, cong DB moi tu dot 7) NAY XUAT HIEN va bi REJECT
+y het moi cong khac — khong co gi lang nghe o do tu Internet. Hinh dang phong thu khong
+doi so voi 2026-08-24: moi port ung dung deu bi REJECT o tang network, doc lap voi curl/nmap.

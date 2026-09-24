@@ -1,0 +1,24 @@
+### KB-12: ban kinh anh huong (blast radius) cua role deploy GitHub Actions
+### Account 551897327153 — do lai cho dot 7 (PostgreSQL 17)
+### 2026-09-23T09:08:21Z
+Role: arn:aws:iam::551897327153:role/hushstore-github-actions-deploy-role
+
+-- PHAI DUOC PHEP (4 viec cua pipeline) --
+rds:CreateDBSnapshot                arn:aws:rds:ap-southeast-1:551897327153:snapshot:pre-migrate-test allowed
+ecs:UpdateService                   arn:aws:ecs:ap-southeast-1:551897327153:service/hushstore/hushstore-api allowed
+ecr:PutImage                        arn:aws:ecr:ap-southeast-1:551897327153:repository/hushstore-api allowed
+ecs:RunTask                         arn:aws:ecs:ap-southeast-1:551897327153:task-definition/hushstore-migrator:1 allowed
+
+-- PHAI BI TU CHOI (khong duoc bat ha tang ton tien, khong doc secret) --
+autoscaling:SetDesiredCapacity      arn:aws:autoscaling:ap-southeast-1:551897327153:autoScalingGroup:*:autoScalingGroupName/hushstore-asg implicitDeny
+rds:StartDBInstance                 arn:aws:rds:ap-southeast-1:551897327153:db:hushstore-db-tf implicitDeny
+rds:StopDBInstance                  arn:aws:rds:ap-southeast-1:551897327153:db:hushstore-db-tf implicitDeny
+s3:GetObject                        arn:aws:s3:::hushstore-tfstate-551897327153/prod/terraform.tfstate implicitDeny
+ecs:RunTask                         arn:aws:ecs:ap-southeast-1:551897327153:task-definition/hushstore-api:1 implicitDeny
+ssm:GetParameter                    arn:aws:ssm:ap-southeast-1:551897327153:parameter/hushstore/prod/db-password implicitDeny
+iam:PassRole                        arn:aws:iam::551897327153:role/hushstore-task-execution-seeder-role implicitDeny
+iam:AttachRolePolicy                arn:aws:iam::551897327153:role/hushstore-github-actions-deploy-role implicitDeny
+
+-- dieu kien ecs:cluster khong phai trang tri --
+ecs:RunTask                         arn:aws:ecs:ap-southeast-1:551897327153:task-definition/hushstore-migrator:1 (cluster=hushstore) allowed
+ecs:RunTask                         arn:aws:ecs:ap-southeast-1:551897327153:task-definition/hushstore-migrator:1 (cluster=cluster-khac) implicitDeny

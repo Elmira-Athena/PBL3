@@ -1,0 +1,50 @@
+### KB-05 (phan cau hinh, dot 7): he thong KHONG CO be mat SSH nao
+### Account 551897327153 — 2026-09-24T02:31:29Z
+
+== 1. So key pair EC2 trong region ==
+   so key pair: 0
+
+== 2. Launch template co gan key_name khong (hushstore-lt-a81c363d512602b4fb1d3e5902) ==
+   KeyName: None
+
+== 3. Cac SG cua ta: dem rule ingress phu port 22 ==
+   alb: (khong tim thay hushstore-alb-sg)
+   web: (khong tim thay hushstore-web-sg)
+   rds: (khong tim thay hushstore-rds-sg)
+
+== 5. NACL app tier: rule 90 DENY 22 ==
+[]
+
+== 6. IMDSv2 bat buoc ==
+{
+    "HttpTokens": "required",
+    "HttpPutResponseHopLimit": 1,
+    "HttpEndpoint": "enabled"
+}
+
+== 3b. Cac SG cua ta (ten day du): dem rule ingress phu port 22 ==
+    (sg-047fde57ffa848f75):  rule phu port 22
+    (sg-055eeb2fff782b18d):  rule phu port 22
+    (sg-039c1a381b23280bf):  rule phu port 22
+
+== 5. NACL app tier (acl-0b4112cdf2688c78e): rule 90 DENY 22 ==
+
+== 3b. Cac SG cua ta (ten day du): dem rule ingress phu port 22 ==
+   hushstore-alb-sg-d7d22561d6d4f7bdaa7fc840df (sg-047fde57ffa848f75): 0 rule phu port 22
+   hushstore-rds-sg-70d65704ee4eab7b2b8cc63989 (sg-055eeb2fff782b18d): 0 rule phu port 22
+   hushstore-web-sg-c506528e03235748ee5f9df3db (sg-039c1a381b23280bf): 0 rule phu port 22
+
+== 5. NACL app tier (acl-0b4112cdf2688c78e): rule 90 DENY 22 ==
+[
+    {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": false,
+        "PortRange": {
+            "From": 22,
+            "To": 22
+        },
+        "Protocol": "6",
+        "RuleAction": "deny",
+        "RuleNumber": 90
+    }
+]
