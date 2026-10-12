@@ -19,7 +19,7 @@ file nào.*
 | **Bật hệ thống lên** / tắt đi / deploy bản mới / sửa sự cố | [terraform-runbook.md](terraform-runbook.md) | 864 dòng |
 | Biết hệ thống **chặn được tấn công gì**, và vì sao | [bao-mat-he-thong.md](bao-mat-he-thong.md) | 843 dòng |
 | Hiểu **CI/CD** từ con số không | [cicd-cho-nguoi-moi.md](cicd-cho-nguoi-moi.md) | 399 dòng |
-| Biết **code Terraform nằm ở đâu**, đọc theo thứ tự nào | [doc-code-terraform.md](doc-code-terraform.md) | 289 dòng |
+| Biết **code Terraform nằm ở đâu**, đọc theo thứ tự nào — kèm cú pháp cho người chưa đọc Terraform bao giờ | [doc-code-terraform.md](doc-code-terraform.md) | 902 dòng |
 | Xem **bằng chứng** đã tấn công thật và bị chặn thật | [security-validation-report.md](security-validation-report.md) | 668 dòng |
 | Biết dự án **đã đi qua những gì**, vấp ở đâu | [nhat-ky-trien-khai.md](nhat-ky-trien-khai.md) | 931 dòng |
 | **Đang tốn tiền** và cần tắt gấp ngay bây giờ | [emergency-shutdown.md](emergency-shutdown.md) | 210 dòng |
@@ -105,8 +105,8 @@ vừa push code lên và đang không biết chuyện gì đang xảy ra.
 
 ### Sắp mở code Terraform ra đọc?
 
-Đọc [doc-code-terraform.md](doc-code-terraform.md) trước. 68 file, 9713 dòng —
-không có bản đồ thì rất dễ mở đúng file ít quan trọng nhất. Nó cũng chỉ ra **ba
+Đọc [doc-code-terraform.md](doc-code-terraform.md) trước. 89 file, ~12.800 dòng —
+không có bản đồ thì rất dễ mở đúng file ít quan trọng nhất. Nó cũng chỉ ra **bốn
 chỗ dễ hiểu sai** trong code này, loại hiểu sai mà đọc kỹ vẫn mắc.
 
 ### Chưa biết Terraform?
