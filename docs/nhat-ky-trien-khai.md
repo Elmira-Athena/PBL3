@@ -11,13 +11,17 @@
 > xem **Phần VI — Lộ trình học** trong tài liệu thiết kế, có bản đồ từ mỗi thành
 > phần của hệ thống sang workshop tiếng Việt tương ứng.
 >
-> 🕰️ **Nhật ký kể chuyện đã xảy ra, nên nó KHÔNG được cập nhật khi hệ thống đổi.**
-> Phần lớn tài liệu này viết khi database còn là **SQL Server** (cổng `1433`) và
-> hạ tầng còn **một** NAT Gateway. Đợt 7 (2026-09-05) đổi sang **PostgreSQL 17**
-> (cổng `5432`), thêm NAT thứ hai và bật **Multi-AZ**. Những chỗ nhắc SQL Server
-> hoặc `1433` bên dưới là **đúng với thời điểm chúng được viết** — muốn biết hệ
-> thống *hiện tại* thì đọc [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md)
-> và [terraform-runbook.md](terraform-runbook.md).
+> 🕰️ Tài liệu này viết khi database còn là **SQL Server** (cổng `1433`) và hạ
+> tầng còn **một** NAT Gateway. Đợt 7 (2026-09-05) đổi sang **PostgreSQL 17**
+> (cổng `5432`), thêm NAT thứ hai và bật **Multi-AZ**.
+>
+> 🔄 **Giai đoạn 0–5 đã được cập nhật khớp code ngày 2026-10-12.** Bảng cấu hình
+> ở đó là giá trị trong `infra/tf/` hiện tại. Chỗ nào khác bản gốc thì có ghi chú
+> **🔄 Đợt 7** giữ lại cấu hình cũ và lý do đổi.
+> **Giai đoạn 6–10 và Phần III–V chưa cập nhật**: chỗ nào nhắc SQL Server hoặc
+> `1433` ở đó là đúng với thời điểm viết. Muốn biết hệ thống *hiện tại* của các
+> phần đó thì đọc [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) và
+> [terraform-runbook.md](terraform-runbook.md).
 
 ---
 
@@ -133,10 +137,12 @@ không đụng nhau, và chỉ chuyển tên miền khi bản mới đã verify 
 
 | Thiết lập | Giá trị | Vì sao |
 |---|---|---|
-| Tên bucket | `hushstore-tfstate` | Tên S3 là **toàn cầu duy nhất** — trùng với bất kỳ ai trên thế giới là tạo thất bại |
+| Tên bucket | `hushstore-tfstate-<account ID>` | Tên S3 là **toàn cầu duy nhất** — trùng với bất kỳ ai trên thế giới là tạo thất bại. Ghép account ID thì không bao giờ trùng, khỏi phải đoán |
 | Versioning | **bật** | State hỏng thì quay lại bản trước. Đây là lưới an toàn duy nhất cho file quan trọng nhất của hạ tầng |
+| Lifecycle | xoá **version cũ** sau 90 ngày | Mỗi lần apply sinh một version mới. Không dọn thì bucket phình vô hạn. Version hiện hành không bao giờ bị xoá |
 | Block public access | **bật toàn bộ** | State chứa mọi ID resource và có thể chứa giá trị nhạy cảm. Public là thảm hoạ |
-| Mã hoá | bật (SSE-S3) | Miễn phí, không có lý do để tắt |
+| Mã hoá | bật (SSE-S3, `AES256`) | Miễn phí, không có lý do để tắt |
+| `prevent_destroy` | `true` | Terraform **từ chối** xoá bucket này. Muốn xoá phải sửa code bỏ khối này trước — xoá state bucket phải là quyết định có chủ đích, không phải một lần destroy vô tình |
 | Backend lock | `use_lockfile = true` | Terraform ≥ 1.10 lock ngay trên S3, **không cần bảng DynamoDB** như hướng dẫn cũ — bớt một resource phải quản |
 
 **Vì sao đây là việc đầu tiên.** Vì mọi thứ sau đó đều ghi vào state. Nếu state
@@ -156,9 +162,10 @@ lại khi lần trước chưa xong). Đó là tình huống thật, và nó là
 
 ## Giai đoạn 2 — Mạng
 
-**Resource:** 1 VPC · 6 subnet · 1 Internet Gateway · 3 route table · 1 NAT
-Gateway + 1 Elastic IP · 1 S3 Gateway Endpoint · 3 Network ACL · (tuỳ chọn) Flow
-Logs.
+**Resource:** 1 VPC · 6 subnet · 1 Internet Gateway · 4 route table · 2 NAT
+Gateway + 2 Elastic IP (khi bật NAT) · 1 S3 Gateway Endpoint · 3 Network ACL ·
+default Security Group khoá rỗng · (tuỳ chọn) Flow Logs · (tuỳ chọn) 2 ECR
+Interface Endpoint.
 
 ### VPC
 
@@ -194,21 +201,35 @@ chỗ và chắc chắn sẽ quên một chỗ.
 
 | Route table | Gắn vào | Dòng route | Ý nghĩa |
 |---|---|---|---|
-| public | 2 subnet public | `0.0.0.0/0` → **IGW** | Có đường vào **và** ra |
-| private (app) | 2 subnet app | `0.0.0.0/0` → **NAT** *(chỉ khi bật NAT)* | **Chỉ** có đường ra |
-| db | 2 subnet db | **không có dòng `0.0.0.0/0` nào** | Không đường ra, không đường vào |
+| `rt-public` | 2 subnet public | `0.0.0.0/0` → **IGW** | Có đường vào **và** ra |
+| `rt-private-a` | subnet `app-a` | `0.0.0.0/0` → **NAT ở AZ a** *(chỉ khi bật NAT)* | **Chỉ** có đường ra |
+| `rt-private-b` | subnet `app-b` | `0.0.0.0/0` → **NAT ở AZ b** *(chỉ khi bật NAT)* | **Chỉ** có đường ra |
+| `rt-db` | 2 subnet db | **không có dòng `0.0.0.0/0` nào** | Không đường ra, không đường vào |
 
 Route table của db tier là ví dụ đẹp nhất của nguyên tắc tối thiểu: bảo mật ở đây
 đến từ **việc thiếu một dòng cấu hình**, không phải từ việc thêm một rule.
+
+**Vì sao app tier có hai route table.** Một route table chỉ chứa được **một**
+dòng `0.0.0.0/0`. Muốn mỗi AZ đi ra bằng NAT của chính nó thì mỗi AZ phải có route
+table riêng. Khi chỉ dựng 1 NAT, cả hai route table cùng trỏ về NAT đó.
+
+🔄 **Đợt 7:** bản gốc dùng **một** route table `private` chung cho cả hai subnet
+app — đúng khi chỉ có một NAT. Tách ra là điều kiện cần để có NAT thứ hai.
 
 ### NAT Gateway
 
 | Thiết lập | Giá trị | Vì sao |
 |---|---|---|
-| Vị trí | `public-a` | NAT **phải** nằm ở public subnet — nó cần đường ra IGW để làm việc của mình |
-| Elastic IP | 1 cái, gắn kèm | NAT bắt buộc có IP public tĩnh |
-| Số lượng | **1** cho cả 2 AZ | NAT tính phí theo giờ. Mỗi AZ một NAT chỉ cần khi thật sự chạy nhiều máy ở nhiều AZ; ta `max_size = 1` nên chỉ có một máy tại một thời điểm |
-| Công tắc | `count = enable_nat ? 1 : 0` | Đặt **ngay từ ngày đầu**, không để cuối dự án |
+| Vị trí | NAT thứ *i* ở `public-<AZ i>` | NAT **phải** nằm ở public subnet — nó cần đường ra IGW để làm việc của mình. NAT gắn với **một** AZ và không tự failover sang AZ khác |
+| Elastic IP | 1 cái cho mỗi NAT | NAT bắt buộc có IP public tĩnh |
+| Số lượng | `nat_gateway_count`: **2** ở `envs/prod` (default của module là 1) | Mỗi AZ một NAT: mất một AZ không cắt đường ra của AZ còn lại, và app-b không phải đi chéo sang NAT ở AZ a (phí cross-AZ $0,01/GB **mỗi chiều**, không hiện ở dòng nào tên "NAT") |
+| Công tắc | `nat_count = enable_nat ? nat_gateway_count : 0` | Hai câu hỏi khác nhau nên là hai biến: "có cần đường ra không" và "đường ra có cần sống sót khi mất một AZ không". Công tắc đặt **ngay từ ngày đầu**, không để cuối dự án |
+| Giá | $0,059/giờ **mỗi** NAT + $0,045/GB xử lý | ap-southeast-1, đo 2026-09-05. Không có bậc miễn phí |
+
+🔄 **Đợt 7:** bản gốc dựng **1** NAT ở `public-a` cho cả 2 AZ, với lý do "ASG
+`max_size = 1` nên chỉ có một máy tại một thời điểm". Đợt 7 (cùng đợt bật
+Multi-AZ cho database) thêm NAT thứ hai, để mất một AZ không cắt đường ra của AZ
+còn lại.
 
 **Lưu ý đáng ghi vào báo cáo:** NAT Gateway **không gắn được Security Group**
 (khác NAT instance là một EC2 tự dựng). Nên toàn bộ việc kiểm soát chiều ra phải
@@ -218,11 +239,31 @@ làm ở `sg-web` và ở NACL của app tier.
 
 | Thiết lập | Giá trị | Vì sao |
 |---|---|---|
-| Loại | **Gateway** (không phải Interface) | Gateway endpoint **miễn phí**; Interface endpoint tốn ~$7/tháng mỗi cái |
-| Gắn vào | route table của app tier | Traffic S3 đi đường riêng, không qua NAT |
+| Loại | **Gateway** (không phải Interface) | Gateway endpoint **miễn phí**; Interface endpoint tính tiền theo giờ cho mỗi AZ |
+| Gắn vào | **cả 2** route table private **và** route table db | Phải phủ **mọi** route table không ra thẳng Internet. Sót một cái thì subnet của nó đi S3 vòng qua NAT: vẫn chạy, không lỗi, chỉ âm thầm tính $0,045/GB |
 
 Hai lợi ích: không bị tính phí data qua NAT ($0.045/GB), và **vẫn hoạt động khi
 NAT đã tắt**.
+
+### Default Security Group — khoá về rỗng
+
+AWS tự tạo một security group tên `default` cho **mọi** VPC và không cho xoá. Mặc
+định nó cho phép mọi port giữa các máy cùng nằm trong nó — kể cả cổng 22. Ai
+launch một máy mà quên chỉ định SG thì AWS gán SG này, và máy đó lập tức nằm
+trong một SG mở.
+
+Terraform không tạo SG mới ở đây: nó **nhận quản lý** SG `default` có sẵn rồi xoá
+sạch rule, và đặt tên `hushstore-default-KHONG-DUNG`. Không resource nào của hệ
+thống dùng nó. Phát hiện lúc chạy lại kiểm thử 2026-08-24.
+
+### ECR Interface Endpoint (tuỳ chọn, mặc định tắt)
+
+Công tắc `enable_ecr_endpoints`. Chỉ dựng **hai** endpoint `ecr.api` + `ecr.dkr`
+(4 ENI ≈ $0,04/giờ), không dựng đủ bộ 7 cái (≈ $0,14/giờ, đắt hơn cả 2 NAT). Phần
+byte lớn nhất của một lần pull image là layer nằm trên S3, mà S3 Gateway Endpoint
+đã miễn phí. Hai endpoint này gỡ nốt phần còn lại, nên pull image chạy được **cả
+khi tắt NAT**. Đây là resource **có tính tiền** mà `enable_nat` không che: chỉ bật
+trong cửa sổ đo.
 
 ### Network ACL — 3 cái
 
@@ -233,10 +274,16 @@ NAT đã tắt**.
 | Rule number | cách nhau 5–10 | Chừa khoảng trống để chèn rule mới vào giữa mà không phải đánh số lại |
 | Rule mặc định `*` | **deny** | AWS tự thêm, không xoá được. Đây là lý do NACL "an toàn theo mặc định" |
 
-Bảng rule đầy đủ và lý do từng rule nằm ở **Phần III của
-[tài liệu thiết kế](thiet-ke-he-thong-aws.md)**. Ở đây chỉ nhắc điều quan trọng
-nhất: rule 90, 95 và 115 là rule **DENY**, và chúng tồn tại **vì** rule 120 —
-không phải vì thừa.
+| NACL | Vào | Ra |
+|---|---|---|
+| public (ALB + NAT) | 100: 80 · 110: 443 · 120: 1024–65535, đều từ `0.0.0.0/0` | 100: 80 và 110: 8080 tới app tier · 120: 80 · 125: 443 · 130: 1024–65535 ra `0.0.0.0/0` |
+| app (container) | **90: DENY 22** · **95: DENY 5432** · 100: 80 và 110: 8080 từ public tier · **115: DENY 8080** · 120: 1024–65535 từ `0.0.0.0/0` | 100: 5432 tới db tier · 110: 80 · 115: 443 ra `0.0.0.0/0` · 120: 1024–65535 **chỉ** tới public tier |
+| db | 100: 5432 từ app tier | 100: 1024–65535 tới app tier |
+
+"Public tier", "app tier", "db tier" là ba dải `/23` tính ở trên. Lý do chi tiết
+từng rule nằm ở **Phần III của [tài liệu thiết kế](thiet-ke-he-thong-aws.md)**
+và ở comment trong `modules/network/nacl.tf`. Điều quan trọng nhất: rule 90, 95 và
+115 là rule **DENY**, và chúng tồn tại **vì** rule 120 — không phải vì thừa.
 
 ### VPC Flow Logs (tuỳ chọn)
 
@@ -244,8 +291,8 @@ không phải vì thừa.
 |---|---|---|
 | `traffic_type` | **`REJECT`** | Chỉ ghi kết nối **bị chặn**. Ghi cả `ALL` thì lượng log gấp hàng chục lần và tốn phí ingest, mà phần cần cho báo cáo chỉ là phần bị chặn |
 | Retention | 1 ngày | Chỉ cần trong lúc thu bằng chứng |
-| `max_aggregation_interval` | 600 giây | Gom bản ghi 10 phút một lần thay vì 1 phút → ít bản ghi hơn, ít tiền hơn |
-| Mặc định | **tắt** | Tính phí theo lượng log ghi vào CloudWatch |
+| `max_aggregation_interval` | 600 giây (mặc định của AWS, code không khai) | Gom bản ghi 10 phút một lần thay vì 1 phút → ít bản ghi hơn, ít tiền hơn |
+| Mặc định | **tắt** (`enable_flow_logs = false`) | Tính phí theo lượng log ghi vào CloudWatch |
 
 **Vì sao mạng trước tiên.** Vì mọi thứ khác đều phải *nằm trong* một subnet nào
 đó. Security Group cần biết VPC nào; RDS cần biết subnet nào; ALB cần biết subnet
@@ -255,20 +302,30 @@ nào.
 stateless. Người mới thường viết rule cho chiều vào rồi tưởng xong. Kết quả: kết
 nối ra Internet không hoạt động, vì câu trả lời quay về bị chặn ở chiều vào. Chữa
 thì phải mở dải ephemeral 1024–65535 — nhưng mở xong lại vô tình mở luôn port
-1433 và 8080 ra Internet, vì hai port đó nằm trong dải. Phải chặn chúng bằng rule
+5432 và 8080 ra Internet, vì hai port đó nằm trong dải. Phải chặn chúng bằng rule
 **số nhỏ hơn**.
+
+🔄 **Đợt 7:** rule 95 từng chặn `1433` (SQL Server). Đổi engine mà **quên đổi số
+cổng của rule 95** là mở cổng database mới ra `0.0.0.0/0` mà không có gì báo đỏ —
+nên đây là dòng phải sửa cùng lúc với việc đổi engine.
 
 ---
 
 ## Giai đoạn 3 — Security Group
 
-**Resource:** 3 Security Group · 5 rule vào · 4 rule ra.
+**Resource:** 3 Security Group · 5 rule vào · 5 rule ra.
 
-| SG | `description` | Rule vào | Rule ra |
+| SG (tag `Name`) | `description` | Rule vào | Rule ra |
 |---|---|---|---|
 | `hushstore-alb-sg` | ALB nhận 80/443 từ internet | 80 ← `0.0.0.0/0`<br>443 ← `0.0.0.0/0` | 80 → `sg-web`<br>8080 → `sg-web` |
-| `hushstore-web-sg` | container instance, không port 22 | 80 ← `sg-alb`<br>8080 ← `sg-alb` | 1433 → `sg-rds`<br>80 → `0.0.0.0/0`<br>443 → `0.0.0.0/0` |
-| `hushstore-rds-sg` | chỉ nhận 1433 từ sg-web | 1433 ← `sg-web` | **không có rule nào** |
+| `hushstore-web-sg` | container instance, không port 22 | 80 ← `sg-alb`<br>8080 ← `sg-alb` | 5432 → `sg-rds`<br>80 → `0.0.0.0/0`<br>443 → `0.0.0.0/0` |
+| `hushstore-rds-sg` | chỉ nhận 5432 từ sg-web, egress rỗng | 5432 ← `sg-web` | **không có rule nào** |
+
+Cổng 80 vào `sg-web` là container nginx phục vụ Blazor WASM; 8080 là container
+API. Hai rule ra 80/443 của `sg-web` là để pull image từ ECR, gọi SSM/CloudWatch
+và `yum update`, đi qua NAT.
+
+🔄 **Đợt 7:** cổng database đổi từ `1433` (SQL Server) sang `5432` (PostgreSQL).
 
 Thiết lập kỹ thuật cần biết:
 
@@ -277,8 +334,18 @@ Thiết lập kỹ thuật cần biết:
 | Nguồn/đích của rule | **ID của SG khác**, không phải dải IP | IP của EC2 đổi mỗi lần máy được tạo lại; SG thì không. Rule tự đúng mãi |
 | `description` mỗi rule | bắt buộc điền | Sáu tháng sau, đây là thứ duy nhất cho biết rule đó mở để làm gì. Rule không có mô tả là rule không ai dám xoá |
 | `lifecycle create_before_destroy` | `true` | SG đang được dùng thì không xoá được. Tạo cái mới trước rồi mới bỏ cái cũ |
+| Tên SG | **`name_prefix`** (`hushstore-rds-sg-` + hậu tố ngẫu nhiên), không phải `name` cố định | Xem 🔄 bên dưới |
 | Rule khai ở đâu | resource **riêng**, ngoài định nghĩa SG | Xem "chỗ dễ sai" |
-| Egress mặc định | Terraform **không** tự thêm "cho phép tất cả" | Khác console: console tạo SG là tự thêm egress allow-all. Terraform không, nên mỗi đường ra đều là một quyết định có ý thức |
+| Egress mặc định | Terraform **xoá** rule "cho phép tất cả" mà AWS tự thêm | Khác console: console tạo SG là giữ luôn egress allow-all. Terraform thì không, nên mỗi đường ra đều là một quyết định có ý thức |
+
+🔄 **Đợt 7 — vì sao đổi sang `name_prefix`.** `description` của SG là **bất biến**
+ở AWS: đổi nó buộc Terraform thay cả SG. Với tên cố định cộng
+`create_before_destroy`, Terraform tạo SG mới **trước** khi xoá cái cũ, mà cái cũ
+vẫn giữ tên ⇒ `InvalidGroup.Duplicate`. Đã xảy ra thật khi đổi description
+`"RDS SQL Server: 1433"` thành `"RDS PostgreSQL: 5432"`, và hỏng ở giữa chừng: RDS
+cũ đã bị xoá, RDS mới chưa dựng được vì thiếu SG. Cả ba SG được sửa cùng lúc vì
+chúng cùng một quả mìn. Tag `Name` vẫn giữ nguyên, và đó là thứ người và script
+đọc.
 
 **Vì sao egress của `sg-rds` rỗng hoàn toàn.** Database không bao giờ cần chủ
 động gọi ra ngoài. SG là stateful nên câu trả lời cho app vẫn đi được bình
@@ -312,17 +379,33 @@ Nhãn image dùng **mã commit Git**, không dùng `latest`. Lý do: `latest` n�
 
 ### S3 — 3 bucket, ba mục đích, ba cấu hình khác nhau
 
-| Bucket | `force_destroy` | Lifecycle | Vì sao cấu hình vậy |
-|---|---|---|---|
-| `hushstore-public-assets` (ảnh sản phẩm) | **`false`** | không | **Chứa dữ liệu thật.** URL của những ảnh này đang nằm trong database. `false` nghĩa là `terraform destroy` sẽ **thất bại** ở bucket này nếu nó còn file — đó là **lưới an toàn có chủ ý**, không phải lỗi |
-| `hushstore-artifacts` | `true` | xoá sau 30 ngày | Chứa file SQL migration và file tạm. Dựng lại được từ Git |
-| `hushstore-alb-logs` | `true` | xoá sau 7 ngày | Log của ALB. Chỉ cần trong lúc chẩn đoán |
+Tên cả ba bucket có hậu tố account ID (`hushstore-public-assets-<account ID>`…),
+cùng lý do với bucket state ở giai đoạn 1.
 
-Cả ba bucket đều bật: block public access, mã hoá, và chặn ACL.
+| Bucket | Public? | `force_destroy` | Lifecycle | Vì sao cấu hình vậy |
+|---|---|---|---|---|
+| `public-assets` (ảnh sản phẩm) | **đọc công khai** | **`false`** | không | **Chứa dữ liệu thật.** URL của những ảnh này đang nằm trong database. `false` nghĩa là `terraform destroy` sẽ **thất bại** ở bucket này nếu nó còn file — đó là **lưới an toàn có chủ ý**, không phải lỗi |
+| `artifacts` | chặn hoàn toàn | `true` | xoá sau **365** ngày | Chứa file SQL migration (`migrations/migrate-<sha>.sql`), seed và script. File migration là bản ghi duy nhất cho biết câu SQL nào đã chạy lên production ở commit nào, nên phải sống lâu hơn một học kỳ |
+| `alb-logs` | chặn hoàn toàn | `true` | xoá sau 7 ngày | Log của ALB. Chỉ cần trong lúc chẩn đoán |
 
-**Riêng bucket ảnh là ngoại lệ duy nhất của toàn bộ hạ tầng greenfield:** nó
-được **nhập** (import) vào Terraform quản lý thay vì tạo mới. Tạo lại là làm chết
-toàn bộ ảnh sản phẩm hiện có.
+**Vì sao bucket ảnh phải public.** App trả cho trình duyệt URL dạng
+`https://<bucket>.s3.<region>.amazonaws.com/<key>`, và Blazor hiển thị ảnh thẳng
+từ đó. Nên bucket có một bucket policy cho **mọi người** `s3:GetObject`, cộng CORS
+cho `GET`/`HEAD`. Vẫn **chặn ACL**: quyền công khai chỉ đến từ một policy duy
+nhất, đọc được trong code. Hệ quả phải nhớ: **mọi** object trong bucket này đều
+công khai, nên tuyệt đối không đặt dữ liệu riêng tư vào đây.
+
+**Hai bucket còn lại** bật đủ bốn công tắc block public access. Bucket `alb-logs`
+có policy cho dịch vụ ELB ghi log vào, kèm điều kiện `aws:SourceAccount` để ALB
+của account **khác** không ghi vào được (lỗ hổng *confused deputy*). Mã hoá:
+`artifacts` khai SSE-S3 tường minh; hai bucket kia dùng mã hoá SSE-S3 mà S3 tự
+bật cho mọi bucket.
+
+🔄 **Đã đổi so với bản gốc:** bản gốc ghi cả ba bucket đều chặn public, artifacts
+xoá sau 30 ngày, và bucket ảnh được **nhập** (import) từ bucket có sẵn thay vì
+tạo mới. Code hiện tại: bucket ảnh public-read như trên, artifacts 365 ngày, và
+không có khối `import` nào — bucket ảnh do Terraform tạo, tên có hậu tố account
+ID.
 
 **Chỗ dễ sai.** Chạy `terraform destroy` để "dọn cho sạch" mà không biết nó kéo
 theo bucket dữ liệu thật. Đây là lý do `force_destroy = false` ở bucket ảnh, và
@@ -332,39 +415,51 @@ lý do script `nuke.sh` in cảnh báo riêng về nó trước khi hỏi xác n
 
 ## Giai đoạn 5 — Database và bí mật
 
-**Resource:** 1 DB subnet group · 1 RDS instance · 2 mật khẩu sinh tự động · 3
-SSM Parameter.
+**Resource:** 1 DB subnet group · 1 RDS PostgreSQL (Multi-AZ) · (tuỳ chọn) 1
+read replica · 2 mật khẩu sinh tự động · 3 SSM Parameter (+1 khi có replica).
 
 ### DB subnet group
 
 | Thiết lập | Giá trị | Vì sao |
 |---|---|---|
-| Subnet | 2 cái, ở **2 AZ khác nhau** | RDS **bắt buộc** tối thiểu 2 AZ, kể cả khi chạy single-AZ. Đây là lý do phải có `db-b` dù nó không chứa gì |
+| Subnet | 2 cái, ở **2 AZ khác nhau** | RDS **bắt buộc** tối thiểu 2 AZ, kể cả khi chạy single-AZ. Với Multi-AZ thì `db-b` còn là nơi đặt bản standby |
 
 ### RDS instance
 
 | Thiết lập | Giá trị | Vì sao |
 |---|---|---|
-| `engine` | `sqlserver-ex` (Express) | Bản miễn phí license của SQL Server. Giới hạn 10GB/database, đủ cho đồ án |
-| `license_model` | `license-included` | Express không phải trả phí license, nhưng AWS vẫn đòi khai rõ |
-| `instance_class` | `db.t3.micro` | Nhỏ nhất. **Nhưng xem Issue #11** — lớp `t3` có bẫy chi phí |
-| `allocated_storage` | 20 GB, `gp2` | Mức tối thiểu của SQL Server trên RDS |
-| `storage_encrypted` | **`true`** | Mã hoã ổ đĩa, miễn phí. **Chỉ đặt được lúc tạo** — sau này muốn bật phải tạo lại database |
+| `engine` | `postgres`, `engine_version = "17"` | Engine open-source, không có license phải khai. Ghim **major** chứ không ghim minor: minor hết hỗ trợ theo lịch của AWS, ghim là tự tạo việc |
+| `instance_class` | `db.t4g.micro` | Nhỏ nhất, chip Graviton (arm64), rẻ hơn `t3`. Vẫn là lớp *burstable* — xem Issue #11 |
+| `allocated_storage` | 20 GB, `gp3` | Mức tối thiểu cho `gp3` |
+| `storage_encrypted` | **`true`** | Mã hoá ổ đĩa, miễn phí. **Chỉ đặt được lúc tạo** — sau này muốn bật phải tạo lại database |
+| `db_name` | `HushStoreDB` | PostgreSQL tạo database ngay lúc tạo instance. Bỏ trống thì app nối vào database mặc định `postgres`: migration và seed vẫn chạy, không có gì báo đỏ, chỉ là cả hệ thống sống trong database mang tên sai |
 | `publicly_accessible` | **`false`** | Endpoint phân giải ra IP **private**. Kẻ tấn công tra được tên nhưng nhận về địa chỉ không tồn tại trên Internet |
-| `multi_az` | `false` | SQL Server Express **không hỗ trợ** Multi-AZ |
+| `multi_az` | **`true`** ở `envs/prod` (default của module là `false`) | Bản standby ở AZ thứ hai, tự failover khi AZ chính hỏng. Standby **không** phục vụ đọc: Multi-AZ là để *sống sót*, không phải để *đọc nhanh hơn* |
 | `vpc_security_group_ids` | chỉ `sg-rds` | Lớp bảo vệ thứ hai sau việc không có route |
 | `backup_retention_period` | 7 ngày | Miễn phí tới bằng dung lượng đã cấp. Cho phép khôi phục về một thời điểm bất kỳ trong 7 ngày |
+| `backup_window` / `maintenance_window` | `06:00-06:30` / `sun:07:00-sun:08:00` (UTC) | Phải tránh 17:00 UTC, giờ cost guard tắt database. Lúc đang backup hay bảo trì, AWS **từ chối** lệnh stop, nên một cửa sổ trùng giờ làm guard mất tác dụng **mỗi đêm**. Để trống thì AWS tự chọn ngẫu nhiên và có thể rơi đúng vào giờ đó |
 | `auto_minor_version_upgrade` | `true` | Vá lỗi bảo mật tự động trong cửa sổ bảo trì |
 | `deletion_protection` | `false` | Đồ án cần xoá/dựng lại nhiều lần. **Production phải là `true`** |
 | `skip_final_snapshot` | `true` | Destroy nhanh. **Đây là bẫy** — xoá là mất dữ liệu, không có snapshot cuối. `nuke.sh` cảnh báo riêng về nó |
 | `performance_insights_enabled` | `false` | Tốn phí, và ta đã có CloudWatch metrics |
 
+**Read replica** (`enable_read_replica`, mặc định **tắt**). Đây là bản sao phục vụ
+đọc — thứ Multi-AZ không làm được. Nhưng AWS **không cho stop** một database đang
+có replica, nên bật replica là phá cơ chế tắt tiền của cả hệ thống. Chỉ dựng và
+huỷ trong cùng một cửa sổ đo. Hiện chưa có dòng code nào của app đọc từ replica.
+
+🔄 **Đợt 7:** bản gốc dùng `sqlserver-ex` (`license-included`), `db.t3.micro`,
+`gp2`, không đặt `db_name`, và `multi_az = false` vì SQL Server Express **không hỗ
+trợ** Multi-AZ. Lý do đổi engine: read replica của RDS SQL Server chỉ có ở bản
+Enterprise và máy từ 4 vCPU, và RDS SQL Server Multi-AZ thì **không stop được**.
+PostgreSQL làm được cả hai.
+
 ### Mật khẩu — sinh tự động, không ai biết
 
 | Thiết lập | Giá trị | Vì sao |
 |---|---|---|
-| Mật khẩu DB | 32 ký tự, tối thiểu 2 chữ hoa / 2 chữ thường / 2 số / 2 ký tự đặc biệt | Đủ mạnh, và ràng buộc từng loại để chắc chắn thoả yêu cầu của SQL Server |
-| Ký tự đặc biệt | **danh sách chỉ định**, không dùng mặc định | Vài ký tự (`;` `'` `"` `/` `@`) **phá vỡ connection string** hoặc URL. Đây là lỗi rất khó chẩn đoán vì nó chỉ xảy ra với một số mật khẩu sinh ra |
+| Mật khẩu DB | 32 ký tự, tối thiểu 2 chữ hoa / 2 chữ thường / 2 số / 2 ký tự đặc biệt | Đủ mạnh, và ràng buộc từng loại để chắc chắn thoả yêu cầu độ phức tạp |
+| Ký tự đặc biệt | **danh sách chỉ định** `!#$%&*()-_+[]{}<>:?` | RDS PostgreSQL cấm `/` `'` `"` `@` và khoảng trắng. Bỏ thêm **`=`** vì connection string của Npgsql đọc theo cặp `key=value;` — mật khẩu có `=` có thể parse sai, và triệu chứng là "password authentication failed", chỉ nhầm sang hướng sai mật khẩu |
 | Khoá JWT | 64 ký tự, **không** ký tự đặc biệt | Cần trên 256-bit entropy. Bỏ ký tự đặc biệt để tránh rắc rối khi đi qua biến môi trường |
 
 ### SSM Parameter Store — 3 bí mật
@@ -372,16 +467,24 @@ SSM Parameter.
 | Tên | Loại | Nội dung |
 |---|---|---|
 | `/hushstore/prod/db-password` | `SecureString` | Mật khẩu master, **chỉ** seeder đọc được |
-| `/hushstore/prod/connection-string` | `SecureString` | Chuỗi kết nối đầy đủ, có `Encrypt=True` và `TrustServerCertificate=False` |
+| `/hushstore/prod/connection-string` | `SecureString` | Chuỗi kết nối đầy đủ, có `SSL Mode=VerifyFull` và `Root Certificate` |
 | `/hushstore/prod/jwt-secret` | `SecureString` | Khoá ký JWT |
+| `/hushstore/prod/connection-string-readonly` | `SecureString` | **Chỉ tồn tại khi bật read replica**. Chuỗi kết nối tới replica |
 
 `SecureString` nghĩa là AWS mã hoá giá trị bằng KMS. Đọc được hay không do IAM
 quyết định — và đó là chỗ Deny tường minh ở Giai đoạn 7 phát huy tác dụng.
 
-Chú ý `TrustServerCertificate=False` trong connection string: nó buộc app
-**thật sự kiểm chứng** chứng chỉ TLS của RDS. Đặt `True` là bỏ qua kiểm tra — tức
-mã hoá mà không xác thực, và khi đó mã hoá gần như vô nghĩa. Đây là lý do image
-phải có sẵn chứng chỉ gốc của Amazon RDS.
+Chú ý `SSL Mode=VerifyFull` trong connection string: nó buộc app **thật sự kiểm
+chứng** chứng chỉ TLS của RDS **và** kiểm hostname. Mặc định của Npgsql là
+`Prefer` — mã hoá nhưng không xác thực, tức gần như vô nghĩa — và `Require` cũng
+chưa đủ. Tụt về mặc định thì kết nối vẫn thành công, log vẫn sạch, nên đây là
+thuộc tính bảo mật dễ mất nhất. `Root Certificate` trỏ tới chứng chỉ gốc của
+Amazon RDS cài sẵn trong image, vì Npgsql không đọc trust store của hệ điều hành.
+Thiếu file đó thì kết nối **gãy** chứ không tụt xuống chế độ kém an toàn.
+
+🔄 **Đợt 7:** bản SQL Server dùng `Encrypt=True; TrustServerCertificate=False` cho
+cùng mục đích. Hai tham số đó (cùng `MultipleActiveResultSets`) không tồn tại ở
+Npgsql.
 
 **Vì sao database tạo rỗng.** Vì schema là việc của migration, dữ liệu là việc
 của seeder. Cả hai phải chạy được nhiều lần cho cùng kết quả và phải nằm trong
