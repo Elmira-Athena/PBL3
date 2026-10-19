@@ -1,0 +1,109 @@
+### KB-14: bat lai ha tang sau 25 ngay tat — va mot khoang trong DNS chua ai do
+### Account 551897327153 · 2026-10-19 · commit d050c35 · image_tag = d050c353463a...
+### Muc dich: xac nhan stack con bat len duoc, va do xem nguoi ngoai co vao duoc bang
+###           TRINH DUYET khong (khac voi cac lan do truoc deu dung curl --resolve)
+
+== LAN CHAY 1 — THAT BAI o BUOC 2/6 sau 5 giay ==
+
+Error: Required plugins are not installed
+  the cached package for registry.terraform.io/hashicorp/aws 6.60.0
+  (in .terraform/providers) does not match any of the checksums recorded
+  in the dependency lock file
+  (cung loi cho hashicorp/archive 2.8.0 va hashicorp/random 3.9.0)
+
+Nguyen nhan goc: mot phien truoc chay `terraform init` tren envs/prod o macOS.
+Lenh do tai provider darwin_arm64 vao .terraform/providers VA them hash darwin vao
+.terraform.lock.hcl. Lock file sau do bi HOAN NGUYEN (de giu diff sach) nhung cache
+provider thi KHONG bi xoa. Tu do: cache = darwin, lock = chi co hash linux.
+
+Dau hieu da hien tu phut dau ma bi doc nham: up.sh in
+  "! khong kiem duoc thay doi cho tren module.data (terraform plan ma 1)"
+Do chinh la terraform plan chet vi cung ly do, khong phai mot ca bien.
+up.sh van thoat ma 0 nen nhin tu ngoai tuong da xong.
+
+RDS da kip bat len o lan chay nay => tinh tien tu do.
+
+== SUA ==
+
+  terraform -chdir=infra/tf/envs/prod providers lock \
+      -platform=linux_amd64 -platform=darwin_arm64
+  terraform -chdir=infra/tf/envs/prod init
+
+Lock chuyen tu 1 hash/provider -> 3 hash/provider (phu ca Linux cua CI lan macOS).
+Khong tai dien, va het diff nhieu moi lan doi may.
+
+== LAN CHAY 2 — THANH CONG, tong 0h 06m ==
+
+  BUOC 1/6  RDS da available, khong can lam gi
+  BUOC 2/6  NAT + ALB + target group + service — 0h 02m
+            Apply complete! Resources: 16 added, 1 changed, 0 destroyed
+  BUOC 3/6  RDS available — 1s
+  BUOC 4/6  bat 1 instance — 50s   (0 added, 3 changed, 0 destroyed)
+  BUOC 5/6  instance dang ky vao ECS cluster — OK
+  BUOC 6/6  ca tg-api va tg-web healthy — 0h 01m
+
+Trang thai do bang AWS API:
+  RDS = available   ALB = 1   NAT = 2   EC2 = 1
+  hushstore-tg-api   healthy
+  hushstore-tg-web   healthy
+
+== DO 1: goi THANG ALB, bo qua DNS cong khai (curl --resolve) ==
+
+  ALB : hushstore-alb-1768351568.ap-southeast-1.elb.amazonaws.com
+  IP  : 18.143.255.1
+
+  https://hushstore.io.vn/              -> HTTP 200
+  https://api.hushstore.io.vn/health/ready -> HTTP 200
+
+=> ALB + ECS + RDS + cert ACM deu dung. App chay duoc dau-cuoi.
+
+== DO 2: goi qua DNS CONG KHAI, dung trinh duyet se thay gi ==
+
+  https://hushstore.io.vn/        -> HTTP 530
+  https://api.hushstore.io.vn/    -> HTTP 530
+
+  dig hushstore.io.vn      -> 104.21.0.90, 172.67.150.201   (IP cua Cloudflare)
+  dig api.hushstore.io.vn  -> 104.21.0.90, 172.67.150.201
+
+  ALB hien tai       : hushstore-alb-1768351568...
+  ALB trong kb07 (24/09): hushstore-alb-718170503...   <- da bi destroy
+  ALB trong bao cao 24/08: hushstore-alb-1075742626...  <- da bi destroy
+
+=> Cloudflare tro origin toi mot ALB KHONG CON TON TAI => tra 530 (loi 1016,
+   origin DNS error). Khong phai loi cua lan bat nay.
+
+== PHAT HIEN CHINH — mot khoang trong ton tai tu truoc, chua ai do ==
+
+ALB doi ten DNS MOI LAN destroy roi dung lai. down.sh xoa ALB, up.sh tao cai moi
+voi ten khac. Ban ghi DNS o Cloudflare dat bang tay nen khong tu doi theo.
+
+Moi bang chung "200" tu truoc toi nay deu dung `curl --resolve`, tuc BO QUA DNS
+cong khai. Xem nguyen van kb07 ngay 2026-09-24:
+
+    -- duong hop le qua --resolve --
+    hushstore.io.vn -> HTTP 200
+
+Nhung lan do do chung minh ALB + app + cert dung. Chung KHONG chung minh nguoi
+ngoai vao duoc bang trinh duyet. Khoang trong nay chua tung duoc do.
+
+Viec phai lam (can quyen Cloudflare, khong nam trong repo):
+  - CNAME hushstore.io.vn -> ALB DNS name hien tai
+  - CNAME api            -> ALB DNS name hien tai
+  - Neu bat proxy (may cam): SSL/TLS mode phai la Full (strict). ALB co cert ACM
+    that nen Full (strict) dung; de "Flexible" se thanh vong lap chuyen huong.
+  - Duong sua goc: Route 53 alias record do Terraform quan ly, hoac mot buoc
+    trong up.sh tu cap nhat DNS sau khi ALB len. Chua lam.
+
+== GHI CHU ==
+
+- Ban deploy o cua so nay la CODE CU: image_tag = d050c353, tuc TRUOC khi muc J
+  (ApiCall.SendAsync) merge vao main. up.sh co canh bao dung:
+    "! ECR co image moi hon tag dang dung: ... 8b6497a2..."
+  va no KHONG tu sua tfvars. Co y.
+- my_ip trong tfvars lech (113.185.109.227 vs 113.185.106.172 hien tai). KHONG anh
+  huong truy cap: my_ip chi dung o nacl.tf:109, rule DENY demo, ma enable_deny_demo
+  = false. Nhung PHAI cap nhat truoc khi dien lai kich ban 8, neu khong rule DENY
+  chan nham IP nguoi khac va test "dat" GIA.
+- Chua do bang mat cho muc J (ep 400 xem cau tieng Viet cua server co toi UI khong).
+  Cua so nay da mo ma khong tranh thu do — van con no.
+- Chi phi cua so: ~$0.25/gio, tong ~40 phut (gom ca lan chay that bai) ~ $0.17.
