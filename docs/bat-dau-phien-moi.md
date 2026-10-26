@@ -5,7 +5,8 @@
 >
 > | Gói việc | Đọc | Trạng thái |
 > |---|---|---|
-> | Mục 🅹 — 40 lời gọi `GetFromJsonAsync` | [`ban-giao-no-code-muc-J.md`](ban-giao-no-code-muc-J.md) | 🔴 chưa bắt đầu |
+> | **TOÀN BỘ việc còn lại** | [**`VIEC-CON-LAI.md`**](VIEC-CON-LAI.md) | 🔴 **bắt đầu ở đây** |
+> | Mục 🅹 — `GetFromJsonAsync` | [`ban-giao-no-code-muc-J.md`](ban-giao-no-code-muc-J.md) | ✅ code xong (`993e44c`); còn đo bằng mắt |
 > | Cửa sổ đo đợt 7 | [`ban-giao-cua-so-do-dot-7.md`](ban-giao-cua-so-do-dot-7.md) | 🟡 còn failover + `ReplicaLag` |
 >
 > File này là **hồ sơ tra cứu của cả dự án** — dùng nó cho mọi việc khác.
