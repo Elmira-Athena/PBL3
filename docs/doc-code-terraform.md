@@ -15,8 +15,9 @@
 
 **Thiết kế hiện tại trong mã:** không có custom NACL. Sáu subnet dùng default ACL
 allow-all do AWS tạo, không được Terraform nhận quản lý. Mạng được giới hạn bằng
-SG và route; default SG vẫn được quản lý với ingress/egress rỗng. Chưa apply hoặc
-kiểm chứng runtime lần chuyển đổi này; xem [migration guide](nacl-to-sg-migration.md).
+SG và route; default SG vẫn được quản lý với ingress/egress rỗng. Migration prod
+đã apply và kiểm tra cấu hình ngày 02/11/2026; chưa đo runtime ứng dụng hoặc apply
+WAF. Xem [biên bản](bien-ban-apply-sg-2026-11-02.md) và [migration guide](nacl-to-sg-migration.md).
 
 **Đọc theo lượng thời gian bạn có:**
 

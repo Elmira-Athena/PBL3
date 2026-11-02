@@ -1,0 +1,141 @@
+[
+  {
+    "id": "sg-0554e1f7ac63016d0",
+    "name": "default",
+    "inbound": [],
+    "outbound": []
+  },
+  {
+    "id": "sg-047fde57ffa848f75",
+    "name": "hushstore-alb-sg-d7d22561d6d4f7bdaa7fc840df",
+    "inbound": [
+      {
+        "protocol": "tcp",
+        "from": 80,
+        "to": 80,
+        "ipv4": [
+          "0.0.0.0/0"
+        ],
+        "ipv6": [],
+        "source_or_target_sgs": [],
+        "prefix_lists": []
+      },
+      {
+        "protocol": "tcp",
+        "from": 443,
+        "to": 443,
+        "ipv4": [
+          "0.0.0.0/0"
+        ],
+        "ipv6": [],
+        "source_or_target_sgs": [],
+        "prefix_lists": []
+      }
+    ],
+    "outbound": [
+      {
+        "protocol": "tcp",
+        "from": 80,
+        "to": 80,
+        "ipv4": [],
+        "ipv6": [],
+        "source_or_target_sgs": [
+          "sg-039c1a381b23280bf"
+        ],
+        "prefix_lists": []
+      },
+      {
+        "protocol": "tcp",
+        "from": 8080,
+        "to": 8080,
+        "ipv4": [],
+        "ipv6": [],
+        "source_or_target_sgs": [
+          "sg-039c1a381b23280bf"
+        ],
+        "prefix_lists": []
+      }
+    ]
+  },
+  {
+    "id": "sg-055eeb2fff782b18d",
+    "name": "hushstore-rds-sg-70d65704ee4eab7b2b8cc63989",
+    "inbound": [
+      {
+        "protocol": "tcp",
+        "from": 5432,
+        "to": 5432,
+        "ipv4": [],
+        "ipv6": [],
+        "source_or_target_sgs": [
+          "sg-039c1a381b23280bf"
+        ],
+        "prefix_lists": []
+      }
+    ],
+    "outbound": []
+  },
+  {
+    "id": "sg-039c1a381b23280bf",
+    "name": "hushstore-web-sg-c506528e03235748ee5f9df3db",
+    "inbound": [
+      {
+        "protocol": "tcp",
+        "from": 80,
+        "to": 80,
+        "ipv4": [],
+        "ipv6": [],
+        "source_or_target_sgs": [
+          "sg-047fde57ffa848f75"
+        ],
+        "prefix_lists": []
+      },
+      {
+        "protocol": "tcp",
+        "from": 8080,
+        "to": 8080,
+        "ipv4": [],
+        "ipv6": [],
+        "source_or_target_sgs": [
+          "sg-047fde57ffa848f75"
+        ],
+        "prefix_lists": []
+      }
+    ],
+    "outbound": [
+      {
+        "protocol": "tcp",
+        "from": 80,
+        "to": 80,
+        "ipv4": [
+          "0.0.0.0/0"
+        ],
+        "ipv6": [],
+        "source_or_target_sgs": [],
+        "prefix_lists": []
+      },
+      {
+        "protocol": "tcp",
+        "from": 5432,
+        "to": 5432,
+        "ipv4": [],
+        "ipv6": [],
+        "source_or_target_sgs": [
+          "sg-055eeb2fff782b18d"
+        ],
+        "prefix_lists": []
+      },
+      {
+        "protocol": "tcp",
+        "from": 443,
+        "to": 443,
+        "ipv4": [
+          "0.0.0.0/0"
+        ],
+        "ipv6": [],
+        "source_or_target_sgs": [],
+        "prefix_lists": []
+      }
+    ]
+  }
+]

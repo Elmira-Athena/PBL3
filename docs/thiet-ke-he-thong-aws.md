@@ -13,8 +13,9 @@
 
 **Thiết kế hiện tại trong mã:** bỏ ba custom NACL, sáu subnet dùng default NACL
 allow-all do AWS tạo và không do Terraform quản lý. Security Group là lớp lọc
-mạng chính. Thay đổi này **chưa apply lên AWS và chưa kiểm chứng runtime**; xem
-[hướng dẫn chuyển đổi](nacl-to-sg-migration.md) trước khi triển khai.
+mạng chính. **Prod đã apply migration ngày 02/11/2026**, xác minh association/SG;
+chưa đo runtime ứng dụng và chưa apply WAF. Xem [biên bản apply](bien-ban-apply-sg-2026-11-02.md)
+và [hướng dẫn chuyển đổi](nacl-to-sg-migration.md).
 
 **Lịch sử 2026-09-06 — ba thay đổi đã triển khai ở thời điểm đó:**
 

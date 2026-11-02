@@ -1,5 +1,7 @@
 # HushStore
 
+**AWS migration applied (2026-11-02):** all six subnets use the default NACL; three custom ACLs and 20 rules were removed, and SG policies were verified. Serving resources remain off. **Cloudflare WAF is still pending credentials.** See the [deployment receipt](docs/bien-ban-apply-sg-2026-11-02.md).
+
 **WAF addition (2026-10-28):** Cloudflare Free was selected because the DNS proxy already exists. Terraform adds custom/rate/header rules and optional ALB origin lockdown (Cloudflare source IPs + Host AND secret). No additional AWS service. **Not applied; runtime verification pending.** See [comparison and deployment guide](docs/waf-cloudflare.md).
 
 **Production-shaped AWS infrastructure for a .NET 10 e-commerce platform — built with Terraform, deployed by GitHub Actions with zero long-lived credentials, and verified by tests and captured evidence rather than by assertion.**

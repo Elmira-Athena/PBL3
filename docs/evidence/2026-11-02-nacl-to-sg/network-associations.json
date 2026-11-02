@@ -1,0 +1,72 @@
+{
+  "vpc_id": "vpc-0b84a98c407cd4136",
+  "default_network_acl_id": "acl-0aef9c02b0752addf",
+  "default_acl_entries": [
+    {
+      "CidrBlock": "0.0.0.0/0",
+      "Egress": true,
+      "Protocol": "-1",
+      "RuleAction": "allow",
+      "RuleNumber": 100
+    },
+    {
+      "CidrBlock": "0.0.0.0/0",
+      "Egress": true,
+      "Protocol": "-1",
+      "RuleAction": "deny",
+      "RuleNumber": 32767
+    },
+    {
+      "CidrBlock": "0.0.0.0/0",
+      "Egress": false,
+      "Protocol": "-1",
+      "RuleAction": "allow",
+      "RuleNumber": 100
+    },
+    {
+      "CidrBlock": "0.0.0.0/0",
+      "Egress": false,
+      "Protocol": "-1",
+      "RuleAction": "deny",
+      "RuleNumber": 32767
+    }
+  ],
+  "subnets": [
+    {
+      "id": "subnet-0ab590fba699728de",
+      "cidr": "10.20.0.0/24",
+      "az": "ap-southeast-1a",
+      "network_acl_id": "acl-0aef9c02b0752addf"
+    },
+    {
+      "id": "subnet-03f0b2bd38d65cd2c",
+      "cidr": "10.20.1.0/24",
+      "az": "ap-southeast-1b",
+      "network_acl_id": "acl-0aef9c02b0752addf"
+    },
+    {
+      "id": "subnet-03705b1983b7b0830",
+      "cidr": "10.20.10.0/24",
+      "az": "ap-southeast-1a",
+      "network_acl_id": "acl-0aef9c02b0752addf"
+    },
+    {
+      "id": "subnet-06cff125f76fd9c71",
+      "cidr": "10.20.11.0/24",
+      "az": "ap-southeast-1b",
+      "network_acl_id": "acl-0aef9c02b0752addf"
+    },
+    {
+      "id": "subnet-0ec39d71372c6fd6b",
+      "cidr": "10.20.20.0/24",
+      "az": "ap-southeast-1a",
+      "network_acl_id": "acl-0aef9c02b0752addf"
+    },
+    {
+      "id": "subnet-0943e509d529ba57c",
+      "cidr": "10.20.21.0/24",
+      "az": "ap-southeast-1b",
+      "network_acl_id": "acl-0aef9c02b0752addf"
+    }
+  ]
+}

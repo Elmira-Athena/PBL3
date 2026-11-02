@@ -10,9 +10,10 @@ file nào.*
 
 **Kiến trúc hiện tại trong mã:** bỏ ba custom NACL; sáu subnet dùng default NACL
 allow-all của AWS, không do Terraform quản lý. SG là bộ lọc mạng chính, default SG
-rỗng; ECR endpoint tuỳ chọn chỉ nhận 443 từ web SG. **Chưa apply và chưa đo runtime**
-lần chuyển đổi này. Hướng dẫn review plan, migration, rollback và đo lại nằm ở
-[nacl-to-sg-migration.md](nacl-to-sg-migration.md).
+rỗng; ECR endpoint tuỳ chọn chỉ nhận 443 từ web SG. **Đã apply migration AWS prod
+ngày 02/11/2026**, xác minh sáu association và SG; serving stack vẫn tắt, chưa đo
+lại runtime ứng dụng. **WAF chưa apply.** Xem [biên bản](bien-ban-apply-sg-2026-11-02.md)
+và [quy trình migration](nacl-to-sg-migration.md).
 
 ---
 
@@ -29,7 +30,8 @@ lần chuyển đổi này. Hướng dẫn review plan, migration, rollback và 
 | So sánh WAF tiết kiệm chi phí, cấu hình Cloudflare Free và khóa origin | [waf-cloudflare.md](waf-cloudflare.md) | thiết kế + triển khai + kiểm thử |
 | Báo cáo với giảng viên về thay đổi NACL → SG và bổ sung WAF | [bao-cao-thay-doi-sg-va-waf.md](bao-cao-thay-doi-sg-va-waf.md) | báo cáo tổng hợp |
 | Đối chiếu toàn bộ góp ý giảng viên với mã hiện tại, xác định việc cần sửa | [ra-soat-gop-y-giang-vien-2026-10-31.md](ra-soat-gop-y-giang-vien-2026-10-31.md) | rà soát + thứ tự đề xuất |
-| Bản sửa trước apply, kiểm thử và live plan đang dừng vì drift | [kiem-tra-truoc-apply-2026-11-02.md](kiem-tra-truoc-apply-2026-11-02.md) | trạng thái bàn giao mới nhất |
+| Bản sửa và kiểm tra trước apply, giữ làm lịch sử | [kiem-tra-truoc-apply-2026-11-02.md](kiem-tra-truoc-apply-2026-11-02.md) | mốc trước triển khai |
+| Kết quả apply AWS, bằng chứng association/SG và phần WAF còn chờ | [bien-ban-apply-sg-2026-11-02.md](bien-ban-apply-sg-2026-11-02.md) | trạng thái triển khai mới nhất |
 | Biết hệ thống **chặn được tấn công gì**, và vì sao | [bao-mat-he-thong.md](bao-mat-he-thong.md) | tham khảo |
 | Hiểu **CI/CD** từ con số không | [cicd-cho-nguoi-moi.md](cicd-cho-nguoi-moi.md) | 399 dòng |
 | Biết **code Terraform nằm ở đâu**, đọc theo thứ tự nào — kèm cú pháp cho người chưa đọc Terraform bao giờ | [doc-code-terraform.md](doc-code-terraform.md) | tham khảo |

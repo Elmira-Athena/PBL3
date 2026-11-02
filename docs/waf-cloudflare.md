@@ -2,8 +2,12 @@
 
 Quyết định ngày **2026-10-28**: dùng **Cloudflare Free WAF** trên proxy đã có của
 `hushstore.io.vn` và `api.hushstore.io.vn`. Đây là thiết kế và mã triển khai;
-**chưa apply AWS/Cloudflare, chưa kiểm thử lưu lượng thật**. Không thay thế các
+**cấu hình WAF chưa apply AWS/Cloudflare, chưa kiểm thử lưu lượng thật**. Không thay thế các
 biên bản trong `evidence/` hay kết quả KB8 của kiến trúc NACL cũ.
+
+**AWS migration đã xong ngày 02/11/2026:** sáu subnet về default NACL, ba ACL và
+20 rule cũ đã xóa, SG được đọc lại và xác minh. Serving stack vẫn tắt; WAF chờ
+credential Cloudflare. Xem [biên bản apply](bien-ban-apply-sg-2026-11-02.md).
 
 **Bản sửa trước triển khai 02/11/2026:** thêm guard cho script vận hành, kiểm tra
 CNAME/header đã triển khai bằng preflight, backend S3 mã hóa với state key riêng

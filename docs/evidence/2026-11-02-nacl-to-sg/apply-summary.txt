@@ -1,0 +1,9 @@
+Source commit: 136d7fb
+Account: 551897327153; region: ap-southeast-1
+refresh: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+stage1: Apply complete! Resources: 0 added, 3 changed, 0 destroyed.
+stage2: Apply complete! Resources: 0 added, 0 changed, 23 destroyed.
+Default NACL IPv4 allow-all verified; six subnet associations verified after stage 1 and stage 2.
+Migration final plan exit 0 / No changes.
+Root pending AMI-only launch-template update not applied.
+Cloudflare WAF and runtime traffic tests not applied/run.

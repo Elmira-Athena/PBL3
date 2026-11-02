@@ -6,6 +6,12 @@
 
 **Trạng thái:** Đã hoàn thành thay đổi mã Terraform, kiểm thử cấu hình và tài liệu. Chưa apply lên AWS/Cloudflare và chưa kiểm thử runtime của thiết kế mới.
 
+**Cập nhật triển khai 02/11/2026:** đã apply AWS theo hai mốc, xác minh sáu subnet
+gắn default NACL và chính sách SG; xóa ba ACL cùng 20 rule cũ. Serving stack vẫn
+tắt, chưa đo lại runtime ứng dụng; WAF Cloudflare còn chờ credential. Xem
+[biên bản apply và bằng chứng mới](bien-ban-apply-sg-2026-11-02.md). Trạng thái
+và kết quả được tổng hợp ngày 28–29/10 bên dưới giữ đúng mốc lịch sử.
+
 **Cập nhật mã 02/11/2026:** bổ sung guard chống script apply nhầm trước migration,
 backend WAF S3 mã hóa với key riêng, preflight kiểm origin/header và xử lý IP
 visitor tại API khi lockdown bật. Trình tự chuyển API revision/rollback nằm ở

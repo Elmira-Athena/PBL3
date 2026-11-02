@@ -1,5 +1,9 @@
 # Kiểm tra SG/WAF trước apply — 02/11/2026
 
+**Bản ghi tại điểm dừng trước apply, được giữ nguyên để đối chiếu.** Sau khi có
+yêu cầu triển khai tiếp, AWS đã hoàn tất hai mốc; xem
+[biên bản apply](bien-ban-apply-sg-2026-11-02.md). WAF vẫn chưa apply.
+
 **Điểm dừng:** đã sửa mã và chuẩn bị plan; chưa apply, kể cả refresh-only.
 Chưa init/migrate backend Cloudflare, import ruleset, deploy image hoặc thay đổi DNS.
 

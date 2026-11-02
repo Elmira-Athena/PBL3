@@ -18,9 +18,11 @@
 > NACL allow-all do AWS tạo, không quản lý ACL bằng Terraform.
 
 **Trạng thái:** nội dung kiến trúc dưới đây mô tả mã sau khi bỏ ba custom NACL.
-Chưa apply hoặc kiểm thử runtime thay đổi này. Báo cáo 12 kịch bản và thư mục
-`evidence/` vẫn là hồ sơ của cấu hình cũ. Xem
-[nacl-to-sg-migration.md](nacl-to-sg-migration.md) để chuyển đổi và đo lại.
+Đã apply migration prod ngày 02/11/2026, đọc lại AWS để xác minh association/SG;
+chưa kiểm thử runtime ứng dụng và chưa apply WAF. Xem
+[biên bản apply](bien-ban-apply-sg-2026-11-02.md). Báo cáo 12 kịch bản cũ vẫn là
+hồ sơ của cấu hình tại thời điểm đo; [migration guide](nacl-to-sg-migration.md)
+mô tả cách tái thực hiện và đo lại.
 
 ---
 
@@ -736,7 +738,8 @@ suất, và đã ghi ở Phần V của tài liệu thiết kế.
 **"Đã kiểm thử thật chưa, hay chỉ đọc cấu hình?"**
 
 Đã có 12 kịch bản runtime của **thiết kế cũ** trong
-`docs/evidence/acc-551897327153/`. Chưa apply và chưa chạy lại bản bỏ custom NACL.
+`docs/evidence/acc-551897327153/`. Bản bỏ custom NACL đã apply ngày 02/11; bằng
+chứng mới xác minh cấu hình/association, chưa chạy lại các kịch bản traffic.
 Bộ `terraform test` kiểm bất biến trong mã (quan hệ SG, port, egress, không custom
 ACL); test plan không chứng minh association hay rule đang chạy trên AWS. Kết quả
 check local và kết quả đo sau triển khai phải được ghi tách biệt, có thời gian và

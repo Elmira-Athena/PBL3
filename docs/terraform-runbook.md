@@ -1,5 +1,9 @@
 # Terraform Runbook — HushStore
 
+**Prod đã apply migration NACL ngày 02/11/2026:** sáu subnet gắn default ACL,
+custom ACL/rule đã xóa và SG đã được xác minh; WAF chưa apply. Xem
+[biên bản triển khai](bien-ban-apply-sg-2026-11-02.md). Serving stack vẫn tắt.
+
 **Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
 
 Hạ tầng AWS của HushStore, dựng bằng Terraform. Tài liệu này là thứ cần đọc

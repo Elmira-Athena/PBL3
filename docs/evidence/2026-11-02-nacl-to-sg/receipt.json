@@ -1,0 +1,31 @@
+{
+  "account": "551897327153",
+  "region": "ap-southeast-1",
+  "source_commit": "136d7fb",
+  "refresh_only_apply": "success",
+  "stage1_apply": "success",
+  "stage2_apply": "success",
+  "subnets_on_default_acl": 6,
+  "custom_acls_remaining": 0,
+  "legacy_acl_rules_in_state": 0,
+  "sg_policy_verified": true,
+  "default_sg_empty": true,
+  "rds": {
+    "status": "stopped",
+    "engine": "postgres",
+    "port": 5432,
+    "public": false,
+    "multi_az": true
+  },
+  "active_nat_gateways": 0,
+  "load_balancers": 0,
+  "asg": {
+    "desired": 0,
+    "instances": 0
+  },
+  "interface_endpoints": 0,
+  "migration_final_plan_exit": 0,
+  "unapplied_root_ami_update_count": 1,
+  "cloudflare_applied": false,
+  "runtime_network_tests": "not run; serving resources remain off"
+}

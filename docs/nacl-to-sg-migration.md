@@ -1,7 +1,8 @@
 # Bỏ NACL tùy chỉnh, kiểm soát truy cập bằng Security Group
 
-Thiết kế ngày **2026-10-26**, theo góp ý của giảng viên. Thay đổi trong repository
-chưa được apply lên AWS; tài liệu này không phải biên bản kiểm thử runtime.
+Thiết kế ngày **2026-10-26**, theo góp ý của giảng viên. **Prod đã hoàn tất hai mốc
+ngày 02/11/2026**, xác minh association/SG; xem [biên bản apply](bien-ban-apply-sg-2026-11-02.md).
+Tài liệu này là quy trình tái thực hiện, không phải biên bản kiểm thử runtime.
 Các báo cáo cũ và `evidence/` vẫn mô tả đúng cấu hình tại thời điểm đã đo.
 
 ## Chính sách đích
