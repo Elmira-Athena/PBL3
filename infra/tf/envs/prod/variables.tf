@@ -27,16 +27,6 @@ variable "azs" {
   }
 }
 
-variable "my_ip" {
-  description = "IP công cộng của máy tấn công (laptop), dạng CIDR /32. Lấy bằng: curl -s https://checkip.amazonaws.com"
-  type        = string
-
-  validation {
-    condition     = can(cidrhost(var.my_ip, 0)) && endswith(var.my_ip, "/32")
-    error_message = "my_ip phải là CIDR /32, ví dụ 203.0.113.45/32."
-  }
-}
-
 variable "vpc_cidr" {
   description = "CIDR của VPC — 10.20.0.0/16, KHÔNG trùng 10.0.0.0/16 của stack cũ"
   type        = string
@@ -93,12 +83,6 @@ variable "enable_alb" {
 
 variable "enable_flow_logs" {
   description = "Bật VPC Flow Logs (chỉ REJECT) cho báo cáo bảo mật"
-  type        = bool
-  default     = false
-}
-
-variable "enable_deny_demo" {
-  description = "Bật NACL rule 50 DENY my_ip — kịch bản kiểm thử số 8"
   type        = bool
   default     = false
 }
@@ -222,4 +206,22 @@ variable "enable_ecr_endpoints" {
   description = "Dựng 2 interface VPC Endpoint cho ECR. ~$0,04/giờ — TÍNH TIỀN NGAY khi apply, không đợi up.sh. Trả lời góp ý của thầy về VPC Endpoint: chỉ 2 cái ECR có lãi thật, đủ bộ 7 cái đắt hơn cả 2 NAT Gateway"
   type        = bool
   default     = false
+}
+
+variable "enable_cloudflare_origin_lockdown" {
+  description = "Restrict ALB ingress to Cloudflare IPv4 and require its injected origin secret; enable only after the Cloudflare zone configuration is ready"
+  type        = bool
+  default     = false
+}
+
+variable "cloudflare_origin_secret" {
+  description = "Shared x-hushstore-origin value; set TF_VAR_cloudflare_origin_secret securely and use the identical value in the Cloudflare root; stored in Terraform state"
+  type        = string
+  sensitive   = true
+  default     = null
+
+  validation {
+    condition     = !var.enable_cloudflare_origin_lockdown || can(regex("^[A-Za-z0-9_-]{32,128}$", var.cloudflare_origin_secret))
+    error_message = "cloudflare_origin_secret must contain 32-128 letters, digits, underscores or hyphens when origin lockdown is enabled."
+  }
 }

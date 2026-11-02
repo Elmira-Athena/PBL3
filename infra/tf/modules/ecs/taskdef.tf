@@ -119,13 +119,15 @@ resource "aws_ecs_task_definition" "api" {
         { containerPort = 8080, hostPort = 8080, protocol = "tcp" }
       ]
 
-      environment = [
+      environment = concat([
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
         { name = "ASPNETCORE_URLS", value = "http://+:8080" },
         { name = "AllowedOrigins", value = var.allowed_origins },
         { name = "AwsSettings__BucketName", value = var.assets_bucket_name },
         { name = "AwsSettings__Region", value = local.aws_region },
-      ]
+        ], var.enable_cloudflare_origin_lockdown ? [
+        { name = "ProxyHeaders__CloudflareOriginLockdown", value = "true" },
+      ] : [])
 
       secrets = local.app_secrets
 

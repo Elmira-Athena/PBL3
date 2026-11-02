@@ -32,6 +32,7 @@ esac
 T_ALL=$SECONDS
 hs_tf_check
 hs_sso_check
+hs_nacl_migration_check
 
 # Kiểm tra trước khi bật bất cứ thứ gì: nếu CI đã push image mới hơn tag trong
 # tfvars thì nói ra ngay, lúc còn sửa được mà chưa tốn đồng nào.

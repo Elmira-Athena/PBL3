@@ -129,10 +129,8 @@ namespace PBL3.API.Filters
         /// luôn chạy sau middleware nên điều đó được bảo đảm.
         /// </summary>
         /// <remarks>
-        /// ⚠️ Độ tin cậy của toàn bộ cơ chế phụ thuộc <c>ForwardLimit = 1</c> ở
-        /// <c>ForwardedHeadersOptions</c>. Đổi nó thành &gt;= 2 là cho kẻ tấn công tự chọn
-        /// phân vùng của mình bằng cách bơm <c>X-Forwarded-For</c>, và mọi hạn mức thành vô
-        /// nghĩa — kể cả khi bộ đếm đã dùng chung hoàn hảo.
+        /// Middleware proxy giữ ForwardLimit = 1: direct ALB đọc phần tử XFF do ALB thêm,
+        /// origin lockdown đọc CF-Connecting-IP đã kiểm tra. Không tự đọc header ở đây.
         /// </remarks>
         private static string GetClientIp(HttpContext context)
             => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";

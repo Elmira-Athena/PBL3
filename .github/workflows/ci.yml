@@ -45,8 +45,8 @@
 # `repo:.../environment:<tên>` và fork không lấy được token mà không có người
 # bấm duyệt. Đó là cấu hình trên GitHub, không phải Terraform.
 #
-# Thứ CÓ ở đây và có giá trị hơn plan: `terraform test`. 11 file test đang canh
-# các assertion bảo mật (NACL stateless, SG không mở 22, IAM least privilege).
+# Thứ CÓ ở đây và có giá trị hơn plan: `terraform test` đang canh
+# các assertion bảo mật (SG chain, origin lockdown, IAM least privilege).
 # Chúng chạy được mà không cần state.
 #
 # `terraform test` chạy được trên push main vì trust policy của role plan nhận
@@ -93,7 +93,22 @@ jobs:
           terraform_wrapper: false
 
       - name: fmt -check
-        run: terraform -chdir=infra/tf fmt -check -recursive -diff
+        run: |
+          terraform -chdir=infra/tf fmt -check -recursive -diff
+          terraform -chdir=infra/cloudflare fmt -check -recursive -diff
+
+      - name: Cloudflare validate và mock tests (không cần token)
+        run: |
+          terraform -chdir=infra/cloudflare init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/cloudflare validate -no-color
+          terraform -chdir=infra/cloudflare test -no-color
+
+      - name: Kiểm tra migration guard và WAF preflight offline
+        run: |
+          python3 -W error -m unittest discover -s infra/tf/migrations/nacl-to-sg -p 'test_*.py'
+          python3 -W error -m unittest discover -s infra/cloudflare/scripts -p 'test_*.py'
+          python3 -W error -m unittest discover -s infra/tf/scripts/tests -p 'test_*.py'
+          for script in infra/tf/scripts/*.sh; do bash -n "$script"; done
 
       - name: validate mọi module và env
         run: |
@@ -116,6 +131,16 @@ jobs:
             terraform -chdir="$dir" validate -no-color || fail=1
           done
           exit $fail
+
+  proxy-headers:
+    name: Proxy client IP regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project tools/ProxyHeadersProbe/ProxyHeadersProbe.csproj --configuration Release
 
   # ───────────────────────────────────────────────────────────────
   # terraform test — CẦN credential vì một số module có data source gọi AWS
@@ -176,13 +201,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: gha-tf-test
 
-      # 10 trong 11 file test khai báo `provider "aws" { profile = "hushstore" }`
-      # — đó là profile SSO trên máy của người phát triển. (File thứ 11,
-      # modules/alb/tests/alb.tftest.hcl, dùng `mock_provider` có chủ ý để chạy
-      # offline, nên nó không cần profile nào.) Trên runner không có profile
+      # Một số test dùng `provider "aws" { profile = "hushstore" }`
+      # — profile SSO trên máy phát triển. network/security/alb dùng mock_provider
+      # và không cần credential. Trên runner không có profile
       # nào, nên tạo một profile CÙNG TÊN trỏ vào credential tạm mà
       # configure-aws-credentials vừa export ra biến môi trường. Cách này giữ
-      # 10 file test nguyên vẹn, thay vì sửa provider block ở cả 10 chỗ rồi làm
+      # các test dùng provider thật nguyên vẹn, thay vì sửa provider block rồi làm
       # hỏng cách chạy test trên máy cá nhân.
       #
       # `aws configure set` GHI RA ĐĨA: nó tạo/ghi `~/.aws/credentials` của

@@ -1,5 +1,7 @@
 # Thiết kế hệ thống AWS — HushStore
 
+**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+
 > **Tài liệu này dành cho ai:** thành viên trong nhóm chưa từng dùng AWS và chưa
 > vững mạng máy tính, nhưng cần hiểu **bản chất** hệ thống để bảo vệ đồ án.
 > Không cần đọc code. Mỗi phần trả lời hai câu: *cái này là gì* và *vì sao ta
@@ -9,7 +11,12 @@
 > Phần III. Trong Phần III, mục **"Linux — hệ điều hành chạy bên dưới tất cả"**
 > trả lời gạch đầu dòng đầu tiên của đề bài và đọc được độc lập.
 
-**Cập nhật 2026-09-06 — ba thay đổi kiến trúc, tài liệu này đã phản ánh hết:**
+**Thiết kế hiện tại trong mã:** bỏ ba custom NACL, sáu subnet dùng default NACL
+allow-all do AWS tạo và không do Terraform quản lý. Security Group là lớp lọc
+mạng chính. Thay đổi này **chưa apply lên AWS và chưa kiểm chứng runtime**; xem
+[hướng dẫn chuyển đổi](nacl-to-sg-migration.md) trước khi triển khai.
+
+**Lịch sử 2026-09-06 — ba thay đổi đã triển khai ở thời điểm đó:**
 
 | | Trước | Nay |
 |---|---|---|
@@ -112,7 +119,8 @@ mỗi port thường ứng với một loại dịch vụ:
 
 **Ephemeral port (cổng tạm).** Khi máy A gọi máy B ở port 443, máy A tự mở một
 port ngẫu nhiên trong dải **1024–65535** để nhận câu trả lời. Nghe lạ nhưng đây
-là nguyên nhân của phần rắc rối nhất trong thiết kế NACL bên dưới — hãy nhớ nó.
+là cổng đích của gói phản hồi. SG stateful tự cho phép traffic trả lời; cấu hình
+hiện tại không cần rule riêng cho dải cổng này.
 
 ## 5. Stateful vs stateless — phân biệt quan trọng nhất tài liệu này
 
@@ -127,14 +135,13 @@ Group hoạt động như vậy** — chỉ cần cho phép chiều vào, chiề
 ra, đều bị xét lại từ đầu như thể chưa từng thấy. **Network ACL hoạt động như
 vậy** — phải viết rule cho **cả hai chiều**, kể cả chiều trả lời.
 
-Hệ quả trực tiếp: NACL bắt buộc phải mở dải ephemeral 1024–65535, vì câu trả lời
-luôn đi về một port trong dải đó. Và vì mở dải đó, một số port nguy hiểm (5432,
-8080) vô tình nằm trong khoảng mở — nên phải chặn chúng bằng rule *số nhỏ hơn*.
+Nếu dùng custom NACL hạn chế traffic thì phải xét cả chiều đi lẫn chiều về,
+bao gồm dải cổng tạm phù hợp với client và dịch vụ. Đó là nguồn phức tạp của
+thiết kế cũ. NACL xét số rule từ nhỏ tới lớn, dừng ở rule khớp đầu tiên.
 
-*(NACL đánh **số** cho từng rule và xét theo **thứ tự tăng dần**; rule khớp đầu tiên
-thắng và dừng luôn, không xét tiếp. Nên muốn chặn thứ đang lọt qua một rule mở, phải
-đặt rule chặn ở **số nhỏ hơn**. Phần III nói kỹ.)*
-Toàn bộ phần NACL ở Phần III chỉ là hệ quả của một câu này.
+Trong thiết kế hiện tại, default NACL cho phép mọi traffic hai chiều; SG stateful
+thực thi quan hệ ALB → web → RDS mà không cần thêm rule ephemeral. Default NACL
+vẫn tồn tại vì mỗi subnet luôn phải gắn một NACL; nó không phải lớp chặn chủ động.
 
 ## 6. NAT — vì sao máy không có IP public vẫn tải được phần mềm
 
@@ -247,7 +254,7 @@ Ba loại đầu: hết hạn thì **xin lại**. Loại thứ tư: hết hạn 
 nhóm này là cách người ta xoá mất bằng chứng của chính mình.
 
 Bảng đầy đủ mọi giá trị TTL thật của hệ thống này — kèm triệu chứng khi từng cái
-hết hạn — ở [bao-mat-he-thong.md](bao-mat-he-thong.md) mục *Lớp 3 → Chứng chỉ TLS:
+hết hạn — ở [bao-mat-he-thong.md](bao-mat-he-thong.md) mục *Lớp 2 → Chứng chỉ TLS:
 vòng đời và TTL*.
 
 ### TLS termination
@@ -292,7 +299,7 @@ chỉ có một.
 | **Internet Gateway (IGW)** | Cửa ra/vào Internet của VPC | Gắn vào VPC, phục vụ public subnet |
 | **NAT Gateway** | Cho private subnet đi ra Internet | App tier tải image, gọi API AWS |
 | **Security Group (SG)** | Firewall **stateful**, gắn vào từng resource | 3 cái: alb, web, rds |
-| **Network ACL (NACL)** | Firewall **stateless**, gắn vào từng subnet | 3 cái, mỗi tier một cái |
+| **Network ACL (NACL)** | Firewall **stateless**, gắn vào từng subnet | Default allow-all của AWS, dùng chung cho 6 subnet; không quản lý bằng Terraform |
 | **Application Load Balancer (ALB)** | Bộ chia tải hiểu HTTP | Cửa vào duy nhất, bóc TLS, định tuyến theo tên miền |
 | **Target Group** | Nhóm đích để ALB gửi traffic tới | 2 cái: web (:80) và api (:8080) |
 | **EC2** | Máy chủ ảo | 1 máy `t3.micro` chạy container |
@@ -390,22 +397,11 @@ Terraform *trước khi* đụng vào prod, không phải để chứng minh tí
 
 ## Đường đi của một request
 
-Người dùng mở `https://hushstore.io.vn` và bấm xem sản phẩm. Gói tin đi qua
-**tám** lớp kiểm soát, vẽ thành bảy ô đánh số — ô ⑦ gộp hai lớp (NACL db và SG rds)
-cho sơ đồ đỡ dài. Đếm theo *lớp* thì là tám: mỗi tier đều có một NACL ở tầng subnet
-và một SG ở tầng máy, ba tier là sáu, cộng ALB và luật chọn tên miền của nó.
-
-⚠️ **Ba con số, đừng tưởng chúng mâu thuẫn** — chúng đếm ba thứ khác nhau:
-> - **8 lớp** (ở đây) — số *chốt chặn* trên đường đi của một request.
-> - **7 lớp phòng thủ** ([bao-mat-he-thong.md](bao-mat-he-thong.md)) — số *nhóm* biện
->   pháp bảo vệ, gộp theo loại chứ không theo vị trí.
-> - **12 chốt kiểm** (cũng tài liệu đó) — vì NACL **stateless** nên mỗi NACL bị hỏi
->   **hai lần**: một lần lúc gói tin đi vào, một lần nữa lúc câu trả lời đi ra.
->
-> Cùng một hệ thống, ba cách đếm. Nếu thầy hỏi "hệ thống có mấy lớp bảo vệ", hãy hỏi
-> lại *"thầy đếm chốt trên đường đi hay đếm nhóm biện pháp?"* — đó là câu trả lời
-> đúng, không phải né tránh.
-
+Người dùng mở `https://hushstore.io.vn` và bấm xem sản phẩm. Các SG kiểm soát
+kết nối ở từng chặng; ALB kiểm tra TLS và Host header; ứng dụng kiểm tra quyền
+truy cập dữ liệu. Default NACL cho qua cả hai chiều nên không được tính là lớp
+chặn trong luồng hiện tại. Bản [bảo mật](bao-mat-he-thong.md) giải thích sáu nhóm
+biện pháp phòng thủ, không dùng cách đếm 8/10/12 chốt của thiết kế custom NACL cũ.
 
 **Trước khi đọc sơ đồ — Cloudflare là ai và vì sao nó ở đây.** Tên miền
 `hushstore.io.vn` được quản lý DNS bởi **Cloudflare** (dịch vụ miễn phí, KHÔNG
@@ -418,40 +414,40 @@ phải nắm:
   chồng lên nhau, mà hai chặng riêng biệt, mỗi chặng mã hoá độc lập.
 - **Câu "ALB là cửa vào duy nhất" vẫn đúng, nhưng đúng ở phạm vi AWS:** trong VPC
   của ta không có đường nào khác đi vào. Cloudflare nằm *ngoài* AWS, ở phía trước.
-- Cloudflare **không** nằm trong phạm vi đề bài và không do Terraform quản. Nó có
-  mặt vì tên miền cần DNS, và bản miễn phí tiện nhất.
+- WAF/Transform Rules của Cloudflare được quản lý bằng root `infra/cloudflare/`
+  riêng. DNS có sẵn vẫn do operator quản lý. Free Managed Ruleset do Cloudflare
+  tự triển khai; phải xác nhận trên dashboard. Xem [runbook WAF](waf-cloudflare.md).
 
 ```
-Người dùng
-   │  ① DNS: hushstore.io.vn → Cloudflare → ALB
+Người dùng → DNS / Cloudflare proxy (ngoài AWS)
+   │ HTTPS :443
    ▼
-Cloudflare (proxy, TLS lớp ngoài — NGOÀI AWS, không do Terraform quản)
-   │  ② NACL public (stateless) — cho vào 443?
+sg-alb ingress 80/443 từ Internet
    ▼
-   │  ③ SG alb (stateful) — cho vào 443?
+ALB — :80 redirect sang HTTPS; :443 terminate TLS, kiểm Host
+   │ hushstore.io.vn → web :80; api.hushstore.io.vn → API :8080
+   │ Host khác → 403
+   │ sg-alb egress 80/8080 tới sg-web
    ▼
-Application Load Balancer  ── bóc TLS, đọc header Host
-   │  ④ Listener rule — Host có trong danh sách cho phép?
-   │       hushstore.io.vn     → target group web
-   │       api.hushstore.io.vn → target group api
-   │       tên khác            → trả 403, KHÔNG chuyển đi đâu
+sg-web ingress 80/8080 chỉ từ sg-alb
    ▼
-   │  ⑤ NACL app (stateless) — cho vào 80/8080 từ public tier?
+EC2 không IP public — nginx :80 / API :8080
+   │ API kiểm JWT, quyền dữ liệu
+   │ sg-web egress 5432 tới sg-rds
    ▼
-   │  ⑥ SG web (stateful) — cho vào 80/8080 từ sg-alb?
+sg-rds ingress 5432 chỉ từ sg-web; egress rỗng
    ▼
-EC2 (không có IP public) ── container nginx :80 · container API :8080
-   │  ⑦ NACL db + SG rds — cho vào 5432 từ app tier?
-   ▼
-RDS PostgreSQL — Multi-AZ (không có đường ra Internet)
-   ⋮  standby đồng bộ ở AZ thứ hai, AWS tự failover
-   ⋮  standby KHÔNG phục vụ đọc — đó là việc của read replica
+RDS PostgreSQL — subnet DB không có default route Internet
 ```
 
-Điểm cần hiểu: **các lớp không trùng lặp vô ích, chúng bù cho nhau.** SG không
-chặn được một IP cụ thể (nó chỉ có danh sách cho phép); NACL làm được. NACL
-không hiểu HTTP; ALB làm được. Đây là **defense in depth** — phòng thủ nhiều
-lớp, mỗi lớp bắt được loại tấn công lớp khác bỏ sót.
+Phản hồi trên các kết nối đã được SG cho phép tự đi về nhờ connection tracking,
+kể cả khi `sg-rds` không có egress. Default NACL allow-all không cần rule trả lời
+riêng. Kết nối mới vẫn phải khớp rule ở từng SG liên quan.
+
+Các lớp bảo vệ có vai trò khác nhau: SG xác định nguồn và đích tin cậy, route và
+IP quyết định đường đi, ALB xử lý TLS/Host, IAM và ứng dụng giới hạn quyền. Bỏ
+custom NACL đồng nghĩa bỏ lớp deny theo CIDR ở subnet và bài demo chặn một IP;
+đây là đánh đổi đã chọn để giảm rule stateless và giữ tập luật mạng dễ kiểm tra.
 
 ## Mạng — VPC và 6 subnet
 
@@ -516,7 +512,9 @@ nó, traffic đọc/ghi ảnh sản phẩm không đi qua NAT Gateway — tiết
 
 **ECR Interface Endpoint ×2 — `enable_ecr_endpoints`, mặc định TẮT.** Hai cửa
 riêng đi tới ECR (`ecr.api` cho auth token + manifest, `ecr.dkr` cho Docker
-Registry API). Bật thì việc kéo image chạy được **ngay cả khi `enable_nat =
+Registry API). SG của endpoint chỉ nhận TCP 443 từ `sg-web`, không mở theo
+CIDR của app subnet; rule này nằm ở module `security` để tránh vòng phụ thuộc.
+Bật thì phần đường mạng để kéo image chạy được **ngay cả khi `enable_nat =
 false`**, và không gói tin nào ra Internet.
 
 Vì sao chỉ 2 cái, không phải đủ bộ 7 như tài liệu AWS thường khuyên
@@ -551,7 +549,9 @@ cần NAT.
 
 ## Security Group — firewall stateful, chỉ có danh sách cho phép
 
-Ba SG. Điểm đặc biệt: **hầu hết rule dùng SG khác làm nguồn, không dùng dải IP.**
+Ba SG phục vụ ứng dụng. Default SG của VPC được Terraform quản lý với ingress và
+egress rỗng. Khi bật ECR endpoint có thêm SG endpoint chỉ nhận 443 từ `sg-web`.
+Điểm đặc biệt: **hầu hết rule dùng SG khác làm nguồn, không dùng dải IP.**
 
 | SG | Cho vào (ingress) | Cho ra (egress) |
 |---|---|---|
@@ -567,8 +567,8 @@ Ba SG. Điểm đặc biệt: **hầu hết rule dùng SG khác làm nguồn, kh
 
 **Vì sao egress của `sg-rds` rỗng?** Database không cần chủ động gọi ra ngoài
 bao giờ. SG là stateful nên câu trả lời cho app vẫn đi được. Egress rỗng nghĩa
-là: nếu kẻ tấn công có chiếm được database, nó **không thể gửi dữ liệu ra
-ngoài**. Đây là chặn đường rút, không phải chặn đường vào.
+là không cho phép database chủ động mở kết nối mới. Dữ liệu vẫn có thể đi về
+trên kết nối PostgreSQL hợp lệ, nên egress rỗng không bảo đảm chống rò rỉ dữ liệu.
 
 **Vì sao không có port 22 ở đâu cả?** Vì SSH là bề mặt tấn công lớn nhất và phổ
 biến nhất của một máy Linux trên Internet (Flow Logs của ta bắt được máy quét tự
@@ -577,94 +577,39 @@ pair nào, không có file `.pem` nào**. Quản trị đi bằng **SSM Session 
 AWS mở kênh từ trong máy ra, nên không cần mở port nào từ ngoài vào, và mọi
 phiên đều được ghi log và kiểm soát bằng IAM.
 
-## Network ACL — phần kỹ thuật đáng nhất của đồ án
+## Network ACL — dùng default allow-all của AWS
 
-NACL gắn vào **subnet** (không phải vào máy), **stateless**, và xét rule **theo
-số thứ tự từ nhỏ đến lớn — gặp rule khớp đầu tiên là dừng**.
+Sáu subnet public/app/db dùng default NACL do AWS tạo cùng VPC. Giữ nguyên rule
+allow-all inbound/outbound của AWS và **không** khai báo `aws_default_network_acl`,
+`aws_network_acl`, `aws_network_acl_rule` hay association custom trong Terraform.
+Default NACL và default SG là hai đối tượng khác nhau: ACL cho phép mọi traffic,
+còn default SG được quản lý với toàn bộ ingress/egress rỗng.
 
-### `nacl-public` — chứa ALB và NAT Gateway
+| Thành phần | Cấu hình hiện tại | Nơi thực thi hạn chế |
+|---|---|---|
+| NACL cho 6 subnet | Default allow-all, AWS quản lý | Không dùng làm lớp chặn |
+| ALB | 80/443 từ Internet; 80/8080 tới web | `sg-alb` |
+| Web | 80/8080 từ ALB; 5432 tới RDS; 80/443 ra Internet | `sg-web` |
+| RDS | 5432 từ web; không cho mở kết nối outbound mới | `sg-rds` |
+| ECR endpoint (tuỳ chọn) | 443 chỉ từ web SG | SG endpoint + rule tại module `security` |
 
-| # | Vào | # | Ra |
-|---|---|---|---|
-| **50** | **DENY tất cả từ `my_ip`** *(bật khi demo)* | 100 | allow 80 → app tier |
-| 100 | allow 80 ← `0.0.0.0/0` | 110 | allow 8080 → app tier |
-| 110 | allow 443 ← `0.0.0.0/0` | 120 | allow 80 → `0.0.0.0/0` |
-| 120 | allow 1024–65535 ← `0.0.0.0/0` | 125 | allow 443 → `0.0.0.0/0` |
-| `*` | **deny** (mặc định) | 130 | allow 1024–65535 → `0.0.0.0/0` |
-| | | `*` | **deny** (mặc định) |
+Lý do bỏ ba custom NACL: rule stateless phải xử lý chiều phản hồi, thứ tự rule và
+CIDR của từng tier. Các quan hệ truy cập cần giữ đã được mô tả trực tiếp bằng
+SG stateful, nên chuyển sang một nơi kiểm soát chính giảm rủi ro vận hành khi đổi
+port hoặc subnet. Route, subnet riêng, ALB, IAM và bảo mật ứng dụng vẫn cần thiết.
 
-Rule **50** là điểm chứng minh giá trị của NACL: nó **chặn đúng một IP**. Security
-Group *không làm được việc này* vì SG chỉ có rule cho phép, không có rule cấm.
-Muốn chặn một kẻ tấn công cụ thể mà vẫn phục vụ mọi người khác — chỉ NACL làm
-được.
+**Đánh đổi:** không còn deny chủ động theo IP/CIDR ở subnet, không còn lớp NACL
+hạn chế bổ sung khi cấu hình SG sai. SG chỉ hỗ trợ allow; nếu gắn nhầm SG hoặc
+mở rộng rule, default NACL không chặn thay. WAF ở lớp HTTP được bổ sung riêng
+bằng [Cloudflare Free](waf-cloudflare.md), không thay thế SG.
+Hai biến Terraform `enable_deny_demo` và `my_ip` đã bị xoá. Khi đo Flow Logs,
+IP của máy probe được ghi trong bằng chứng, không phải input của module mạng.
 
-### `nacl-app` — chứa EC2, và là phần khó nhất
-
-| # | Vào | # | Ra |
-|---|---|---|---|
-| **90** | **DENY 22** ← `0.0.0.0/0` | 100 | allow 5432 → db tier |
-| **95** | **DENY 5432** ← `0.0.0.0/0` | 110 | allow 80 → `0.0.0.0/0` |
-| 100 | allow 80 ← public tier | 115 | allow 443 → `0.0.0.0/0` |
-| 110 | allow 8080 ← public tier | 120 | allow 1024–65535 → public tier |
-| **115** | **DENY 8080** ← `0.0.0.0/0` | `*` | **deny** |
-| 120 | allow 1024–65535 ← `0.0.0.0/0` | | |
-| `*` | **deny** | | |
-
-**Đây là chỗ cần hiểu kỹ, và cũng là chỗ đáng trình bày nhất khi báo cáo.**
-
-Rule 120 mở dải 1024–65535 cho **cả thế giới**. Nghe như một lỗ hổng khổng lồ.
-Nhưng nó **bắt buộc phải có**: NACL là stateless, và khi EC2 tải container image
-từ Internet qua NAT, câu trả lời quay về sẽ đi tới một ephemeral port trong dải
-đó, với địa chỉ nguồn là `0.0.0.0/0` (vì server ở đâu trên Internet ta không
-biết trước). Không mở rule 120 thì EC2 không tải được gì.
-
-Nhưng `5432` và `8080` **nằm trong khoảng 1024–65535**. Nghĩa là rule 120 vô
-tình mở database port và API port ra Internet ở tầng NACL.
-
-Cách xử lý: đặt **DENY ở số nhỏ hơn**. Rule 95 (`DENY 5432`) và rule 115
-(`DENY 8080`) được xét *trước* rule 120, nên gói tin nhắm vào hai port đó bị
-chặn trước khi rule 120 kịp cho qua. Rule 90 (`DENY 22`) cũng vậy — chặn SSH
-tường minh ở tầng mạng, thêm một lớp nữa bên cạnh việc SG không có rule 22.
-
-🚨 **Rule 115 có ràng buộc THỨ HAI, và bỏ sót nó là tự chặn chính mình.** Nói
-"DENY phải đứng trước rule 120" mới là một nửa. Với rule 115 (`DENY 8080 ← 0.0.0.0/0`), số của nó bị kẹp giữa **hai** ràng buộc:
-
-```
-110  allow 8080  ← public tier      ← 115 phải đứng SAU cái này
-115  DENY  8080  ← 0.0.0.0/0
-120  allow 1024-65535 ← 0.0.0.0/0   ← 115 phải đứng TRƯỚC cái này
-```
-
-- Đứng **sau 120** ⇒ vô dụng: rule 120 đã cho 8080 qua rồi.
-- Đứng **trước 110** ⇒ tai hại hơn nhiều: nó chặn luôn traffic **hợp lệ từ ALB**,
-  vì `0.0.0.0/0` bao gồm cả dải public tier. Website chết, mà NACL vẫn "trông
-  đúng".
-
-Rule 95 (`DENY 5432`) **không** có ràng buộc dưới, vì bảng này không có rule nào
-allow 5432 vào app tier cả — chẳng ai gọi database *vào* app tier. Đó là lý do
-hai rule nhìn giống nhau nhưng số của chúng bị ràng buộc khác nhau, và là ví dụ
-rõ nhất cho câu "với NACL, **thứ tự là một phần của cấu hình**".
-
-Ba điều rút ra, đều là ý hay để nói khi báo cáo:
-
-1. **Thứ tự rule trong NACL là logic, không phải hình thức.** Đổi 95 thành 130
-   là mở database ra Internet.
-2. **Stateless là con dao hai lưỡi.** Nó cho phép viết rule DENY (điều SG không
-   làm được), nhưng buộc phải mở dải ephemeral (điều SG không cần).
-3. **Vì thế SG vẫn cần thiết.** NACL ở tầng app buộc phải mở 1024–65535 cho cả
-   thế giới; chính SG mới là lớp nói "8080 chỉ nhận từ sg-alb". Hai lớp bù đúng
-   điểm yếu của nhau — đó là ý nghĩa thật của defense in depth, không phải làm
-   hai lần cho chắc.
-
-### `nacl-db` — chặt nhất
-
-| # | Vào | # | Ra |
-|---|---|---|---|
-| 100 | allow 5432 ← **chỉ app tier** | 100 | allow 1024–65535 → **chỉ app tier** |
-| `*` | **deny mọi thứ khác** | `*` | **deny mọi thứ khác** |
-
-Không có rule nào khác. Chiều ra chỉ mở dải ephemeral về app tier — tức
-database *chỉ được trả lời*, không được chủ động gọi đi đâu.
+**Lịch sử:** `nacl-public`, `nacl-app`, `nacl-db`, rule 50/90/95/115/120 và KB-08
+là thiết kế/kiểm thử cũ. [Báo cáo đo](security-validation-report.md), nhật ký và
+`evidence/` được giữ nguyên làm hồ sơ, không chứng minh cấu hình mới. Thứ tự
+chuyển association, kiểm tra default ACL, review plan, rollback và kiểm tra sau
+triển khai nằm trong [nacl-to-sg-migration.md](nacl-to-sg-migration.md).
 
 ## Application Load Balancer
 
@@ -967,7 +912,7 @@ store — và từ đó giả mạo được database.
 ### Không có SSH — và vì sao vẫn vào được máy
 
 Đề bài chấm nguyên tắc tối thiểu, nên **port 22 đóng hoàn toàn**: không SG rule
-nào, không key pair, không file `.pem`, `nacl-app` còn có rule DENY 22 tường minh.
+nào, không key pair, không file `.pem`; default NACL không dùng để chặn SSH.
 
 Nhưng vẫn cần vào máy để chẩn đoán. Đường vào là **SSM Session Manager**: trên
 Amazon Linux 2023 có sẵn daemon `amazon-ssm-agent`, nó **tự gọi ra** AWS
@@ -1203,7 +1148,6 @@ NAT Gateway và ALB tính theo giờ. Nên hệ thống được thiết kế đ
 | `enable_alb` | ALB + target group + 2 ECS service | $0.0252/giờ |
 | `instance_count` | 0 … `max_instance_count` EC2 | $0.0132/giờ mỗi cái |
 | `enable_flow_logs` | VPC Flow Logs | phí ingest |
-| `enable_deny_demo` | NACL rule 50 | $0 |
 | `enable_ecr_endpoints` | 2 interface endpoint ECR (4 ENI) | **$0.01/giờ mỗi ENI ≈ $0.04** — 🚨 tính tiền ngay khi apply, không đợi `up.sh` |
 
 RDS bật/tắt bằng lệnh riêng, không qua Terraform.
@@ -1283,16 +1227,16 @@ trong [terraform-runbook.md](terraform-runbook.md).
 | Đề bài yêu cầu | Ở đâu trong hệ thống |
 |---|---|
 | **Tìm hiểu HĐH Linux + xây website trên đó** | Mục ["Linux — hệ điều hành chạy bên dưới tất cả"](#linux--hệ-điều-hành-chạy-bên-dưới-tất-cả): 3 bản phân phối, cloud-init/systemd, swap, namespace/cgroup, quyền file, không SSH |
-| **Tìm hiểu AWS Cloud + Terraform** | Phần II (khái niệm), và toàn bộ hạ tầng khai bằng Terraform: 8 module, 106 test tự động, không resource nào bấm tay |
+| **Tìm hiểu AWS Cloud + Terraform** | Phần II (khái niệm), và toàn bộ hạ tầng khai bằng Terraform: 8 module, bộ test tự động, không resource nào bấm tay |
 | VPC | `10.20.0.0/16`, 6 subnet, 3 tier, 2 AZ |
-| Security Group | 3 cái, rule tham chiếu SG, không có port 22 |
-| **Network ACL** | 3 cái, mỗi tier một cái, có rule DENY và thứ tự có ý nghĩa |
+| Security Group | 3 SG ứng dụng, default SG rỗng; SG endpoint tuỳ chọn, rule tham chiếu web SG, không có port 22 |
+| **Network ACL** | Default allow-all của AWS; ba custom NACL đã bỏ trong mã. Phần demo deny cũ chỉ còn là lịch sử |
 | **Application Load Balancer** | ALB + ACM + 2 target group + allowlist Host |
 | EC2 Instance chạy website | 1 `t3.micro` chạy container nginx + .NET |
-| Máy tấn công verify rule | Laptop (`my_ip`), **12 kịch bản**, bằng chứng lưu trong `docs/evidence/acc-551897327153/` |
+| Máy tấn công verify rule | Hồ sơ 12 kịch bản cũ trong `docs/evidence/acc-551897327153/`; cấu hình SG hiện tại cần đo lại theo migration guide |
 | Rule mở theo nguyên tắc tối thiểu | Xem bảng dưới |
-| Rule đã ngăn được tấn công | [security-validation-report.md](security-validation-report.md) |
-| Giải thích **vì sao** rule chặn được | [bao-mat-he-thong.md](bao-mat-he-thong.md) — bảy lớp phòng thủ, và mục câu hỏi phản biện |
+| Rule đã ngăn được tấn công | [security-validation-report.md](security-validation-report.md) là bằng chứng lịch sử, chưa xác nhận bản bỏ custom NACL |
+| Giải thích **vì sao** rule chặn được | [bao-mat-he-thong.md](bao-mat-he-thong.md) — sáu nhóm phòng thủ, và mục câu hỏi phản biện |
 
 **Nguyên tắc tối thiểu — chứng minh cụ thể, không phải khẩu hiệu:**
 
@@ -1301,7 +1245,7 @@ trong [terraform-runbook.md](terraform-runbook.md).
 | Không port 22 ở bất kỳ SG nào | Không có bề mặt SSH; máy quét tự động dò 22 đều bị chặn |
 | App tier không có IP public | Không thể gọi trực tiếp từ Internet |
 | Db tier không có route ra Internet | Không tồn tại đường đi tới database |
-| `sg-rds` egress rỗng | Chiếm được DB cũng không rút được dữ liệu ra |
+| `sg-rds` egress rỗng | DB không tự mở kết nối mới; phản hồi PostgreSQL vẫn được phép |
 | `sg-web` ingress chỉ 2 port, chỉ từ `sg-alb` | Không ai ngoài ALB gọi được container |
 | ALB default action = 403 | Tên miền lạ không lọt vào hệ thống |
 | Role máy EC2 bị Deny tường minh đọc bí mật | Vào được máy cũng không đọc được mật khẩu DB |
@@ -1317,8 +1261,8 @@ bảo vệ:
 
 | Giới hạn | Vì sao chấp nhận |
 |---|---|
-| `nacl-app` buộc mở dải 1024–65535 ra Internet | Bản chất của NACL stateless. Đã bù bằng DENY 5432/8080 số nhỏ hơn, và bằng SG ở lớp trong |
-| NAT Gateway không gắn được Security Group | Khác NAT instance. Kiểm soát egress dồn vào `sg-web` và `nacl-app` |
+| Default NACL allow-all | Không còn lớp lọc subnet hay deny IP. Mọi giới hạn kết nối phụ thuộc SG và đường mạng; thay đổi SG phải được review/test |
+| NAT Gateway không gắn được Security Group | Khác NAT instance. Kiểm soát egress của EC2 nằm ở `sg-web`; default NACL không lọc NAT |
 | Không lọc egress theo tên miền | Cần AWS Network Firewall (~$300/tháng), không khả thi |
 | Chỉ 1 EC2, deploy có downtime 20–40s | Đổi lấy bề mặt SG nhỏ hơn hàng nghìn lần. Lựa chọn có ý thức |
 | Rate limiter đếm trong RAM | 2 instance sẽ thành 2× hạn mức, làm kịch bản KB6 của báo cáo bảo mật **sai sự thật**. Đây là lý do `max_instance_count` vẫn ghim 1: Terraform chặn nâng trần nếu chưa khai `rate_limiter_is_distributed = true`, và cờ đó chỉ được khai sau khi sửa tầng app |
@@ -1329,7 +1273,7 @@ bảo vệ:
 | **Default security group của VPC** mở mọi port từ chính nó | AWS tạo sẵn một cái cho mỗi VPC và không cho xoá. Đo được **0 ENI** dùng nó nên chưa có bề mặt thật, nhưng ai launch instance mà không chỉ định SG sẽ rơi vào nó. ✅ **Đã bịt** bằng `aws_default_security_group` rỗng (apply 2026-09-06) |
 | Không có CloudTrail trail | Chỉ có Event History mặc định: 90 ngày, chỉ management event, không lưu ra S3. Tạo trail tốn ~$0.03/tháng cho S3 — đã cân nhắc, hoãn vì mọi thao tác hạ tầng đều đi qua Terraform và Git đã là nhật ký |
 | Không có alarm nào | Lambda cost guard lỗi thì im lặng. Một CloudWatch alarm trên metric `Errors` là ~$0.10/tháng — đã cân nhắc, hoãn |
-| Không WAF | ALB có allowlist Host nhưng không lọc SQL injection ở tầng mạng. Phòng thủ nằm ở tầng ứng dụng (EF Core tham số hoá) |
+| WAF Free có giới hạn | Cấu hình Cloudflare Free chưa apply; không có đầy đủ OWASP rules. ALB yêu cầu Host + secret khi lockdown; EF Core tham số hoá vẫn cần |
 | Giữa hai phiên làm việc, domain không hoạt động | ALB chạy 24/7 tốn $18/tháng cho một đồ án |
 | **Chưa đo chi phí thật sau khi đổi engine** | Giá đang dùng là niêm yết + một số đo cũ trên SQL Server giữ làm cận trên. Cần 24–48h chạy thật mới biết CPU surplus của PostgreSQL có thực sự về 0 không |
 
@@ -1349,7 +1293,7 @@ lại đọc phần tương ứng ở Phần III để hiểu vì sao ta cấu h
 
 | Thành phần của ta | Workshop | Học được gì dùng ngay | Workshop KHÔNG dạy phần nào ta cần |
 |---|---|---|---|
-| VPC, subnet, SG, **NACL** | [Bắt đầu với Amazon VPC](https://000003.awsstudygroup.com/vi/) — chương 2 tên đúng là **"Tường lửa trong VPC"** | Đây là chương gần nhất với deliverable trọng tâm của đồ án: phân biệt SG và NACL trên console | Không dạy thứ tự rule NACL và bài toán dải ephemeral. Đó là phần Phần III của tài liệu này |
+| VPC, subnet, SG, **NACL** | [Bắt đầu với Amazon VPC](https://000003.awsstudygroup.com/vi/) — chương 2 tên đúng là **"Tường lửa trong VPC"** | Phân biệt SG và NACL trên console | Đối chiếu Phần III để hiểu vì sao dự án dùng default ACL và tập trung lọc ở SG |
 | Mạng nâng cao, VPC Endpoint | [AWS Networking and Content Delivery](https://000092.awsstudygroup.com/vi/) — chương "VPC Endpoints cho AWS Services" | Hiểu S3 Gateway Endpoint của ta làm gì và vì sao nó miễn phí | Nặng về Transit Gateway / VPC Peering — ta không dùng |
 | EC2 | [Giới thiệu về Amazon EC2](https://000004.awsstudygroup.com/vi/) | AMI, instance type, key pair, user data, gắn SG | Workshop **có dùng key pair và SSH**; ta cố ý bỏ cả hai |
 | Launch Template, ASG, **Load Balancer** | [Triển khai ứng dụng với Auto Scaling Group](https://000006.awsstudygroup.com/vi/) — chương 3 và 4 | Đây là chỗ duy nhất trên site dạy **Launch Template + ALB + target group** cùng nhau | Không có allowlist Host header, không có listener rule theo tên miền |
@@ -1429,14 +1373,13 @@ toàn, và `terraform plan`/`state`/`module` thì CloudFormation không có tư�
 | 3 | [Terraform Series — Bài 5: Module — tạo VPC trên AWS](https://viblo.asia/p/terraform-series-bai-5-terraform-module-create-virtual-private-cloud-on-aws-ORNZqp2MK0n) (Viblo) | 🇻🇳 | **Bài quan trọng nhất cho dự án này.** Cách gom resource thành module, truyền `variable`, lấy `output` — đúng cấu trúc `infra/tf/modules/` của ta | Dùng module VPC có sẵn từ Registry; ta tự viết module |
 | 4 | [Terraform Series — Bài 6: Module in depth — ứng dụng multi-tier](https://viblo.asia/p/terraform-series-bai-6-module-in-depth-create-multi-tier-application-1VgZvAb2KAw) (Viblo) | 🇻🇳 | Ghép **VPC + ALB + target group + listener + ASG + Launch Template + RDS** thành một hệ thống — gần kiến trúc của ta nhất trong mọi nguồn tiếng Việt tìm được | **Không có `aws_network_acl` nào.** Và dùng module từ Registry thay vì tự viết. Bài đăng 24/02/2022 nên cú pháp là Terraform 1.x đời đầu — vẫn đọc được |
 | 5 | [HashiCorp — AWS Get Started](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) | 🇬🇧 | Nguồn chính thức, luôn cập nhật. Nhất là hai chương **`Store remote state`** và **`Manage resource drift`** | Tiếng Anh |
-| 6 | [terraform-runbook.md](terraform-runbook.md) của chính dự án này | 🇻🇳 | Cách chạy stack thật: backend S3 + lockfile, biến toggle bật/tắt, thứ tự `up.sh`/`down.sh`, và **106 test `.tftest.hcl`** | — |
+| 6 | [terraform-runbook.md](terraform-runbook.md) của chính dự án này | 🇻🇳 | Cách chạy stack thật: backend S3 + lockfile, biến toggle bật/tắt, thứ tự `up.sh`/`down.sh`, và bộ test `.tftest.hcl` | — |
 
 **Chỗ không nguồn tiếng Việt nào phủ**, và ta dùng thật:
 
 - **`terraform test`** (`.tftest.hcl`) — framework test tích hợp, có từ Terraform 1.6.
-  Đây là thứ khiến hạ tầng của dự án này khác một bài blog: 106 test khẳng định
-  các bất biến bảo mật (không rule 22 nào, NACL DENY đúng thứ tự, NAT tắt theo
-  mặc định). Tài liệu chính thức:
+  Bộ test khẳng định các bất biến bảo mật (không rule 22 nào,
+  quan hệ nguồn/đích SG, không có custom NACL, NAT tắt theo mặc định). Tài liệu chính thức:
   [developer.hashicorp.com/terraform/language/tests](https://developer.hashicorp.com/terraform/language/tests).
   Một điểm đã vấp phải và đáng biết trước: giá trị *known-after-apply* **không
   assert được** ở `command = plan` — xem khối chú thích trong
@@ -1447,33 +1390,23 @@ toàn, và `terraform plan`/`state`/`module` thì CloudFormation không có tư�
   NAT Gateway và ALB mà state không lệch. Không nguồn nào dạy, vì các bài hướng
   dẫn không quan tâm tới việc tắt hạ tầng đi để khỏi tốn tiền.
 
-### Khoảng trống 2 — Network ACL
+### Khoảng trống 2 — Network ACL và ranh giới với SG
 
-Trên AWS Study Group, NACL chỉ là **một chương** trong workshop VPC. Mà NACL lại
-là thành phần đề bài nhấn mạnh nhất. Nên **phần NACL ở Phần III của tài liệu này
-là nguồn chính, không phải phần bổ trợ.**
+Cần hiểu NACL để đọc hồ sơ cũ và thực hiện migration an toàn, dù thiết kế hiện
+tại không quản lý custom ACL. [AWS Docs — Network ACLs](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html)
+là nguồn học về default ACL, thứ tự rule và traffic trả lời của bộ lọc stateless.
 
-Đọc thêm để đối chiếu:
+Ba câu cần giải thích được:
 
-| Nguồn | Ngôn ngữ | Phủ được | Không phủ |
-|---|---|---|---|
-| [Phân biệt Security Group và Network ACL trong AWS](https://indaacademy.vn/aws/phan-biet-security-group-va-network-acl-trong-aws/) (INDA Academy) | 🇻🇳 | Bài tiếng Việt tốt nhất tìm được. Nói đúng **cả ba** điều quan trọng: NACL stateless nên *"inbound và outbound traffic được đánh giá hoàn toàn độc lập"*; rule xét theo số, *"rule có số nhỏ hơn sẽ được đánh giá trước"*; và cảnh báo *"không tính đến ephemeral ports … là một lỗi thường gặp"* | Không có ví dụ DENY theo IP, không có bài toán "rule 120 vô tình mở 5432" |
-| [AWS — Sự khác biệt giữa Security Group và Network ACL](https://viblo.asia/p/aws-su-khac-biet-giua-security-group-va-network-access-controll-list-V3m5WQLvZO7) (Viblo) | 🇻🇳 | Bảng so sánh gọn: SG **chỉ có allow**, NACL có **cả allow và deny**; SG gắn từng instance, NACL gắn cả subnet; một subnet chỉ 1 NACL, một instance nhiều SG | Không đi vào thứ tự rule |
-| [AWS Docs — Network ACLs](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html) | 🇬🇧 | Nguồn thẩm quyền. Cần đọc mục **"Ephemeral ports"** và **"Custom network ACL examples"** | Tiếng Anh |
+1. *Bỏ custom NACL có bỏ mọi NACL không?* Không. Mỗi subnet vẫn gắn default ACL
+   allow-all do AWS tạo; Terraform không nhận quản lý ACL đó.
+2. *Vì sao không mở dải ephemeral trên SG?* SG theo dõi kết nối và cho phép phản
+   hồi; chỉ các kết nối mới mới cần khớp ingress/egress.
+3. *Đã mất gì?* Lớp deny theo subnet/CIDR và demo chặn IP KB-08. SG không cung cấp
+   deny tương đương; đây là đánh đổi, không phải hai tính năng giống nhau.
 
-**Ba câu hỏi mà không nguồn nào ở trên trả lời — nhưng dự án này trả lời:**
-
-1. *Vì sao SG không thay được NACL?* Vì SG **không có rule deny**. Muốn chặn đúng
-   một địa chỉ IP thì chỉ NACL làm được. Đây chính là kịch bản KB-08 trong
-   [security-validation-report.md](security-validation-report.md).
-2. *Vì sao rule 95 và 115 phải tồn tại?* Vì rule 120 buộc phải mở dải ephemeral
-   `1024-65535` cho return traffic qua NAT — mà `5432` và `8080` nằm **trong**
-   dải đó. Phải đặt DENY ở số nhỏ hơn để chặn trước khi rule 120 được xét.
-3. *Vì sao vẫn cần SG khi đã có NACL?* Vì chính điểm 2: NACL stateless buộc ta mở
-   một dải rộng, nên tầng lọc chặt phải nằm ở SG stateful.
-
-Đọc mục [Network ACL ở Phần III](#network-acl--phần-kỹ-thuật-đáng-nhất-của-đồ-án)
-để thấy ba câu trả lời này ở dạng bảng rule đầy đủ.
+Đọc [mục Network ACL ở Phần III](#network-acl--dùng-default-allow-all-của-aws) và
+[migration guide](nacl-to-sg-migration.md) để gắn kiến thức với cấu hình hiện tại.
 
 ### Khoảng trống 3 — Application Load Balancer
 

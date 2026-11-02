@@ -1,10 +1,18 @@
 # Mục lục tài liệu — HushStore
 
-Thư mục này có 14 tài liệu và bốn thư mục con. Trang này để bạn **không phải mở
-từng file ra xem nó nói gì**.
+**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+
+Trang này giúp bạn chọn tài liệu theo việc cần làm, **không phải mở từng file
+ra xem nó nói gì**.
 
 Đọc trang này mất 3 phút. Nó trả lời đúng một câu hỏi: *tôi đang cần gì thì mở
 file nào.*
+
+**Kiến trúc hiện tại trong mã:** bỏ ba custom NACL; sáu subnet dùng default NACL
+allow-all của AWS, không do Terraform quản lý. SG là bộ lọc mạng chính, default SG
+rỗng; ECR endpoint tuỳ chọn chỉ nhận 443 từ web SG. **Chưa apply và chưa đo runtime**
+lần chuyển đổi này. Hướng dẫn review plan, migration, rollback và đo lại nằm ở
+[nacl-to-sg-migration.md](nacl-to-sg-migration.md).
 
 ---
 
@@ -15,12 +23,17 @@ file nào.*
 | 🔴 **Tiếp tục viết code — dự án đang làm dở** | [bat-dau-phien-moi.md](bat-dau-phien-moi.md) | **đọc đầu tiên** |
 | **Xem hình để in báo cáo / làm slide** | [diagrams/hushstore-aws-don-gian.drawio](diagrams/hushstore-aws-don-gian.drawio) | 3 trang |
 | **Xem hình để tra cứu khi đọc tài liệu** — đầy đủ mọi resource | [diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio) | 5 trang |
-| Hiểu hệ thống này **là cái gì** và **vì sao thiết kế vậy** | [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) | 1185 dòng |
+| Hiểu hệ thống này **là cái gì** và **vì sao thiết kế vậy** | [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) | tham khảo |
 | **Bật hệ thống lên** / tắt đi / deploy bản mới / sửa sự cố | [terraform-runbook.md](terraform-runbook.md) | 864 dòng |
-| Biết hệ thống **chặn được tấn công gì**, và vì sao | [bao-mat-he-thong.md](bao-mat-he-thong.md) | 843 dòng |
+| Chuyển từ custom NACL sang SG, kiểm tra và rollback | [nacl-to-sg-migration.md](nacl-to-sg-migration.md) | hướng dẫn hiện tại |
+| So sánh WAF tiết kiệm chi phí, cấu hình Cloudflare Free và khóa origin | [waf-cloudflare.md](waf-cloudflare.md) | thiết kế + triển khai + kiểm thử |
+| Báo cáo với giảng viên về thay đổi NACL → SG và bổ sung WAF | [bao-cao-thay-doi-sg-va-waf.md](bao-cao-thay-doi-sg-va-waf.md) | báo cáo tổng hợp |
+| Đối chiếu toàn bộ góp ý giảng viên với mã hiện tại, xác định việc cần sửa | [ra-soat-gop-y-giang-vien-2026-10-31.md](ra-soat-gop-y-giang-vien-2026-10-31.md) | rà soát + thứ tự đề xuất |
+| Bản sửa trước apply, kiểm thử và live plan đang dừng vì drift | [kiem-tra-truoc-apply-2026-11-02.md](kiem-tra-truoc-apply-2026-11-02.md) | trạng thái bàn giao mới nhất |
+| Biết hệ thống **chặn được tấn công gì**, và vì sao | [bao-mat-he-thong.md](bao-mat-he-thong.md) | tham khảo |
 | Hiểu **CI/CD** từ con số không | [cicd-cho-nguoi-moi.md](cicd-cho-nguoi-moi.md) | 399 dòng |
-| Biết **code Terraform nằm ở đâu**, đọc theo thứ tự nào — kèm cú pháp cho người chưa đọc Terraform bao giờ | [doc-code-terraform.md](doc-code-terraform.md) | 902 dòng |
-| Xem **bằng chứng** đã tấn công thật và bị chặn thật | [security-validation-report.md](security-validation-report.md) | 668 dòng |
+| Biết **code Terraform nằm ở đâu**, đọc theo thứ tự nào — kèm cú pháp cho người chưa đọc Terraform bao giờ | [doc-code-terraform.md](doc-code-terraform.md) | tham khảo |
+| Xem **bằng chứng lịch sử**, trước khi bỏ custom NACL | [security-validation-report.md](security-validation-report.md) | 668 dòng |
 | Biết dự án **đã đi qua những gì**, vấp ở đâu | [nhat-ky-trien-khai.md](nhat-ky-trien-khai.md) | 931 dòng |
 | **Đang tốn tiền** và cần tắt gấp ngay bây giờ | [emergency-shutdown.md](emergency-shutdown.md) | 210 dòng |
 | Ôn để **bảo vệ đồ án** (câu hỏi vấn đáp phần .NET/Blazor) | [on-tap-van-dap.md](on-tap-van-dap.md) | 704 dòng |
@@ -42,29 +55,31 @@ Có **hai** file sơ đồ, phục vụ hai việc khác nhau. Mở bằng
 
 **Để in báo cáo, làm slide, trình bày với thầy** —
 [diagrams/hushstore-aws-don-gian.drawio](diagrams/hushstore-aws-don-gian.drawio),
-3 trang, 93 hình. Bản đầy đủ vẽ hết mọi thứ nên đọc trên giấy A4 bị rối; bản này
+3 trang. Bản đầy đủ vẽ hết mọi thứ nên đọc trên giấy A4 bị rối; bản này
 cắt bớt để mỗi trang vừa **một** khổ giấy hoặc **một** slide:
 
-| Trang | Nội dung | Tỉ lệ khung |
-|---|---|---|
-| 1 | Kiến trúc tổng thể — 5 thành phần đề bài yêu cầu, 3 tier, 3 NACL, 3 SG | 1,38 — vừa A4 ngang |
-| 2 | Một request đi qua **10 chốt kiểm**, kèm lý do bảng NACL dài gấp đôi bảng SG | 1,79 — vừa slide 16:9 |
-| 3 | 6 kịch bản tấn công: chặn ở lớp nào, luật nào chặn, **kết quả đo được** | 1,73 — vừa slide 16:9 |
+| Trang | Nội dung |
+|---|---|
+| 1 | Kiến trúc tổng thể — 3 tier, SG ứng dụng, default ACL allow-all, default SG rỗng |
+| 2 | Luồng request qua SG stateful, phản hồi tự được phép, ECR endpoint tuỳ chọn |
+| 3 | Các bước kiểm chứng SG sau migration; chưa có kết quả đo runtime bản mới |
 
 **Để tra cứu trong lúc đọc tài liệu** —
 [diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio), 5
-trang, 240 hình, không cắt gì:
+trang:
 
 | Trang | Nội dung |
 |---|---|
 | 1 | Kiến trúc tổng thể — mọi resource, và cái gì nằm trong VPC / cái gì nằm ngoài |
-| 2 | Một request đi từ Internet tới database qua **12 chốt kiểm**, kèm đường về |
+| 2 | Luồng request qua Security Group và đường phản hồi stateful |
 | 3 | Luồng CI/CD — từ lúc bấm push tới lúc website đổi |
 | 4 | Vòng đời bật/tắt và chi phí |
 | 5 | 10 role IAM và ranh giới quyền |
 
-Đọc tài liệu mà không có hình bên cạnh thì tới mục Network ACL sẽ mất phương
-hướng. Nếu chỉ in được ba tờ giấy, in cả **ba trang của bản đơn giản**.
+Hai bản `.drawio` và luồng Mermaid trong [bao-mat-he-thong.md](bao-mat-he-thong.md)
+đã mô tả thiết kế SG hiện tại. Phần kiểm chứng trong hình là hướng dẫn cần làm
+sau triển khai, chưa phải kết quả đo. Báo cáo, nhật ký và log cũ vẫn là bằng
+chứng lịch sử, không chứng minh cấu hình mới.
 
 ### Bước 1 — [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md)
 
@@ -73,8 +88,8 @@ tính mà mọi phần sau cần: địa chỉ IP và CIDR, subnet, route table,
 **stateful vs stateless**, NAT, DNS, TLS.
 
 Nếu chỉ nhớ được một điều từ Phần I, hãy nhớ mục **stateful vs stateless** — đó
-là khác biệt giữa Security Group và Network ACL, và là lý do bảng rule NACL ở
-Phần III trông rối như vậy.
+là khác biệt giữa Security Group và Network ACL, và giải thích vì sao thiết kế
+hiện tại dùng SG stateful, để default NACL allow-all.
 
 Rồi đọc tiếp Phần II (AWS) và Phần III (thiết kế thật). Trong Phần III, mục
 **"Linux — hệ điều hành chạy bên dưới tất cả"** đọc được độc lập nếu bạn quan
@@ -89,8 +104,8 @@ bảng cấu hình từng resource, và 12 sự cố đã vấp thật kèm bài
 
 ### Bước 3 — [bao-mat-he-thong.md](bao-mat-he-thong.md)
 
-*Vì sao nó chặn được.* Bảy lớp phòng thủ, mỗi lớp làm được điều gì mà lớp khác
-không làm được, bảng 12 tấn công → lớp chặn → lớp dự phòng, và một danh sách
+*Vì sao nó chặn được.* Sáu nhóm biện pháp phòng thủ, bảng kỳ vọng tấn công → lớp
+chặn cho thiết kế SG hiện tại, liên hệ với 12 phép đo lịch sử, và một danh sách
 thẳng thắn những gì hệ thống **không** chặn được.
 
 Mục **"câu hỏi phản biện"** ở cuối là thứ nên đọc ngay trước buổi bảo vệ.
@@ -105,9 +120,8 @@ vừa push code lên và đang không biết chuyện gì đang xảy ra.
 
 ### Sắp mở code Terraform ra đọc?
 
-Đọc [doc-code-terraform.md](doc-code-terraform.md) trước. 89 file, ~12.800 dòng —
-không có bản đồ thì rất dễ mở đúng file ít quan trọng nhất. Nó cũng chỉ ra **bốn
-chỗ dễ hiểu sai** trong code này, loại hiểu sai mà đọc kỹ vẫn mắc.
+Đọc [doc-code-terraform.md](doc-code-terraform.md) trước. Có bản đồ module giúp
+chọn đúng file cần đọc. Nó cũng chỉ ra **bốn chỗ dễ hiểu sai** trong code này, loại hiểu sai mà đọc kỹ vẫn mắc.
 
 ### Chưa biết Terraform?
 
@@ -155,12 +169,14 @@ tầng khác nhau:
 
 | Thư mục | Account | Ý nghĩa |
 |---|---|---|
-| [evidence/acc-551897327153/](evidence/acc-551897327153/) | hiện hành | **Lần đo có hiệu lực.** 12/12 kịch bản đạt |
+| [evidence/acc-551897327153/](evidence/acc-551897327153/) | hiện hành | Phép đo lịch sử: 12/12 đạt khi còn custom NACL và SQL Server; chưa xác nhận migration SG |
 | [evidence/acc-667836586836/](evidence/acc-667836586836/) | đã xoá | Lần đo đầu, giữ để đối chiếu |
 
-Việc hai lần đo trên hai account cho **cùng kết quả** chính là lập luận mạnh
-nhất của báo cáo bảo mật: các thuộc tính an toàn nằm trong **code Terraform**,
-không nằm trong một lần cấu hình may mắn.
+Hai lần đo trên hai account cho cùng kết quả là bằng chứng về khả năng tái lập
+**thiết kế cũ**. Không dùng kết quả này để khẳng định cấu hình PostgreSQL hoặc
+bản bỏ custom NACL đã đạt runtime. Giữ nguyên báo cáo, nhật ký và log gốc; lưu
+kết quả sau triển khai thành bằng chứng mới theo migration guide. KB-08 deny IP
+đã nghỉ hưu và không được tính đạt trong bộ kiểm SG hiện tại.
 
 `evidence/loadprobe/` là loại bằng chứng **khác hẳn**: nó không đo hạ tầng mà đo
 **tính đúng đắn dữ liệu của ứng dụng dưới tải đồng thời**, và nó chạy $0 trên máy local.

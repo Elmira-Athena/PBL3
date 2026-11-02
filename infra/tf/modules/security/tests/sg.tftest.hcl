@@ -1,6 +1,23 @@
-provider "aws" {
-  region  = "ap-southeast-1"
-  profile = "hushstore"
+# Mock IDs are known during plan, so these tests check actual SG identities.
+# No AWS credentials or API calls are needed.
+mock_provider "aws" {}
+
+override_resource {
+  target          = aws_security_group.alb
+  override_during = plan
+  values          = { id = "sg-00000000000000001" }
+}
+
+override_resource {
+  target          = aws_security_group.web
+  override_during = plan
+  values          = { id = "sg-00000000000000002" }
+}
+
+override_resource {
+  target          = aws_security_group.rds
+  override_during = plan
+  values          = { id = "sg-00000000000000003" }
 }
 
 variables {
@@ -8,144 +25,186 @@ variables {
   vpc_id  = "vpc-00000000000000000"
 }
 
-run "khong_co_bat_ky_rule_nao_mo_port_22" {
+run "lockdown_restricts_existing_alb_rule_addresses" {
   command = plan
+
+  variables {
+    enable_cloudflare_origin_lockdown = true
+  }
 
   assert {
     condition = alltrue([
-      for r in values(aws_vpc_security_group_ingress_rule.all) :
-      !(r.from_port <= 22 && r.to_port >= 22)
+      aws_vpc_security_group_ingress_rule.all["alb-http"].cidr_ipv4 == "173.245.48.0/20",
+      aws_vpc_security_group_ingress_rule.all["alb-https"].cidr_ipv4 == "173.245.48.0/20",
     ])
-    error_message = "Không Security Group nào được có ingress rule chứa port 22 — admin access chỉ qua SSM Session Manager."
+    error_message = "Lockdown must restrict the existing HTTP/HTTPS rule addresses to Cloudflare's first IPv4 range."
+  }
+
+  assert {
+    condition = length(aws_vpc_security_group_ingress_rule.all) == 5 && length(aws_vpc_security_group_ingress_rule.cloudflare) == 28 && alltrue([
+      for port in [80, 443] : toset([
+        for rule in concat(values(aws_vpc_security_group_ingress_rule.all), values(aws_vpc_security_group_ingress_rule.cloudflare)) :
+        rule.cidr_ipv4 if rule.security_group_id == "sg-00000000000000001" && rule.from_port == port
+        ]) == toset([
+        "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
+        "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
+        "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22",
+        "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+        "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+      ])
+    ])
+    error_message = "Each ALB port must allow exactly the 15 official Cloudflare IPv4 ranges, with no missing/extra sources or duplicate rules."
+  }
+
+  assert {
+    condition = alltrue([
+      for rule in values(aws_vpc_security_group_ingress_rule.cloudflare) :
+      rule.security_group_id == "sg-00000000000000001" &&
+      rule.ip_protocol == "tcp" && rule.from_port == rule.to_port &&
+      contains([80, 443], rule.from_port) && rule.referenced_security_group_id == null &&
+      rule.cidr_ipv6 == null && rule.prefix_list_id == null
+      ]) && alltrue([
+      for key, expected in {
+        web-http     = { group = "sg-00000000000000002", port = 80, source = "sg-00000000000000001" }
+        web-api      = { group = "sg-00000000000000002", port = 8080, source = "sg-00000000000000001" }
+        rds-postgres = { group = "sg-00000000000000003", port = 5432, source = "sg-00000000000000002" }
+        } : alltrue([
+          aws_vpc_security_group_ingress_rule.all[key].security_group_id == expected.group,
+          aws_vpc_security_group_ingress_rule.all[key].from_port == expected.port,
+          aws_vpc_security_group_ingress_rule.all[key].to_port == expected.port,
+          aws_vpc_security_group_ingress_rule.all[key].cidr_ipv4 == null,
+          aws_vpc_security_group_ingress_rule.all[key].referenced_security_group_id == expected.source,
+      ])
+    ])
+    error_message = "Lockdown must add only ALB TCP 80/443 IPv4 ingress and preserve the ALB→web→RDS chain."
+  }
+
+  assert {
+    condition = length(aws_vpc_security_group_egress_rule.all) == 5 && alltrue([
+      for key, expected in {
+        alb-to-web-http = { group = "sg-00000000000000001", port = 80, cidr = null, target = "sg-00000000000000002" }
+        alb-to-web-api  = { group = "sg-00000000000000001", port = 8080, cidr = null, target = "sg-00000000000000002" }
+        web-to-rds      = { group = "sg-00000000000000002", port = 5432, cidr = null, target = "sg-00000000000000003" }
+        web-https-out   = { group = "sg-00000000000000002", port = 443, cidr = "0.0.0.0/0", target = null }
+        web-http-out    = { group = "sg-00000000000000002", port = 80, cidr = "0.0.0.0/0", target = null }
+        } : alltrue([
+          aws_vpc_security_group_egress_rule.all[key].security_group_id == expected.group,
+          aws_vpc_security_group_egress_rule.all[key].referenced_security_group_id == expected.target,
+          aws_vpc_security_group_egress_rule.all[key].cidr_ipv4 == expected.cidr,
+          aws_vpc_security_group_egress_rule.all[key].ip_protocol == "tcp",
+          aws_vpc_security_group_egress_rule.all[key].from_port == expected.port,
+          aws_vpc_security_group_egress_rule.all[key].to_port == expected.port,
+      ])
+    ])
+    error_message = "Origin lockdown must leave all five existing egress rules unchanged."
   }
 }
 
-run "khong_co_ingress_rule_nao_mo_0000_ngoai_alb" {
+run "exact_ingress_chain" {
   command = plan
 
   assert {
-    condition = alltrue([
-      for k, r in aws_vpc_security_group_ingress_rule.all :
-      r.cidr_ipv4 == null || startswith(k, "alb-")
+    condition     = length(aws_vpc_security_group_ingress_rule.cloudflare) == 0
+    error_message = "Lockdown disabled must preserve the original five-rule ingress topology without extra Cloudflare rules."
+  }
+
+  assert {
+    condition = length(aws_vpc_security_group_ingress_rule.all) == 5 && alltrue([
+      for key, expected in {
+        alb-http     = { group = "sg-00000000000000001", port = 80, cidr = "0.0.0.0/0", source = null }
+        alb-https    = { group = "sg-00000000000000001", port = 443, cidr = "0.0.0.0/0", source = null }
+        web-http     = { group = "sg-00000000000000002", port = 80, cidr = null, source = "sg-00000000000000001" }
+        web-api      = { group = "sg-00000000000000002", port = 8080, cidr = null, source = "sg-00000000000000001" }
+        rds-postgres = { group = "sg-00000000000000003", port = 5432, cidr = null, source = "sg-00000000000000002" }
+        } : alltrue([
+          aws_vpc_security_group_ingress_rule.all[key].security_group_id == expected.group,
+          aws_vpc_security_group_ingress_rule.all[key].referenced_security_group_id == expected.source,
+          aws_vpc_security_group_ingress_rule.all[key].cidr_ipv4 == expected.cidr,
+          aws_vpc_security_group_ingress_rule.all[key].ip_protocol == "tcp",
+          aws_vpc_security_group_ingress_rule.all[key].from_port == expected.port,
+          aws_vpc_security_group_ingress_rule.all[key].to_port == expected.port,
+      ])
     ])
-    error_message = "Chỉ sg-alb được nhận traffic từ CIDR công cộng. Mọi SG khác phải dùng referenced_security_group_id."
+    error_message = "Ingress must be exactly Internet→ALB 80/443, ALB→web 80/8080 and web→RDS 5432, with the correct SG identities."
+  }
+
+  assert {
+    condition = alltrue([
+      for rule in values(aws_vpc_security_group_ingress_rule.all) :
+      rule.from_port == rule.to_port && rule.from_port != 22 &&
+      (rule.security_group_id == "sg-00000000000000001" || rule.cidr_ipv4 == null)
+    ])
+    error_message = "No SSH, public database/app ingress, or explicit ephemeral return-traffic ranges are allowed."
   }
 }
 
-run "alb_chi_mo_dung_2_rule_80_va_443" {
+run "exact_egress_chain" {
   command = plan
 
   assert {
-    condition = alltrue([
-      aws_vpc_security_group_ingress_rule.all["alb-http"].from_port == 80,
-      aws_vpc_security_group_ingress_rule.all["alb-http"].to_port == 80,
-      aws_vpc_security_group_ingress_rule.all["alb-http"].cidr_ipv4 == "0.0.0.0/0",
-      aws_vpc_security_group_ingress_rule.all["alb-https"].from_port == 443,
-      aws_vpc_security_group_ingress_rule.all["alb-https"].to_port == 443,
-      aws_vpc_security_group_ingress_rule.all["alb-https"].cidr_ipv4 == "0.0.0.0/0",
+    condition = length(aws_vpc_security_group_egress_rule.all) == 5 && alltrue([
+      for key, expected in {
+        alb-to-web-http = { group = "sg-00000000000000001", port = 80, cidr = null, target = "sg-00000000000000002" }
+        alb-to-web-api  = { group = "sg-00000000000000001", port = 8080, cidr = null, target = "sg-00000000000000002" }
+        web-to-rds      = { group = "sg-00000000000000002", port = 5432, cidr = null, target = "sg-00000000000000003" }
+        web-https-out   = { group = "sg-00000000000000002", port = 443, cidr = "0.0.0.0/0", target = null }
+        web-http-out    = { group = "sg-00000000000000002", port = 80, cidr = "0.0.0.0/0", target = null }
+        } : alltrue([
+          aws_vpc_security_group_egress_rule.all[key].security_group_id == expected.group,
+          aws_vpc_security_group_egress_rule.all[key].referenced_security_group_id == expected.target,
+          aws_vpc_security_group_egress_rule.all[key].cidr_ipv4 == expected.cidr,
+          aws_vpc_security_group_egress_rule.all[key].ip_protocol == "tcp",
+          aws_vpc_security_group_egress_rule.all[key].from_port == expected.port,
+          aws_vpc_security_group_egress_rule.all[key].to_port == expected.port,
+      ])
     ])
-    error_message = "sg-alb phải mở đúng 80 và 443 từ 0.0.0.0/0."
+    error_message = "Egress must be exactly ALB→web 80/8080, web→RDS 5432, and web→Internet 80/443."
   }
 
-  # Đếm theo KEY của for_each — key biết ở plan-time. KHÔNG so
-  # r.security_group_id với aws_security_group.alb.id: cả hai là
-  # (known after apply) nên Terraform báo lỗi Unknown condition value.
   assert {
-    condition = length([
-      for k in keys(aws_vpc_security_group_ingress_rule.all) : k if startswith(k, "alb-")
-    ]) == 2
-    error_message = "sg-alb phải có ĐÚNG 2 ingress rule — thêm rule nào là vi phạm nguyên tắc tối thiểu."
+    condition = alltrue([
+      for rule in values(aws_vpc_security_group_egress_rule.all) :
+      rule.security_group_id != "sg-00000000000000003" && rule.from_port == rule.to_port && rule.from_port != 22
+    ])
+    error_message = "RDS must have no egress; no SSH or explicit ephemeral return-traffic ranges may be added."
   }
 }
 
-run "alb_egress_chi_toi_sg_web_khong_ra_cidr_nao" {
-  command = plan
-
-  # cidr_ipv4 == null chứng minh destination là SG reference chứ không phải
-  # CIDR, mà không cần biết giá trị ID thật.
-  assert {
-    condition = alltrue([
-      for k, r in aws_vpc_security_group_egress_rule.all :
-      r.cidr_ipv4 == null if startswith(k, "alb-")
-    ])
-    error_message = "sg-alb chỉ được egress tới sg-web qua referenced_security_group_id, không được mở ra CIDR nào."
-  }
-
-  assert {
-    condition = length([
-      for k in keys(aws_vpc_security_group_egress_rule.all) : k if startswith(k, "alb-")
-    ]) == 2
-    error_message = "sg-alb phải có đúng 2 egress rule (80 và 8080 tới sg-web)."
-  }
-}
-
-run "web_chi_nhan_traffic_tu_sg_alb" {
+run "endpoints_disabled_by_default" {
   command = plan
 
   assert {
-    condition = alltrue([
-      for k, r in aws_vpc_security_group_ingress_rule.all :
-      r.cidr_ipv4 == null if startswith(k, "web-")
-    ])
-    error_message = "sg-web chỉ được nhận traffic từ sg-alb — mọi ingress rule của nó phải dùng referenced_security_group_id, không dùng CIDR."
-  }
-
-  assert {
-    condition = alltrue([
-      aws_vpc_security_group_ingress_rule.all["web-http"].from_port == 80,
-      aws_vpc_security_group_ingress_rule.all["web-api"].from_port == 8080,
-    ])
-    error_message = "sg-web phải nhận đúng port 80 (nginx) và 8080 (API)."
-  }
-
-  assert {
-    condition = length([
-      for k in keys(aws_vpc_security_group_ingress_rule.all) : k if startswith(k, "web-")
-    ]) == 2
-    error_message = "sg-web phải có ĐÚNG 2 ingress rule."
+    condition     = length(aws_vpc_security_group_ingress_rule.vpce_443) == 0
+    error_message = "No endpoint ingress rule may exist when ECR endpoints are disabled."
   }
 }
 
-run "rds_chi_nhan_5432_tu_sg_web_va_khong_co_egress" {
+run "endpoint_https_only_from_web_sg" {
   command = plan
 
+  variables {
+    enable_ecr_endpoints = true
+    vpce_sg_id           = "sg-00000000000000004"
+  }
+
   assert {
-    condition = alltrue([
-      aws_vpc_security_group_ingress_rule.all["rds-postgres"].from_port == 5432,
-      aws_vpc_security_group_ingress_rule.all["rds-postgres"].to_port == 5432,
-      aws_vpc_security_group_ingress_rule.all["rds-postgres"].cidr_ipv4 == null,
+    condition = length(aws_vpc_security_group_ingress_rule.vpce_443) == 1 && alltrue([
+      aws_vpc_security_group_ingress_rule.vpce_443[0].security_group_id == "sg-00000000000000004",
+      aws_vpc_security_group_ingress_rule.vpce_443[0].referenced_security_group_id == "sg-00000000000000002",
+      aws_vpc_security_group_ingress_rule.vpce_443[0].cidr_ipv4 == null,
+      aws_vpc_security_group_ingress_rule.vpce_443[0].ip_protocol == "tcp",
+      aws_vpc_security_group_ingress_rule.vpce_443[0].from_port == 443,
+      aws_vpc_security_group_ingress_rule.vpce_443[0].to_port == 443,
     ])
-    error_message = "sg-rds phải nhận đúng 5432 và chỉ qua referenced_security_group_id (sg-web), không qua CIDR."
+    error_message = "The endpoint must have exactly one TCP 443 ingress from sg-web, with no CIDR source."
   }
 
   assert {
-    condition = length([
-      for k in keys(aws_vpc_security_group_ingress_rule.all) : k if startswith(k, "rds-")
-    ]) == 1
-    error_message = "sg-rds phải có ĐÚNG 1 ingress rule."
-  }
-
-  assert {
-    condition = length([
-      for k in keys(aws_vpc_security_group_egress_rule.all) : k if startswith(k, "rds-")
-    ]) == 0
-    error_message = "sg-rds phải có egress RỖNG — RDS không cần gọi ra ngoài."
+    condition     = length(aws_vpc_security_group_ingress_rule.all) == 5 && length(aws_vpc_security_group_egress_rule.all) == 5
+    error_message = "Enabling endpoints must preserve the five main ingress and five egress rules, including HTTP/HTTPS outbound."
   }
 }
 
-# ─────────────────────────────────────────────────────────────────
-# CHỐT CHO MỘT LỖI CHỈ NỔ LÚC APPLY, KHÔNG NỔ LÚC PLAN.
-#
-# Description của security group là BẤT BIẾN ở AWS ⇒ đổi nó buộc thay thế SG.
-# `name` cố định + `create_before_destroy` thì lần thay thế nào cũng chết:
-#   InvalidGroup.Duplicate: The security group '...' already exists for VPC
-# `terraform plan` KHÔNG thấy gì bất thường — nó in `+/-` rồi báo xanh. Chỉ tới
-# lúc apply AWS mới từ chối, và khi đó apply đã hỏng Ở GIỮA.
-#
-# Đã xảy ra thật ở apply đợt 7: RDS cũ bị xoá xong, RDS mới không dựng được vì
-# security group của nó tạo không nổi. Test này là thứ duy nhất trong repo canh
-# chỗ đó, vì fmt/validate/plan đều không canh.
-# ─────────────────────────────────────────────────────────────────
 run "sg_dung_name_prefix_chu_khong_dung_name" {
   command = plan
 
@@ -154,24 +213,39 @@ run "sg_dung_name_prefix_chu_khong_dung_name" {
       for sg in [aws_security_group.alb, aws_security_group.web, aws_security_group.rds] :
       sg.name_prefix != null && sg.name_prefix != ""
     ])
-    error_message = "Cả 3 security group PHẢI dùng name_prefix. Với `name` cố định + create_before_destroy, mọi lần đổi description (bất biến ở AWS ⇒ buộc thay thế) sẽ chết vì InvalidGroup.Duplicate, và chết GIỮA apply."
+    error_message = "All three groups must use name_prefix to support create_before_destroy without duplicate-name errors."
   }
 }
 
 run "khong_con_chuoi_sql_server_trong_description" {
   command = plan
 
-  # Sau đợt 7 engine là PostgreSQL. Description ghi "SQL Server" không làm hỏng
-  # gì về kỹ thuật — đó chính là lý do nó sống sót qua cả một đợt migration và
-  # suýt đi vào báo cáo. Console AWS là nơi người chấm nhìn vào.
   assert {
     condition = length([
-      for l in split("\n", file("${path.module}/main.tf")) :
-      # Lọc dòng comment — cùng lý do đã ghi ở modules/data/tests/rds.tftest.hcl:
-      # khối comment ngay phía trên giải thích chính lỗi này và có nhắc cả hai từ
-      # khoá, không lọc thì assert đỏ vì lời giải thích của chính nó.
-      l if !startswith(trimspace(l), "#") && strcontains(l, "description") && strcontains(l, "SQL Server")
+      for line in split("\n", file("${path.module}/main.tf")) :
+      line if !startswith(trimspace(line), "#") && strcontains(line, "description") && strcontains(line, "SQL Server")
     ]) == 0
-    error_message = "Còn description nhắc 'SQL Server' trong modules/security/main.tf — engine đã là PostgreSQL từ đợt 7."
+    error_message = "Security group descriptions must describe the current PostgreSQL engine."
   }
+}
+
+run "enabled_endpoints_require_sg_id" {
+  command = plan
+
+  variables {
+    enable_ecr_endpoints = true
+  }
+
+  expect_failures = [var.vpce_sg_id]
+}
+
+run "enabled_endpoints_reject_blank_sg_id" {
+  command = plan
+
+  variables {
+    enable_ecr_endpoints = true
+    vpce_sg_id           = "  "
+  }
+
+  expect_failures = [var.vpce_sg_id]
 }

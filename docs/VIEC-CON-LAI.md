@@ -1,10 +1,23 @@
 # Việc còn lại — từ đây đến hết dự án
 
+**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+
 > **Viết cho một agent không có ngữ cảnh gì.** File này tự chứa. Đọc hết trước khi
 > gõ dòng lệnh đầu tiên.
 >
 > **Đo ngày 2026-10-26.** Mọi con số dưới đây đo bằng lệnh thật tại thời điểm đó,
 > không lấy từ trí nhớ hay từ tài liệu khác.
+
+> **Ghi chú revision mạng (2026-10-26, sửa code/tài liệu local; chưa đo lại AWS):**
+> Bỏ 3 custom NACL, dùng default ACL allow-all do AWS quản lý cho cả 6 subnet.
+> SG giữ chuỗi Internet TCP 80/443 → ALB → web TCP 80/8080 → RDS TCP 5432;
+> web outbound TCP 80/443 được giữ, default SG rỗng. ECR endpoints tuỳ chọn
+> chỉ nhận TCP 443 từ SG web; không bật endpoint hay thêm tài nguyên tính phí.
+> Không còn yêu cầu `my_ip` / `enable_deny_demo` hoặc demo chặn IP bằng ACL
+> trong revision hiện tại. Bẫy số 3 ở mục 7 là bản ghi cũ, không phải hướng dẫn
+> thực hiện nữa. Dùng [quy trình migration hai giai đoạn](nacl-to-sg-migration.md)
+> trước khi apply từ state cũ. Các số đo và trạng thái nhánh dưới đây được giữ
+> nguyên tại thời điểm đo, không chứng minh revision này đã chạy trên AWS.
 
 ---
 
@@ -360,11 +373,12 @@ bash infra/tf/scripts/down.sh       # rồi status.sh XÁC MINH: ALB=0 NAT=0 EC2
    ở `12b5b8b` bằng `providers lock -platform=linux_amd64 -platform=darwin_arm64`.
    **Nếu lại chạy `init` trên macOS rồi hoàn nguyên lock mà không xoá cache, nó tái
    diễn.** Lock giờ có 3 hash/provider — giữ nguyên, đừng hoàn nguyên.
-3. **`my_ip` trong tfvars lệch** với IP hiện tại. **Không** chặn truy cập (nó chỉ
+3. **[Bản ghi cũ; hết áp dụng ở revision mạng hiện tại] `my_ip` trong tfvars lệch** với IP hiện tại. **Không** chặn truy cập (nó chỉ
    dùng ở `modules/network/nacl.tf:109`, rule DENY demo, mà `enable_deny_demo=false`).
-   Nhưng **phải cập nhật trước khi diễn lại kịch bản 8**, nếu không rule DENY chặn
+   Khi đo cũ, **phải cập nhật trước khi diễn lại kịch bản 8**, nếu không rule DENY chặn
    nhầm IP người khác và test "đạt" **GIẢ**.
    ```bash
+   # Lệnh của bản ghi cũ, không chạy theo revision hiện tại:
    curl -s https://checkip.amazonaws.com    # rồi sửa my_ip = "<ip>/32"
    ```
 4. **`image_tag` trong tfvars có thể cũ hơn ECR.** `up.sh` cảnh báo nhưng **không tự

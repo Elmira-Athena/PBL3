@@ -54,3 +54,21 @@ variable "enable_alb" {
   type        = bool
   default     = false
 }
+
+variable "enable_cloudflare_origin_lockdown" {
+  description = "Require the allowed Host and Cloudflare-injected origin secret on both HTTPS routes"
+  type        = bool
+  default     = false
+}
+
+variable "cloudflare_origin_secret" {
+  description = "Shared x-hushstore-origin header value; supply securely, because Terraform state contains this secret"
+  type        = string
+  sensitive   = true
+  default     = null
+
+  validation {
+    condition     = !var.enable_cloudflare_origin_lockdown || can(regex("^[A-Za-z0-9_-]{32,128}$", var.cloudflare_origin_secret))
+    error_message = "cloudflare_origin_secret must contain 32-128 letters, digits, underscores or hyphens when origin lockdown is enabled."
+  }
+}

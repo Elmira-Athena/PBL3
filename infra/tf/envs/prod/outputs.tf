@@ -64,6 +64,11 @@ output "ecs_cluster_name" {
   value       = module.ecs.cluster_name
 }
 
+output "api_task_definition_arn" {
+  description = "Terraform-registered API revision for reviewed configuration rollouts; ECS Service revision remains managed by deployment"
+  value       = module.ecs.taskdef_api_arn
+}
+
 output "asg_name" {
   description = "Tên ASG — dùng để bật/tắt instance tiết kiệm chi phí"
   value       = module.ecs.asg_name
@@ -149,4 +154,9 @@ output "ecr_endpoint_ids" {
 output "ecr_endpoint_count" {
   description = "Số interface endpoint ECR đang dựng — 0 hoặc 2. status.sh dùng để tính $0,01/giờ mỗi ENI"
   value       = module.network.ecr_endpoint_count
+}
+
+output "default_network_acl_id" {
+  description = "ID của default network ACL do AWS tạo; Terraform không quản lý rule, dùng để kiểm tra association sau migration"
+  value       = module.network.default_network_acl_id
 }

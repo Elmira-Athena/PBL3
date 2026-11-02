@@ -3,6 +3,16 @@ provider "aws" {
   profile = "hushstore"
 }
 
+mock_provider "aws" {
+  alias = "proxy_headers"
+
+  mock_data "aws_iam_policy_document" {
+    defaults = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+}
+
 variables {
   project                   = "hushstore-tftest"
   assets_bucket_arn         = "arn:aws:s3:::hushstore-public-assets"
@@ -24,6 +34,50 @@ variables {
   image_tag                 = "abc123def456abc123def456abc123def456ab12"
   assets_bucket_name        = "hushstore-public-assets"
   allowed_origins           = "https://hushstore.io.vn"
+}
+
+run "direct_alb_does_not_trust_cloudflare_visitor_headers" {
+  command = plan
+  providers = {
+    aws = aws.proxy_headers
+  }
+
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
+      length([for e in c.environment : e if e.name == "ProxyHeaders__CloudflareOriginLockdown"]) == 0
+    ])
+    error_message = "Direct ALB mode must omit the flag: absent defaults false and avoids task-definition churn during the NACL migration."
+  }
+}
+
+run "origin_lockdown_enables_cloudflare_visitor_header_only_on_api" {
+  command = plan
+  providers = {
+    aws = aws.proxy_headers
+  }
+  variables {
+    enable_cloudflare_origin_lockdown = true
+  }
+
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
+      length([for e in c.environment : e if e.name == "ProxyHeaders__CloudflareOriginLockdown" && e.value == "true"]) == 1
+    ])
+    error_message = "Origin lockdown must enable Cloudflare visitor IP handling in the API task definition."
+  }
+
+  assert {
+    condition = alltrue([
+      for c in concat(
+        jsondecode(aws_ecs_task_definition.web.container_definitions),
+        jsondecode(aws_ecs_task_definition.migrator.container_definitions),
+        jsondecode(aws_ecs_task_definition.seeder.container_definitions),
+      ) : alltrue([for e in try(c.environment, []) : !startswith(e.name, "ProxyHeaders__")])
+    ])
+    error_message = "Only the API HTTP pipeline consumes proxy-header configuration."
+  }
 }
 
 run "tat_ca_task_def_dung_bridge_va_ec2_launch_type" {

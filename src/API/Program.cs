@@ -506,13 +506,8 @@ builder.Services.AddScoped<IRateLimitStore, PostgresRateLimitStore>();
 // theo luật "Async vs Sync Decision" của CLAUDE.md.
 builder.Services.AddHostedService<PBL3.API.RateLimitCounterCleanupService>();
 
-// Phân vùng theo IP client. Đặt SAU UseForwardedHeaders trong pipeline nên
-// RemoteIpAddress đã là IP thật cho traffic qua ALB.
-//
-// Độ tin cậy của toàn bộ cơ chế này phụ thuộc vào ForwardLimit = 1 ở khối
-// ForwardedHeadersOptions ngay bên dưới — đổi nó thành >= 2 là mở đường cho kẻ
-// tấn công tự chọn phân vùng của mình bằng cách bơm X-Forwarded-For, và mọi
-// hạn mức ở đây thành vô nghĩa.
+// Middleware proxy xác thực và chuẩn hoá IP trước mọi bộ đếm rate limit.
+// Direct ALB chỉ đọc 1 phần tử XFF; origin lockdown đọc CF-Connecting-IP.
 static string GetClientIp(HttpContext context)
     => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
@@ -530,41 +525,11 @@ static void AddPerIpFixedWindow(
             }));
 }
 
-// ALB terminate TLS rồi forward HTTP xuống container. Không có block này thì
-// app không biết request gốc là HTTPS, khiến mọi URL sinh ra bị sai scheme.
-//
-// KnownNetworks/KnownProxies bị clear vì container chạy bridge network mode:
-// source IP mà app thấy là gateway của docker bridge (172.17.0.1), KHÔNG phải
-// IP của ALB trong VPC — nên không thể whitelist theo VPC CIDR. An toàn vì
-// sg-web chỉ nhận traffic từ sg-alb, không ai khác chạm tới được container.
+// Chỉ bật cùng Cloudflare-only ALB ingress + origin-secret listener rule.
+// Khi tắt, CF-Connecting-IP do client tự gửi hoàn toàn không được tin cậy.
+var cloudflareOriginLockdown = builder.Configuration.GetValue<bool>("ProxyHeaders:CloudflareOriginLockdown");
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
-    options.KnownProxies.Clear();
-
-    // ForwardLimit = 1 là lớp phòng thủ đi cùng việc clear KnownProxies ở trên.
-    // Vì đã bỏ whitelist proxy, mọi giá trị trong X-Forwarded-For đều được coi
-    // là "do proxy tin cậy ghi" — nên số phần tử được đọc chính là ranh giới
-    // an toàn duy nhất còn lại.
-    //
-    // Cơ chế: ALB APPEND vào X-Forwarded-For, không replace. Client gửi
-    //     X-Forwarded-For: 1.2.3.4        (giả mạo)
-    // thì container nhận
-    //     X-Forwarded-For: 1.2.3.4, <IP thật của client>
-    // ASP.NET đọc từ PHẢI sang trái, nên đọc đúng 1 phần tử là lấy đúng IP mà
-    // ALB quan sát được, và phần client tự bơm bị bỏ lại. Đặt 2 trở lên là tự
-    // tay tin vào chuỗi do client kiểm soát — RemoteIpAddress sẽ thành giá trị
-    // kẻ tấn công chọn, và mọi thứ dựa trên nó (rate limit theo IP, log audit,
-    // chặn theo IP) đều bị lách.
-    //
-    // Đây cũng là giá trị mặc định của ASP.NET Core. Ghi tường minh vì
-    // `drop_invalid_header_fields` trên ALB KHÔNG chặn được X-Forwarded-*
-    // (ALB append, không phải reject), nên dòng này là chỗ duy nhất trong toàn
-    // hệ thống chặn giả mạo X-Forwarded-For — không phải chỗ nên để mặc định
-    // ngầm rồi có người đổi mà không biết mình đang mở gì.
-    options.ForwardLimit = 1;
-});
+    ProxyHeaders.Configure(options, cloudflareOriginLockdown));
 
 // Tham số HSTS (đợt 2). Bắt đầu THẬN TRỌNG, vì HSTS là quyết định KHÓ HOÀN TÁC:
 // trình duyệt đã ghi nhớ thì trong suốt max-age nó TỪ CHỐI mọi kết nối HTTP tới
@@ -670,7 +635,7 @@ app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
 }));
 
 // UseForwardedHeaders phải chạy TRƯỚC mọi middleware đọc scheme hoặc IP.
-app.UseForwardedHeaders();
+app.UseTrustedProxyHeaders(cloudflareOriginLockdown);
 
 // Ở Production, ALB đã redirect 80 -> 443 ở tầng listener rồi. Bật thêm ở
 // đây sẽ gây redirect loop khi ALB forward request HTTP xuống container.
@@ -688,7 +653,7 @@ else
     // không đóng góp gì. Đây chính là điều mục A7 của tài liệu rà soát muốn sửa.
     //
     // 🔴 VỊ TRÍ QUAN TRỌNG HƠN BẢN THÂN LỜI GỌI: khối này PHẢI đứng SAU
-    // app.UseForwardedHeaders() ở ngay trên. UseHsts() chỉ phát header khi
+    // app.UseTrustedProxyHeaders() ở ngay trên. UseHsts() chỉ phát header khi
     // Request.IsHttps == true, mà container nhận HTTP THUẦN từ ALB — chỉ sau khi
     // ForwardedHeaders đọc X-Forwarded-Proto thì IsHttps mới thành true.
     // Đảo thứ tự là một NO-OP HOÀN TOÀN IM LẶNG: không lỗi, không cảnh báo,

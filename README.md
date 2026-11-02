@@ -1,5 +1,7 @@
 # HushStore
 
+**WAF addition (2026-10-28):** Cloudflare Free was selected because the DNS proxy already exists. Terraform adds custom/rate/header rules and optional ALB origin lockdown (Cloudflare source IPs + Host AND secret). No additional AWS service. **Not applied; runtime verification pending.** See [comparison and deployment guide](docs/waf-cloudflare.md).
+
 **Production-shaped AWS infrastructure for a .NET 10 e-commerce platform — built with Terraform, deployed by GitHub Actions with zero long-lived credentials, and verified by tests and captured evidence rather than by assertion.**
 
 🇻🇳 Bản tiếng Việt: **[README.vi.md](README.vi.md)** · All design documents in [`docs/`](docs/) are written in Vietnamese.
@@ -11,9 +13,9 @@
 | **Application** | ASP.NET Core 10 Web API · Blazor WebAssembly · PostgreSQL 17 · EF Core |
 | **Infrastructure** | Terraform (8 modules, ~6,300 lines HCL) on AWS `ap-southeast-1` |
 | **Compute** | ECS on EC2 launch type · 4 container images · one-off tasks for migrate & seed |
-| **Network** | 3-tier VPC across 2 AZ, one Network ACL per tier, no public IP on app tier |
+| **Network** | 3-tier VPC across 2 AZ, SG references enforce tier boundaries, no public IP on app tier |
 | **CI/CD** | GitHub Actions + OIDC — **no AWS access key exists anywhere** |
-| **Testing** | 109 `terraform test` assertions across 12 files · 12 security scenarios with raw output committed |
+| **Testing** | Terraform module tests · historical security scenarios with raw output committed |
 | **Cost control** | Every billable resource behind a toggle · nightly shutdown Lambda · cost telemetry in `status.sh` |
 
 > **Note on placeholders.** This README uses `<AWS_ACCOUNT_ID>`, `<YOUR_IP>` and `<ALERT_EMAIL>` where the working tree holds real values. `terraform.tfvars` is git-ignored by design; only `*.tfvars.example` is committed.
@@ -26,7 +28,7 @@ Most portfolio projects prove that infrastructure *can be created*. This one is 
 
 Three things follow from that, and they are the parts worth your time:
 
-1. **Security properties live in code, not in a lucky console session.** The entire stack was destroyed on one AWS account (132 resources) and rebuilt from the same Terraform on a blank account. All 12 security scenarios produced identical results — see [`docs/security-validation-report.md`](docs/security-validation-report.md) and the raw command output in [`docs/evidence/`](docs/evidence/).
+1. **Security properties live in code, not in a lucky console session.** The entire stack was destroyed on one AWS account (132 resources) and rebuilt from the same Terraform on a blank account. On that historical configuration, all 12 security scenarios produced identical results — see [`docs/security-validation-report.md`](docs/security-validation-report.md) and the raw command output in [`docs/evidence/`](docs/evidence/).
 2. **Cost is treated as a design constraint, not an afterthought.** NAT Gateway and ALB have no free tier and bill by the hour. Every such resource sits behind an explicit toggle that defaults to *off*, and a Lambda enforces the default nightly in case a human forgets.
 3. **Claims are qualified.** Where something has been measured, this README says on what date and what configuration. Where it has *not*, it says so — see [Known limitations](#known-limitations). A green `terraform apply` is not evidence that a system works, and this repo does not treat it as such.
 
@@ -40,7 +42,7 @@ Three things follow from that, and they are the parts worth your time:
                    Cloudflare DNS (proxied, Full strict)
                             │
     ┌───────────────────────▼────────────────────────────────────────────┐
-    │  VPC 10.20.0.0/16 — 3 tiers × 2 AZ, one Network ACL per tier       │
+    │  VPC 10.20.0.0/16 — 3 tiers × 2 AZ, stateful SG filtering          │
     │                                                                    │
     │  public tier   ALB (ACM cert, 80→443 redirect)                     │
     │                └─ Host-header allowlist; unknown Host → 403         │
@@ -63,6 +65,10 @@ Three things follow from that, and they are the parts worth your time:
 | ALB | 80, 443 ← `0.0.0.0/0` | only to `sg-web` on 80 and 8080 |
 | app | 80, 8080 ← **`sg-alb` only** | 5432 → `sg-rds`; 80/443 → internet (ECR, SSM) |
 | db  | 5432 ← **`sg-web` only** | **empty** |
+| ECR endpoints (optional) | 443 ← **`sg-web` only** | **empty** |
+| VPC default SG | **empty** | **empty** |
+
+Security groups enforce the traffic policy. Subnets use the AWS-created default allow-all network ACL, whose rules Terraform leaves unmanaged. Stateful SGs allow response traffic automatically; no ephemeral-port rules are needed. Existing deployments must follow the [staged ACL-to-SG migration](docs/nacl-to-sg-migration.md) before removing their custom ACLs.
 
 **There is no SSH.** No key pair exists and no security group rule opens port 22. Administrative access goes through **SSM Session Manager** (to the host) and **ECS Exec** (into the container). This was verified by scanning the ALB from an external host — see [`docs/evidence/`](docs/evidence/).
 
@@ -77,7 +83,7 @@ infra/tf/
 ├── bootstrap/              S3 state backend, versioned + encrypted (chicken-and-egg layer)
 ├── envs/prod/              root module — composes the eight modules below
 ├── modules/
-│   ├── network/            VPC, 3×2 subnets, route tables, NACLs, flow logs, ECR endpoints
+│   ├── network/            VPC, 3×2 subnets, route tables, flow logs, ECR endpoints
 │   ├── security/           security groups — the matrix above
 │   ├── storage/            4 × ECR repo, S3 assets, S3 ALB logs, S3 artifacts
 │   ├── data/               RDS PostgreSQL 17, subnet group, SSM parameters
@@ -88,7 +94,7 @@ infra/tf/
 └── scripts/                up.sh · down.sh · status.sh · nuke.sh · wait-for-capacity.sh
 ```
 
-**Testing.** `terraform test` runs **109 `run` blocks across 12 test files** with no AWS credentials and no state access. The assertions encode the security invariants directly — NACLs are stateless so return traffic must be allowed explicitly, no security group may open 22, IAM policies must stay least-privilege. Run them with:
+**Testing.** Module `terraform test` plans check exact SG sources, destinations, ports and counts, endpoint toggles, the empty default SG, and IAM least privilege. The network, security and ALB tests use mock providers; other modules use the AWS provider and may require credentials for data sources. These module tests do not read the deployed stack's state. Run them with:
 
 ```bash
 for m in infra/tf/modules/*/; do terraform -chdir="$m" init -backend=false && terraform -chdir="$m" test; done
@@ -163,8 +169,8 @@ aws ecs execute-command --cluster hushstore --task <arn> --container api \
 
 | What | Where | Status |
 |---|---|---|
-| 12 security scenarios (port scan, direct DB access, SSH, IAM blast radius, OIDC spoofing, rate limiting, Host allowlist, NACL, flow logs, cost guard) | [`docs/security-validation-report.md`](docs/security-validation-report.md), raw output in [`docs/evidence/`](docs/evidence/) | 12/12 pass, measured 2026-08-24 — see caveat below |
-| Terraform module assertions | [`infra/tf/modules/*/tests/`](infra/tf/) | 109 `run` blocks, executed in CI on every PR |
+| Historical 12 security scenarios (port scan, direct DB access, SSH, IAM blast radius, OIDC spoofing, rate limiting, Host allowlist, NACL, flow logs, cost guard) | [`docs/security-validation-report.md`](docs/security-validation-report.md), raw output in [`docs/evidence/`](docs/evidence/) | 12/12 pass on the historical configuration, measured 2026-08-24 — see caveat below |
+| Terraform module assertions | [`infra/tf/modules/*/tests/`](infra/tf/) | Module plans run in CI on every PR; mock SG tests cover the current policy |
 | Application correctness under concurrency | [`tools/LoadProbe/`](tools/LoadProbe/), [`docs/evidence/loadprobe/`](docs/evidence/loadprobe/) | 9/9 invariants hold at both 1 and 2 instances |
 | Rebuild-from-scratch reproducibility | [`docs/security-validation-report.md`](docs/security-validation-report.md) | Stack destroyed (132 resources) and rebuilt on a blank account; identical results |
 
@@ -176,7 +182,7 @@ aws ecs execute-command --cluster hushstore --task <arn> --container api \
 
 Stated plainly, because a DevOps reviewer will find them anyway and because the reasoning is more interesting than a clean-looking list.
 
-- **The 12 security scenarios were measured against SQL Server on port 1433**, before the PostgreSQL 17 migration changed it to 5432 and added a second NAT Gateway plus Multi-AZ. The *shape* of every rule is unchanged ("exactly one DB port, from the app tier only"), so the conclusions almost certainly hold — but *almost certainly* is not *measured*, and this repo does not round that up.
+- **The 12 security scenarios were measured against SQL Server on port 1433**, before the PostgreSQL 17 migration changed it to 5432 and added a second NAT Gateway plus Multi-AZ. Custom tier ACLs and their IP-deny demo have since been removed in favor of SG references. That historical result does not verify the current policy; follow the [migration and live checks](docs/nacl-to-sg-migration.md) for a deployed stack.
 - **The RDS hourly rate (`$0.098`) is a SQL Server measurement** carried forward as an upper bound. PostgreSQL Multi-AZ lists at \$0.051. It stays unchanged until a real invoice confirms it.
 - **Single application instance by default.** Running two requires the rate-limit counter to be shared across tasks first; `terraform validate` blocks raising `max_instance_count` without also setting `rate_limiter_is_distributed`, so the unsafe state is not representable. The distributed counter has since been implemented and measured — see [`docs/evidence/2026-09-06-rate-limit-dung-chung.md`](docs/evidence/2026-09-06-rate-limit-dung-chung.md).
 - **No automated test suite for application code.** `tools/LoadProbe/` covers concurrency invariants; conventional unit tests do not exist. This is a real gap, not a considered trade-off.

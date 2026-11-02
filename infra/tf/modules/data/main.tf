@@ -153,8 +153,8 @@ resource "aws_db_instance" "this" {
 # THỨ TỰ BẮT BUỘC khi tắt: huỷ replica (enable_read_replica = false + apply)
 # TRƯỚC, rồi mới stop primary. Đảo lại thì stop bị AWS từ chối.
 #
-# Không cần subnet/NACL mới: VPC đã có 2 AZ, db subnet group đã phủ cả hai, và
-# NACL db gắn cả hai subnet — replica rơi vào AZ nào cũng đã có đường.
+# Không cần subnet mới: db subnet group đã phủ cả 2 AZ, và replica dùng cùng
+# Security Group với primary nên chỉ nhận PostgreSQL từ sg-web.
 resource "aws_db_instance" "replica" {
   count = var.enable_read_replica ? 1 : 0
 

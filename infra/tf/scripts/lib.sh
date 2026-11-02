@@ -202,6 +202,17 @@ hs_sso_check() {
     || hs_die "SSO session hết hạn. Chạy: aws sso login --profile ${HS_PROFILE}"
 }
 
+# Cây cuối đã bỏ custom NACL; apply thẳng có thể xoá rule trước khi tháo subnet.
+hs_nacl_migration_check() {
+  local resources
+  if ! resources="$(terraform -chdir="$HS_TF_DIR" state list)"; then
+    hs_die "không đọc được Terraform state để kiểm tra NACL; dừng trước mọi thay đổi. Xem docs/nacl-to-sg-migration.md"
+  fi
+  if [[ "$resources" =~ (^|[.])aws_network_acl[.] ]]; then
+    hs_die "state vẫn còn custom NACL (kể cả migration dở dang); không được apply cấu hình cuối. Hoàn tất hai mốc trong docs/nacl-to-sg-migration.md trước khi chạy up.sh/down.sh"
+  fi
+}
+
 # hs_apply "<nhãn>" — chạy terraform apply, in tiến độ trực tiếp, trả exit code
 # THẬT của terraform. Không pipe. Log đầy đủ nằm ở $HS_LAST_LOG.
 # Có thay đổi nào đang chờ trên module.data (tức RDS) không?
@@ -236,6 +247,7 @@ hs_data_has_pending() {
 }
 
 hs_apply() {
+  hs_nacl_migration_check
   label="$1"
   mkdir -p "$HS_LOCAL_DIR/logs"
   HS_LAST_LOG="${HS_LOCAL_DIR}/logs/apply-$(date +%Y%m%d-%H%M%S).log"

@@ -1,5 +1,7 @@
 # Thực hành trên AWS Console — Dựng lại Giai đoạn 0 → 3 bằng tay
 
+**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+
 > **Mục đích.** Hiểu hệ thống AWS của HushStore bằng cách **tự tay bấm lại** đúng
 > những gì Terraform đã dựng ở Giai đoạn 0 (khảo sát), 1 (S3 chứa state),
 > 2 (mạng) và 3 (Security Group) trong
@@ -13,9 +15,14 @@
 > | Giai đoạn | File Terraform |
 > |---|---|
 > | 1 — S3 state | [bootstrap/main.tf](../infra/tf/bootstrap/main.tf) |
-> | 2 — Mạng | [modules/network/vpc.tf](../infra/tf/modules/network/vpc.tf), [modules/network/nacl.tf](../infra/tf/modules/network/nacl.tf) |
+> | 2 — Mạng | [modules/network/vpc.tf](../infra/tf/modules/network/vpc.tf) |
 > | 3 — Security Group | [modules/security/main.tf](../infra/tf/modules/security/main.tf) |
 > | Giá trị đầu vào | [envs/prod/variables.tf](../infra/tf/envs/prod/variables.tf) |
+
+**Revision mạng:** không tạo custom ACL; cả 6 subnet giữ default network
+ACL allow-all do AWS quản lý. Lọc traffic bằng SG ở Phần E. Lab VPC mới
+không cần migration; hạ tầng thật có state ACL cũ phải theo
+[quy trình chuyển hai giai đoạn](nacl-to-sg-migration.md).
 
 ---
 
@@ -50,7 +57,7 @@ thứ phải phân biệt được bằng mắt và bằng tag:
 
 > [!CAUTION]
 > Trước mỗi thao tác **sửa** hoặc **xoá**, nhìn cột *Name*: phải bắt đầu bằng
-> `lab-hushstore-`. Sửa nhầm một NACL hay route table có tag
+> `lab-hushstore-`. Sửa nhầm một SG hay route table có tag
 > `ManagedBy = terraform` là làm hạ tầng thật lệch khỏi state — đúng loại lỗi
 > khó chữa nhất mà nhật ký đã cảnh báo.
 
@@ -71,8 +78,8 @@ region**, tạo nhầm region là "biến mất" khỏi màn hình.
 
 ## A.3 CIDR trùng với hạ tầng thật — có sao không?
 
-Bản lab dùng **đúng** `10.20.0.0/16` như thiết kế để mọi CIDR trong NACL khớp
-từng chữ số với Terraform. Hai VPC trùng CIDR **được phép** cùng tồn tại trong
+Bản lab dùng **đúng** `10.20.0.0/16` như thiết kế để CIDR subnet và route
+khớp với Terraform. Hai VPC trùng CIDR **được phép** cùng tồn tại trong
 một account: chúng chỉ xung đột khi bạn nối chúng lại (peering, Transit
 Gateway, VPN). Lab này không nối gì cả.
 
@@ -121,7 +128,7 @@ lab.
 1. Click tên tài khoản góc trên phải → ghi lại **Account ID**. Phải là
    `551897327153`.
 2. Bạn cần quyền tạo/xoá: S3, EC2/VPC (subnet, route table, IGW, NAT, EIP,
-   NACL, SG, endpoint), và (nếu làm Flow Logs) IAM + CloudWatch Logs.
+   SG, endpoint), và (nếu làm Flow Logs) IAM + CloudWatch Logs.
 
 ## B.2 Đọc hạ tầng thật bằng Tag Editor
 
@@ -129,7 +136,8 @@ lab.
 2. *Regions*: `ap-southeast-1`. *Resource types*: `All supported resource types`.
 3. *Tags*: Key `ManagedBy`, Value `terraform` → **Search resources**.
 4. Lọc theo cột *Type*, tìm các loại `AWS::EC2::VPC`, `AWS::EC2::Subnet`,
-   `AWS::EC2::RouteTable`, `AWS::EC2::NetworkAcl`, `AWS::EC2::SecurityGroup`.
+   `AWS::EC2::RouteTable`, `AWS::EC2::SecurityGroup`.
+   Default ACL không do Terraform quản lý nên xem riêng ở D.6.
 
 Ghi lại: có VPC `hushstore-vpc` (10.20.0.0/16) không? Có mấy subnet, mấy route
 table? Đây là bản gốc bạn sẽ so sánh ở cuối mỗi phần.
@@ -162,19 +170,20 @@ flowchart TB
     S3["S3: lab-hushstore-tfstate-ACCOUNT_ID<br/>versioning + SSE-S3 + block public + lifecycle 90 ngày"]
     subgraph VPC["VPC lab-hushstore-vpc 10.20.0.0/16"]
         IGW["Internet Gateway"]
-        subgraph PUB["Tier public — NACL public — rt-public"]
+        subgraph PUB["Tier public — rt-public"]
             PA["public-a 10.20.0.0/24 (1a)"]
             PB["public-b 10.20.1.0/24 (1b)"]
         end
-        subgraph APP["Tier app — NACL app"]
+        subgraph APP["Tier app"]
             AA["app-a 10.20.10.0/24 (1a) — rt-private-a"]
             AB["app-b 10.20.11.0/24 (1b) — rt-private-b"]
         end
-        subgraph DB["Tier db — NACL db — rt-db"]
+        subgraph DB["Tier db — rt-db"]
             DA["db-a 10.20.20.0/24 (1a)"]
             DBB["db-b 10.20.21.0/24 (1b)"]
         end
         EP["S3 Gateway Endpoint<br/>gắn rt-private-a, rt-private-b, rt-db"]
+        ACL["Default network ACL: allow-all cả 6 subnet; AWS quản lý"]
         SG["3 SG: alb-sg, web-sg, rds-sg<br/>+ default SG bị khoá rỗng"]
     end
     IGW --- PUB
@@ -183,7 +192,7 @@ flowchart TB
 
 **Thứ tự bắt buộc và lý do:** S3 trước (mọi thứ sau ghi vào state) → VPC
 trước mọi thứ trong nó → subnet → IGW → route table (cần IGW làm đích) →
-endpoint (cần route table) → NACL (cần subnet để gắn) → SG (cần VPC, và SG cần
+endpoint (cần route table) → kiểm default ACL → SG (cần VPC, và SG cần
 tồn tại hết trước khi khai rule trỏ lẫn nhau).
 
 ---
@@ -283,13 +292,13 @@ giống hệt (trừ tên).
 
 # Phần D — Giai đoạn 2: Mạng
 
-Terraform: [vpc.tf](../infra/tf/modules/network/vpc.tf) +
-[nacl.tf](../infra/tf/modules/network/nacl.tf).
+Terraform: [vpc.tf](../infra/tf/modules/network/vpc.tf). Default ACL do AWS
+tạo cùng VPC, không được Terraform adopt hay khai rule.
 
 **Danh sách resource bản lab** (đếm theo code hiện tại, khác nhật ký — xem Phụ
 lục 1): 1 VPC · 6 subnet · 1 IGW · **4** route table · 1 S3 Gateway Endpoint ·
-3 NACL (14 rule tự khai + rule `*` mặc định) · default SG bị khoá ·
-*(tuỳ chọn)* 2 EIP + 2 NAT · *(tuỳ chọn)* Flow Logs · *(tuỳ chọn)* rule deny demo.
+1 default ACL do AWS tạo (6 subnet, allow-all hai chiều) · default SG bị khoá ·
+*(tuỳ chọn)* 2 EIP + 2 NAT · *(tuỳ chọn)* Flow Logs.
 
 ## D.1 VPC
 
@@ -322,7 +331,7 @@ private — app không kết nối được database (Giai đoạn 5).
 > Khi tạo VPC, AWS **tự động** sinh kèm 3 thứ: một **main route table**, một
 > **default network ACL** (cho phép tất cả), một **default security group**.
 > Không xoá được chúng; ta sẽ (a) không dùng main route table, (b) chuyển mọi
-> subnet sang NACL riêng, (c) khoá default SG ở D.8.
+> subnet giữ default ACL allow-all, (c) khoá default SG ở D.8.
 
 ## D.2 Subnet — 6 cái
 
@@ -355,12 +364,6 @@ trọng nhất của toàn hệ thống"*.
 3. Lặp lại cho `lab-hushstore-public-b`.
 4. **Không** làm cho 4 subnet app/db — mặc định của subnet mới là **tắt**,
    đúng với `false` trong Terraform.
-
-> [!NOTE]
-> Ba dải `/23` dùng trong NACL ở D.7 là kết quả **gộp** hai subnet `/24` của
-> mỗi tier: public `10.20.0.0/23` (= .0 + .1), app `10.20.10.0/23`
-> (= .10 + .11), db `10.20.20.0/23` (= .20 + .21). Terraform tính bằng
-> `cidrsubnet(var.vpc_cidr, 7, n)`; ở console bạn gõ tay.
 
 ### ✅ Checkpoint D.2
 
@@ -468,143 +471,38 @@ thêm một dòng đích là **prefix list** `pl-xxxxxxxx` → target `vpce-xxxx
 Dòng đó do endpoint tự thêm — đây là *cách* gateway endpoint hoạt động: bằng
 route, không bằng ENI.
 
-## D.6 Network ACL — tạo 3 cái và gắn subnet
+## D.6 Default network ACL — giữ nguyên allow-all
 
-1. **Network ACLs** → **Create network ACL**, lặp 3 lần. *VPC*: `lab-hushstore-vpc`; bộ tag lab.
+1. **Network ACLs** → lọc *VPC ID* = VPC lab → chọn ACL có *Default* = **Yes**.
+2. **Inbound rules**: rule `100`, *All traffic*, source `0.0.0.0/0`, **Allow**;
+   rule `*` **Deny** là dòng cuối do AWS tạo.
+3. **Outbound rules**: rule `100`, *All traffic*, destination `0.0.0.0/0`, **Allow**;
+   rule `*` **Deny** là dòng cuối.
+4. **Subnet associations**: đủ 6 subnet lab. Không tạo ACL riêng, không đổi rule.
 
-   | Name |
-   |---|
-   | `lab-hushstore-nacl-public` |
-   | `lab-hushstore-nacl-app` |
-   | `lab-hushstore-nacl-db` |
+Đây là default ACL do AWS tạo, **không** phải `aws_default_network_acl` do
+Terraform quản lý. Default ACL allow-all không thay thế SG: app và DB vẫn
+private, DB không có route Internet, SG giới hạn nguồn theo danh tính SG.
 
-   NACL mới tạo chỉ có rule `*` **Deny** ở cả hai chiều — tức **chặn hết**.
-   Đây là lý do nói NACL "an toàn theo mặc định". (Khác với **default** NACL
-   của VPC, vốn *allow all*.)
-
-2. Gắn subnet — chọn NACL → tab **Subnet associations** → **Edit subnet associations**:
-
-   | NACL | Subnet |
-   |---|---|
-   | `nacl-public` | `public-a`, `public-b` |
-   | `nacl-app` | `app-a`, `app-b` |
-   | `nacl-db` | `db-a`, `db-b` |
-
-   Mỗi subnet chỉ gắn được **một** NACL; gắn vào NACL mới là tự động rời khỏi
-   default NACL. Sau bước này, default NACL của VPC lab phải có **0** subnet.
-
-> [!TIP]
-> Có thể **gắn subnet sau khi đã nhập xong rule** (D.7) — trong lab thì không
-> sao vì chưa có gì chạy, nhưng với hệ thống thật thì thứ tự đúng là *rule
-> trước, gắn sau*: gắn một NACL rỗng vào subnet đang chạy là cắt mạng ngay lập
-> tức.
-
-## D.7 Network ACL — nhập rule
-
-Cách nhập (giống nhau cho cả 3 NACL): chọn NACL → tab **Inbound rules** (hoặc
-**Outbound rules**) → **Edit inbound rules** → **Add new rule** cho mỗi dòng.
-Mỗi dòng có các ô: *Rule number*, *Type*, *Protocol*, *Port range*,
-*Source* (inbound) / *Destination* (outbound), *Allow/Deny*.
-
-**Quy ước nhập:** *Type* luôn chọn **Custom TCP** rồi gõ *Port range* (kể cả
-port 80/443 — để giống Terraform, nơi mọi rule là `tcp` + from/to). Chọn
-"HTTP (80)" cũng cho ra cùng kết quả, chỉ khác nhãn hiển thị.
-
-NACL **xét rule theo số từ nhỏ đến lớn và dừng ở rule khớp đầu tiên**. Rule
-`*` cuối cùng là Deny, AWS tự thêm, không xoá được.
-
-### D.7.1 `lab-hushstore-nacl-public` — chứa ALB + NAT
-
-**Inbound (3 rule):**
-
-| Rule # | Type | Port range | Source | Allow/Deny | Vì sao |
-|---|---|---|---|---|---|
-| 100 | Custom TCP | `80` | `0.0.0.0/0` | Allow | Client gọi ALB (HTTP, sau đó redirect) |
-| 110 | Custom TCP | `443` | `0.0.0.0/0` | Allow | Client gọi ALB (HTTPS) |
-| 120 | Custom TCP | `1024-65535` | `0.0.0.0/0` | Allow | Return traffic: phản hồi Internet về NAT, phản hồi app về ALB |
-
-**Outbound (5 rule):**
-
-| Rule # | Type | Port range | Destination | Allow/Deny | Vì sao |
-|---|---|---|---|---|---|
-| 100 | Custom TCP | `80` | `10.20.10.0/23` | Allow | ALB → nginx container (app tier) |
-| 110 | Custom TCP | `8080` | `10.20.10.0/23` | Allow | ALB → API container |
-| 120 | Custom TCP | `80` | `0.0.0.0/0` | Allow | NAT đẩy traffic HTTP ra Internet (yum) |
-| 125 | Custom TCP | `443` | `0.0.0.0/0` | Allow | NAT đẩy HTTPS ra Internet (ECR, SSM) |
-| 130 | Custom TCP | `1024-65535` | `0.0.0.0/0` | Allow | Phản hồi về client; phản hồi từ NAT về app tier |
-
-### D.7.2 `lab-hushstore-nacl-app` — chứa ECS container instance
-
-> [!IMPORTANT]
-> **Thứ tự rule ở đây là điểm kỹ thuật cốt lõi.** Rule 120 *buộc* phải mở
-> `1024-65535` từ `0.0.0.0/0` (để phản hồi từ Internet đi qua NAT về được —
-> NACL **stateless**, không nhớ kết nối). Nhưng dải đó **chứa** 5432 (database)
-> và 8080 (API). Rule 90/95/115 là **DENY với số nhỏ hơn 120** để bịt đúng
-> những port đó lại. Chúng tồn tại **vì** rule 120, không phải vì thừa.
-
-**Inbound (6 rule) — nhập đúng số:**
-
-| Rule # | Type | Port range | Source | Allow/Deny | Vì sao |
-|---|---|---|---|---|---|
-| 90 | Custom TCP | `22` | `0.0.0.0/0` | **Deny** | Không SSH, bất kể SG cấu hình gì |
-| 95 | Custom TCP | `5432` | `0.0.0.0/0` | **Deny** | 🔴 Thứ **duy nhất** ngăn rule 120 mở cổng PostgreSQL ra Internet |
-| 100 | Custom TCP | `80` | `10.20.0.0/23` | Allow | Chỉ ALB (public tier) gọi nginx |
-| 110 | Custom TCP | `8080` | `10.20.0.0/23` | Allow | Chỉ ALB gọi API |
-| 115 | Custom TCP | `8080` | `0.0.0.0/0` | **Deny** | Mọi nguồn khác tới 8080 bị chặn trước khi rơi vào rule 120 |
-| 120 | Custom TCP | `1024-65535` | `0.0.0.0/0` | Allow | Return traffic từ Internet qua NAT |
-
-**Outbound (4 rule):**
-
-| Rule # | Type | Port range | Destination | Allow/Deny | Vì sao |
-|---|---|---|---|---|---|
-| 100 | Custom TCP | `5432` | `10.20.20.0/23` | Allow | App → PostgreSQL (db tier) |
-| 110 | Custom TCP | `80` | `0.0.0.0/0` | Allow | Ra Internet qua NAT (yum) |
-| 115 | Custom TCP | `443` | `0.0.0.0/0` | Allow | Ra Internet qua NAT (ECR, SSM, CloudWatch), và tới S3 qua endpoint |
-| 120 | Custom TCP | `1024-65535` | `10.20.0.0/23` | Allow | Phản hồi về ALB — **chỉ** tới public tier, không ra `0.0.0.0/0` |
-
-### D.7.3 `lab-hushstore-nacl-db` — chặt nhất, đúng 1 rule mỗi chiều
-
-| Chiều | Rule # | Type | Port range | Source/Destination | Allow/Deny |
-|---|---|---|---|---|---|
-| Inbound | 100 | Custom TCP | `5432` | `10.20.10.0/23` | Allow |
-| Outbound | 100 | Custom TCP | `1024-65535` | `10.20.10.0/23` | Allow |
-
-Chiều ra chỉ là **phản hồi** về app tier (port ephemeral của client). DB không
-có đường nào khác.
-
-### Tự kiểm bằng câu hỏi (trả lời trước khi đọc đáp án)
-
-1. Một máy trên Internet gửi gói tới `10.20.10.x:5432`. Rule nào khớp đầu tiên?
-   → *Rule 95 Deny* (90 không khớp port; 95 khớp ⇒ dừng). Nếu xoá 95 ⇒ rule
-   120 Allow khớp — cổng DB mở.
-2. App gọi `https://ecr...` qua NAT; phản hồi về app-a từ `52.x.x.x:443` tới
-   port `51000`. Rule inbound nào cho qua? → *Rule 120*.
-3. Vì sao không cần rule nào cho phản hồi của **Security Group**? → SG
-   **stateful**, NACL **stateless**.
-
-### (Tuỳ chọn) Rule deny demo — kịch bản kiểm thử số 8
-
-Terraform: `public_deny_demo`, chỉ bật khi `enable_deny_demo = true`. Thử để
-thấy điều NACL làm được mà SG không làm được: **chặn riêng một IP**.
-
-1. Lấy IP của bạn: mở `https://checkip.amazonaws.com`.
-2. `nacl-public` → **Edit inbound rules** → **Add new rule**:
-   *Rule #* `50`, *Type* **All traffic**, *Source* `<IP-của-bạn>/32`, **Deny**.
-3. Quan sát: rule 50 đứng trên 100/110 ⇒ IP bạn bị chặn trước khi tới rule allow.
-4. **Xoá rule 50 ngay sau khi xem xong** (nhật ký: Issue #12 là chuyện quên tắt nó).
+## D.7 Kiểm default ACL và ranh giới SG
 
 ### ✅ Checkpoint D.7
 
-Tổng số rule tự khai: public 3 + 5, app 6 + 4, db 1 + 1 = **20** (cộng các
-rule `*`). Mỗi NACL có cột *Associated with* = **2 Subnets**.
+Network ACLs chỉ có **1** dòng trong VPC lab, *Default* = **Yes**, gắn 6 subnet.
+Hai chiều đều allow-all. Lệnh chỉ đọc để đối chiếu (dùng `$VPC` đã đặt ở D.2):
 
 ```bash
 aws ec2 describe-network-acls --filters Name=vpc-id,Values=$VPC --profile hushstore \
-  --query 'NetworkAcls[].{Name:Tags[?Key==`Name`]|[0].Value,Default:IsDefault,Subnets:length(Associations),Rules:Entries[?RuleNumber!=`32767`]|sort_by(@,&RuleNumber)[].[Egress,RuleNumber,RuleAction,CidrBlock,PortRange.From,PortRange.To]}'
+  --query 'NetworkAcls[].{Default:IsDefault,Subnets:length(Associations),Rules:Entries[?RuleNumber!=`32767`].[Egress,RuleNumber,RuleAction,CidrBlock,Protocol]}'
 ```
 
-So với bản thật: thay `$VPC` bằng ID của `hushstore-vpc` — danh sách rule phải
-trùng khớp từng dòng (trừ khi bản thật đang bật deny demo).
+Kết quả mong đợi: `Default=true`, `Subnets=6`, mỗi chiều rule `100`, `allow`,
+`0.0.0.0/0`, protocol `-1`. Không có rule chặn một IP hay bài demo ACL.
+Rule 80/443, 80/8080 và 5432 sẽ nằm trong SG ở Phần E; SG stateful tự cho
+traffic phản hồi của kết nối được cho phép, không cần mở dải ephemeral.
+
+Nếu VPC thật còn custom ACL, **không** sửa tay theo lab này: dùng
+[quy trình migration hai giai đoạn](nacl-to-sg-migration.md), rồi mới đối chiếu.
 
 ## D.8 Khoá default security group về rỗng
 
@@ -674,7 +572,8 @@ NAT **phải** nằm ở public subnet: bản thân nó cần đường ra IGW. 
 (*Route tables* → chọn bảng → **Routes** → **Edit routes** → **Add route**.)
 
 > **Ghi vào báo cáo:** NAT Gateway **không gắn được Security Group**. Kiểm soát
-> chiều ra nằm hoàn toàn ở `web-sg` (E.3) và NACL app (D.7.2).
+> chiều ra của instance nằm ở `web-sg` (E.3); default ACL allow-all không
+> giới hạn egress.
 
 ## D.10 (Tuỳ chọn) VPC Flow Logs — chỉ ghi REJECT
 
@@ -746,7 +645,9 @@ bộ tag lab → **Create**.
 Terraform có `enable_ecr_endpoints` (mặc định **tắt**) dựng `ecr.api` +
 `ecr.dkr` kèm SG `sg-vpce`. Interface endpoint tính tiền theo ENI × AZ và
 **không** được `enable_nat` che chắn. Ngoài phạm vi Giai đoạn 2 của nhật ký —
-chỉ cần biết nó tồn tại.
+chỉ cần biết nó tồn tại. SG endpoint chỉ nhận **TCP 443 từ SG web**;
+egress rỗng, phản hồi dựa trên stateful SG. Không dùng CIDR VPC làm nguồn
+và không bật endpoint chỉ để đổi ACL sang SG.
 
 ## ✅ Checkpoint D (tổng)
 
@@ -782,7 +683,7 @@ flowchart LR
     ALB -- "80, 8080" --> WEB["web-sg"]
     WEB -- "5432" --> RDS["rds-sg"]
     WEB -- "80, 443 (qua NAT)" --> O(("Internet"))
-    RDS -. "egress: KHÔNG" .-> X(("✗"))
+    RDS -. "phản hồi stateful" .-> WEB
 ```
 
 **Vấn đề gà-trứng:** `alb-sg` cần trỏ tới `web-sg` (outbound) và `web-sg` cần
@@ -931,8 +832,8 @@ không dòng nào `IpProtocol = -1`.
 | Internet gateway | 1, Attached | Internet gateways |
 | Route table tự tạo | 4 (+1 main không dùng) | Route tables |
 | VPC endpoint | 1 Gateway S3, gắn 3 route table | Endpoints |
-| NACL tự tạo | 3, mỗi cái 2 subnet (+1 default, 0 subnet) | Network ACLs |
-| NACL rule tự khai | 20 | |
+| Network ACL | 1 default, gắn cả 6 subnet; 0 custom ACL | Network ACLs |
+| ACL rule tự khai | 0; giữ allow-all mặc định hai chiều | |
 | Security group | 3 (+ default đã khoá rỗng) | Security groups |
 | SG rule | 5 inbound + 5 outbound | |
 | *(tuỳ chọn)* EIP / NAT | 2 / 2 | Elastic IPs, NAT gateways |
@@ -941,16 +842,16 @@ không dòng nào `IpProtocol = -1`.
 ## F.2 Mười câu "phản biện" thiết kế — trả lời được là hiểu
 
 1. Nếu bật auto-assign public IP cho `app-a`, hệ thống mất lớp bảo vệ nào?
-2. Vì sao NACL app cần rule 95 nhưng NACL db **không** cần rule deny nào?
+2. Default ACL allow-all thì SG nào chặn truy cập trực tiếp tới app và DB?
 3. Vì sao `rt-db` được gắn S3 endpoint dù db không có route `0.0.0.0/0`?
 4. Xoá `rt-private-b`, subnet `app-b` đi ra bằng route table nào?
 5. Vì sao `alb-sg` không có egress `0.0.0.0/0`?
 6. NAT Gateway không gắn SG — vậy chặn egress port 25 từ app tier ở đâu?
 7. Vì sao lifecycle xoá *noncurrent* chứ không xoá *current* version?
-8. Default SG đang có rule "từ chính nó" — rủi ro cụ thể là gì?
+8. Nếu default SG giữ rule "từ chính nó" thay vì bị khoá rỗng — rủi ro là gì?
 9. Vì sao Terraform dùng `name_prefix` còn console thì không cần?
-10. Đổi engine DB sang cổng khác mà quên sửa rule 95 thì chuyện gì xảy ra,
-    và vì sao không có gì báo lỗi?
+10. Đổi cổng DB mà quên sửa `web-sg` egress và `rds-sg` ingress thì query
+    thất bại ở đâu? Vì sao không cần rule ephemeral cho phản hồi?
 
 ---
 
@@ -969,7 +870,7 @@ flowchart TD
     G2 --> G3["G.3 S3 Gateway Endpoint"]
     G3 --> G4["G.4 Rule SG tham chiếu chéo → 3 SG"]
     G4 --> G5["G.5 6 subnet"]
-    G5 --> G6["G.6 4 route table + 3 NACL"]
+    G5 --> G6["G.6 4 route table"]
     G6 --> G7["G.7 Detach + xoá IGW"]
     G7 --> G8["G.8 Xoá VPC"]
     G8 --> G9["G.9 Làm rỗng + xoá S3 bucket"]
@@ -1038,9 +939,8 @@ Xoá subnet sẽ tự gỡ mọi liên kết subnet ↔ route table và subnet �
 1. **Route tables** → chọn 4 bảng `lab-hushstore-rt-*` → **Actions** →
    **Delete route table** → gõ `delete` → **Delete**.
    (Main route table không xoá được — nó đi cùng VPC.)
-2. **Network ACLs** → chọn 3 NACL `lab-hushstore-nacl-*` → **Actions** →
-   **Delete network ACLs** → gõ `delete` → **Delete**.
-   (Default NACL đi cùng VPC.)
+2. Default network ACL không xoá riêng; AWS xoá nó cùng VPC ở G.8.
+   Lab này không tạo custom ACL.
 
 ## G.7 Internet Gateway
 
@@ -1116,7 +1016,8 @@ Nhật ký là chuyện kể theo thời điểm, không được cập nhật (
 | Số route table | 3 | **4** (private tách theo AZ) | D.4 tạo 4 |
 | S3 endpoint gắn vào | route table app | app-a, app-b **và db** | D.5 tick 3 bảng |
 | NAT | 1 cái ở `public-a` | `nat_gateway_count = 2`, mỗi AZ một | D.9 tạo 2 |
-| Cổng DB | 1433 (SQL Server) | **5432** (PostgreSQL 17) | NACL rule 95, app egress 100, db rule, SG rds |
+| Cổng DB | 1433 (SQL Server) | **5432** (PostgreSQL 17) | `web-sg` egress và `rds-sg` ingress |
+| Network ACL | ACL riêng từng tier | Default ACL allow-all, AWS quản lý | D.6–D.7 chỉ kiểm tra; không tạo ACL |
 | Default SG | không nhắc | bị khoá rỗng (`aws_default_security_group`) | Thêm D.8 |
 | Tên SG | `hushstore-alb-sg` cố định | `name_prefix` + hậu tố ngẫu nhiên | Console dùng tên cố định |
 | Số rule SG ra | 4 | **5** (alb 2 + web 3) | E.3 |

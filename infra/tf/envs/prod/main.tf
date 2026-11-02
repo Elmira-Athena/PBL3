@@ -22,11 +22,9 @@ module "network" {
   public_subnet_cidrs = var.public_subnet_cidrs
   app_subnet_cidrs    = var.app_subnet_cidrs
   db_subnet_cidrs     = var.db_subnet_cidrs
-  my_ip               = var.my_ip
   enable_nat          = var.enable_nat
   nat_gateway_count   = var.nat_gateway_count
   enable_flow_logs    = var.enable_flow_logs
-  enable_deny_demo    = var.enable_deny_demo
 
   # Công tắc TÍNH TIỀN, không được enable_nat che chắn. Xem lý do ở
   # modules/network/vpc.tf, khối "ECR INTERFACE ENDPOINTS".
@@ -38,6 +36,11 @@ module "security" {
 
   project = local.name
   vpc_id  = module.network.vpc_id
+
+  enable_ecr_endpoints = var.enable_ecr_endpoints
+  vpce_sg_id           = module.network.vpce_sg_id
+
+  enable_cloudflare_origin_lockdown = var.enable_cloudflare_origin_lockdown
 }
 
 module "storage" {
@@ -68,6 +71,8 @@ module "ecs" {
 
   ssm_connection_string_arn = module.data.ssm_connection_string_arn
   ssm_jwt_secret_arn        = module.data.ssm_jwt_secret_arn
+
+  enable_cloudflare_origin_lockdown = var.enable_cloudflare_origin_lockdown
 
   app_subnet_ids = module.network.app_subnet_ids
   web_sg_id      = module.security.web_sg_id
@@ -122,6 +127,9 @@ module "alb" {
   web_domain        = var.web_domain
   api_domain        = var.api_domain
   enable_alb        = var.enable_alb
+
+  enable_cloudflare_origin_lockdown = var.enable_cloudflare_origin_lockdown
+  cloudflare_origin_secret          = var.cloudflare_origin_secret
 }
 
 # Budgets dựng sớm hơn thứ tự plan (Phase 3) theo yêu cầu: bịt rủi ro "quên tắt

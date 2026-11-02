@@ -64,7 +64,7 @@ biết hai giá trị đã biết trước, nên đừng coi nó là lưới an 
 
 ```bash
 cd infra/tf/envs/dev
-cp terraform.tfvars.example terraform.tfvars   # rồi sửa my_ip, alert_email
+cp terraform.tfvars.example terraform.tfvars   # rồi sửa alert_email
 terraform init
 terraform plan
 ```
@@ -76,3 +76,18 @@ thiết kế: xem `scripts/lib.sh`.
 
 ⚠️ **4 repo ECR của dev đang rỗng.** `deploy.yml` chỉ push vào repo của prod,
 nên dev dựng được hạ tầng nhưng chưa deploy được ứng dụng. Cũng là việc còn nợ.
+
+## Chính sách mạng
+
+Dev và prod dùng cùng chuỗi SG: Internet → ALB (80/443), ALB → web
+(80/8080), web → RDS (5432). ECR endpoint khi bật chỉ nhận 443 từ sg-web;
+web vẫn giữ egress HTTP/HTTPS. Default SG có ingress/egress rỗng.
+
+Subnet dùng default network ACL allow-all do AWS tạo; Terraform không quản
+lý ACL này. Nếu dev đã có custom ACL, thực hiện [chuyển đổi theo giai đoạn](../../../../docs/nacl-to-sg-migration.md)
+trước khi áp dụng cấu hình cuối. Không còn biến `my_ip` hoặc `enable_deny_demo`.
+
+Test module network và security dùng mock provider nên kiểm tra được chính
+sách SG và cấu hình endpoint mà không cần AWS credential. Các module khác
+có thể đọc AWS data source và cần credential; kết quả mock không thay thế
+kiểm tra trên stack thật sau chuyển đổi.

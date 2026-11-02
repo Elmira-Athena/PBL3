@@ -142,11 +142,7 @@ render() {
 
   # In cả ý muốn (tfvars) cạnh thực tế (AWS). Hai cột này lệch nhau nghĩa là có
   # apply chưa chạy hoặc chạy dở — thông tin đó không suy ra được từ bảng dưới.
-  echo "${C_DIM}  tfvars: enable_nat=$(hs_tfvar_get enable_nat)  enable_alb=$(hs_tfvar_get enable_alb)  instance_count=$(hs_tfvar_get instance_count)  enable_flow_logs=$(hs_tfvar_get enable_flow_logs)  enable_deny_demo=$(hs_tfvar_get enable_deny_demo)${C_RESET}"
-  if [ "$(hs_tfvar_get enable_deny_demo)" = "true" ]; then
-    echo "  ${C_YELLOW}!${C_RESET} enable_deny_demo = true → NACL đang chặn ${C_B}$(hs_tfvar_get my_ip)${C_RESET} ở tầng mạng."
-    echo "    ${C_DIM}Browser sẽ timeout và trông y như hạ tầng lỗi. Đặt false rồi apply nếu không đang demo.${C_RESET}"
-  fi
+  echo "${C_DIM}  tfvars: enable_nat=$(hs_tfvar_get enable_nat)  enable_alb=$(hs_tfvar_get enable_alb)  instance_count=$(hs_tfvar_get instance_count)  enable_flow_logs=$(hs_tfvar_get enable_flow_logs)${C_RESET}"
   echo
   echo "${C_DIM}RESOURCE       TRẠNG THÁI         THỜI GIAN  $/GIỜ    ĐÃ TỐN   GHI CHÚ${C_RESET}"
 
