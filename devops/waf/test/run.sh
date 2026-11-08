@@ -84,6 +84,25 @@ PRODUCT=$(jq -nc '{
 }')
 expect san_pham_tieng_viet 200 "$(code -X PUT "${J[@]}" --data-binary "$PRODUCT" "$API/api/products/1")"
 
+# Mô tả sản phẩm là HTML đã sanitize (ProductService.cs:131-132, 202-203) và CÓ <img src=https://…>:
+# CRS 941160 khớp "<img src=" nếu không có exclusion 1005. Ca đối chứng mo_ta_script bên dưới
+# phải vẫn 403 — exclusion chỉ gỡ 941160, 941100/941110… còn nguyên.
+S3IMG='https://hushstore-public-assets.s3.ap-southeast-1.amazonaws.com/a.jpg'
+PRODUCT_HTML=$(jq -nc --arg d "<h2>Giới thiệu</h2><p>Mô tả <b>CPU</b></p><ul><li>20 nhân</li></ul><a href=\"https://hushstore.io.vn/\">Xem thêm</a><img src=\"$S3IMG\" alt=\"cpu\">" \
+  '{name:"Intel Core i7-14700K",manufacturerId:1,categoryId:1,status:1,shortDescription:$d,description:$d}')
+expect mo_ta_html_co_anh 200 "$(code -X PUT "${J[@]}" --data-binary "$PRODUCT_HTML" "$API/api/products/1")"
+expect mo_ta_html_co_anh_post 200 "$(code -X POST "${J[@]}" --data-binary "$PRODUCT_HTML" "$API/api/products")"
+
+# Tên file upload có dấu ' hoặc ; — CRS 920120 chặn. API đổi tên file thành GUID (chỉ giữ đuôi),
+# xem comment exclusion 1006.
+head -c 2048 /dev/urandom > "$TMP/anh-nho.png"
+codes=(); for n in "Card's RTX.png" "screenshot;1.png"; do
+  # filename="…": curl hiểu ";" trong tên file chỉ khi nằm trong dấu nháy kép.
+  codes+=("$(code -H 'Expect:' -F "file=@$TMP/anh-nho.png;type=image/png;filename=\"$n\"" \
+    "$API/api/images/upload?folder=products")")
+done
+expect upload_ten_file_dau_nhay "200 200" "${codes[*]}"
+
 # Mật khẩu "khó": mỗi cái từng khớp một nhóm luật CRS khác nhau (932 / 930 / 941 / 942).
 HARD=('Abc;ls -la1' '../x' '<script>' '"; DROP')
 codes=(); for p in "${HARD[@]}"; do
@@ -136,6 +155,14 @@ expect sqli 403 "$(code -G --data-urlencode "search=' OR 1=1--" "$API/api/produc
 expect xss 403 "$(code "${J[@]}" --data-binary '{"comment":"<script>alert(1)</script>"}' "$API/api/reviews")"
 # 400 cũng chấp nhận: nginx có thể từ chối URI trước khi ModSecurity xem.
 expect path_traversal "403/400" "$(code --path-as-is "$WEB/..%2f..%2fetc/passwd")"
+# Mô tả chứa <script> vẫn phải bị chặn dù 941160 đã gỡ khỏi trường description (exclusion 1005).
+expect mo_ta_script 403 "$(code -X PUT "${J[@]}" --data-binary \
+  "$(jq -nc '{name:"X",manufacturerId:1,categoryId:1,description:"<p>a</p><script>alert(1)</script>"}')" \
+  "$API/api/products/1")"
+# Ngoài exclusion: cùng <img src=> ở trường KHÁC của cùng path, hoặc ở path khác, vẫn 403 (941160).
+expect img_ngoai_pham_vi_1005 "403 403" "$(code -X PUT "${J[@]}" --data-binary \
+  "$(jq -nc --arg d "<img src=\"$S3IMG\">" '{name:$d,manufacturerId:1,categoryId:1}')" "$API/api/products/1") \
+$(code "${J[@]}" --data-binary "$(jq -nc --arg d "<img src=\"$S3IMG\">" '{comment:$d}')" "$API/api/reviews")"
 expect scanner 403 "$(code -A 'sqlmap/1.7' "$API/")"
 
 # Audit log JSON của ca sqli phải có trên stdout của waf-api, chứa rule 942xxx.
