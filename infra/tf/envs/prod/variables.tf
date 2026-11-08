@@ -148,9 +148,20 @@ variable "rate_limiter_is_distributed" {
 }
 
 variable "instance_type" {
-  description = "Instance type của container instance. t3.micro free tier, 1GB RAM"
+  description = "Instance type của container instance. t3.small (2GB RAM): thêm 2 sidecar WAF thì tổng memoryReservation (992 MiB) vượt ~900 MiB (ước) mà ECS đăng ký trên t3.micro — phép cộng ở docs/evidence/2026-11-08-waf-ram-spike.md §5"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
+}
+
+variable "waf_rule_engine" {
+  description = "Chế độ ModSecurity của 2 sidecar WAF: On (chặn) hoặc DetectionOnly (chỉ ghi log) — công tắc lùi khi chặn nhầm"
+  type        = string
+  default     = "On"
+
+  validation {
+    condition     = contains(["On", "DetectionOnly"], var.waf_rule_engine)
+    error_message = "waf_rule_engine chỉ được On hoặc DetectionOnly."
+  }
 }
 
 variable "image_tag" {

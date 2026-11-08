@@ -8,7 +8,7 @@ locals {
   # có ngày lệch.
   seeder_tag = var.seeder_image_tag != "" ? var.seeder_image_tag : var.image_tag
 
-  # Cấu hình log dùng chung cho cả 3 task definition.
+  # Cấu hình log dùng chung cho mọi task definition.
   log_config = {
     api = {
       logDriver = "awslogs"
@@ -25,6 +25,25 @@ locals {
         "awslogs-group"         = aws_cloudwatch_log_group.web.name
         "awslogs-region"        = local.aws_region
         "awslogs-stream-prefix" = "web"
+        "mode"                  = "blocking"
+      }
+    }
+    # Hai WAF chung một log group, tách bằng stream prefix.
+    waf_api = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.waf.name
+        "awslogs-region"        = local.aws_region
+        "awslogs-stream-prefix" = "waf-api"
+        "mode"                  = "blocking"
+      }
+    }
+    waf_web = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.waf.name
+        "awslogs-region"        = local.aws_region
+        "awslogs-stream-prefix" = "waf-web"
         "mode"                  = "blocking"
       }
     }
@@ -52,6 +71,27 @@ locals {
   # Giá trị trong `environment` hiện nguyên văn trong output của
   # `aws ecs describe-task-definition` — ai có quyền đọc task definition là
   # đọc được connection string.
+  # Env chung của hai WAF — bản sao của devops/waf/test/compose.yml (x-waf-env),
+  # tên biến và lý do từng giá trị ở docs/evidence/2026-11-08-waf-local.md §0.1.
+  # Template nginx của image tham chiếu BACKEND/PORT/CLIENT_MAX_BODY_SIZE/
+  # SET_REAL_IP_FROM: thiếu một biến thì envsubst để nguyên `${X}` và nginx KHÔNG
+  # khởi động. Ba biến khác nhau giữa api và web nằm ở từng container bên dưới.
+  waf_env = [
+    { name = "PORT", value = "8080" },
+    { name = "SET_REAL_IP_FROM", value = var.vpc_cidr },
+    { name = "MODSEC_RULE_ENGINE", value = var.waf_rule_engine },
+    { name = "BLOCKING_PARANOIA", value = "1" },
+    { name = "ANOMALY_INBOUND", value = "5" },
+    { name = "ANOMALY_OUTBOUND", value = "4" },
+    { name = "NGINX_WORKER_PROCESSES", value = "1" },
+    { name = "MODSEC_RESP_BODY_ACCESS", value = "Off" },
+    { name = "MODSEC_AUDIT_ENGINE", value = "RelevantOnly" },
+    { name = "MODSEC_AUDIT_LOG_FORMAT", value = "JSON" },
+    { name = "MODSEC_AUDIT_LOG", value = "/dev/stdout" },
+    # Bỏ part B (header request): nó chép nguyên `Authorization: Bearer …` vào log.
+    { name = "MODSEC_AUDIT_LOG_PARTS", value = "AHZ" },
+  ]
+
   app_secrets = [
     {
       name      = "ConnectionStrings__DefaultConnection"
@@ -113,11 +153,10 @@ resource "aws_ecs_task_definition" "api" {
       # ECS đi tiếp ngay. Nên đặt rộng không tốn gì, còn đặt hẹp thì cắt request.
       stopTimeout = 90
 
-      # Static host port 8080: nhờ vậy sg-web ingress giữ đúng 2 rule thay vì
-      # phải mở dải ephemeral 32768-65535 như khi dùng dynamic port mapping.
-      portMappings = [
-        { containerPort = 8080, hostPort = 8080, protocol = "tcp" }
-      ]
+      # KHÔNG có portMappings: cổng host 8080 thuộc container `waf`, nó gọi app
+      # qua `links`. Ở bridge mode, khai containerPort mà thiếu hostPort là xin
+      # một cổng host ĐỘNG — cửa sau đi vòng WAF. Test
+      # `app_khong_mo_cong_host_de_khong_di_vong_waf` canh điều này.
 
       environment = [
         { name = "ASPNETCORE_ENVIRONMENT", value = "Production" },
@@ -141,7 +180,39 @@ resource "aws_ecs_task_definition" "api" {
       logConfiguration = local.log_config.api
 
       # KHÔNG đặt healthCheck ở tầng container: image aspnet:10.0 không có
-      # curl. Sức khoẻ do ALB target group kiểm tra qua /health/ready.
+      # curl. Sức khoẻ do ALB target group kiểm tra qua /health/ready (đi qua waf).
+    },
+    {
+      # Sidecar WAF: ALB → waf:8080 (cổng host 8080 static) → api:8080 qua links.
+      name      = "waf"
+      image     = "${var.ecr_waf_url}:${var.image_tag}"
+      essential = true
+
+      memory            = var.waf_memory_hard
+      memoryReservation = var.waf_memory_reservation
+
+      # Bằng app. dependsOn làm ECS dừng waf TRƯỚC app; trần chờ của nó không
+      # được ngắn hơn của app.
+      stopTimeout = 90
+
+      portMappings = [
+        { containerPort = 8080, hostPort = 8080, protocol = "tcp" }
+      ]
+
+      links     = ["api"]
+      dependsOn = [{ containerName = "api", condition = "START" }]
+
+      environment = concat(local.waf_env, [
+        { name = "BACKEND", value = "http://api:8080" },
+        { name = "CLIENT_MAX_BODY_SIZE", value = "8m" },
+        { name = "MODSEC_REQ_BODY_LIMIT", value = "8388608" },
+        # Trần body KHÔNG phải file (JSON); mặc định 131072 ⇒ JSON > 128 KiB bị 400.
+        { name = "MODSEC_REQ_BODY_NOFILES_LIMIT", value = "1048576" },
+        # Mỗi phần tử mảng JSON là một ARG; phiếu nhập/xuất kho không giới hạn số serial.
+        { name = "MODSEC_ARGUMENTS_LIMIT", value = "20000" },
+      ])
+
+      logConfiguration = local.log_config.waf_api
     }
   ])
 
@@ -177,11 +248,38 @@ resource "aws_ecs_task_definition" "web" {
       # stopTimeout là TRẦN, container thoát sớm thì ECS đi tiếp ngay.
       stopTimeout = 90
 
-      portMappings = [
-        { containerPort = 80, hostPort = 80, protocol = "tcp" }
-      ]
+      # KHÔNG có portMappings — cổng host 80 thuộc container `waf`. Xem lý do ở
+      # container `api`.
 
       logConfiguration = local.log_config.web
+    },
+    {
+      # Sidecar WAF: ALB → waf:8080 (cổng host 80 static) → web:80 qua links.
+      name      = "waf"
+      image     = "${var.ecr_waf_url}:${var.image_tag}"
+      essential = true
+
+      memory            = var.waf_memory_hard
+      memoryReservation = var.waf_memory_reservation
+
+      stopTimeout = 90
+
+      portMappings = [
+        { containerPort = 8080, hostPort = 80, protocol = "tcp" }
+      ]
+
+      links     = ["web"]
+      dependsOn = [{ containerName = "web", condition = "START" }]
+
+      environment = concat(local.waf_env, [
+        { name = "BACKEND", value = "http://web:80" },
+        { name = "CLIENT_MAX_BODY_SIZE", value = "1m" },
+        { name = "MODSEC_REQ_BODY_LIMIT", value = "1048576" },
+        { name = "MODSEC_REQ_BODY_NOFILES_LIMIT", value = "131072" },
+        { name = "MODSEC_ARGUMENTS_LIMIT", value = "1000" },
+      ])
+
+      logConfiguration = local.log_config.waf_web
     }
   ])
 

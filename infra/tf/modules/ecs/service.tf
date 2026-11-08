@@ -76,10 +76,12 @@ resource "aws_ecs_service" "web" {
     rollback = true
   }
 
+  # Gắn vào sidecar `waf`, không phải container `web`: ALB phải đi qua WAF.
+  # container_port là cổng CONTAINER của waf (8080), cổng host do taskdef.tf map.
   load_balancer {
     target_group_arn = var.tg_web_arn
-    container_name   = "web"
-    container_port   = 80
+    container_name   = "waf"
+    container_port   = 8080
   }
 
   # nginx serve static file, sẵn sàng trong khoảng 1 giây. 60s là 45s (cửa sổ
@@ -149,9 +151,11 @@ resource "aws_ecs_service" "api" {
     rollback = true
   }
 
+  # Gắn vào sidecar `waf`, không phải container `api`: ALB phải đi qua WAF.
+  # container_port là cổng CONTAINER của waf (8080), cổng host do taskdef.tf map.
   load_balancer {
     target_group_arn = var.tg_api_arn
-    container_name   = "api"
+    container_name   = "waf"
     container_port   = 8080
   }
 

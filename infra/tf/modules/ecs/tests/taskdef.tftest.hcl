@@ -31,6 +31,8 @@ variables {
   ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
   ecr_web_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
   ecr_migrator_url          = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
+  ecr_waf_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-waf"
+  vpc_cidr                  = "10.0.0.0/16"
   image_tag                 = "abc123def456abc123def456abc123def456ab12"
   assets_bucket_name        = "hushstore-public-assets"
   allowed_origins           = "https://hushstore.io.vn"
@@ -73,24 +75,108 @@ run "tat_ca_task_def_dung_bridge_va_ec2_launch_type" {
   }
 }
 
+# Cổng host 80/8080 nay thuộc container `waf` (sidecar), không thuộc app. Lọc theo
+# tên `waf` chứ không anytrue trên mọi container: anytrue sẽ vẫn xanh nếu app giữ
+# lại cổng host còn waf thì không — đúng tình huống ALB đi vòng qua WAF.
 run "static_host_port_dung_80_va_8080_de_sg_web_giu_dung_2_rule" {
   command = plan
 
   assert {
-    condition = anytrue([
-      for c in jsondecode(aws_ecs_task_definition.web.container_definitions) :
-      anytrue([for p in c.portMappings : p.hostPort == 80 && p.containerPort == 80])
-    ])
-    error_message = "Container web phải map static hostPort 80 — dynamic port mapping sẽ buộc mở dải 32768-65535 trên sg-web."
+    condition = length([
+      for c in jsondecode(aws_ecs_task_definition.web.container_definitions) : c
+      if c.name == "waf" && anytrue([for p in try(c.portMappings, []) : p.hostPort == 80 && p.containerPort == 8080])
+    ]) == 1
+    error_message = "Container waf của task web phải map static hostPort 80 → containerPort 8080 — dynamic port mapping sẽ buộc mở dải 32768-65535 trên sg-web."
   }
 
   assert {
-    condition = anytrue([
-      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
-      anytrue([for p in c.portMappings : p.hostPort == 8080 && p.containerPort == 8080])
-    ])
-    error_message = "Container API phải map static hostPort 8080."
+    condition = length([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) : c
+      if c.name == "waf" && anytrue([for p in try(c.portMappings, []) : p.hostPort == 8080 && p.containerPort == 8080])
+    ]) == 1
+    error_message = "Container waf của task api phải map static hostPort 8080 → containerPort 8080."
   }
+}
+
+# Bridge mode: `containerPort` mà thiếu `hostPort` KHÔNG có nghĩa là "không mở
+# cổng" — ECS cấp một cổng host ĐỘNG (32768-65535). Cổng đó vẫn là cửa sau: ai tới
+# được host (container khác, instance khác trong VPC nếu SG nới) gọi thẳng app mà
+# không qua WAF. Nên app không được có portMappings nào, kể cả rỗng-hostPort.
+run "app_khong_mo_cong_host_de_khong_di_vong_waf" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
+      length(try(c.portMappings, [])) == 0 if c.name == "api"
+    ])
+    error_message = "Container api KHÔNG được có portMappings. containerPort thiếu hostPort ở bridge mode là cổng host ĐỘNG — vẫn là cửa sau đi vòng WAF."
+  }
+
+  assert {
+    condition = alltrue([
+      for c in jsondecode(aws_ecs_task_definition.web.container_definitions) :
+      length(try(c.portMappings, [])) == 0 if c.name == "web"
+    ])
+    error_message = "Container web KHÔNG được có portMappings. containerPort thiếu hostPort ở bridge mode là cổng host ĐỘNG — vẫn là cửa sau đi vòng WAF."
+  }
+
+  # Chốt chống pass rỗng: hai alltrue trên xanh nếu không còn container nào tên
+  # api/web (đổi tên). Đòi mỗi task có đúng một container app.
+  assert {
+    condition = alltrue([
+      length([for c in jsondecode(aws_ecs_task_definition.api.container_definitions) : c if c.name == "api"]) == 1,
+      length([for c in jsondecode(aws_ecs_task_definition.web.container_definitions) : c if c.name == "web"]) == 1,
+    ])
+    error_message = "Mỗi task phải có đúng một container app (api / web) — thiếu thì hai assertion trên pass rỗng."
+  }
+}
+
+run "waf_dung_truoc_app" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for pair in [
+        { app = "api", backend = "http://api:8080", defs = jsondecode(aws_ecs_task_definition.api.container_definitions) },
+        { app = "web", backend = "http://web:80", defs = jsondecode(aws_ecs_task_definition.web.container_definitions) },
+        ] : length([
+          for c in pair.defs : c if c.name == "waf"
+          && contains(try(c.links, []), pair.app)
+          && try(c.essential, false) == true
+          && length([for d in try(c.dependsOn, []) : d if d.containerName == pair.app && d.condition == "START"]) == 1
+          && length([for e in try(c.environment, []) : e if e.name == "BACKEND" && e.value == pair.backend]) == 1
+          && length([for e in try(c.environment, []) : e if e.name == "MODSEC_RULE_ENGINE" && e.value == var.waf_rule_engine]) == 1
+          && endswith(c.image, ":${var.image_tag}")
+          && try(c.logConfiguration.options["awslogs-group"], "") == "/ecs/${var.project}-waf"
+      ]) == 1
+    ])
+    error_message = "Mỗi task api/web phải có ĐÚNG MỘT container `waf`: links tới app, essential, dependsOn app (START), BACKEND trỏ đúng app, MODSEC_RULE_ENGINE = var.waf_rule_engine, image :<image_tag>, log vào /ecs/<project>-waf."
+  }
+}
+
+run "waf_api_nhan_upload_8mb" {
+  command = plan
+
+  assert {
+    condition = length([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) : c
+      if c.name == "waf"
+      && length([for e in try(c.environment, []) : e if e.name == "MODSEC_REQ_BODY_LIMIT" && e.value == "8388608"]) == 1
+      && length([for e in try(c.environment, []) : e if e.name == "CLIENT_MAX_BODY_SIZE" && e.value == "8m"]) == 1
+    ]) == 1
+    error_message = "WAF của api phải cho body tới 8 MB (MODSEC_REQ_BODY_LIMIT=8388608, CLIENT_MAX_BODY_SIZE=8m) — upload ảnh thật tới 5 MB, thấp hơn là chặn nhầm upload hợp lệ."
+  }
+}
+
+run "waf_rule_engine_sai_gia_tri_bi_tu_choi" {
+  command = plan
+
+  variables {
+    waf_rule_engine = "Off"
+  }
+
+  expect_failures = [var.waf_rule_engine]
 }
 
 run "khong_container_nao_nhan_secret_qua_environment" {
@@ -198,11 +284,13 @@ run "api_bat_ecs_exec_va_co_task_role_rieng" {
     error_message = "Task definition web KHÔNG được có task_role_arn — nginx serve static file, không gọi AWS API nào."
   }
 
+  # Lọc đúng container `api` (task còn có sidecar `waf`); length == 1 để không
+  # pass rỗng nếu container bị đổi tên.
   assert {
-    condition = alltrue([
-      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
-      try(c.linuxParameters.initProcessEnabled, false) == true
-    ])
+    condition = length([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) : c
+      if c.name == "api" && try(c.linuxParameters.initProcessEnabled, false) == true
+    ]) == 1
     error_message = "Phải bật initProcessEnabled trên container API để ECS Exec hoạt động (kịch bản kiểm thử số 10)."
   }
 }

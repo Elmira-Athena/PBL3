@@ -39,7 +39,8 @@ resource "aws_lb" "this" {
 
 # ─── TARGET GROUPS ───────────────────────────────────────────────
 # target_type = instance vì task dùng bridge network mode với static host
-# port. ECS service tự đăng ký/rút instance khỏi target group.
+# port (cổng host 80/8080 thuộc container `waf` — sidecar WAF đứng trước web/api,
+# xem modules/ecs/taskdef.tf). ECS service tự đăng ký/rút instance khỏi target group.
 resource "aws_lb_target_group" "web" {
   count = var.enable_alb ? 1 : 0
 
@@ -163,7 +164,7 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# Host-based routing: api.hushstore.io.vn -> container API port 8080.
+# Host-based routing: api.hushstore.io.vn -> cổng host 8080 (container waf của task api).
 # Nhờ rule này nginx trong image web KHÔNG cần block proxy_pass nào.
 resource "aws_lb_listener_rule" "api" {
   count = var.enable_alb ? 1 : 0

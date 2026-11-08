@@ -94,6 +94,12 @@ module "ecs" {
   assets_bucket_name = module.storage.assets_bucket_name
   allowed_origins    = "https://${var.web_domain}"
 
+  # Sidecar WAF trước api/web (modules/ecs/taskdef.tf). vpc_cidr là dải WAF tin
+  # X-Forwarded-For từ đó (ALB nằm trong VPC).
+  ecr_waf_url     = module.storage.ecr_waf_url
+  vpc_cidr        = var.vpc_cidr
+  waf_rule_engine = var.waf_rule_engine
+
   # Service bi enable_alb gate cung voi ALB/TG/listener: ECS CreateService fail
   # neu target group chua gan vao load balancer nao. Khi enable_alb = false thi
   # tg_*_arn tra ve "" (KHONG phai null) — module ecs khong doc chung luc do.

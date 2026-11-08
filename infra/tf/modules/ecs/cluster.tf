@@ -217,6 +217,11 @@ resource "aws_cloudwatch_log_group" "web" {
   retention_in_days = var.log_retention_days
 }
 
+resource "aws_cloudwatch_log_group" "waf" {
+  name              = "/ecs/${var.project}-waf"
+  retention_in_days = var.log_retention_days
+}
+
 resource "aws_cloudwatch_log_group" "migrator" {
   name              = "/ecs/${var.project}-migrator"
   retention_in_days = var.log_retention_days
