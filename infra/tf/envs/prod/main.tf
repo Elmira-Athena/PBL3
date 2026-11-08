@@ -175,6 +175,7 @@ module "cicd" {
     module.storage.ecr_web_arn,
     module.storage.ecr_migrator_arn,
     module.storage.ecr_seeder_arn,
+    module.storage.ecr_waf_arn,
   ]
 
   cluster_arn             = module.ecs.cluster_arn

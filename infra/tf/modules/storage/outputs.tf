@@ -38,6 +38,16 @@ output "ecr_migrator_arn" {
   value       = aws_ecr_repository.this["migrator"].arn
 }
 
+output "ecr_waf_url" {
+  description = "URL repository ECR của image waf (nginx + ModSecurity + OWASP CRS, chạy sidecar trước web/api)"
+  value       = aws_ecr_repository.this["waf"].repository_url
+}
+
+output "ecr_waf_arn" {
+  description = "ARN repository ECR của image waf"
+  value       = aws_ecr_repository.this["waf"].arn
+}
+
 output "assets_bucket_name" {
   description = "Tên bucket ảnh sản phẩm"
   value       = aws_s3_bucket.assets.id

@@ -12,19 +12,25 @@ variables {
   # biến này). Set nó ở đây thì test chỉ còn kiểm lại chính đầu vào của mình.
 }
 
-run "co_dung_4_ecr_repository_va_deu_immutable" {
+run "co_dung_5_ecr_repository_va_deu_immutable" {
   command = plan
 
-  # Bốn, không phải ba. `seeder` được thêm ở Task 16 và test này không được cập
-  # nhật theo — nó đỏ từ lúc đó tới khi Phase 2 dựng CI và bắt gặp.
+  # Năm, không phải bốn. `seeder` được thêm ở Task 16 và test này không được cập
+  # nhật theo — nó đỏ từ lúc đó tới khi Phase 2 dựng CI và bắt gặp. `waf` là repo
+  # thứ năm (image ModSecurity + CRS chạy sidecar trước web/api).
   #
   # Đếm bằng một con số cứng chứ không phải `>= 3` là cố ý: thêm một ECR
   # repository là thêm một chỗ pipeline được push vào, và policy của role deploy
-  # liệt kê tường minh từng ARN. Test này đỏ khi có người thêm repo thứ năm buộc
+  # liệt kê tường minh từng ARN. Test này đỏ khi có người thêm repo thứ sáu buộc
   # họ nhìn lại cả hai chỗ.
   assert {
-    condition     = length(aws_ecr_repository.this) == 4
-    error_message = "Phải có đúng 4 ECR repository: api, web, migrator, seeder. Nếu vừa thêm repo mới thì phải cập nhật cả ecr_repository_arns của module cicd."
+    condition     = length(aws_ecr_repository.this) == 5
+    error_message = "Phải có đúng 5 ECR repository: api, web, migrator, seeder, waf. Nếu vừa thêm repo mới thì phải cập nhật cả ecr_repository_arns của module cicd."
+  }
+
+  assert {
+    condition     = contains(keys(aws_ecr_repository.this), "waf")
+    error_message = "Thiếu ECR repository waf (hushstore-waf) — image WAF ModSecurity + CRS không có chỗ để đẩy lên."
   }
 
   assert {

@@ -1,5 +1,5 @@
 locals {
-  ecr_repos = ["api", "web", "migrator", "seeder"]
+  ecr_repos = ["api", "web", "migrator", "seeder", "waf"]
 }
 
 resource "aws_ecr_repository" "this" {

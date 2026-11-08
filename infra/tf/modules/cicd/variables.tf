@@ -22,7 +22,7 @@ variable "deploy_branch" {
 }
 
 variable "ecr_repository_arns" {
-  description = "ARN của 4 ECR repository mà pipeline được push. Liệt kê tường minh thay vì wildcard để role không push được vào repo lạ nếu ai đó tạo thêm"
+  description = "ARN của 5 ECR repository mà pipeline được push. Liệt kê tường minh thay vì wildcard để role không push được vào repo lạ nếu ai đó tạo thêm"
   type        = list(string)
 
   validation {
