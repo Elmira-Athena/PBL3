@@ -126,10 +126,10 @@ resource "aws_iam_role" "cost_guard" {
 #     max_size. max_size = 1 do Terraform đặt trên
 #     aws_autoscaling_group.this trong modules/ecs/cluster.tf, nên trần thiệt
 #     hại tuyệt đối nếu ai đó sửa mã thành SetDesiredCapacity(N) là 1 instance
-#     t3.micro = $0,0132/giờ.
+#     t3.small = $0,0264/giờ.
 #   • Mã Python chỉ truyền DesiredCapacity=0, và không có nhánh nào truyền khác.
 #
-# TRẦN $0,0132/GIỜ ĐANG DỰA VÀO MỘT THỨ Ở MODULE KHÁC — ĐỌC TRƯỚC KHI BẬT
+# TRẦN $0,0264/GIỜ ĐANG DỰA VÀO MỘT THỨ Ở MODULE KHÁC — ĐỌC TRƯỚC KHI BẬT
 # MANAGED SCALING:
 # Lý do trần đó đứng vững KHÔNG phải là "muốn nâng capacity thì phải gọi
 # SetDesiredCapacity, mà action đó bị ghim vào đúng một ASG". Lý do thật là
