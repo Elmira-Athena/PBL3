@@ -1,5 +1,7 @@
 # Cloudflare Free WAF implementation plan
 
+> **Lịch sử — cập nhật 08/11/2026:** phương án Cloudflare WAF/origin lockdown đã được gỡ khỏi mã nguồn. Không thực hiện các bước triển khai Cloudflare trong tài liệu này; các số đo và quyết định bên dưới được giữ theo mốc cũ. Xem [rollback hiện tại](../../rollback-cloudflare-waf-2026-11-08.md).
+
 **Goal:** Thêm WAF cho cả web/API, không thêm dịch vụ AWS tính phí, không apply trong phiên này.
 
 **Architecture:** Cloudflare Free hiện đứng trước ALB. Quản lý custom/rate/transform rules bằng Terraform root riêng; giữ Free Managed Ruleset tự động của Cloudflare. ALB chỉ nhận nguồn Cloudflare và chỉ forward khi Host cùng header bí mật hợp lệ.

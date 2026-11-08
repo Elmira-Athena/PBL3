@@ -8,13 +8,13 @@
         <mxCell id="n1" value="Hạ tầng AWS của HushStore — kiến trúc tổng thể" style="text;html=1;align=left;verticalAlign=middle;fontSize=19;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
           <mxGeometry x="40" y="14" width="1000" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="n2" value="Thiết kế đích WAF + SG; default ACL allow-all. Lockdown mặc định tắt, chưa apply. Xem docs/waf-cloudflare.md." style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#5A5A5A;" vertex="1" parent="1">
+        <mxCell id="n2" value="Rollback 08/11/2026: đã gỡ Cloudflare WAF/origin lockdown; chưa có WAF thay thế. Giữ SG + default ACL allow-all." style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#5A5A5A;" vertex="1" parent="1">
           <mxGeometry x="40" y="44" width="1150" height="20" as="geometry" />
         </mxCell>
         <mxCell id="n3" value="Người dùng Internet" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#232F3E;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.users;" vertex="1" parent="1">
           <mxGeometry x="112" y="88" width="70" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="n4" value="Cloudflare Free WAF&lt;br&gt;DNS proxy + header HTTPS" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9A9A9A;align=left;verticalAlign=top;fontSize=11;spacing=6;" vertex="1" parent="1">
+        <mxCell id="n4" value="Cloudflare DNS/proxy&lt;br&gt;Không cấu hình WAF của dự án" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9A9A9A;align=left;verticalAlign=top;fontSize=11;spacing=6;" vertex="1" parent="1">
           <mxGeometry x="215" y="92" width="205" height="58" as="geometry" />
         </mxCell>
         <mxCell id="n5" value="Máy kiểm thử&lt;br&gt;(laptop — không cần biến IP)" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#DD344C;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.user;" vertex="1" parent="1">
@@ -38,7 +38,7 @@
         <mxCell id="n11" value="NAT Gateway ×2&lt;br&gt;mỗi AZ một cái (nat_gateway_count = 2)&lt;br&gt;chỉ bật khi cần" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.nat_gateway;" vertex="1" parent="1">
           <mxGeometry x="160" y="406" width="62" height="62" as="geometry" />
         </mxCell>
-        <mxCell id="n12" value="SG ALB — IN TCP 80/443 ← IP Cloudflare · OUT TCP 80/8080 → SG web" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#DD3522;dashed=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=2;fontColor=#DD3522;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="n12" value="SG ALB — IN TCP 80/443 ← Internet · OUT TCP 80/8080 → SG web" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#DD3522;dashed=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=2;fontColor=#DD3522;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="250" y="392" width="330" height="100" as="geometry" />
         </mxCell>
         <mxCell id="n13" value="Application Load Balancer&lt;br&gt;listener 80 → 443 (ACM)" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=none;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;aspect=fixed;pointerEvents=1;shape=mxgraph.aws4.application_load_balancer;verticalLabelPosition=middle;verticalAlign=middle;labelPosition=right;align=left;spacingLeft=8;" vertex="1" parent="1">
@@ -141,7 +141,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="n39" value="Cloudflare Free WAF → ALB (Host AND secret) → web 80/8080 → RDS 5432. Default ACL allow-all; không SSH. Thiết kế sau lockdown, chưa apply/đo; xem docs/waf-cloudflare.md." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9A9A9A;align=left;verticalAlign=top;fontSize=11;spacing=6;" vertex="1" parent="1">
+        <mxCell id="n39" value="DNS/proxy → ALB (Host) → web/API 80/8080 → RDS 5432. Default ACL allow-all; không SSH. Chưa có WAF thay thế; chưa đo lại runtime." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#9A9A9A;align=left;verticalAlign=top;fontSize=11;spacing=6;" vertex="1" parent="1">
           <mxGeometry x="40" y="1008" width="1330" height="62" as="geometry" />
         </mxCell>
       </root>
@@ -155,10 +155,10 @@
         <mxCell id="title" value="Luồng request — SG stateful giới hạn từng bước" style="text;html=1;align=left;fontSize=23;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
           <mxGeometry x="40" y="20" width="1320" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="client" value="① Cloudflare Free WAF&lt;br&gt;Client → edge proxy → ALB; HTTPS mang header bí mật." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#C6CDD4;fontColor=#232F3E;fontSize=13;align=left;verticalAlign=middle;spacing=12;" vertex="1" parent="1">
+        <mxCell id="client" value="① Cloudflare DNS/proxy hiện có&lt;br&gt;Client → proxy → ALB; không có origin-secret transform." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#C6CDD4;fontColor=#232F3E;fontSize=13;align=left;verticalAlign=middle;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="40" y="90" width="730" height="108" as="geometry" />
         </mxCell>
-        <mxCell id="albsg" value="② SG ALB — lockdown&lt;br&gt;IN: TCP 80/443 chỉ từ IP Cloudflare.&lt;br&gt;Forward khi Host AND secret đúng." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E9F3E6;strokeColor=#248814;fontColor=#232F3E;fontSize=13;align=left;verticalAlign=middle;spacing=12;" vertex="1" parent="1">
+        <mxCell id="albsg" value="② SG ALB&lt;br&gt;IN: TCP 80/443 từ Internet.&lt;br&gt;Forward khi Host hợp lệ; Host lạ trả 403." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E9F3E6;strokeColor=#248814;fontColor=#232F3E;fontSize=13;align=left;verticalAlign=middle;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="40" y="222" width="730" height="108" as="geometry" />
         </mxCell>
         <mxCell id="flow1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#248814;fontSize=12;labelBackgroundColor=#FFFFFF;" edge="1" parent="1" source="client" target="albsg">
@@ -226,7 +226,7 @@
         <mxCell id="title" value="Kiểm chứng sau migration — kết quả mong đợi, chưa đo lại" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F4F6F8;strokeColor=#C6CDD4;fontColor=#232F3E;fontSize=21;align=left;verticalAlign=middle;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="40" y="25" width="1320" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="check0" value="WAF + origin lockdown&lt;br&gt;&lt;br&gt;Edge → ALB: 80/443 từ IP Cloudflare.&lt;br&gt;Host AND secret; gọi trực tiếp phải bị chặn." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E9F3E6;strokeColor=#248814;fontColor=#232F3E;fontSize=15;align=left;verticalAlign=middle;spacing=12;" vertex="1" parent="1">
+        <mxCell id="check0" value="SG + ALB Host routing&lt;br&gt;&lt;br&gt;ALB: 80/443 từ Internet.&lt;br&gt;Host lạ trả 403; direct ALB với Host đúng vẫn tới ứng dụng." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E9F3E6;strokeColor=#248814;fontColor=#232F3E;fontSize=15;align=left;verticalAlign=middle;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="40" y="120" width="640" height="195" as="geometry" />
         </mxCell>
         <mxCell id="check1" value="ALB → web&lt;br&gt;&lt;br&gt;SG ALB egress TCP 80/8080 → SG web.&lt;br&gt;SG web ingress TCP 80/8080 ← SG ALB; không dùng CIDR subnet." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E9F3E6;strokeColor=#248814;fontColor=#232F3E;fontSize=15;align=left;verticalAlign=middle;spacing=12;" vertex="1" parent="1">

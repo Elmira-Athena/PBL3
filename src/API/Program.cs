@@ -506,8 +506,7 @@ builder.Services.AddScoped<IRateLimitStore, PostgresRateLimitStore>();
 // theo luật "Async vs Sync Decision" của CLAUDE.md.
 builder.Services.AddHostedService<PBL3.API.RateLimitCounterCleanupService>();
 
-// Middleware proxy xác thực và chuẩn hoá IP trước mọi bộ đếm rate limit.
-// Direct ALB chỉ đọc 1 phần tử XFF; origin lockdown đọc CF-Connecting-IP.
+// Middleware proxy đọc phần tử XFF do ALB thêm trước mọi bộ đếm rate limit.
 static string GetClientIp(HttpContext context)
     => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
@@ -525,11 +524,7 @@ static void AddPerIpFixedWindow(
             }));
 }
 
-// Chỉ bật cùng Cloudflare-only ALB ingress + origin-secret listener rule.
-// Khi tắt, CF-Connecting-IP do client tự gửi hoàn toàn không được tin cậy.
-var cloudflareOriginLockdown = builder.Configuration.GetValue<bool>("ProxyHeaders:CloudflareOriginLockdown");
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-    ProxyHeaders.Configure(options, cloudflareOriginLockdown));
+builder.Services.Configure<ForwardedHeadersOptions>(ProxyHeaders.Configure);
 
 // Tham số HSTS (đợt 2). Bắt đầu THẬN TRỌNG, vì HSTS là quyết định KHÓ HOÀN TÁC:
 // trình duyệt đã ghi nhớ thì trong suốt max-age nó TỪ CHỐI mọi kết nối HTTP tới
@@ -635,7 +630,7 @@ app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
 }));
 
 // UseForwardedHeaders phải chạy TRƯỚC mọi middleware đọc scheme hoặc IP.
-app.UseTrustedProxyHeaders(cloudflareOriginLockdown);
+app.UseForwardedHeaders();
 
 // Ở Production, ALB đã redirect 80 -> 443 ở tầng listener rồi. Bật thêm ở
 // đây sẽ gây redirect loop khi ALB forward request HTTP xuống container.
@@ -653,7 +648,7 @@ else
     // không đóng góp gì. Đây chính là điều mục A7 của tài liệu rà soát muốn sửa.
     //
     // 🔴 VỊ TRÍ QUAN TRỌNG HƠN BẢN THÂN LỜI GỌI: khối này PHẢI đứng SAU
-    // app.UseTrustedProxyHeaders() ở ngay trên. UseHsts() chỉ phát header khi
+    // app.UseForwardedHeaders() ở ngay trên. UseHsts() chỉ phát header khi
     // Request.IsHttps == true, mà container nhận HTTP THUẦN từ ALB — chỉ sau khi
     // ForwardedHeaders đọc X-Forwarded-Proto thì IsHttps mới thành true.
     // Đảo thứ tự là một NO-OP HOÀN TOÀN IM LẶNG: không lỗi, không cảnh báo,

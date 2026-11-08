@@ -22,9 +22,9 @@ vẫn được Terraform khóa ingress/egress rỗng; đây là resource khác d
 
 HTTP/HTTPS outbound giữ nguyên theo lựa chọn của chủ đồ án, phục vụ tương thích
 bảo trì và các API ngoài. SG không lọc URL/domain. NAT và các công tắc endpoint
-giữ nguyên; hai mốc NACL không thêm dịch vụ tính phí. Yêu cầu WAF mới được xử lý
-**sau hai mốc này** theo [runbook Cloudflare Free](waf-cloudflare.md), giữ
-`enable_cloudflare_origin_lockdown = false` trong cả hai plan migration.
+giữ nguyên; hai mốc NACL không thêm dịch vụ tính phí. Phương án Cloudflare WAF
+đã được [gỡ khỏi mã nguồn](rollback-cloudflare-waf-2026-11-08.md); không còn input
+origin lockdown và không gộp triển khai WAF vào migration này.
 Hai ECR endpoint không thay
 thế toàn bộ phụ thuộc NAT của ECS, SSM, CloudWatch và các API bên ngoài.
 
@@ -48,9 +48,9 @@ migration dở dang. Lỗi đọc state cũng làm dừng trước thay đổi A
 Hoàn tất hai mốc bằng các cây riêng bên dưới; không bỏ guard để chạy script.
 Guard này không chặn được lệnh `terraform apply` gõ tay ngoài các script.
 
-Giữ cờ origin lockdown false: task definition API không thêm biến proxy ở chế
-độ này, tránh phát sinh revision ngoài allowlist của hai plan NACL. Việc đổi
-IP visitor, backend Cloudflare và WAF chỉ được triển khai ở đợt tiếp theo.
+Không thay cấu hình task/proxy khi migration NACL; mọi revision task ngoài
+allowlist làm chốt plan dừng. Các biến origin lockdown đã được gỡ trong rollback
+Cloudflare WAF ngày 08/11/2026.
 
 Mốc 1 giữ nguyên địa chỉ ba ACL và các rule cũ, chỉ đặt `subnet_ids = []` để trả
 sáu subnet về default ACL. Rule endpoint từ `sg-web` được thêm song song với
@@ -229,4 +229,5 @@ association thực tế và runtime phải kiểm trong phiên triển khai.
 
 Checksum cache được xử lý bằng tải lại package provider ký hợp lệ và bổ sung hash
 nền tảng vào lockfile; AWS provider vẫn 6.60.0, không tắt kiểm checksum.
-Kết quả test cấu hình toàn bộ và bổ sung WAF nằm ở [trạng thái xác minh](waf-cloudflare.md#trạng-thái-xác-minh).
+Kết quả apply migration nằm ở [biên bản 02/11](bien-ban-apply-sg-2026-11-02.md).
+Thay đổi WAF sau đó được ghi riêng ở [biên bản rollback](rollback-cloudflare-waf-2026-11-08.md).

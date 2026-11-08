@@ -6,12 +6,6 @@
 enable_nat = false
 enable_alb = false
 
-# Bật sau khi Cloudflare đã proxy cả hai domain, Full (strict), và ghi đè
-# header x-hushstore-origin bằng cùng secret. Giữ false qua bước migrate NACL.
-enable_cloudflare_origin_lockdown = false
-# Truyền secret 32-128 ký tự [A-Za-z0-9_-] bằng TF_VAR_cloudflare_origin_secret;
-# không commit secret. Giá trị này vẫn được lưu trong Terraform state.
-
 # Số EC2 container instance (0 hoặc 1). max_size cố định = 1.
 instance_count = 0
 

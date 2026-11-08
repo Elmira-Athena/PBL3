@@ -4,7 +4,7 @@
 custom ACL/rule đã xóa và SG đã được xác minh; WAF chưa apply. Xem
 [biên bản triển khai](bien-ban-apply-sg-2026-11-02.md). Serving stack vẫn tắt.
 
-**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
 
 Hạ tầng AWS của HushStore, dựng bằng Terraform. Tài liệu này là thứ cần đọc
 trước khi chạm vào hệ thống. Các phép đo bên dưới giữ nguyên theo thời điểm
@@ -17,9 +17,9 @@ trước khi apply cấu hình cuối; không áp dụng trực tiếp plan xoá
 
 **Chốt script 02/11/2026:** `up.sh`/`down.sh` và `hs_apply` dừng trước thay đổi
 nếu state còn custom NACL hoặc không đọc được state. Hoàn tất migration bằng
-hai cây riêng; không bỏ chốt để chạy script. Khi triển khai WAF, xem bước chuyển
-API revision và rollback trong [runbook WAF](waf-cloudflare.md): Service bỏ qua
-task-definition diff để CI quản lý, nên chỉ apply flag chưa đổi mode của task đang chạy.
+hai cây riêng; không bỏ chốt để chạy script. Phương án WAF Cloudflare đã gỡ, không
+còn flag origin lockdown để bật. ECS Service vẫn bỏ qua task-definition diff để CI
+quản lý; thay cấu hình task cần kiểm tra revision đang được Service sử dụng.
 
 | Security Group | Inbound | Outbound |
 |---|---|---|

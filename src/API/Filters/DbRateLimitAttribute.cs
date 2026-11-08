@@ -129,8 +129,8 @@ namespace PBL3.API.Filters
         /// luôn chạy sau middleware nên điều đó được bảo đảm.
         /// </summary>
         /// <remarks>
-        /// Middleware proxy giữ ForwardLimit = 1: direct ALB đọc phần tử XFF do ALB thêm,
-        /// origin lockdown đọc CF-Connecting-IP đã kiểm tra. Không tự đọc header ở đây.
+        /// Middleware proxy giữ ForwardLimit = 1, chỉ đọc phần tử XFF do ALB thêm.
+        /// Không tự đọc header ở đây.
         /// </remarks>
         private static string GetClientIp(HttpContext context)
             => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";

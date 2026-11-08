@@ -35,44 +35,6 @@ variables {
   enable_alb        = true
 }
 
-run "lockdown_requires_host_and_origin_header_for_both_services" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "test_only_origin_secret_1234567890"
-  }
-
-  assert {
-    condition = alltrue([
-      for rule in [aws_lb_listener_rule.api[0], aws_lb_listener_rule.web[0]] :
-      length(rule.condition) == 2 &&
-      length(flatten([for c in rule.condition : tolist(c.host_header)])) == 1 &&
-      length(flatten([
-        for c in rule.condition : [for h in c.http_header : h
-          if h.http_header_name == "x-hushstore-origin" &&
-          toset(h.values) == toset(["test_only_origin_secret_1234567890"])
-        ]
-      ])) == 1
-    ])
-    error_message = "Both service routes must require the allowed Host AND the exact origin secret header."
-  }
-
-  assert {
-    condition = alltrue([
-      toset(flatten([for c in aws_lb_listener_rule.api[0].condition : [for h in c.host_header : tolist(h.values)]])) == toset(["api.hushstore.io.vn"]),
-      toset(flatten([for c in aws_lb_listener_rule.web[0].condition : [for h in c.host_header : tolist(h.values)]])) == toset(["hushstore.io.vn"]),
-      aws_lb_listener_rule.api[0].priority == 100,
-      aws_lb_listener_rule.web[0].priority == 200,
-      aws_lb_listener_rule.api[0].action[0].type == "forward",
-      aws_lb_listener_rule.web[0].action[0].type == "forward",
-      aws_lb_listener.https[0].default_action[0].type == "fixed-response",
-      aws_lb_listener.https[0].default_action[0].fixed_response[0].status_code == "403",
-    ])
-    error_message = "Enabling lockdown must preserve exact allowed hosts, routing priorities, forwarding, and the default 403 response."
-  }
-}
-
 run "alb_internet_facing_tren_2_az_va_khong_bat_deletion_protection" {
   command = plan
 
@@ -83,7 +45,7 @@ run "alb_internet_facing_tren_2_az_va_khong_bat_deletion_protection" {
 
   assert {
     condition     = aws_lb.this[0].ip_address_type == "ipv4"
-    error_message = "The origin must remain IPv4-only so no IPv6 path bypasses the Cloudflare IPv4 security group allowlist."
+    error_message = "The ALB must retain its IPv4 address type."
   }
 
   assert {
@@ -256,12 +218,11 @@ run "listener_rule_route_api_domain_sang_tg_api" {
 run "default_action_443_tra_403_va_chi_allowlist_dung_2_rule_host" {
   command = plan
 
-  # Default 403 rejects unknown Host values. A caller can forge an allowed
-  # Host; origin lockdown additionally requires Cloudflare source + secret.
+  # Default 403 rejects unknown Host values; a caller can forge an allowed Host.
   # Health checks do not pass through the listener.
   assert {
     condition     = aws_lb_listener.https[0].default_action[0].type == "fixed-response"
-    error_message = "Default action của listener 443 phải là fixed-response để từ chối Host lạ. Host hợp lệ còn cần SG và secret header khi bật lockdown."
+    error_message = "Default action của listener 443 phải là fixed-response để từ chối Host lạ."
   }
 
   # Dùng list comprehension chứ KHÔNG index [0] vào fixed_response: khi ai đó
@@ -377,31 +338,11 @@ run "project_dai_hon_25_ky_tu_bi_variable_validation_tu_choi" {
   expect_failures = [var.project]
 }
 
-run "lockdown_accepts_minimum_length_secret" {
+run "alb_off_keeps_serving_resources_absent" {
   command = plan
 
   variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "0123456789abcdef0123456789abcdef"
-  }
-}
-
-run "lockdown_accepts_maximum_length_secret" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-  }
-}
-
-run "lockdown_alb_off_keeps_serving_resources_absent" {
-  command = plan
-
-  variables {
-    enable_alb                        = false
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "test_only_origin_secret_1234567890"
+    enable_alb = false
   }
 
   assert {
@@ -416,104 +357,6 @@ run "lockdown_alb_off_keeps_serving_resources_absent" {
       length(aws_acm_certificate_validation.this) == 0,
       aws_acm_certificate.this.domain_name == "hushstore.io.vn",
     ])
-    error_message = "Lockdown must not turn on any ALB serving resources or ACM waiter while enable_alb is false."
+    error_message = "No ALB serving resources or ACM waiter may exist while enable_alb is false."
   }
-}
-
-run "lockdown_requires_secret_even_while_alb_off" {
-  command = plan
-
-  variables {
-    enable_alb                        = false
-    enable_cloudflare_origin_lockdown = true
-  }
-
-  expect_failures = [var.cloudflare_origin_secret]
-}
-
-run "lockdown_rejects_null_secret" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-  }
-
-  expect_failures = [var.cloudflare_origin_secret]
-}
-
-run "lockdown_rejects_empty_secret" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = ""
-  }
-
-  expect_failures = [var.cloudflare_origin_secret]
-}
-
-run "lockdown_rejects_short_secret" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "0123456789abcdef0123456789abcde"
-  }
-
-  expect_failures = [var.cloudflare_origin_secret]
-}
-
-run "lockdown_rejects_overlong_secret" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"
-  }
-
-  expect_failures = [var.cloudflare_origin_secret]
-}
-
-run "lockdown_rejects_asterisk_wildcard" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "test_only_origin_secret_123456789*"
-  }
-
-  expect_failures = [var.cloudflare_origin_secret]
-}
-
-run "lockdown_rejects_question_mark_wildcard" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "test_only_origin_secret_123456789?"
-  }
-
-  expect_failures = [var.cloudflare_origin_secret]
-}
-
-run "lockdown_rejects_control_character" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "test_only_origin_secret_123456789\n"
-  }
-
-  expect_failures = [var.cloudflare_origin_secret]
-}
-
-run "lockdown_rejects_whitespace" {
-  command = plan
-
-  variables {
-    enable_cloudflare_origin_lockdown = true
-    cloudflare_origin_secret          = "test_only_origin_secret_123456789 "
-  }
-
-  expect_failures = [var.cloudflare_origin_secret]
 }

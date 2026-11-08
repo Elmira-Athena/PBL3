@@ -1,5 +1,7 @@
 # Kiểm tra SG/WAF trước apply — 02/11/2026
 
+> **Lịch sử — cập nhật 08/11/2026:** phương án Cloudflare WAF/origin lockdown đã được gỡ khỏi mã nguồn. Không thực hiện các bước triển khai Cloudflare trong tài liệu này; các số đo và quyết định bên dưới được giữ theo mốc cũ. Xem [rollback hiện tại](rollback-cloudflare-waf-2026-11-08.md).
+
 **Bản ghi tại điểm dừng trước apply, được giữ nguyên để đối chiếu.** Sau khi có
 yêu cầu triển khai tiếp, AWS đã hoàn tất hai mốc; xem
 [biên bản apply](bien-ban-apply-sg-2026-11-02.md). WAF vẫn chưa apply.

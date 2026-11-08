@@ -8,12 +8,6 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "enable_cloudflare_origin_lockdown" {
-  description = "Restrict ALB TCP 80/443 ingress to the vendored official Cloudflare IPv4 ranges"
-  type        = bool
-  default     = false
-}
-
 variable "enable_ecr_endpoints" {
   description = "Tạo rule HTTPS từ sg-web tới Security Group của ECR endpoint"
   type        = bool

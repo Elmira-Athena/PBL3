@@ -1,5 +1,7 @@
 # WAF tiết kiệm chi phí cho HushStore
 
+> **Lịch sử — cập nhật 08/11/2026:** phương án Cloudflare WAF/origin lockdown đã được gỡ khỏi mã nguồn. Không thực hiện các bước triển khai Cloudflare trong tài liệu này; các số đo và quyết định bên dưới được giữ theo mốc cũ. Xem [rollback hiện tại](rollback-cloudflare-waf-2026-11-08.md).
+
 Quyết định ngày **2026-10-28**: dùng **Cloudflare Free WAF** trên proxy đã có của
 `hushstore.io.vn` và `api.hushstore.io.vn`. Đây là thiết kế và mã triển khai;
 **cấu hình WAF chưa apply AWS/Cloudflare, chưa kiểm thử lưu lượng thật**. Không thay thế các

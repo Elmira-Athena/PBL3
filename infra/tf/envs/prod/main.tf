@@ -39,8 +39,6 @@ module "security" {
 
   enable_ecr_endpoints = var.enable_ecr_endpoints
   vpce_sg_id           = module.network.vpce_sg_id
-
-  enable_cloudflare_origin_lockdown = var.enable_cloudflare_origin_lockdown
 }
 
 module "storage" {
@@ -71,8 +69,6 @@ module "ecs" {
 
   ssm_connection_string_arn = module.data.ssm_connection_string_arn
   ssm_jwt_secret_arn        = module.data.ssm_jwt_secret_arn
-
-  enable_cloudflare_origin_lockdown = var.enable_cloudflare_origin_lockdown
 
   app_subnet_ids = module.network.app_subnet_ids
   web_sg_id      = module.security.web_sg_id
@@ -127,9 +123,6 @@ module "alb" {
   web_domain        = var.web_domain
   api_domain        = var.api_domain
   enable_alb        = var.enable_alb
-
-  enable_cloudflare_origin_lockdown = var.enable_cloudflare_origin_lockdown
-  cloudflare_origin_secret          = var.cloudflare_origin_secret
 }
 
 # Budgets dựng sớm hơn thứ tự plan (Phase 3) theo yêu cầu: bịt rủi ro "quên tắt

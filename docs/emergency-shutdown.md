@@ -1,6 +1,6 @@
 # Tắt khẩn cấp — dừng mọi khoản tính phí theo giờ
 
-**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
 
 Dùng file này khi bạn cần dừng chi phí AWS mà **không có ai hướng dẫn**: phiên làm
 việc bị ngắt giữa lúc triển khai, bạn không rõ hạ tầng đang ở trạng thái nào, hoặc

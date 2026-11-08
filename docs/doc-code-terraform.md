@@ -1,6 +1,6 @@
 # Đọc code Terraform của dự án này — cho người chưa đọc Terraform bao giờ
 
-**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
 
 `infra/tf/` chia thành module và môi trường. Đọc từ đầu tới cuối thì không ai
 đọc nổi, và cũng không cần. Tài liệu này giúp bạn ba việc:

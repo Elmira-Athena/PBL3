@@ -1,6 +1,6 @@
 # Bảo mật hệ thống HushStore — sáu nhóm phòng thủ
 
-**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
 
 > **Tài liệu này dành cho ai:** thành viên trong nhóm cần **giải thích được** hệ
 > thống phòng thủ khi bảo vệ đồ án, không cần đọc code.
@@ -143,8 +143,8 @@ này. Trước khi migration, phải kiểm tra default ACL thật sự còn all
 
 SG và route là các cơ chế chính giới hạn kết nối. Không còn rule DENY 22/5432/8080
 ở subnet, không còn `enable_deny_demo`, và KB-08 chặn một IP không còn là bài
-kiểm thử của thiết kế hiện tại. Demo chặn IP mới dùng custom rule Cloudflare WAF,
-triển khai riêng theo [runbook WAF](waf-cloudflare.md).
+kiểm thử của thiết kế hiện tại. Chưa có demo chặn IP thay thế bằng WAF; phương án
+Cloudflare đã được [rollback](rollback-cloudflare-waf-2026-11-08.md).
 
 **Lịch sử để đối chiếu:** báo cáo cũ có demo rule 50 deny IP và rule ephemeral
 stateless. Những phép đo đó được giữ nguyên, không tái diễn giải thành bằng
@@ -336,7 +336,7 @@ gặp trước khi biết nguyên nhân.
 >
 > *(Cloudflare là dịch vụ DNS/CDN **bên ngoài AWS**, đứng trước ALB — nó không phải
 > một trong sáu nhóm ở trên. "Full (strict)" kiểm chứng chỉ origin ở **chặng HTTPS**; HTTP viewer
-> vẫn cần redirect riêng. WAF transform chỉ gửi secret trên HTTPS, thay vì nói HTTP ở chặng sau. Ta dùng nó vì
+> vẫn cần redirect riêng. Cloudflare DNS/proxy có trước phương án WAF; ta dùng nó vì
 > nó miễn phí và đã có sẵn cho tên miền này.)*
 
 ### Lớp 3 — Kiến trúc mạng: phòng thủ mạnh nhất không phải là một rule
@@ -589,7 +589,7 @@ Nói thẳng phần này khi bảo vệ sẽ được điểm cao hơn là vờ 
 
 | Không chặn được | Vì sao, và cần gì để chặn |
 |---|---|
-| **Tấn công tầng ứng dụng (XSS, CSRF, SQLi ở tầng HTTP)** | Có cấu hình Cloudflare Free WAF, chưa apply. Free Managed Ruleset là tập con, không có đầy đủ OWASP rules. EF tham số hoá và Blazor escape output vẫn cần thiết; xem [giới hạn WAF](waf-cloudflare.md) |
+| **Tấn công tầng ứng dụng (XSS, CSRF, SQLi ở tầng HTTP)** | Chưa triển khai WAF thay thế sau khi gỡ phương án Cloudflare. EF tham số hoá, validation và Blazor escape output vẫn cần thiết; xem [giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md) |
 | **DDoS quy mô lớn** | Chỉ có AWS Shield Standard (bật sẵn, miễn phí), chặn tầng 3/4. Chặn tầng 7 cần Shield Advanced ($3.000/tháng) hoặc Cloudflare |
 | **Rò rỉ dữ liệu qua egress hợp lệ** | `sg-web` được mở 443 ra Internet để pull ECR. Kẻ chiếm được container có thể dùng chính đường đó đẩy dữ liệu ra. Lọc theo tên miền cần AWS Network Firewall (~$300/tháng) |
 | **Kẻ tấn công đã có credential hợp lệ của user** | Các lớp mạng đều có thể cho họ vào. Chặn được bằng MFA — chưa có |

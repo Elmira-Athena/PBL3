@@ -144,17 +144,14 @@ resource "aws_lb_listener" "https" {
 
   # ALLOWLIST HOST HEADER — default action là 403, KHÔNG forward.
   # Chỉ 2 rule bên dưới mới được vào target group. Host allowlist chỉ chặn
-  # Host lạ: người gọi trực tiếp vẫn giả được Host hợp lệ. Khi bật lockdown,
-  # SG chỉ nhận IPv4 Cloudflare và cả hai route đòi thêm secret header do
-  # Cloudflare ghi đè; hai lớp này mới giới hạn đường vào origin.
+  # Host lạ: người gọi trực tiếp vẫn giả được Host hợp lệ.
   #
   # HEALTH CHECK KHÔNG BỊ ẢNH HƯỞNG (câu hỏi đầu tiên ai đọc cũng sẽ có): ALB
   # gọi health check THẲNG tới target theo IP:port của instance, không đi qua
   # listener và không qua listener rule, nên nó không mang Host header nào cần
   # match và không bao giờ nhận 403 này.
   #
-  # Trước khi bật lockdown, --resolve với Host hợp lệ vẫn tới được origin.
-  # Sau khi bật, client ngoài Cloudflare bị SG chặn dù dùng Host hợp lệ.
+  # --resolve với Host hợp lệ vẫn tới được origin.
   default_action {
     type = "fixed-response"
 
@@ -177,16 +174,6 @@ resource "aws_lb_listener_rule" "api" {
   condition {
     host_header {
       values = [var.api_domain]
-    }
-  }
-
-  dynamic "condition" {
-    for_each = var.enable_cloudflare_origin_lockdown ? [1] : []
-    content {
-      http_header {
-        http_header_name = "x-hushstore-origin"
-        values           = [var.cloudflare_origin_secret]
-      }
     }
   }
 
@@ -217,16 +204,6 @@ resource "aws_lb_listener_rule" "web" {
   condition {
     host_header {
       values = [var.web_domain]
-    }
-  }
-
-  dynamic "condition" {
-    for_each = var.enable_cloudflare_origin_lockdown ? [1] : []
-    content {
-      http_header {
-        http_header_name = "x-hushstore-origin"
-        values           = [var.cloudflare_origin_secret]
-      }
     }
   }
 

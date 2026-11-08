@@ -33,12 +33,6 @@ variable "web_sg_id" {
   type        = string
 }
 
-variable "enable_cloudflare_origin_lockdown" {
-  description = "Trust CF-Connecting-IP only with Cloudflare-only ALB ingress and the origin-secret listener rule."
-  type        = bool
-  default     = false
-}
-
 # ─── SỐ INSTANCE: TRẦN, TRẠNG THÁI, VÀ ĐIỀU KIỆN ĐỂ NÂNG TRẦN ────
 #
 # Ba biến dưới đây tách ba thứ khác nhau, đừng gộp:

@@ -46,7 +46,7 @@
 # bấm duyệt. Đó là cấu hình trên GitHub, không phải Terraform.
 #
 # Thứ CÓ ở đây và có giá trị hơn plan: `terraform test` đang canh
-# các assertion bảo mật (SG chain, origin lockdown, IAM least privilege).
+# các assertion bảo mật (SG chain, IAM least privilege).
 # Chúng chạy được mà không cần state.
 #
 # `terraform test` chạy được trên push main vì trust policy của role plan nhận
@@ -95,18 +95,10 @@ jobs:
       - name: fmt -check
         run: |
           terraform -chdir=infra/tf fmt -check -recursive -diff
-          terraform -chdir=infra/cloudflare fmt -check -recursive -diff
 
-      - name: Cloudflare validate và mock tests (không cần token)
-        run: |
-          terraform -chdir=infra/cloudflare init -backend=false -input=false -lockfile=readonly
-          terraform -chdir=infra/cloudflare validate -no-color
-          terraform -chdir=infra/cloudflare test -no-color
-
-      - name: Kiểm tra migration guard và WAF preflight offline
+      - name: Kiểm tra migration guard và shell guard offline
         run: |
           python3 -W error -m unittest discover -s infra/tf/migrations/nacl-to-sg -p 'test_*.py'
-          python3 -W error -m unittest discover -s infra/cloudflare/scripts -p 'test_*.py'
           python3 -W error -m unittest discover -s infra/tf/scripts/tests -p 'test_*.py'
           for script in infra/tf/scripts/*.sh; do bash -n "$script"; done
 

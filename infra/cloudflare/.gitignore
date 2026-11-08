@@ -1,3 +1,0 @@
-# Saved plans and their JSON exports can contain the cleartext origin secret.
-*.tfplan
-*.tfplan.json

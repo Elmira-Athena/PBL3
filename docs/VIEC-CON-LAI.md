@@ -1,11 +1,11 @@
 # Việc còn lại — từ đây đến hết dự án
 
 **Cập nhật 02/11/2026:** migration NACL prod đã apply xong, SG/association được
-đọc lại và xác minh; serving stack vẫn tắt. WAF còn chờ credential Cloudflare.
+đọc lại và xác minh; serving stack vẫn tắt. Phương án Cloudflare WAF đã được gỡ ngày 08/11/2026; WAF trên EC2 để đợt sau.
 Xem [biên bản mới](bien-ban-apply-sg-2026-11-02.md); các số đo ngày 26/10 bên dưới
 vẫn là bản ghi tại thời điểm đó.
 
-**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
 
 > **Viết cho một agent không có ngữ cảnh gì.** File này tự chứa. Đọc hết trước khi
 > gõ dòng lệnh đầu tiên.

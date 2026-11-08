@@ -1,5 +1,7 @@
 # BÁO CÁO ĐIỀU CHỈNH THIẾT KẾ BẢO MẬT HỆ THỐNG HUSHSTORE
 
+> **Lịch sử — cập nhật 08/11/2026:** phương án Cloudflare WAF/origin lockdown đã được gỡ khỏi mã nguồn. Không thực hiện các bước triển khai Cloudflare trong tài liệu này; các số đo và quyết định bên dưới được giữ theo mốc cũ. Xem [rollback hiện tại](rollback-cloudflare-waf-2026-11-08.md).
+
 **Nội dung:** Bỏ Network ACL tùy chỉnh, củng cố Security Group và bổ sung Web Application Firewall.
 
 **Ngày báo cáo:** 29/10/2026. **Mốc kiểm thử cấu hình được tổng hợp:** 28/10/2026.
@@ -195,4 +197,4 @@ Các giới hạn còn lại gồm bộ managed rules Free chưa đầy đủ, o
 - [Phân tích, cấu hình và runbook Cloudflare WAF](waf-cloudflare.md).
 - [Thiết kế hệ thống AWS](thiet-ke-he-thong-aws.md).
 - [Chính sách và giải thích bảo mật](bao-mat-he-thong.md).
-- [Terraform root Cloudflare](../infra/cloudflare/README.md).
+- Terraform root Cloudflare từng ở `infra/cloudflare/`; đã gỡ trong đợt rollback 08/11/2026.

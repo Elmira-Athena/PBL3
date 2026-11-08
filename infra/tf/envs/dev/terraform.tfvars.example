@@ -30,12 +30,6 @@ image_tag = "0000000000000000000000000000000000000000"
 # instance_count       = 1
 # enable_ecr_endpoints = true   # 🚨 tính tiền NGAY, không đợi up.sh
 
-# Bật sau khi Cloudflare proxy cả hai domain dev, Full (strict), và ghi đè
-# header x-hushstore-origin bằng cùng secret. Giữ false qua bước migrate NACL.
-enable_cloudflare_origin_lockdown = false
-# Truyền secret 32-128 ký tự [A-Za-z0-9_-] bằng TF_VAR_cloudflare_origin_secret;
-# không commit secret. Giá trị này vẫn được lưu trong Terraform state.
-
 # ═══ KHÔNG KHAI LẠI project, vpc_cidr, *_subnet_cidrs ════════════
 # Ba thứ đó là cái ngăn dev giẫm lên prod. Chúng có validation chặn giá trị
 # của prod, nhưng validation chỉ chặn đúng hai giá trị đã biết — đổi sang một

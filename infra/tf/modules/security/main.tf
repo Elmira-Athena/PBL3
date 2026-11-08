@@ -60,19 +60,6 @@ resource "aws_security_group" "rds" {
 # Gom vào 1 map để test có thể assert trên toàn bộ rule set cùng lúc —
 # đó là cách bảo đảm "không có rule nào mở port 22" ở phạm vi cả module.
 locals {
-  # Vendored official snapshot: review updates before applying; no live HTTP
-  # data source may make an unrelated plan depend on Cloudflare availability.
-  cloudflare_ipv4_cidrs = split("\n", trimspace(file("${path.module}/cloudflare-ipv4.txt")))
-
-  # Keep the existing all[alb-http]/all[alb-https] addresses for the first
-  # range. CIDR keys keep the remaining rules stable when the list is updated.
-  cloudflare_ingress_rules = var.enable_cloudflare_origin_lockdown ? merge([
-    for cidr in slice(local.cloudflare_ipv4_cidrs, 1, length(local.cloudflare_ipv4_cidrs)) : {
-      "http-${cidr}"  = { port = 80, cidr = cidr }
-      "https-${cidr}" = { port = 443, cidr = cidr }
-    }
-  ]...) : {}
-
   ingress_rules = {
     # sg-alb là SG DUY NHẤT được nhận traffic từ CIDR công cộng.
     "alb-http" = {
@@ -80,7 +67,7 @@ locals {
       description = "HTTP tu internet, se bi redirect sang HTTPS o listener"
       from_port   = 80
       to_port     = 80
-      cidr_ipv4   = var.enable_cloudflare_origin_lockdown ? local.cloudflare_ipv4_cidrs[0] : "0.0.0.0/0"
+      cidr_ipv4   = "0.0.0.0/0"
       source_sg   = null
     }
     "alb-https" = {
@@ -88,7 +75,7 @@ locals {
       description = "HTTPS tu internet"
       from_port   = 443
       to_port     = 443
-      cidr_ipv4   = var.enable_cloudflare_origin_lockdown ? local.cloudflare_ipv4_cidrs[0] : "0.0.0.0/0"
+      cidr_ipv4   = "0.0.0.0/0"
       source_sg   = null
     }
 
@@ -198,19 +185,6 @@ resource "aws_vpc_security_group_egress_rule" "all" {
   referenced_security_group_id = each.value.target_sg
 
   tags = { Name = "${var.project}-out-${each.key}" }
-}
-
-resource "aws_vpc_security_group_ingress_rule" "cloudflare" {
-  for_each = local.cloudflare_ingress_rules
-
-  security_group_id = aws_security_group.alb.id
-  description       = "Cloudflare IPv4 origin ingress"
-  ip_protocol       = "tcp"
-  from_port         = each.value.port
-  to_port           = each.value.port
-  cidr_ipv4         = each.value.cidr
-
-  tags = { Name = "${var.project}-in-cloudflare-${each.key}" }
 }
 
 # Endpoint SG thuộc network; đặt rule ở đây để nguồn là đúng sg-web mà không

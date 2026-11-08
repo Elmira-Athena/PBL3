@@ -4,7 +4,7 @@ provider "aws" {
 }
 
 mock_provider "aws" {
-  alias = "proxy_headers"
+  alias = "taskdef_baseline"
 
   mock_data "aws_iam_policy_document" {
     defaults = {
@@ -36,47 +36,18 @@ variables {
   allowed_origins           = "https://hushstore.io.vn"
 }
 
-run "direct_alb_does_not_trust_cloudflare_visitor_headers" {
+run "api_keeps_platform_proxy_defaults" {
   command = plan
   providers = {
-    aws = aws.proxy_headers
+    aws = aws.taskdef_baseline
   }
 
   assert {
     condition = alltrue([
       for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
-      length([for e in c.environment : e if e.name == "ProxyHeaders__CloudflareOriginLockdown"]) == 0
+      alltrue([for e in c.environment : !startswith(e.name, "ProxyHeaders__")])
     ])
-    error_message = "Direct ALB mode must omit the flag: absent defaults false and avoids task-definition churn during the NACL migration."
-  }
-}
-
-run "origin_lockdown_enables_cloudflare_visitor_header_only_on_api" {
-  command = plan
-  providers = {
-    aws = aws.proxy_headers
-  }
-  variables {
-    enable_cloudflare_origin_lockdown = true
-  }
-
-  assert {
-    condition = alltrue([
-      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) :
-      length([for e in c.environment : e if e.name == "ProxyHeaders__CloudflareOriginLockdown" && e.value == "true"]) == 1
-    ])
-    error_message = "Origin lockdown must enable Cloudflare visitor IP handling in the API task definition."
-  }
-
-  assert {
-    condition = alltrue([
-      for c in concat(
-        jsondecode(aws_ecs_task_definition.web.container_definitions),
-        jsondecode(aws_ecs_task_definition.migrator.container_definitions),
-        jsondecode(aws_ecs_task_definition.seeder.container_definitions),
-      ) : alltrue([for e in try(c.environment, []) : !startswith(e.name, "ProxyHeaders__")])
-    ])
-    error_message = "Only the API HTTP pipeline consumes proxy-header configuration."
+    error_message = "The API must retain its default ALB forwarding behavior without proxy-header overrides."
   }
 }
 

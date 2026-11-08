@@ -33,7 +33,7 @@ MODULE_FILES = {
     "data": ["main.tf"],
     "ecs": ["cluster.tf", "iam.tf", "service.tf", "taskdef.tf", "user_data.sh.tftpl"],
     "network": ["vpc.tf"],
-    "security": ["main.tf", "cloudflare-ipv4.txt"],
+    "security": ["main.tf"],
     "storage": ["ecr.tf", "s3.tf"],
 }
 SOURCE_FILES = {

@@ -1,6 +1,6 @@
 # Mục lục tài liệu — HushStore
 
-**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
 
 Trang này giúp bạn chọn tài liệu theo việc cần làm, **không phải mở từng file
 ra xem nó nói gì**.
@@ -27,11 +27,12 @@ và [quy trình migration](nacl-to-sg-migration.md).
 | Hiểu hệ thống này **là cái gì** và **vì sao thiết kế vậy** | [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) | tham khảo |
 | **Bật hệ thống lên** / tắt đi / deploy bản mới / sửa sự cố | [terraform-runbook.md](terraform-runbook.md) | 864 dòng |
 | Chuyển từ custom NACL sang SG, kiểm tra và rollback | [nacl-to-sg-migration.md](nacl-to-sg-migration.md) | hướng dẫn hiện tại |
-| So sánh WAF tiết kiệm chi phí, cấu hình Cloudflare Free và khóa origin | [waf-cloudflare.md](waf-cloudflare.md) | thiết kế + triển khai + kiểm thử |
-| Báo cáo với giảng viên về thay đổi NACL → SG và bổ sung WAF | [bao-cao-thay-doi-sg-va-waf.md](bao-cao-thay-doi-sg-va-waf.md) | báo cáo tổng hợp |
+| Phạm vi rollback Cloudflare WAF và giới hạn hiện tại | [rollback-cloudflare-waf-2026-11-08.md](rollback-cloudflare-waf-2026-11-08.md) | trạng thái hiện tại |
+| Thiết kế Cloudflare WAF đã ngừng sử dụng | [waf-cloudflare.md](waf-cloudflare.md) | lịch sử, không triển khai |
+| Báo cáo với giảng viên về thay đổi NACL → SG và bổ sung WAF | [bao-cao-thay-doi-sg-va-waf.md](bao-cao-thay-doi-sg-va-waf.md) | báo cáo lịch sử, xem ghi chú rollback |
 | Đối chiếu toàn bộ góp ý giảng viên với mã hiện tại, xác định việc cần sửa | [ra-soat-gop-y-giang-vien-2026-10-31.md](ra-soat-gop-y-giang-vien-2026-10-31.md) | rà soát + thứ tự đề xuất |
 | Bản sửa và kiểm tra trước apply, giữ làm lịch sử | [kiem-tra-truoc-apply-2026-11-02.md](kiem-tra-truoc-apply-2026-11-02.md) | mốc trước triển khai |
-| Kết quả apply AWS, bằng chứng association/SG và phần WAF còn chờ | [bien-ban-apply-sg-2026-11-02.md](bien-ban-apply-sg-2026-11-02.md) | trạng thái triển khai mới nhất |
+| Kết quả apply AWS, bằng chứng association/SG và phần WAF còn chờ | [bien-ban-apply-sg-2026-11-02.md](bien-ban-apply-sg-2026-11-02.md) | biên bản AWS ngày 02/11 |
 | Biết hệ thống **chặn được tấn công gì**, và vì sao | [bao-mat-he-thong.md](bao-mat-he-thong.md) | tham khảo |
 | Hiểu **CI/CD** từ con số không | [cicd-cho-nguoi-moi.md](cicd-cho-nguoi-moi.md) | 399 dòng |
 | Biết **code Terraform nằm ở đâu**, đọc theo thứ tự nào — kèm cú pháp cho người chưa đọc Terraform bao giờ | [doc-code-terraform.md](doc-code-terraform.md) | tham khảo |

@@ -1,8 +1,8 @@
 # HushStore
 
-**Đã apply AWS ngày 02/11/2026:** sáu subnet dùng default NACL; xóa ba custom ACL và 20 rule, xác minh chính sách SG. Giữ serving stack tắt. **WAF Cloudflare còn chờ credential.** Xem [biên bản triển khai](docs/bien-ban-apply-sg-2026-11-02.md).
+**Đã apply AWS ngày 02/11/2026:** sáu subnet dùng default NACL; xóa ba custom ACL và 20 rule, xác minh chính sách SG. Giữ serving stack tắt. **Đã gỡ mã Cloudflare WAF ngày 08/11/2026; chưa triển khai WAF thay thế.** Xem [biên bản triển khai](docs/bien-ban-apply-sg-2026-11-02.md).
 
-**Bổ sung WAF (2026-10-28):** chọn Cloudflare Free vì DNS proxy đã có. Terraform thêm custom/rate/header rules và khóa origin ALB bằng IP Cloudflare + Host AND secret. Không thêm dịch vụ AWS tính phí. **Chưa apply; chưa đo runtime.** Xem [so sánh và hướng dẫn triển khai](docs/waf-cloudflare.md).
+**Rollback WAF (08/11/2026):** gỡ cấu hình Cloudflare WAF/origin lockdown chưa apply; giữ DNS/proxy và migration SG đã apply. WAF mã nguồn mở trên EC2 để đợt sau. Xem [phạm vi rollback](docs/rollback-cloudflare-waf-2026-11-08.md).
 
 **Hạ tầng AWS dạng production cho một nền tảng thương mại điện tử .NET 10 — dựng bằng Terraform, deploy bằng GitHub Actions không có credential dài hạn nào, và được chứng minh bằng test cùng bằng chứng đã ghi lại, chứ không bằng lời khẳng định.**
 

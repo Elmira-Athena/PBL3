@@ -1,6 +1,6 @@
 # Thiết kế hệ thống AWS — HushStore
 
-**Bổ sung WAF 2026-10-28:** chọn [Cloudflare Free](waf-cloudflare.md), với root `infra/cloudflare/` riêng. Khi bật `enable_cloudflare_origin_lockdown`, SG ALB chỉ nhận IP Cloudflare và listener yêu cầu Host **cùng** header bí mật. Flag mặc định false để chuyển NACL an toàn; các bảng SG Internet phía dưới là cấu hình trước lockdown. **Chưa apply hoặc kiểm thử runtime WAF.**
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
 
 > **Tài liệu này dành cho ai:** thành viên trong nhóm chưa từng dùng AWS và chưa
 > vững mạng máy tính, nhưng cần hiểu **bản chất** hệ thống để bảo vệ đồ án.
@@ -415,9 +415,9 @@ phải nắm:
   chồng lên nhau, mà hai chặng riêng biệt, mỗi chặng mã hoá độc lập.
 - **Câu "ALB là cửa vào duy nhất" vẫn đúng, nhưng đúng ở phạm vi AWS:** trong VPC
   của ta không có đường nào khác đi vào. Cloudflare nằm *ngoài* AWS, ở phía trước.
-- WAF/Transform Rules của Cloudflare được quản lý bằng root `infra/cloudflare/`
-  riêng. DNS có sẵn vẫn do operator quản lý. Free Managed Ruleset do Cloudflare
-  tự triển khai; phải xác nhận trên dashboard. Xem [runbook WAF](waf-cloudflare.md).
+- DNS/proxy có sẵn vẫn do operator quản lý. Root Cloudflare WAF và origin
+  lockdown đã được gỡ ngày 08/11/2026; chưa triển khai WAF thay thế. Các rule
+  Cloudflare có thể có sẵn trên dashboard nằm ngoài lần rollback mã nguồn này.
 
 ```
 Người dùng → DNS / Cloudflare proxy (ngoài AWS)
@@ -601,8 +601,8 @@ port hoặc subnet. Route, subnet riêng, ALB, IAM và bảo mật ứng dụng 
 
 **Đánh đổi:** không còn deny chủ động theo IP/CIDR ở subnet, không còn lớp NACL
 hạn chế bổ sung khi cấu hình SG sai. SG chỉ hỗ trợ allow; nếu gắn nhầm SG hoặc
-mở rộng rule, default NACL không chặn thay. WAF ở lớp HTTP được bổ sung riêng
-bằng [Cloudflare Free](waf-cloudflare.md), không thay thế SG.
+mở rộng rule, default NACL không chặn thay. Chưa có WAF thay thế sau khi
+[rollback phương án Cloudflare](rollback-cloudflare-waf-2026-11-08.md); WAF không thay thế SG.
 Hai biến Terraform `enable_deny_demo` và `my_ip` đã bị xoá. Khi đo Flow Logs,
 IP của máy probe được ghi trong bằng chứng, không phải input của module mạng.
 
@@ -1274,7 +1274,7 @@ bảo vệ:
 | **Default security group của VPC** mở mọi port từ chính nó | AWS tạo sẵn một cái cho mỗi VPC và không cho xoá. Đo được **0 ENI** dùng nó nên chưa có bề mặt thật, nhưng ai launch instance mà không chỉ định SG sẽ rơi vào nó. ✅ **Đã bịt** bằng `aws_default_security_group` rỗng (apply 2026-09-06) |
 | Không có CloudTrail trail | Chỉ có Event History mặc định: 90 ngày, chỉ management event, không lưu ra S3. Tạo trail tốn ~$0.03/tháng cho S3 — đã cân nhắc, hoãn vì mọi thao tác hạ tầng đều đi qua Terraform và Git đã là nhật ký |
 | Không có alarm nào | Lambda cost guard lỗi thì im lặng. Một CloudWatch alarm trên metric `Errors` là ~$0.10/tháng — đã cân nhắc, hoãn |
-| WAF Free có giới hạn | Cấu hình Cloudflare Free chưa apply; không có đầy đủ OWASP rules. ALB yêu cầu Host + secret khi lockdown; EF Core tham số hoá vẫn cần |
+| Chưa triển khai WAF thay thế | Cloudflare WAF/origin lockdown đã gỡ khỏi mã. ALB chỉ kiểm Host; direct ALB với Host hợp lệ vẫn được phép. EF Core tham số hoá vẫn cần |
 | Giữa hai phiên làm việc, domain không hoạt động | ALB chạy 24/7 tốn $18/tháng cho một đồ án |
 | **Chưa đo chi phí thật sau khi đổi engine** | Giá đang dùng là niêm yết + một số đo cũ trên SQL Server giữ làm cận trên. Cần 24–48h chạy thật mới biết CPU surplus của PostgreSQL có thực sự về 0 không |
 

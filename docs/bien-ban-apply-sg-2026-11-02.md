@@ -1,5 +1,7 @@
 # Biên bản apply NACL → Security Group — 02/11/2026
 
+> **Lịch sử — cập nhật 08/11/2026:** phương án Cloudflare WAF/origin lockdown đã được gỡ khỏi mã nguồn. Không thực hiện các bước triển khai Cloudflare trong tài liệu này; các số đo và quyết định bên dưới được giữ theo mốc cũ. Xem [rollback hiện tại](rollback-cloudflare-waf-2026-11-08.md).
+
 **Đã apply phần AWS prod. Chưa apply Cloudflare WAF hoặc origin lockdown.**
 
 Mã triển khai: commit `136d7fb`, account `551897327153`, region `ap-southeast-1`.

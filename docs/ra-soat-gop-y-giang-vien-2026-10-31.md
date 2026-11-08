@@ -1,5 +1,7 @@
 # Rà soát dự án HushStore theo góp ý của giảng viên
 
+> **Lịch sử — cập nhật 08/11/2026:** phương án Cloudflare WAF/origin lockdown đã được gỡ khỏi mã nguồn. Không thực hiện các bước triển khai Cloudflare trong tài liệu này; các số đo và quyết định bên dưới được giữ theo mốc cũ. Xem [rollback hiện tại](rollback-cloudflare-waf-2026-11-08.md).
+
 **Ngày rà soát:** 31/10/2026.
 
 **Phạm vi:** mã Terraform hiện tại, cấu hình mẫu, script vận hành, tài liệu và hai sơ đồ draw.io; bao gồm thay đổi SG/WAF đang có trong working tree.

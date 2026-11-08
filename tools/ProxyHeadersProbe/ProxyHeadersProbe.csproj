@@ -9,7 +9,5 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="../../src/API/Middleware/ProxyHeaders.cs" Link="ProxyHeaders.cs" />
-    <Compile Include="../../src/API/Middleware/ErrorResponseJson.cs" Link="ErrorResponseJson.cs" />
-    <Compile Include="../../src/Shared/DTOs/Common/ApiResult.cs" Link="ApiResult.cs" />
   </ItemGroup>
 </Project>

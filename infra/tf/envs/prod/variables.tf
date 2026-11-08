@@ -207,21 +207,3 @@ variable "enable_ecr_endpoints" {
   type        = bool
   default     = false
 }
-
-variable "enable_cloudflare_origin_lockdown" {
-  description = "Restrict ALB ingress to Cloudflare IPv4 and require its injected origin secret; enable only after the Cloudflare zone configuration is ready"
-  type        = bool
-  default     = false
-}
-
-variable "cloudflare_origin_secret" {
-  description = "Shared x-hushstore-origin value; set TF_VAR_cloudflare_origin_secret securely and use the identical value in the Cloudflare root; stored in Terraform state"
-  type        = string
-  sensitive   = true
-  default     = null
-
-  validation {
-    condition     = !var.enable_cloudflare_origin_lockdown || can(regex("^[A-Za-z0-9_-]{32,128}$", var.cloudflare_origin_secret))
-    error_message = "cloudflare_origin_secret must contain 32-128 letters, digits, underscores or hyphens when origin lockdown is enabled."
-  }
-}
