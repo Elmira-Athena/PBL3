@@ -79,6 +79,11 @@ Internet → ALB :443 (định tuyến theo Host, default 403)
 
 - **Chống đi vòng WAF bằng cấu trúc**, không chỉ bằng SG: container app **không còn `hostPort`**,
   nên trên máy không có cổng nào dẫn thẳng vào app. Cổng host 80/8080 nay thuộc về WAF.
+  Giới hạn phải nói đúng: "không có cổng host" nghĩa là **từ ngoài máy** (ALB, VPC, internet)
+  không tới thẳng được app. Container **khác trên cùng máy** vẫn gọi được IP bridge của app — trên
+  máy chỉ có container của dự án, nên điều này không phá yêu cầu "mọi request người dùng qua WAF".
+- WAF và app là **hai container riêng** (image, RAM, log riêng) trong **cùng một task** — không
+  gộp image. Image api/web không đổi một dòng.
 - **SG không đổi** (vẫn 5 ingress, `sg.tftest.hcl` không sửa), **cổng target group không đổi**,
   chỉ `load_balancer.container_name` của 2 service đổi thành `waf`.
 - WAF chỉ có **một upstream**, không phải định tuyến theo Host — health check của ALB (Host = IP
@@ -198,8 +203,9 @@ Internet → ALB :443 (định tuyến theo Host, default 403)
 Chốt (*chủ dự án*): **apply hẹp rồi merge `main`**.
 
 1. Chỉ sau khi local đạt (§6 bước 2) và `terraform test` xanh.
-2. `terraform plan -target` **chỉ** gồm repo ECR `hushstore-waf` (+ lifecycle policy) và log
-   group `/ecs/hushstore-waf` — $0, không chạm RDS/ALB/NAT/EC2. **Đưa plan cho chủ dự án xem**,
+2. `terraform plan -target` **chỉ** gồm repo ECR `hushstore-waf` (+ lifecycle policy) và policy
+   IAM của CI (thêm quyền đẩy vào repo mới — thiếu nó CI không push được) — $0, không chạm
+   RDS/ALB/NAT/EC2. Log group `/ecs/hushstore-waf` để `up.sh` tạo. **Đưa plan cho chủ dự án xem**,
    được duyệt mới `apply`. Plan có bất kỳ resource nào khác ⇒ dừng.
 3. Merge vào `main` ⇒ CI build đủ 5 image cùng một SHA (stack tắt thì job deploy tự bỏ qua).
 4. Chủ dự án tự trỏ `image_tag` trong `terraform.tfvars` vào SHA đó; cửa sổ AWS (§6 bước 5)
