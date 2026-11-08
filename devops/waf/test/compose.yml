@@ -1,0 +1,67 @@
+# Bộ kiểm thử local cho image WAF (devops/waf/Dockerfile). Không có app thật: `echo` đóng vai
+# upstream và in lại XFF|Proto|Host để run.sh so khớp. Chạy qua run.sh, đừng `up` tay rồi quên dọn.
+#
+# Env của waf-api / waf-web là bản sao bộ env Task 4 phải đặt trong task definition. Mọi biến mà
+# default.conf.template tham chiếu (BACKEND, PORT, CLIENT_MAX_BODY_SIZE, SET_REAL_IP_FROM) PHẢI có
+# giá trị ở CẢ HAI: envsubst để nguyên `${X}` khi biến không tồn tại ⇒ nginx không khởi động.
+name: hushstore-waf-test
+
+x-waf-env: &waf-env
+  PORT: "8080"
+  MODSEC_RULE_ENGINE: ${RULE_ENGINE:-On}
+  BLOCKING_PARANOIA: "1"
+  ANOMALY_INBOUND: "5"
+  ANOMALY_OUTBOUND: "4"
+  NGINX_WORKER_PROCESSES: "1"
+  MODSEC_RESP_BODY_ACCESS: "Off"
+  MODSEC_AUDIT_ENGINE: RelevantOnly
+  MODSEC_AUDIT_LOG_FORMAT: JSON
+  MODSEC_AUDIT_LOG: /dev/stdout
+  # Subnet của mạng compose bên dưới (trên AWS: CIDR của VPC). Một CIDR duy nhất.
+  SET_REAL_IP_FROM: 172.30.250.0/24
+
+x-waf-build: &waf-build
+  context: ../../..          # gốc repo — giống CI (context: ., file: devops/waf/Dockerfile)
+  dockerfile: devops/waf/Dockerfile
+
+# Chỉ dùng để `up --wait` biết lúc nào nginx đã nghe. Đi QUA WAF tới echo, không phải /healthz
+# nội bộ của WAF (template của mình không có location đó).
+x-waf-health: &waf-health
+  test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/healthz"]
+  interval: 2s
+  timeout: 2s
+  retries: 30
+
+services:
+  echo:
+    image: nginx:alpine
+    volumes:
+      - ./echo.conf:/etc/nginx/conf.d/default.conf:ro
+
+  waf-api:
+    build: *waf-build
+    depends_on: [echo]
+    environment:
+      <<: *waf-env
+      BACKEND: http://echo:80
+      CLIENT_MAX_BODY_SIZE: 8m
+      MODSEC_REQ_BODY_LIMIT: "8388608"
+    ports: ["18080:8080"]
+    healthcheck: *waf-health
+
+  waf-web:
+    build: *waf-build             # cùng Dockerfile ⇒ lần build thứ hai trúng cache
+    depends_on: [echo]
+    environment:
+      <<: *waf-env
+      BACKEND: http://echo:80
+      CLIENT_MAX_BODY_SIZE: 1m
+      MODSEC_REQ_BODY_LIMIT: "1048576"
+    ports: ["18081:8080"]
+    healthcheck: *waf-health
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.250.0/24
