@@ -41,7 +41,7 @@
 | `devops/waf/default.conf.template` (mới) | server block: proxy tới `${BACKEND}`, header proxy, body size |
 | `devops/waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf` (mới) | exclusion hẹp theo log |
 | `devops/waf/test/compose.yml` (mới) | `waf-api` + `waf-web` + upstream `echo` (nginx:alpine) cho kiểm thử local |
-| `devops/waf/test/echo.conf` (mới) | upstream trả về `XFF|Proto|Host` và 200 cho mọi path |
+| `devops/waf/test/echo.conf` (mới) | upstream trả về `XFF\|Proto\|Host` và 200 cho mọi path |
 | `devops/waf/test/run.sh` (mới) | bộ kiểm thử: corpus hợp lệ ⇒ 200, tấn công ⇒ 403, log JSON có rule ID |
 | `infra/tf/modules/storage/{ecr.tf,outputs.tf,tests/storage.tftest.hcl}` | repo ECR `waf` |
 | `infra/tf/envs/prod/main.tf` | truyền `ecr_waf_url`, `vpc_cidr`, biến WAF vào `module.ecs`; thêm ARN repo waf vào `module.cicd` |
@@ -102,7 +102,7 @@ git commit -m "docs(evidence): đo RAM WAF ModSecurity+CRS bằng Docker local"
   | `health_host_ip` | api | `GET /health/ready`, header `Host: 10.0.1.23:8080`, `User-Agent: ELB-HealthChecker/2.0` | 200 |
   | `health_web` | web | `GET /healthz`, `Host: 10.0.1.23` | 200 |
   | `blazor_framework` | web | `GET /_framework/blazor.boot.json`, `/_framework/App.wasm`, `/_framework/App.dll`, `/_framework/icudt.dat` | 200 cả 4 |
-  | `xff_giu_nguyen` | api | `GET /api/x` với `X-Forwarded-For: 1.2.3.4, 198.51.100.10`, `X-Forwarded-Proto: https`, `Host: api.hushstore.io.vn` | 200 **và** body == `1.2.3.4, 198.51.100.10|https|api.hushstore.io.vn` |
+  | `xff_giu_nguyen` | api | `GET /api/x` với `X-Forwarded-For: 1.2.3.4, 198.51.100.10`, `X-Forwarded-Proto: https`, `Host: api.hushstore.io.vn` | 200 **và** body == `1.2.3.4, 198.51.100.10\|https\|api.hushstore.io.vn` |
   | `sqli` | api | `GET /api/products?search=' OR 1=1--` | 403 |
   | `xss` | api | `POST /api/reviews` JSON `{"comment":"<script>alert(1)</script>"}` | 403 |
   | `path_traversal` | web | `GET /..%2f..%2fetc/passwd` | 403 (hoặc 400 từ nginx — chấp nhận cả hai, ghi lại) |
