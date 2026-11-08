@@ -67,10 +67,6 @@ locals {
     }
   }
 
-  # Secret dùng khối `secrets` với valueFrom, KHÔNG dùng `environment`.
-  # Giá trị trong `environment` hiện nguyên văn trong output của
-  # `aws ecs describe-task-definition` — ai có quyền đọc task definition là
-  # đọc được connection string.
   # Env chung của hai WAF — bản sao của devops/waf/test/compose.yml (x-waf-env),
   # tên biến và lý do từng giá trị ở docs/evidence/2026-11-08-waf-local.md §0.1.
   # Template nginx của image tham chiếu BACKEND/PORT/CLIENT_MAX_BODY_SIZE/
@@ -92,6 +88,10 @@ locals {
     { name = "MODSEC_AUDIT_LOG_PARTS", value = "AHZ" },
   ]
 
+  # Secret dùng khối `secrets` với valueFrom, KHÔNG dùng `environment`.
+  # Giá trị trong `environment` hiện nguyên văn trong output của
+  # `aws ecs describe-task-definition` — ai có quyền đọc task definition là
+  # đọc được connection string.
   app_secrets = [
     {
       name      = "ConnectionStrings__DefaultConnection"
@@ -110,8 +110,8 @@ resource "aws_ecs_task_definition" "api" {
   requires_compatibilities = ["EC2"]
 
   # bridge, không phải awsvpc: awsvpc cấp 1 ENI riêng cho mỗi task, mà
-  # t3.micro chỉ hỗ trợ 2 ENI (1 primary + 1 khả dụng) nên không đủ cho 2
-  # service. ENI trunking cần instance type lớn hơn.
+  # t3.micro chỉ hỗ trợ 2 ENI (1 primary + 1 khả dụng) và t3.small 3, nên không
+  # đủ cho 2 service + task migrator/seeder. ENI trunking cần instance type lớn hơn.
   network_mode = "bridge"
 
   execution_role_arn = aws_iam_role.task_execution.arn
@@ -171,7 +171,7 @@ resource "aws_ecs_task_definition" "api" {
       linuxParameters = {
         # initProcessEnabled bắt buộc để ECS Exec vào được container.
         initProcessEnabled = true
-        # t3.micro chỉ 1GB RAM. Cho container dùng swap của host để không bị
+        # Instance nhỏ (t3.micro 1GB; prod t3.small 2GB). Cho container dùng swap của host để không bị
         # OOM-kill khi task migrator chạy chồng lên.
         maxSwap    = 1024
         swappiness = 60

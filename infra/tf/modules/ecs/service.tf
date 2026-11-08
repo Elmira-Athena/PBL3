@@ -161,8 +161,8 @@ resource "aws_ecs_service" "api" {
 
   # 120s, gấp hơn hai lần cửa sổ 45s. Lý do API cần nhiều hơn web: health check
   # của nó là /health/ready, mà endpoint đó có AddDbContextCheck nên nó MỞ KẾT
-  # NỐI TỚI RDS. Cộng dồn: .NET cold start trên t3.micro, cộng lần kết nối đầu
-  # tới một RDS vừa được start (SQL Server Express khởi động chậm). 45s là quá
+  # NỐI TỚI RDS. Cộng dồn: .NET cold start trên instance nhỏ, cộng lần kết nối đầu
+  # tới một RDS vừa được start (khởi động chậm). 45s là quá
   # sát — task đang boot đúng cách vẫn có thể bị giết.
   health_check_grace_period_seconds = 120
 

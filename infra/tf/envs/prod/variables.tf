@@ -165,7 +165,7 @@ variable "waf_rule_engine" {
 }
 
 variable "image_tag" {
-  description = "Git SHA của 3 image trên ECR. Lấy bằng: git rev-parse HEAD"
+  description = "Git SHA của các image trên ECR (api, web, migrator, seeder, waf — cùng một commit). Lấy bằng: git rev-parse HEAD"
   type        = string
 }
 

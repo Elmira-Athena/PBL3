@@ -147,11 +147,19 @@ run "waf_dung_truoc_app" {
           && length([for d in try(c.dependsOn, []) : d if d.containerName == pair.app && d.condition == "START"]) == 1
           && length([for e in try(c.environment, []) : e if e.name == "BACKEND" && e.value == pair.backend]) == 1
           && length([for e in try(c.environment, []) : e if e.name == "MODSEC_RULE_ENGINE" && e.value == var.waf_rule_engine]) == 1
-          && endswith(c.image, ":${var.image_tag}")
+          && c.image == "${var.ecr_waf_url}:${var.image_tag}"
           && try(c.logConfiguration.options["awslogs-group"], "") == "/ecs/${var.project}-waf"
+          # Template nginx tham chiếu PORT/CLIENT_MAX_BODY_SIZE/SET_REAL_IP_FROM/BACKEND: thiếu
+          # hoặc rỗng một biến thì envsubst để nguyên `${X}` và nginx không khởi động.
+          && alltrue([
+            for n in ["PORT", "CLIENT_MAX_BODY_SIZE", "SET_REAL_IP_FROM", "BACKEND"] :
+            length([for e in try(c.environment, []) : e if e.name == n && try(length(e.value), 0) > 0]) == 1
+          ])
+          # Part B của audit log chép nguyên header Authorization — phải vắng.
+          && length([for e in try(c.environment, []) : e if e.name == "MODSEC_AUDIT_LOG_PARTS" && e.value == "AHZ"]) == 1
       ]) == 1
     ])
-    error_message = "Mỗi task api/web phải có ĐÚNG MỘT container `waf`: links tới app, essential, dependsOn app (START), BACKEND trỏ đúng app, MODSEC_RULE_ENGINE = var.waf_rule_engine, image :<image_tag>, log vào /ecs/<project>-waf."
+    error_message = "Mỗi task api/web phải có ĐÚNG MỘT container `waf`: links tới app, essential, dependsOn app (START), BACKEND trỏ đúng app, MODSEC_RULE_ENGINE = var.waf_rule_engine, image đúng <ecr_waf_url>:<image_tag>, log vào /ecs/<project>-waf, đủ PORT/CLIENT_MAX_BODY_SIZE/SET_REAL_IP_FROM/BACKEND không rỗng, MODSEC_AUDIT_LOG_PARTS = AHZ."
   }
 }
 
