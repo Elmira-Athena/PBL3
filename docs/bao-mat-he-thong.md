@@ -541,7 +541,12 @@ chỉ là chuyện thứ tự. ALB terminate TLS rồi chuyển tiếp bằng HT
 `UseHttpsRedirection` sẽ redirect vô hạn. Quan trọng hơn: **IP thật của client
 nằm trong `X-Forwarded-For`** — không đọc header đó thì rate limiter đếm sai, nó
 sẽ thấy mọi request đến từ cùng một IP (của ALB) và chặn oan người dùng thật.
-Header này chỉ được tin trong phạm vi `KnownNetworks` = CIDR của VPC.
+Mã làm đúng như sau (`src/API/Middleware/ProxyHeaders.cs`): **xoá cả `KnownIPNetworks` lẫn
+`KnownProxies`** — tức là middleware đọc `X-Forwarded-*` từ **bất kỳ** peer nào, không giới hạn theo
+CIDR VPC — và đặt `ForwardLimit = 1`, nên chỉ lấy **một** phần tử, phần tử **cuối** của
+`X-Forwarded-For` (phần ALB nối vào), bỏ qua phần client tự khai ở đầu chuỗi. Thứ chặn kẻ lạ tự
+gửi `X-Forwarded-For` giả **không phải** mã này mà là `sg-web`: chỉ cho ALB đi vào (comment
+trong file: "sg-web allows only ALB traffic").
 
 ---
 
@@ -584,11 +589,14 @@ inbound 5 / outbound 4 (mặc định của CRS), `MODSEC_RESP_BODY_ACCESS=Off`,
 #### WAF chặn gì
 
 Request có dấu hiệu tấn công theo luật CRS mức nhạy 1 → trả **403** và ghi một dòng log JSON có
-mã luật + điểm bất thường. Đã chạy thật ở local (25/25 ca của `run.sh` đạt):
+mã luật + điểm bất thường. Đã chạy thật ở local (30/30 ca của `run.sh` đạt). ⚠️ **Upstream của bộ kiểm thử là `nginx:alpine`
+trả lại header (echo), KHÔNG phải app thật**: nó chứng minh luật CRS và exclusion đúng trên các
+payload mẫu, **không** chứng minh mọi luồng thật của app qua được WAF — vì vậy lần đầu lên AWS phải
+chạy `DetectionOnly` trước (mục [Lần đầu trên AWS](#lần-đầu-trên-aws-bắt-đầu-bằng-detectiononly-không-phải-on)):
 
 | Loại | Ví dụ đã thử | Kết quả |
 |---|---|---|
-| SQL injection | `search=' OR 1=1--`; email đăng nhập `a' OR 1=1--`; SQLi kèm Bearer token hợp lệ | 403 |
+| SQL injection | `search=' OR 1=1--`; email đăng nhập `a' OR 1=1--`; SQLi kèm header `Authorization: Bearer <chuỗi ngẫu nhiên>` (không phải JWT thật) | 403 |
 | XSS | `{"comment":"<script>alert(1)</script>"}` | 403 |
 | Path traversal | `/..%2f..%2fetc/passwd` | 403 hoặc 400 |
 | Công cụ quét | User-Agent `sqlmap/1.7` | 403 |
@@ -596,7 +604,10 @@ mã luật + điểm bất thường. Đã chạy thật ở local (25/25 ca c�
 
 Và **không chặn nhầm** các luồng thật: đăng nhập thường và mật khẩu có ký tự đặc biệt, refresh
 token, sửa sản phẩm tiếng Việt, tìm kiếm có dấu, upload ảnh 5 MB, JSON gần 1 MB, health check của ALB
-(Host là IP), file Blazor `_framework/*`.
+(Host là IP), file Blazor `_framework/*`, mô tả sản phẩm là HTML có `<img>`/`<a>` (exclusion 1005,
+chỉ trường `description`/`shortDescription` của `POST/PUT /api/products`; `<script>` ở đó vẫn 403), và
+upload ảnh có tên file chứa `'` hoặc `;` (exclusion 1006; API đổi tên thành GUID nên tên gốc không
+được dùng).
 
 #### WAF KHÔNG chặn gì (nói thẳng khi bảo vệ)
 
@@ -617,6 +628,34 @@ Biến Terraform `waf_rule_engine` (`infra/tf/envs/prod/variables.tf`), giá tr�
 **chỉ có hiệu lực ở lần deploy kế tiếp** (pipeline lấy revision ACTIVE mới nhất làm khuôn), không
 đổi ngay trên task đang chạy.
 
+**Công tắc khẩn cấp nhanh nhất** (đang chặn nhầm người dùng thật): đặt `waf_rule_engine =
+"DetectionOnly"` rồi `terraform apply` — việc này chỉ tạo **revision task definition mới**, chưa đổi
+task đang chạy. Sau đó trỏ service sang revision mới ngay, không chờ pipeline:
+
+```bash
+aws ecs update-service --cluster hushstore --service hushstore-api --task-definition <revision mới>
+aws ecs update-service --cluster hushstore --service hushstore-web --task-definition <revision mới>
+```
+
+(cluster tên `hushstore` = `var.project`; hai service `hushstore-api` / `hushstore-web`; lấy số
+revision từ output của apply hoặc `aws ecs describe-services`.) ECS thay task theo kiểu rolling nên
+vẫn mất vài phút — đây là cách nhanh nhất có sẵn, không phải tức thời.
+
+#### Lần đầu trên AWS: bắt đầu bằng `DetectionOnly`, không phải `On`
+
+Local chỉ đo với upstream giả, nên **chưa ai biết luật CRS có chặn nhầm luồng thật nào của app**.
+Hai ca đã lọt qua bộ kiểm thử rồi mới bị review bắt (mô tả HTML có `<img>`, tên file upload có `'`)
+chính là loại lỗi này. Vì vậy cửa sổ AWS đầu tiên phải đi theo thứ tự:
+
+1. Bật stack với `waf_rule_engine = "DetectionOnly"` (WAF chỉ ghi log, không chặn).
+2. Đi qua tay các luồng thật chính: đăng nhập, xem/sửa sản phẩm (kể cả mô tả HTML), upload ảnh,
+   giỏ hàng, thanh toán, phiếu nhập kho, phiếu xuất kho.
+3. Đọc CloudWatch `/ecs/hushstore-waf`: mọi bản ghi của request hợp lệ là một dương tính giả cần
+   exclusion mới trong `devops/waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf` (hẹp theo path +
+   tham số, kèm ca trong `run.sh`). Thêm exclusion nghĩa là **build lại image và merge** — không sửa
+   được tại chỗ.
+4. Chỉ khi log sạch mới chuyển `waf_rule_engine = "On"` (apply + công tắc ở trên), rồi chạy demo 403.
+
 #### Chạy bộ kiểm thử local (cổng chặn hồi quy của WAF)
 
 ```bash
@@ -633,8 +672,14 @@ Sửa `default.conf.template`, file exclusion hay đổi tag image gốc thì ch
 Audit log JSON ra stdout → CloudWatch log group `/ecs/hushstore-waf`, hai stream
 `waf-api` và `waf-web` — demo chỉ cần mở một chỗ. Audit log chỉ ghi các phần `AHZ`: A (thông tin
 giao dịch), H (luật nào khớp, điểm bao nhiêu), Z (kết thúc). **Không** có phần B (header của
-request), nên `Authorization: Bearer …` không lọt vào log. Audit engine `RelevantOnly`: chỉ ghi
-request bị gắn cờ, để không đầy CloudWatch.
+request), nên header `Authorization: Bearer …` không có trong log — **trừ khi một luật CRS khớp
+chính header `Authorization`**: khi đó `logdata` của luật chép nguyên giá trị khớp vào phần H. (Ca
+`audit_log_khong_lo_token` chỉ đo trường hợp luật khớp ở tham số khác.) Audit engine `RelevantOnly`
+ghi theo hai điều kiện: request bị luật gắn cờ, **hoặc** status trả về khớp
+`SecAuditLogRelevantStatus` — mặc định của image là `^(?:5|4(?!04))`, tức mọi 4xx **trừ 404** và mọi
+5xx **của app** cũng được ghi (vd. 401 đăng nhập sai, 400 validation, 503 của `/health/ready` lúc DB
+đang khởi động). Bản ghi đó chỉ chứa URI/status, không bí mật. Ước lượng dung lượng CloudWatch phải
+tính cả luồng này, không chỉ request bị chặn.
 
 #### Giới hạn đã biết (đã quyết định, không phải quên)
 
@@ -648,6 +693,8 @@ request bị gắn cờ, để không đầy CloudWatch.
   của container `waf` (đo local: 549–594 MiB). Vấn đề này **chưa được giải quyết**.
 - **Số RAM đo trên Docker arm64 (máy Mac), chưa đo trên EC2 amd64.** Trên amd64 giả lập, RAM sau tải
   còn tăng qua 3 lượt đo — chưa biết là rò rỉ thật hay do giả lập. Phải đo lại trên EC2.
+- **Bộ kiểm thử local dùng upstream giả (echo), không phải app thật.** Dương tính giả với luồng thật
+  chỉ lộ khi chạy `DetectionOnly` trên AWS (xem mục "Lần đầu trên AWS").
 - **`terraform.tfvars` có thể ghi đè `instance_type` về `t3.micro`** (file này không thuộc mã
   commit). Với 2 sidecar, t3.micro không đủ RAM ⇒ chủ dự án **phải kiểm tfvars** trước khi bật stack.
 - **"App không có cổng host" chỉ nghĩa là không tới được từ ngoài máy.** Container khác trên
@@ -658,8 +705,9 @@ request bị gắn cờ, để không đầy CloudWatch.
 
 1. **Bẫy XFF:** WAF phải chuyển **nguyên văn** `X-Forwarded-For` (`$http_x_forwarded_for`),
    **không bao giờ** dùng `$proxy_add_x_forwarded_for`. App tin đúng một hop
-   (`ProxyHeaders.ForwardLimit = 1`); nối thêm IP của WAF vào chuỗi thì mọi người dùng bị coi là
-   cùng một IP và rate limit đăng nhập khoá **tất cả mọi người cùng lúc**. `run.sh` có ca
+   (`ProxyHeaders.ForwardLimit = 1`); nối IP của peer (ALB) vào chuỗi (đo: image mặc định làm đúng như vậy) thì `api` đọc phần tử cuối
+   và thấy IP của ALB thay vì IP client; hệ quả **suy ra, chưa đo trên app thật**: mọi người dùng bị
+   coi là cùng một IP và rate limit đăng nhập khoá **tất cả mọi người cùng lúc**. `run.sh` có ca
    `xff_giu_nguyen` canh điều này (đối chứng âm: evidence local §6).
 2. **Bẫy `containerPort` không `hostPort`:** ở bridge mode, nếu container app khai `containerPort`
    mà thiếu `hostPort`, ECS gán cho nó một **cổng host động** — tức mở lại đường đi vòng

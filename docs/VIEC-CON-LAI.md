@@ -341,8 +341,8 @@ Mã đã xong và đo ở local (Docker arm64, $0): xem [`bao-mat-he-thong.md`](
 | F1 | **Apply hẹp** (`terraform plan -target`) chỉ gồm repo ECR `hushstore-waf` (+ lifecycle policy) và policy IAM cho CI đẩy vào repo đó | $0, không chạm RDS/ALB/NAT/EC2. **Đưa plan cho chủ dự án xem trước**; plan có resource nào khác ⇒ dừng. Log group `/ecs/hushstore-waf` để `up.sh` tạo |
 | F2 | **Merge vào `main`** | CI build đủ 5 image cùng một SHA (stack tắt thì job deploy tự bỏ qua). CI chỉ push được ECR từ `main` |
 | F3 | Chủ dự án **đặt `image_tag`** trong `terraform.tfvars` = SHA của lần build đó | `up.sh` **dừng** nếu image `waf` ở tag đó chưa có trên ECR (thay vì để ECS kẹt ở bước pull) |
-| F4 | **Kiểm `instance_type` trong `terraform.tfvars`** | Default của `envs/prod` là `t3.small`, nhưng tfvars có thể ghi đè về `t3.micro`. Với 2 sidecar WAF, `t3.micro` không đủ RAM (tổng `memoryReservation` 992 MiB vượt ~900 MiB ECS đăng ký được) |
-| F5 | **Cửa sổ AWS**: bật stack bằng `up.sh` và đo (5 phép đo ngay dưới bảng) | Cần duyệt riêng |
+| F4 | **Kiểm `instance_type` trong `terraform.tfvars`** | Default của `envs/prod` là `t3.small`, nhưng tfvars có thể ghi đè về `t3.micro`. Với 2 sidecar WAF, `t3.micro` không đủ RAM (tổng `memoryReservation` 992 MiB vượt ~900 MiB (ước) ECS đăng ký được) |
+| F5 | **Cửa sổ AWS**: bật stack bằng `up.sh` và đo (5 phép đo ngay dưới bảng) | Cần duyệt riêng. **Bắt đầu bằng `waf_rule_engine = "DetectionOnly"`, KHÔNG phải `On`**: bộ kiểm thử local chỉ chạy với upstream giả (echo), chưa bao giờ với app thật. Đi tay các luồng thật (đăng nhập, xem/sửa sản phẩm kể cả mô tả HTML, upload ảnh, giỏ hàng, thanh toán, phiếu nhập/xuất kho), đọc `/ecs/hushstore-waf`, mỗi dương tính giả ⇒ thêm exclusion (build lại image + merge), rồi mới chuyển `On` (apply + `aws ecs update-service --cluster hushstore --service hushstore-api\|hushstore-web --task-definition <revision mới>`) và chạy demo 403 |
 | F6 | `down.sh`, rồi **xác minh đã tắt bằng AWS API** (`status.sh`: ALB=0, NAT=0, EC2=0) | Đừng chỉ tin exit code |
 
 Năm phép đo của F5:

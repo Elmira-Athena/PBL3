@@ -141,7 +141,7 @@ Internet → ALB :443 (định tuyến theo Host, default 403)
 - `MODSEC_AUDIT_LOG_FORMAT=JSON`, `MODSEC_AUDIT_LOG=/dev/stdout`, access log ra stdout ⇒ awslogs.
 - Log group riêng `/ecs/hushstore-waf` (cùng `log_retention_days`), stream prefix phân biệt
   `api`/`web` — để demo chỉ cần mở một chỗ. Kiểm quyền của execution role với log group mới.
-- Audit engine `RelevantOnly` (chỉ ghi request bị gắn cờ) — tránh đầy CloudWatch.
+- Audit engine `RelevantOnly` (ghi request bị gắn cờ và mọi 4xx trừ 404 / 5xx theo `SecAuditLogRelevantStatus` mặc định của image) — tránh đầy CloudWatch.
 
 ### 5.5 Công tắc chế độ
 - Biến Terraform `waf_rule_engine` (`On` | `DetectionOnly`), mặc định **`On`**, đưa vào env
