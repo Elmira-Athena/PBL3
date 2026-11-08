@@ -41,6 +41,20 @@ expect() {
   fi
 }
 code() { curl -sS -o /dev/null -w '%{http_code}' "$@" 2>/dev/null; }
+logs() { docker compose logs --no-color --no-log-prefix waf-api 2>/dev/null; }
+# audit_has <bộ lọc jq trên .transaction>: chờ tối đa 5 giây tới khi audit log có bản ghi khớp.
+audit_has() {
+  for _ in 1 2 3 4 5; do
+    logs | jq -Rre "fromjson? | .transaction | select($1) | true" >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  return 1
+}
+# khong_lo <chuỗi>: "không lộ" nếu chuỗi vắng mặt trong MỌI log của waf-api (audit + access + error).
+# Không dùng grep -q: nó thoát ở dòng khớp đầu, `docker compose logs` nhận SIGPIPE và pipefail
+# biến pipeline thành "thất bại" ⇒ báo "không lộ" đúng lúc ĐANG lộ (đối chứng âm đã bắt được).
+khong_lo() { if logs | grep -F -- "$1" >/dev/null; then echo lộ; else echo "không lộ"; fi; }
+login_json() { jq -nc --arg e "$1" --arg p "$2" '{email:$e,password:$p}'; }
 b64url() { base64 | tr '+/' '-_' | tr -d '=\n'; }
 J=(-H 'Content-Type: application/json')
 
@@ -70,6 +84,28 @@ PRODUCT=$(jq -nc '{
 }')
 expect san_pham_tieng_viet 200 "$(code -X PUT "${J[@]}" --data-binary "$PRODUCT" "$API/api/products/1")"
 
+# Mật khẩu "khó": mỗi cái từng khớp một nhóm luật CRS khác nhau (932 / 930 / 941 / 942).
+HARD=('Abc;ls -la1' '../x' '<script>' '"; DROP')
+codes=(); for p in "${HARD[@]}"; do
+  codes+=("$(code "${J[@]}" --data-binary "$(login_json a@b.vn "$p")" "$API/api/auth/login")")
+done
+expect mat_khau_kho_login "200 200 200 200" "${codes[*]}"
+codes=(); for p in "${HARD[@]}"; do
+  codes+=("$(code "${J[@]}" --data-binary "$(jq -nc --arg p "$p" \
+    '{fullName:"Nguyễn Văn A",email:"a@b.vn",phoneNumber:"0901234567",password:$p,confirmPassword:$p}')" \
+    "$API/api/auth/register")")
+done
+expect mat_khau_kho_register "200 200 200 200" "${codes[*]}"
+codes=(); for p in "${HARD[@]}"; do
+  codes+=("$(code -X PUT "${J[@]}" --data-binary "$(jq -nc --arg p "$p" \
+    '{currentPassword:$p,newPassword:$p,confirmPassword:$p}')" "$API/api/auth/change-password")")
+done
+expect mat_khau_kho_doi_mat_khau "200 200 200 200" "${codes[*]}"
+
+# JSON gần 1 MB (không phải file) — dưới MODSEC_REQ_BODY_NOFILES_LIMIT=1048576 của waf-api.
+{ printf '{"name":"'; head -c 999980 /dev/zero | tr '\0' a; printf '"}'; } > "$TMP/1mb.json"
+expect json_gan_1mb 200 "$(code -H 'Expect:' "${J[@]}" --data-binary @"$TMP/1mb.json" "$API/api/products")"
+
 # Trình duyệt mã hoá UTF-8 thành %XX; --data-urlencode làm đúng như vậy.
 expect tim_kiem 200 "$(code -G --data-urlencode 'search=card đồ hoạ rtx' -d pageSize=20 "$API/api/products")"
 
@@ -98,14 +134,24 @@ expect path_traversal "403/400" "$(code --path-as-is "$WEB/..%2f..%2fetc/passwd"
 expect scanner 403 "$(code -A 'sqlmap/1.7' "$API/")"
 
 # Audit log JSON của ca sqli phải có trên stdout của waf-api, chứa rule 942xxx.
-log_json=không
-for _ in 1 2 3 4 5; do
-  if docker compose logs --no-color --no-log-prefix waf-api 2>/dev/null \
-    | jq -Rr 'fromjson? | select(.transaction.request.uri | test("search=%27")) | .transaction.messages[]?.details.ruleId' \
-    | grep -q '^942'; then log_json=có; break; fi
-  sleep 1
-done
-expect log_json có "$log_json"
+if audit_has '(.request.uri | test("search=%27")) and any(.messages[]?; .details.ruleId | startswith("942"))'
+then expect log_json có có; else expect log_json có không; fi
+
+# SQLi ở email vẫn bị chặn (1002 chỉ gỡ trường mật khẩu); mật khẩu đi kèm là một mật khẩu "khó"
+# ⇒ transaction CÓ bản audit log, và mật khẩu không được nằm trong đó.
+PW_LO='Abc;ls -la1'
+expect email_sqli_login 403 "$(code "${J[@]}" --data-binary "$(login_json "a' OR 1=1--" "$PW_LO")" "$API/api/auth/login")"
+if audit_has '.request.uri == "/api/auth/login" and .response.http_code == 403'
+then expect audit_log_khong_lo_mat_khau "không lộ" "$(khong_lo "$PW_LO")"
+else expect audit_log_khong_lo_mat_khau "không lộ" "không có bản audit log để kiểm"; fi
+
+# Request bị chặn kèm Bearer token ⇒ token không được nằm trong log (audit lẫn access log).
+TOKEN="tok-kiem-thu-$$-$RANDOM$RANDOM$RANDOM"
+expect sqli_kem_token 403 "$(code -H "Authorization: Bearer $TOKEN" -G \
+  --data-urlencode "search=' OR 1=1--" -d ca=token "$API/api/products")"
+if audit_has '.request.uri | test("ca=token")'
+then expect audit_log_khong_lo_token "không lộ" "$(khong_lo "$TOKEN")"
+else expect audit_log_khong_lo_token "không lộ" "không có bản audit log để kiểm"; fi
 
 { printf '{"data":"'; head -c 9437184 /dev/zero | tr '\0' a; printf '"}'; } > "$TMP/9mb.json"
 expect body_qua_8mb 413 "$(code -H 'Expect:' "${J[@]}" --data-binary @"$TMP/9mb.json" "$API/api/products")"

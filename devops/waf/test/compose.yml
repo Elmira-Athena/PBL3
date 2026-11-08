@@ -17,6 +17,10 @@ x-waf-env: &waf-env
   MODSEC_AUDIT_ENGINE: RelevantOnly
   MODSEC_AUDIT_LOG_FORMAT: JSON
   MODSEC_AUDIT_LOG: /dev/stdout
+  # Bỏ part B (header request) khỏi mặc định ABIJDEFHZ: B chép nguyên `Authorization: Bearer …`.
+  # A + H vẫn còn client_ip, unique_id, method, uri, rule ID, điểm anomaly (đã đo). Ghi đè bằng
+  # AUDIT_LOG_PARTS chỉ để chạy đối chứng âm.
+  MODSEC_AUDIT_LOG_PARTS: ${AUDIT_LOG_PARTS:-AHZ}
   # Subnet của mạng compose bên dưới (trên AWS: CIDR của VPC). Một CIDR duy nhất.
   SET_REAL_IP_FROM: 172.30.250.0/24
 
@@ -46,6 +50,8 @@ services:
       BACKEND: http://echo:80
       CLIENT_MAX_BODY_SIZE: 8m
       MODSEC_REQ_BODY_LIMIT: "8388608"
+      # Trần body KHÔNG phải file (JSON). Mặc định image 131072 ⇒ JSON > 128 KiB bị 400.
+      MODSEC_REQ_BODY_NOFILES_LIMIT: "1048576"
     ports: ["18080:8080"]
     healthcheck: *waf-health
 
@@ -57,6 +63,7 @@ services:
       BACKEND: http://echo:80
       CLIENT_MAX_BODY_SIZE: 1m
       MODSEC_REQ_BODY_LIMIT: "1048576"
+      MODSEC_REQ_BODY_NOFILES_LIMIT: "131072"
     ports: ["18081:8080"]
     healthcheck: *waf-health
 
