@@ -52,6 +52,9 @@ services:
       MODSEC_REQ_BODY_LIMIT: "8388608"
       # Trần body KHÔNG phải file (JSON). Mặc định image 131072 ⇒ JSON > 128 KiB bị 400.
       MODSEC_REQ_BODY_NOFILES_LIMIT: "1048576"
+      # Số ARG tối đa (mỗi phần tử mảng JSON là một ARG; rule 200007 của image: >= trần ⇒ 400).
+      # Phiếu nhập/xuất kho không giới hạn số serial; 20000 ≈ số ARG nhét vừa 1 MiB body JSON.
+      MODSEC_ARGUMENTS_LIMIT: "20000"
     ports: ["18080:8080"]
     healthcheck: *waf-health
 
@@ -64,6 +67,7 @@ services:
       CLIENT_MAX_BODY_SIZE: 1m
       MODSEC_REQ_BODY_LIMIT: "1048576"
       MODSEC_REQ_BODY_NOFILES_LIMIT: "131072"
+      MODSEC_ARGUMENTS_LIMIT: "1000"
     ports: ["18081:8080"]
     healthcheck: *waf-health
 

@@ -106,6 +106,11 @@ expect mat_khau_kho_doi_mat_khau "200 200 200 200" "${codes[*]}"
 { printf '{"name":"'; head -c 999980 /dev/zero | tr '\0' a; printf '"}'; } > "$TMP/1mb.json"
 expect json_gan_1mb 200 "$(code -H 'Expect:' "${J[@]}" --data-binary @"$TMP/1mb.json" "$API/api/products")"
 
+# Phiếu nhập/xuất kho: mảng serial không giới hạn. 5000 phần tử = 5000 ARG, vượt trần mặc định
+# 1000 của image (MODSEC_ARGUMENTS_LIMIT) — waf-api đặt 20000.
+jq -nc '{serialNumbers: [range(1; 5001) | "SN-\(. | tostring | ("000000" + .)[-6:])"]}' > "$TMP/serials.json"
+expect json_nhieu_serial 200 "$(code "${J[@]}" --data-binary @"$TMP/serials.json" "$API/api/import-receipts")"
+
 # Trình duyệt mã hoá UTF-8 thành %XX; --data-urlencode làm đúng như vậy.
 expect tim_kiem 200 "$(code -G --data-urlencode 'search=card đồ hoạ rtx' -d pageSize=20 "$API/api/products")"
 
