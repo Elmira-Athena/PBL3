@@ -409,6 +409,17 @@ Nó ghi: việc kế tiếp (kèm `file:dòng` cụ thể), cách chạy môi tr
 chứng, và **mười ba cái bẫy im lặng** đã gặp. Đọc file đó trước khi sửa bất cứ thứ gì thuộc
 tầng Service, auth, hay rate limiting.
 
+🟡 **WAF sidecar ModSecurity + CRS 4 (2026-11-08) — mã xong, đo local, CHƯA apply lên AWS, chưa merge `main`.**
+Container `waf` đứng trước `api` và `web` trong cùng task; app **không còn cổng host**. Cổng chặn
+hồi quy: `devops/waf/test/run.sh` (sửa `devops/waf/` thì chạy lại, thoát `0`). Hai bẫy im lặng:
+(1) **XFF** — WAF phải chuyển `$http_x_forwarded_for`, **không bao giờ** `$proxy_add_x_forwarded_for`
+(app tin đúng một hop, `ForwardLimit = 1`; nối IP WAF vào là rate limit đăng nhập khoá mọi người cùng
+lúc); (2) **bridge mode** — `containerPort` mà thiếu `hostPort` là cổng host *động*, tức cửa sau đi
+vòng WAF; container app không được khai `portMappings`. RAM mới đo ở Docker arm64, chưa đo EC2; việc
+còn lại ở `docs/VIEC-CON-LAI.md` §5F. Thiết kế:
+[`docs/superpowers/specs/2026-11-08-waf-modsecurity-ec2-design.md`](docs/superpowers/specs/2026-11-08-waf-modsecurity-ec2-design.md),
+kế hoạch: `docs/superpowers/plans/2026-11-08-waf-modsecurity-ec2.md`.
+
 Tóm tắt trạng thái: đợt 1 + đợt 2 + mục A + mục B + mục C + mục D + mục 🅴 + mục 🅷 +
 mục 🅸 + **đợt 3 (gói 2 + gói 3)** đã xong — **LoadProbe 9/9 ĐẠT ở CẢ HAI cấu hình**,
 `0 KHÔNG KẾT LUẬN` ở cấu hình 2 instance

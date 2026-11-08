@@ -1,6 +1,6 @@
 # Bảo mật hệ thống HushStore — sáu nhóm phòng thủ
 
-**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
+**WAF 08/11/2026:** phương án Cloudflare WAF đã được gỡ (xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md)) và **thay bằng WAF mã nguồn mở tự vận hành: ModSecurity + OWASP CRS 4 chạy sidecar trong task của `api` và của `web`**. Hiện trạng đúng sự thật: **mã đã xong và đã đo ở máy local (Docker, $0), CHƯA apply lên AWS, CHƯA đo trên EC2.** Mọi con số RAM đều từ Docker arm64 trên máy cá nhân. Xem mục [WAF sidecar](#waf-sidecar-modsecurity--owasp-crs--đã-có-mã-chưa-chạy-trên-aws). Giữ DNS/proxy hiện có và migration SG đã apply.
 
 > **Tài liệu này dành cho ai:** thành viên trong nhóm cần **giải thích được** hệ
 > thống phòng thủ khi bảo vệ đồ án, không cần đọc code.
@@ -19,7 +19,7 @@
 
 **Trạng thái:** nội dung kiến trúc dưới đây mô tả mã sau khi bỏ ba custom NACL.
 Đã apply migration prod ngày 02/11/2026, đọc lại AWS để xác minh association/SG;
-chưa kiểm thử runtime ứng dụng và chưa apply WAF. Xem
+chưa kiểm thử runtime ứng dụng. WAF sidecar mới có mã và số đo local, chưa apply lên AWS. Xem
 [biên bản apply](bien-ban-apply-sg-2026-11-02.md). Báo cáo 12 kịch bản cũ vẫn là
 hồ sơ của cấu hình tại thời điểm đo; [migration guide](nacl-to-sg-migration.md)
 mô tả cách tái thực hiện và đo lại.
@@ -143,7 +143,8 @@ này. Trước khi migration, phải kiểm tra default ACL thật sự còn all
 
 SG và route là các cơ chế chính giới hạn kết nối. Không còn rule DENY 22/5432/8080
 ở subnet, không còn `enable_deny_demo`, và KB-08 chặn một IP không còn là bài
-kiểm thử của thiết kế hiện tại. Chưa có demo chặn IP thay thế bằng WAF; phương án
+kiểm thử của thiết kế hiện tại. WAF sidecar (ModSecurity) chặn theo **nội dung request**
+chứ không theo IP, nên nó không thay thế demo chặn IP này; và nó chưa chạy trên AWS. Phương án
 Cloudflare đã được [rollback](rollback-cloudflare-waf-2026-11-08.md).
 
 **Lịch sử để đối chiếu:** báo cáo cũ có demo rule 50 deny IP và rule ephemeral
@@ -544,6 +545,136 @@ Header này chỉ được tin trong phạm vi `KnownNetworks` = CIDR của VPC.
 
 ---
 
+### WAF sidecar (ModSecurity + OWASP CRS) — đã có mã, chưa chạy trên AWS
+
+> **Trạng thái trung thực:** mã (image, Terraform, CI, script) đã xong trên nhánh
+> `codex/remove-custom-nacl`; **đo ở máy local bằng Docker**, upstream là nginx giả, không phải
+> `api`/`web` thật. **Chưa `apply` lên AWS, chưa merge `main`, chưa đo trên EC2.** Đừng nói với
+> thầy là "WAF đang chạy trên AWS" cho tới khi cửa sổ đo AWS (xem
+> [`VIEC-CON-LAI.md`](VIEC-CON-LAI.md)) thật sự xảy ra.
+
+**Vì sao có:** giảng viên muốn một WAF mã nguồn mở tự vận hành trên EC2 để học được nhiều hơn
+(Cloudflare WAF đã bị rollback vì lý do đó), và cho phép WAF chạy chung máy với web/api.
+
+**Nó nằm ở đâu — làm "sidecar", tức một container đứng ngay trước app, trong cùng một task:**
+
+```
+Internet → ALB :443 (định tuyến theo Host, mặc định 403)
+   ├─ tg-api (cổng host 8080) → [task api]  waf ──link──▶ api:8080  (api KHÔNG mở cổng host)
+   └─ tg-web (cổng host 80)   → [task web]  waf ──link──▶ web:80    (web KHÔNG mở cổng host)
+```
+
+Nói đơn giản: trước đây ALB gọi thẳng vào `api`/`web`. Giờ ALB chỉ gọi được container `waf`;
+container `waf` kiểm tra request rồi mới chuyển cho app. App **không còn cổng nào trên máy**
+để ai đó gọi vòng qua WAF từ bên ngoài.
+
+**Vì sao sidecar, không phải một service WAF riêng:** `api` và `web` không có health check ở tầng
+container, sức khoẻ của chúng **chỉ** do target group của ALB đo. Nếu ALB trỏ sang một service WAF
+riêng thì (a) deploy hỏng không còn ai thấy, (b) `api` chết làm health check qua WAF đỏ và ECS
+**giết nhầm container WAF** (vô tội) trong khi `api` không bị đụng tới. Làm sidecar thì `api` chết
+nghĩa là cả task (kèm WAF) bị thay — đúng như cũ. Cái giá: hai tiến trình WAF trên một máy, tốn
+RAM gấp đôi, nên `instance_type` mặc định của `envs/prod` là **t3.small** (không còn vừa t3.micro).
+
+**Cấu hình đã chốt:** `MODSEC_RULE_ENGINE=On`, `BLOCKING_PARANOIA=1`, ngưỡng điểm bất thường
+inbound 5 / outbound 4 (mặc định của CRS), `MODSEC_RESP_BODY_ACCESS=Off`, 1 worker nginx. Trần body:
+`api` 8 MB (ảnh tối đa 5 MB cộng phần đệm multipart), `web` 1 MB. Image: `devops/waf/Dockerfile`
+(gốc `owasp/modsecurity-crs:4.30.0-nginx-alpine-202610180210`, ghim tag có ngày), đẩy lên ECR repo
+`hushstore-waf`, dùng chung `image_tag` với `api`/`web`.
+
+#### WAF chặn gì
+
+Request có dấu hiệu tấn công theo luật CRS mức nhạy 1 → trả **403** và ghi một dòng log JSON có
+mã luật + điểm bất thường. Đã chạy thật ở local (25/25 ca của `run.sh` đạt):
+
+| Loại | Ví dụ đã thử | Kết quả |
+|---|---|---|
+| SQL injection | `search=' OR 1=1--`; email đăng nhập `a' OR 1=1--`; SQLi kèm Bearer token hợp lệ | 403 |
+| XSS | `{"comment":"<script>alert(1)</script>"}` | 403 |
+| Path traversal | `/..%2f..%2fetc/passwd` | 403 hoặc 400 |
+| Công cụ quét | User-Agent `sqlmap/1.7` | 403 |
+| Body quá 8 MB (api) | JSON 9 MB | 413 |
+
+Và **không chặn nhầm** các luồng thật: đăng nhập thường và mật khẩu có ký tự đặc biệt, refresh
+token, sửa sản phẩm tiếng Việt, tìm kiếm có dấu, upload ảnh 5 MB, JSON gần 1 MB, health check của ALB
+(Host là IP), file Blazor `_framework/*`.
+
+#### WAF KHÔNG chặn gì (nói thẳng khi bảo vệ)
+
+| Không chặn | Vì sao |
+|---|---|
+| **IDOR/BOLA** (khách A xem đơn của khách B) | Request trông hoàn toàn hợp lệ; chỉ code kiểm tra ownership mới chặn được |
+| **Lỗi logic nghiệp vụ, race condition** (dùng voucher quá hạn mức, bán vượt tồn) | WAF không hiểu nghiệp vụ; đã có `LoadProbe` và conditional update ở DB |
+| **Brute force / rate limit** | WAF không làm rate limit (chủ đích). Rate limit đăng nhập nằm ở app |
+| **DDoS, bot** | Không có bot management; tầng 3/4 là AWS Shield Standard |
+| **Rò rỉ ở chiều trả lời** (response) | `MODSEC_RESP_BODY_ACCESS=Off` — WAF không đọc body trả về, nên luật outbound của CRS thực tế không có tác dụng với nội dung |
+| **Trường mật khẩu** ở `/api/auth/login|register|change-password`, `/api/customers`, `/api/employees` | **Cố ý không soi** (exclusion ID 1002): để mật khẩu không lọt vào log và không bị chặn nhầm vì ký tự đặc biệt |
+
+#### Bật/tắt chế độ chặn — biến `waf_rule_engine`
+
+Biến Terraform `waf_rule_engine` (`infra/tf/envs/prod/variables.tf`), giá trị `On` (chặn, **mặc
+định**) hoặc `DetectionOnly` (chỉ ghi log, không chặn — công tắc lùi khi chặn nhầm). Không có
+`Off`: tắt hẳn thì mất cả log. ⚠️ Service có `ignore_changes = [task_definition]`, nên đổi biến
+**chỉ có hiệu lực ở lần deploy kế tiếp** (pipeline lấy revision ACTIVE mới nhất làm khuôn), không
+đổi ngay trên task đang chạy.
+
+#### Chạy bộ kiểm thử local (cổng chặn hồi quy của WAF)
+
+```bash
+devops/waf/test/run.sh                              # On: ca hợp lệ phải 200, ca tấn công phải 403
+RULE_ENGINE=DetectionOnly devops/waf/test/run.sh    # chỉ để gom xem luật nào khớp
+WAF_LOG_OUT=/tmp/waf.log devops/waf/test/run.sh     # lưu log hai WAF trước khi dọn stack
+```
+
+Cần `docker compose`, `curl`, `jq`. Thoát `0` khi mọi ca đạt, `1` khi có ca hỏng (in tên ca).
+Sửa `default.conf.template`, file exclusion hay đổi tag image gốc thì chạy lại trước khi commit.
+
+#### Log
+
+Audit log JSON ra stdout → CloudWatch log group `/ecs/hushstore-waf`, hai stream
+`waf-api` và `waf-web` — demo chỉ cần mở một chỗ. Audit log chỉ ghi các phần `AHZ`: A (thông tin
+giao dịch), H (luật nào khớp, điểm bao nhiêu), Z (kết thúc). **Không** có phần B (header của
+request), nên `Authorization: Bearer …` không lọt vào log. Audit engine `RelevantOnly`: chỉ ghi
+request bị gắn cờ, để không đầy CloudWatch.
+
+#### Giới hạn đã biết (đã quyết định, không phải quên)
+
+- **403 của WAF không có header CORS** → trình duyệt báo lỗi mạng chứ không hiện "bị chặn". Blazor
+  chỉ thấy "network error". Muốn thấy 403 thật thì xem trong tab Network hoặc log WAF.
+- **`proxy_read_timeout` là mặc định nginx, 60 giây** (bằng idle timeout mặc định của ALB). Request
+  nào của `api` chạy quá 60 giây sẽ bị cắt ở WAF.
+- **CRS luật 920450 chặn header `Expect`.** Trình duyệt không gửi nó nên người dùng thật không dính;
+  nhưng `curl -F` với file lớn thì có. Script upload bằng curl phải thêm `-H 'Expect:'`.
+- **Upload đồng thời vẫn dùng được làm DoS:** 20 upload 8 MB cùng lúc có thể vượt trần cứng 512 MiB
+  của container `waf` (đo local: 549–594 MiB). Vấn đề này **chưa được giải quyết**.
+- **Số RAM đo trên Docker arm64 (máy Mac), chưa đo trên EC2 amd64.** Trên amd64 giả lập, RAM sau tải
+  còn tăng qua 3 lượt đo — chưa biết là rò rỉ thật hay do giả lập. Phải đo lại trên EC2.
+- **`terraform.tfvars` có thể ghi đè `instance_type` về `t3.micro`** (file này không thuộc mã
+  commit). Với 2 sidecar, t3.micro không đủ RAM ⇒ chủ dự án **phải kiểm tfvars** trước khi bật stack.
+- **"App không có cổng host" chỉ nghĩa là không tới được từ ngoài máy.** Container khác trên
+  cùng máy vẫn gọi được IP bridge của app. Trên máy chỉ có container của dự án nên không phá yêu cầu
+  "mọi request của người dùng đi qua WAF".
+
+#### Hai cái bẫy im lặng (đừng đụng khi chưa hiểu)
+
+1. **Bẫy XFF:** WAF phải chuyển **nguyên văn** `X-Forwarded-For` (`$http_x_forwarded_for`),
+   **không bao giờ** dùng `$proxy_add_x_forwarded_for`. App tin đúng một hop
+   (`ProxyHeaders.ForwardLimit = 1`); nối thêm IP của WAF vào chuỗi thì mọi người dùng bị coi là
+   cùng một IP và rate limit đăng nhập khoá **tất cả mọi người cùng lúc**. `run.sh` có ca
+   `xff_giu_nguyen` canh điều này (đối chứng âm: evidence local §6).
+2. **Bẫy `containerPort` không `hostPort`:** ở bridge mode, nếu container app khai `containerPort`
+   mà thiếu `hostPort`, ECS gán cho nó một **cổng host động** — tức mở lại đường đi vòng
+   WAF mà ta cố ý đóng. Vì vậy container `api`/`web` **không** khai `portMappings` nào; test Terraform
+   `app_khong_mo_cong_host_de_khong_di_vong_waf` canh điều này.
+
+**Bằng chứng và thiết kế:**
+[đo RAM + soi image](evidence/2026-11-08-waf-ram-spike.md) ·
+[image + bộ kiểm thử local](evidence/2026-11-08-waf-local.md) ·
+[thiết kế](superpowers/specs/2026-11-08-waf-modsecurity-ec2-design.md) ·
+[kế hoạch](superpowers/plans/2026-11-08-waf-modsecurity-ec2.md).
+Kiểm thử trên AWS: **chưa làm**.
+
+---
+
 ## 4. Tấn công nào bị lớp nào chặn
 
 Cột "lớp dự phòng" là chỗ thể hiện *defense in depth*: lớp đầu hỏng thì còn gì.
@@ -589,7 +720,7 @@ Nói thẳng phần này khi bảo vệ sẽ được điểm cao hơn là vờ 
 
 | Không chặn được | Vì sao, và cần gì để chặn |
 |---|---|
-| **Tấn công tầng ứng dụng (XSS, CSRF, SQLi ở tầng HTTP)** | Chưa triển khai WAF thay thế sau khi gỡ phương án Cloudflare. EF tham số hoá, validation và Blazor escape output vẫn cần thiết; xem [giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md) |
+| **Tấn công tầng ứng dụng (XSS, CSRF, SQLi ở tầng HTTP)** | WAF sidecar ModSecurity + CRS **đã có mã và đo local, chưa chạy trên AWS** — khi chạy sẽ chặn payload SQLi/XSS phổ biến bằng 403 (mức nhạy 1). Nó **không** thay EF tham số hoá, validation, Blazor escape output; CSRF và logic nghiệp vụ nó không thấy. Xem [mục WAF](#waf-sidecar-modsecurity--owasp-crs--đã-có-mã-chưa-chạy-trên-aws) |
 | **DDoS quy mô lớn** | Chỉ có AWS Shield Standard (bật sẵn, miễn phí), chặn tầng 3/4. Chặn tầng 7 cần Shield Advanced ($3.000/tháng) hoặc Cloudflare |
 | **Rò rỉ dữ liệu qua egress hợp lệ** | `sg-web` được mở 443 ra Internet để pull ECR. Kẻ chiếm được container có thể dùng chính đường đó đẩy dữ liệu ra. Lọc theo tên miền cần AWS Network Firewall (~$300/tháng) |
 | **Kẻ tấn công đã có credential hợp lệ của user** | Các lớp mạng đều có thể cho họ vào. Chặn được bằng MFA — chưa có |
