@@ -96,8 +96,8 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
-      # fail-fast: bốn image phải cùng một SHA mới deploy được. Nếu một cái
-      # fail thì ba cái kia là rác — dừng luôn để khỏi tốn phút runner.
+      # fail-fast: năm image phải cùng một SHA mới deploy được. Nếu một cái
+      # fail thì bốn cái kia là rác — dừng luôn để khỏi tốn phút runner.
       fail-fast: true
       matrix:
         include:
@@ -119,6 +119,13 @@ jobs:
             build_args: ""
           - image: seeder
             dockerfile: src/Infrastructure/Dockerfile.seeder
+            build_args: ""
+          # Sidecar WAF (ModSecurity + CRS) đứng trước api/web trong cùng task.
+          # Build context vẫn là gốc repo như các image khác. Image này PHẢI
+          # cùng tag $GITHUB_SHA vì bước đăng ký revision bên dưới đổi cả image
+          # `waf` — xem comment ở đó.
+          - image: waf
+            dockerfile: devops/waf/Dockerfile
             build_args: ""
 
     steps:
@@ -383,12 +390,20 @@ jobs:
 
             # Các field bị `del` là READ-ONLY do AWS sinh ra; gửi lại chúng vào
             # register-task-definition là lỗi ValidationException.
-            # Chọn container THEO TÊN, không theo chỉ số [0]. Hôm nay mỗi task
-            # definition chỉ có một container nên hai cách tương đương, nhưng
-            # nếu mai có người thêm một sidecar thì [0] sẽ đổi image của sai
-            # container mà pipeline vẫn xanh.
+            # Chọn container THEO TÊN, không theo chỉ số [0]. api/web nay có hai
+            # container (ứng dụng + sidecar `waf`) nên [0] có thể đổi image của
+            # sai container mà pipeline vẫn xanh.
+            #
+            # Container sidecar `waf` (chỉ có ở api/web, không có ở migrator) cũng
+            # PHẢI nhận image mới trong cùng lượt jq. Bỏ sót thì nó kẹt ở tag cũ
+            # của revision Terraform; chính sách vòng đời ECR rồi sẽ xoá tag đó
+            # và task không pull được image — lỗi chỉ hiện nhiều tuần sau. Với
+            # migrator, nhánh `waf` không khớp container nào nên jq là no-op.
             jq --arg img "${REGISTRY}/hushstore-${key}:${GITHUB_SHA}" --arg name "$key" \
-               '.containerDefinitions |= map(if .name == $name then .image = $img else . end)
+               --arg waf "${REGISTRY}/hushstore-waf:${GITHUB_SHA}" \
+               '.containerDefinitions |= map(if .name == $name then .image = $img
+                                             elif .name == "waf" then .image = $waf
+                                             else . end)
                 | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
                       .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)' \
                "td-${key}.json" > "new-td-${key}.json"
@@ -400,6 +415,16 @@ jobs:
               echo "::error title=Không đổi được image::Không tìm thấy container tên '${key}' trong task definition hushstore-${key}. Kiểm tra modules/ecs/taskdef.tf."
               exit 1
             }
+
+            # Cùng lỗi im lặng đó nhưng cho sidecar: api/web BẮT BUỘC có container
+            # `waf`. Thiếu nó thì jq không đổi gì và grep ở trên vẫn qua vì
+            # container chính đã đổi. Migrator không có WAF nên không kiểm.
+            if [ "$key" != "migrator" ]; then
+              grep -q "hushstore-waf:${GITHUB_SHA}" "new-td-${key}.json" || {
+                echo "::error title=Không đổi được image waf::Không tìm thấy container tên 'waf' trong task definition hushstore-${key}. Kiểm tra modules/ecs/taskdef.tf."
+                exit 1
+              }
+            fi
 
             NEW=$(aws ecs register-task-definition --cli-input-json "file://new-td-${key}.json" \
                     --query 'taskDefinition.taskDefinitionArn' --output text --no-cli-pager)
