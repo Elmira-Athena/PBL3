@@ -15,8 +15,9 @@
 | (a) `OWASP_TAG` ghim | `4.30.0-nginx-alpine-202610180210` (CRS 4.30.0, nginx 1.30.6, ModSecurity 3.0.17) |
 | (a) digest (index đa kiến trúc) | `sha256:873ce68a658d2e3b61484a8a24d215f7d15456e7ce5aec5e7114bf000d743365` |
 | (b) RAM **idle** một WAF | **~50 MiB** (cgroup `memory.current`; `docker stats` báo 40–42 MiB vì trừ page cache) |
-| (b) RAM **đỉnh** một WAF, đúng tải theo kế hoạch | **178 MiB** (arm64), **179–211 MiB** (amd64 giả lập) |
-| (b) đỉnh khi 20 upload 5 MB **đồng thời** (xấu nhất đo được ở 5 MB) | 340–417 MiB |
+| (b) RAM **đỉnh** một WAF, đúng tải theo kế hoạch | **178 MiB** (arm64 native); **179 MiB** (amd64 giả lập, lượt 1; ba lượt liên tiếp tới 211 MiB do `memory.peak` tích luỹ — §4.1) |
+| (b) **chưa chốt** | **đo lại trên EC2 amd64 (Task 9).** Trên amd64 giả lập `memory.current` sau tải tăng 103 → 133 → 163 MiB qua 3 lượt, không tái hiện trên arm64 native (§6, rủi ro 2); chưa biết đó là rò rỉ hay giả lập |
+| (b) đỉnh khi 20 upload 5 MB **đồng thời** (dao động mạnh giữa các lần) | 169–417 MiB (5 lần đo) |
 | (b) đỉnh khi 20 upload 8 MB đồng thời (ở đúng trần `MODSEC_REQ_BODY_LIMIT`) | 549–594 MiB |
 | (b) đề xuất | `waf_memory_reservation = 128`, `waf_memory_hard = 512` |
 | (c) quyết định | **`t3.small`** — `t3.micro` không vừa (xem §5) |
@@ -219,12 +220,25 @@ không gửi XFF               -> backend thấy xff=[192.168.65.1]
 ```
 
 (`192.168.65.1` là IP của Docker Desktop VM — vai "peer trực tiếp" của WAF; trên AWS sẽ là IP của
-ALB.) Hai điểm cần Task sau để mắt tới: (1) giá trị client gửi vào **được giữ nguyên** ở đầu chuỗi,
-nên phía `api` phải quyết định tin bao nhiêu hop; (2) `proto` backend thấy là `http` (WAF nhận HTTP
-từ ALB) nên `X-Forwarded-Proto` của **ALB** bị WAF **ghi đè** bằng `$scheme` = `http` — nếu `api`
-dùng `X-Forwarded-Proto` để biết mình đứng sau HTTPS thì phải đặt `NGINX_X_FORWARDED_PROTO` hoặc
-mount `proxy_backend` riêng. **Chưa đo** trong spike này (không có ALB); đây là cảnh báo suy ra từ
-template, không phải số đo.
+ALB.)
+
+**Mặc định của image VI PHẠM ràng buộc của kế hoạch.** Ràng buộc: WAF phải chuyển tiếp
+`X-Forwarded-For` **NGUYÊN VĂN** (`proxy_set_header X-Forwarded-For $http_x_forwarded_for;`),
+cấm `$proxy_add_x_forwarded_for`, và `ProxyHeaders.ForwardLimit` giữ 1 (C# không đổi). Với mặc định,
+WAF nối thêm IP peer (= IP của ALB) vào cuối chuỗi, nên `api` (ForwardLimit 1 đọc phần tử cuối)
+sẽ lấy **IP của ALB** làm IP client ⇒ mọi người dùng chung một IP, rate limiting theo IP hỏng.
+**Không có env nào chuyển hành vi XFF** (đã kiểm: `proxy_backend.conf.template` gắn cứng
+`$proxy_add_x_forwarded_for`, `env | sort` không có biến XFF). Vì vậy **Task 2 BẮT BUỘC ghi đè
+template** — bind-mount đè `/etc/nginx/templates/includes/proxy_backend.conf.template` (hoặc
+`conf.d/default.conf.template`) với dòng `proxy_set_header X-Forwarded-For $http_x_forwarded_for;`.
+
+`X-Forwarded-Proto`: mặc định `${NGINX_X_FORWARDED_PROTO}` = `$scheme` = `http` (WAF nhận HTTP từ
+ALB) nên giá trị của **ALB** bị ghi đè. **Đã kiểm biến này có thật**: nó xuất hiện trong `env`
+của image (`NGINX_X_FORWARDED_PROTO=$scheme`) và được template tham chiếu (`${NGINX_X_FORWARDED_PROTO}`
+đi qua `envsubst`). Có hai cách: đặt `NGINX_X_FORWARDED_PROTO='$http_x_forwarded_proto'` (nếu dùng
+env, nhớ rằng `envsubst` chỉ thay `${...}` nên giá trị có `$` được giữ nguyên cho nginx — **chưa
+chạy thử** cách này), hoặc chính bản ghi đè template ở trên. Nếu đã phải ghi đè template cho XFF thì
+đặt luôn Proto ở đó. **Chưa đo** với ALB (spike không có ALB); phần Proto là suy ra từ template.
 
 ### 2.6 User và cổng
 
@@ -315,9 +329,11 @@ nginx sống, **không** chứng minh `api`/`web` sống.
 Xác nhận trong `crs-setup.conf` đã sinh: `blocking_paranoia_level=1`, `detection_paranoia_level=1`,
 `inbound_anomaly_score_threshold=5`, `outbound_anomaly_score_threshold=4`.
 
-**Nền tảng:** đo **chính** trên `linux/arm64` (native, không giả lập — số RAM không bị méo);
-chạy lại **một lượt** trên `linux/amd64` giả lập để đối chứng (EC2 là Intel). Hai số khớp nhau
-(178 vs 179 MiB đỉnh ở lượt đầu), nên số arm64 dùng được làm ước lượng cho amd64.
+**Nền tảng:** đo **chính** trên `linux/arm64` (native, không giả lập); chạy lại 3 lượt trên
+`linux/amd64` giả lập để đối chứng (EC2 là Intel). **arm64 chỉ là ước lượng sơ bộ cho amd64, chưa
+phải bằng chứng tương đương:** đỉnh lượt đầu khớp (178 vs 179 MiB) nhưng đó là **một** mẫu amd64;
+idle amd64 cao hơn (58 vs 46–51 MiB), `memory.current` sau tải cao hơn (103 vs 51 MiB), và amd64 tăng
+dần qua các lượt (§4.1, §6 rủi ro 2) còn arm64 thì không. Số chốt phải đo lại trên amd64 thật.
 
 **Cách đo:** `docker stats` chỉ cho điểm mẫu mỗi ~2 giây và **trừ page cache**, nên bỏ lỡ đỉnh
 (mẫu cao nhất chỉ 68 MiB trong khi đỉnh thật 178 MiB). Số đỉnh lấy từ **cgroup v2
@@ -336,6 +352,18 @@ multipart 5 MB (`-H 'Expect:'`), xáo trộn ngẫu nhiên.
 | Đỉnh, 1 lượt 5000 request | **178 MiB** (lượt 1); 136 MiB (lượt đo nháp trước khi sửa backend) | **179 MiB** |
 | Sau lượt tải, `memory.current` | 51 MiB | 103 MiB |
 | Mã HTTP | `4500×200`, `250×403`, `20×200` | `4500×200`, `250×403`, `20×200` |
+
+**amd64 giả lập, ba lượt 5000 request liên tiếp trên cùng một container** (`memory.peak` là đỉnh
+**tích luỹ** từ lúc khởi động, không đặt lại giữa các lượt):
+
+| Lượt | `memory.current` sau tải | `memory.peak` tích luỹ |
+|---|---|---|
+| 1 | 103 MiB | 179 MiB |
+| 2 | 133 MiB | 187 MiB |
+| 3 | 163 MiB | 211 MiB |
+
+Con số 211 MiB là cao nước của lượt 3 chứ không phải một lần chạy độc lập; vì baseline tăng theo
+lượt, nó có thể phản ánh phần tăng chưa giải thích được (§6, rủi ro 2) chứ không phải tải thuần.
 
 **Chặn đúng:** 250/250 payload tấn công bị `403`, **0/4500** GET thường bị chặn (không dương tính
 giả ở PL1 với đường dẫn `/api/products`; đó không phải là kiểm toàn bộ ứng dụng, chỉ kiểm đúng mẫu
@@ -423,7 +451,7 @@ cắt, nhưng đỉnh đồng thời của tất cả là điều chưa ai đo.
    được buffer trọn trước khi proxy, nên backend chậm ⇒ giữ RAM lâu hơn ⇒ đỉnh có thể cao hơn số
    đo ở đây.
 5. **Chỉ PL1.** Số RAM ở PL cao hơn (nhiều luật hơn) không đo.
-6. `X-Forwarded-Proto` sau ALB (§2.5) chưa đo — chỉ suy ra từ template.
+6. `X-Forwarded-Proto` sau ALB (§2.5) chưa đo — chỉ suy ra từ template; cách đặt qua env cũng chưa chạy thử.
 
 ## 7. Cách tái hiện
 
