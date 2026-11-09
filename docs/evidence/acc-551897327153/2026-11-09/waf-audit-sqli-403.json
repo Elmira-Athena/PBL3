@@ -1,0 +1,22 @@
+{
+ "time": "Mon Nov  9 08:29:48 2026",
+ "client_ip": "117.3.54.230",
+ "unique_id": "179421298853.728852",
+ "request": {
+  "method": "GET",
+  "uri": "/api/products?search=%27%20OR%201%3D1--&t9=sqli"
+ },
+ "http_code": 403,
+ "rules": [
+  {
+   "id": "942100",
+   "msg": "SQL Injection Attack Detected via libinjection",
+   "data": "Matched Data: s&1c found within ARGS:search: ' OR 1=1--"
+  },
+  {
+   "id": "949110",
+   "msg": "Inbound Anomaly Score Exceeded (Total Score: 5)",
+   "data": ""
+  }
+ ]
+}
