@@ -226,3 +226,16 @@ variable "stop_cron" {
   type        = string
   default     = "cron(0 0 * * ? *)"
 }
+
+# Bắt buộc phải khai ở đây: envs/dev/main.tf là symlink sang ../prod/main.tf,
+# và main.tf đọc var.waf_rule_engine. Giữ khớp với envs/prod/variables.tf.
+variable "waf_rule_engine" {
+  description = "Chế độ ModSecurity của 2 sidecar WAF: On (chặn) hoặc DetectionOnly (chỉ ghi log) — công tắc lùi khi chặn nhầm"
+  type        = string
+  default     = "On"
+
+  validation {
+    condition     = contains(["On", "DetectionOnly"], var.waf_rule_engine)
+    error_message = "waf_rule_engine chỉ được On hoặc DetectionOnly."
+  }
+}
