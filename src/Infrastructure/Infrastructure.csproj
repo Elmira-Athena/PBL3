@@ -41,8 +41,12 @@
            một thứ không deploy. Đừng đọc dòng này thành "đã vá một lỗ hổng production".
 
            Nâng 9.0.0 -> 10.0.10 (không phải 9.0.18) vì project TargetFramework là
-           net10.0; ở lại nhánh 9.x là giữ một runtime lib lệch band với framework. -->
-      <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+           net10.0; ở lại nhánh 9.x là giữ một runtime lib lệch band với framework.
+
+           2026-11-09: nâng 10.0.10 -> 10.0.13 và ghim thêm Pkcs 10.0.13 — cùng lý do
+           và cùng advisory như ghi chú ở src/Service/Service.csproj. -->
+      <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+      <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     </ItemGroup>
 
 </Project>
