@@ -1,0 +1,28 @@
+### WAF-03: XFF qua rate limit đăng nhập (5/60s/IP) từ 2 IP thật + RAM thật trên EC2
+
+== SSM command d9985958-7560-46dd-b33d-fa77b02ebb59 trên i-0986ec3e5c260db59 (t3.small) — gửi lúc 2026-11-09T15:24:41.707000+07:00
+-- Lệnh:
+[
+    "echo egress_ip=$(curl -s https://checkip.amazonaws.com)",
+    "for i in 1 2 3 4 5 6 7; do curl -s -o /dev/null -w '%{http_code} ' --resolve api.hushstore.io.vn:443:18.140.49.203 -H 'Content-Type: application/json' -d '{\"email\":\"t9-ratelimit-probe@example.invalid\",\"password\":\"Sai@12345\"}' https://api.hushstore.io.vn/api/auth/login; done; echo",
+    "docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'",
+    "free -m | head -3"
+]
+-- Output nguyên văn:
+egress_ip=47.130.228.142
+400 400 400 400 400 429 429 
+ecs-hushstore-api-5-waf-d28f82ee8fb5cc87f901 62.69MiB / 512MiB
+ecs-hushstore-web-5-waf-a49e93c0c5d5cbf10200 40.09MiB / 512MiB
+ecs-hushstore-web-5-web-e8f6ffca8982d095d701 3.426MiB / 192MiB
+ecs-hushstore-api-5-api-ceb4a792cb93c4956200 149.1MiB / 512MiB
+ecs-agent 26.01MiB / 1.869GiB
+               total        used        free      shared  buff/cache   available
+Mem:            1913         502          71          54        1338        1196
+Swap:           2047           0        2047
+
+
+== Ngay sau đó, từ máy đo (IP công khai 117.3.54.230), cùng email không tồn tại:
+$ for i in 1 2; do curl -s -o /dev/null -w '%{http_code} ' --resolve api.hushstore.io.vn:443:18.140.49.203 -H 'Content-Type: application/json' -d '{"email":"t9-ratelimit-probe@example.invalid","password":"Sai@12345"}' https://api.hushstore.io.vn/api/auth/login; done
+400 400
+
+Kết luận: IP 47.130.228.142 (NAT) bị 429 sau 5 lần; IP 117.3.54.230 không bị 429 ⇒ app phân vùng rate limit theo IP client thật, không theo IP WAF/ALB.
