@@ -3,6 +3,54 @@
 ### ALB: hushstore-alb-999297110.ap-southeast-1.elb.amazonaws.com → 18.140.49.203 (dig). Gọi bằng curl --resolve vì CNAME alb trên Cloudflare còn trỏ ALB cũ.
 ### Payload (URL-encoded trong script): SQLi  search=' OR 1=1--   ·  XSS  search=<script>alert(1)</script>   ·  scanner  User-Agent: sqlmap/1.7
 
+CÁCH ĐỌC FILE NÀY
+-----------------
+Cùng một script, chạy hai lần, chỉ khác chế độ của WAF:
+
+  • Lần 1 — DetectionOnly: WAF CHỈ GHI LOG, không chặn. Mục đích: xem request
+    thật có bị WAF "nghi" nhầm không, trước khi bật chặn. Vì không chặn, cả
+    request tấn công cũng ra 200 — điều cần xem là log ghi rule gì (waf-01).
+  • Lần 2 — On: WAF CHẶN THẬT. Request tấn công phải ra 403, request thật vẫn
+    phải ra như lần 1.
+
+Mỗi dòng output = <tên phép thử>  <mã HTTP trả về>. Ý nghĩa từng dòng:
+
+  Dòng               Kiểm cái gì                                  Lần 1   Lần 2   Đạt?
+  ─────────────────  ───────────────────────────────────────────  ──────  ──────  ────
+  web /              trang chủ Blazor qua WAF của task web        200     200     ✓
+  web boot.json      file tĩnh Blazor                             404     404     ✓ (*)
+  api health/ready   đúng đường health check của ALB, chạm DB     200     200     ✓
+  api products       danh sách sản phẩm có phân trang             200     200     ✓
+  api categories     endpoint danh mục                            405     405     ✓ (*)
+  api search VN      tìm kiếm tiếng Việt có dấu (UTF-8)           200     200     ✓
+  login              đăng nhập admin bằng JSON, lấy JWT           OK      OK      ✓
+  admin orders       API cần quyền admin, gửi Bearer token        200     200     ✓
+  SQLi               search=' OR 1=1--                            200     403     ✓
+  XSS                search=<script>alert(1)</script>             200     403     ✓
+  scanner UA         User-Agent: sqlmap/1.7                       200     403     ✓
+
+  (*) 404 và 405 là phản hồi của CHÍNH APP (đường dẫn không có / sai method),
+      không phải WAF: hai lần như nhau, và trong log WAF (waf-01) các request
+      này KHÔNG khớp rule CRS nào. Chúng không ảnh hưởng kết luận.
+
+KẾT LUẬN
+  • 8 luồng thật: kết quả giống hệt nhau ở cả hai chế độ ⇒ bật chặn không làm
+    hỏng người dùng thật (0 chặn nhầm trên các luồng đã thử).
+  • 3 request tấn công: 200 → 403 khi chuyển sang On ⇒ WAF đang chặn thật.
+  • Rule đã khớp (đọc từ log gốc waf-01):
+      SQLi     → 942100 (SQL Injection via libinjection) + 949110 (vượt ngưỡng điểm)
+      XSS      → 941100, 941110, 941160, 941390 + 949110
+      scanner  → 913100 (công cụ quét) + 949110
+    949110 nghĩa là tổng điểm anomaly ≥ 5 — đúng điều kiện để chặn ở chế độ On.
+
+GIỚI HẠN CỦA PHÉP THỬ NÀY
+  • Mới thử luồng ĐỌC + đăng nhập. Các luồng GHI (sửa sản phẩm có HTML, upload
+    ảnh, giỏ hàng, checkout, phiếu nhập/xuất) chưa đi qua WAF thật trên AWS —
+    chúng chỉ được thử ở local bằng devops/waf/test/run.sh với upstream giả.
+  • Dòng cuối "403 có CORS? 0": phản hồi 403 của WAF không mang header CORS,
+    nên trình duyệt (Blazor) sẽ báo "lỗi mạng" thay vì "403". Đây là giới hạn
+    đã biết và đã ghi trong docs/bao-mat-he-thong.md, không phải lỗi mới.
+
 == Lần 1 — 15:21:54 (+07), waf_rule_engine = DetectionOnly (task def api:5 / web:5)
 web /             200
 web boot.json     404
