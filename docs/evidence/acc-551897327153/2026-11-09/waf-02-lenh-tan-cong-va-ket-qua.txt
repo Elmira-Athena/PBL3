@@ -1,0 +1,33 @@
+### WAF-02: lệnh tấn công + luồng thật qua ALB → WAF → app, 2026-11-09
+### Script: waf-02-probe.sh (cùng thư mục). Chạy: ADMIN_PASSWORD=… bash waf-02-probe.sh <IP ALB>
+### ALB: hushstore-alb-999297110.ap-southeast-1.elb.amazonaws.com → 18.140.49.203 (dig). Gọi bằng curl --resolve vì CNAME alb trên Cloudflare còn trỏ ALB cũ.
+### Payload (URL-encoded trong script): SQLi  search=' OR 1=1--   ·  XSS  search=<script>alert(1)</script>   ·  scanner  User-Agent: sqlmap/1.7
+
+== Lần 1 — 15:21:54 (+07), waf_rule_engine = DetectionOnly (task def api:5 / web:5)
+web /             200
+web boot.json     404
+api health/ready  200
+api products      200
+api categories    405
+api search VN     200
+login             OK (token 712 ký tự)
+admin orders      200
+SQLi              200
+XSS               200
+scanner UA        200
+
+== Lần 2 — 15:29:48 (+07), waf_rule_engine = On (task def api:6 / web:6)
+web /             200
+web boot.json     404
+api health/ready  200
+api products      200
+api categories    405
+api search VN     200
+login             OK (token 712 ký tự)
+admin orders      200
+SQLi              403
+XSS               403
+scanner UA        403
+403 có CORS?      0   (curl -D - … -H 'Origin: https://hushstore.io.vn' … | grep -ci access-control-allow-origin)
+
+Đối chiếu log: các dòng có t9=sqli / t9=xss / t9=scanner trong waf-01-cloudwatch-log-goc.txt.
