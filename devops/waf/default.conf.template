@@ -1,0 +1,39 @@
+# Server block của WAF — THAY HẲN bản default.conf.template của image owasp/modsecurity-crs.
+# Đi qua envsubst lúc khởi động: chỉ ${BIEN} được thay; $bien (biến nginx) giữ nguyên.
+#
+# Env BẮT BUỘC (thiếu một biến ⇒ envsubst để nguyên "${X}" ⇒ nginx không khởi động):
+#   PORT                  cổng nghe, 8080
+#   BACKEND               upstream, ví dụ http://api:8080 hoặc http://web:80
+#   CLIENT_MAX_BODY_SIZE  trần body của nginx, ví dụ 8m (api) / 1m (web) — image không có env này
+#   SET_REAL_IP_FROM      MỘT CIDR tin cậy (CIDR của VPC; local: subnet của compose)
+#
+# Cố ý KHÔNG có:
+#   - cổng 8443/TLS của image: ALB terminate TLS, WAF chỉ nhận HTTP.
+#   - location /healthz nội bộ của image: health check của ALB phải tới upstream, nếu không
+#     ALB thấy "khoẻ" trong khi api/web đã chết.
+
+server {
+    listen ${PORT} default_server;
+    server_tokens off;
+
+    # nginx từ chối body quá trần bằng 413 TRƯỚC khi ModSecurity đọc body.
+    client_max_body_size ${CLIENT_MAX_BODY_SIZE};
+
+    # Chỉ đổi $remote_addr (IP client trong audit log) khi peer là ALB trong VPC.
+    # KHÔNG ảnh hưởng header chuyển đi: bên dưới dùng $http_x_forwarded_for (header gốc).
+    set_real_ip_from ${SET_REAL_IP_FROM};
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+
+    location / {
+        # Chuyển NGUYÊN VĂN ba header ALB đặt. Cấm $proxy_add_x_forwarded_for: nó nối IP của
+        # ALB vào cuối chuỗi, `api` (ProxyHeaders.ForwardLimit = 1, đọc phần tử cuối) sẽ coi
+        # IP ALB là IP client ⇒ rate limiting theo IP gom mọi người dùng vào một phân vùng.
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $http_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+
+        proxy_http_version 1.1;
+        proxy_pass ${BACKEND};
+    }
+}

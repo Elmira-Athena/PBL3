@@ -111,7 +111,7 @@ data "aws_iam_policy_document" "assume_deploy" {
 # Vì sao cần giá trị thứ hai: `terraform test` phải chạy được ở CẢ HAI thời điểm —
 # lúc mở PR (giá trị `pull_request`) và lúc code đã vào `main`
 # (`ref:refs/heads/main`). Chỉ nhận `pull_request` thì sau merge không còn lần
-# kiểm nào, và các assertion bảo mật (NACL stateless, SG không mở 22, IAM least
+# kiểm nào, và các assertion bảo mật (SG giới hạn đúng nguồn/đích, không mở 22, IAM least
 # privilege) chỉ còn tồn tại trên máy cá nhân.
 #
 # Điều này KHÔNG mở rộng bán kính thiệt hại: tập người lấy được token push-main

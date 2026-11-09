@@ -21,9 +21,8 @@ resource "aws_vpc" "this" {
 # thì AWS gán default SG cho nó, và instance ấy lập tức nằm trong một SG mở.
 #
 # Khai báo resource này KHÔNG tạo SG mới — Terraform adopt cái AWS đã tạo, rồi
-# xoá sạch rule của nó. Khối ingress/egress để TRỐNG là cách diễn đạt "không có
-# rule nào", khác với việc bỏ hẳn khối (bỏ hẳn thì Terraform không quản rule và
-# giữ nguyên mặc định của AWS).
+# xoá sạch rule của nó. ingress = [] và egress = [] khai báo tường minh
+# rằng default SG không được có rule nào, và kiểm được ngay lúc plan.
 #
 # Không ảnh hưởng gì tới hệ thống: cả 3 SG thật (sg-alb, sg-web, sg-rds) đều
 # được khai báo tường minh ở module `security`, không resource nào của ta dùng
@@ -31,7 +30,8 @@ resource "aws_vpc" "this" {
 resource "aws_default_security_group" "this" {
   vpc_id = aws_vpc.this.id
 
-  # Cố ý KHÔNG có ingress và egress. Đây là toàn bộ mục đích của resource này.
+  ingress = []
+  egress  = []
 
   tags = { Name = "${var.project}-default-KHONG-DUNG" }
 }
@@ -258,21 +258,7 @@ resource "aws_security_group" "vpce" {
   tags = { Name = "${var.project}-sg-vpce" }
 }
 
-# Nguồn là CIDR của app tier, KHÔNG phải sg-web. Module security phụ thuộc vào
-# module network để lấy vpc_id; tham chiếu ngược lại sg-web ở đây sẽ tạo vòng
-# lặp giữa hai module. CIDR /23 của app tier là đúng tập hợp cần mở, không rộng
-# hơn: chỉ ECS container instance nằm trong đó.
-resource "aws_vpc_security_group_ingress_rule" "vpce_443" {
-  count = var.enable_ecr_endpoints ? 1 : 0
-
-  security_group_id = aws_security_group.vpce[0].id
-  description       = "HTTPS tu app tier toi ECR endpoint"
-  cidr_ipv4         = local.app_tier_cidr
-  ip_protocol       = "tcp"
-  from_port         = 443
-  to_port           = 443
-}
-
+# Ingress 443 được quản lý ở module security để tham chiếu trực tiếp sg-web.
 # Không khai egress rule nào: SG có state nên endpoint vẫn trả lời được, và
 # endpoint không tự khởi tạo kết nối đi đâu cả.
 

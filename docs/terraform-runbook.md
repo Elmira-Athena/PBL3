@@ -1,8 +1,37 @@
 # Terraform Runbook — HushStore
 
+**Prod đã apply migration NACL ngày 02/11/2026:** sáu subnet gắn default ACL,
+custom ACL/rule đã xóa và SG đã được xác minh; WAF chưa apply. Xem
+[biên bản triển khai](bien-ban-apply-sg-2026-11-02.md). Serving stack vẫn tắt.
+
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
+
 Hạ tầng AWS của HushStore, dựng bằng Terraform. Tài liệu này là thứ cần đọc
-trước khi chạm vào hệ thống, và mọi con số trong đây đều đo được từ lần chạy
-thật chứ không phải ước lượng.
+trước khi chạm vào hệ thống. Các phép đo bên dưới giữ nguyên theo thời điểm
+được ghi; chúng không phải kết quả kiểm chứng cho revision mạng hiện tại.
+
+**Revision mạng hiện tại:** dùng Security Group để lọc traffic; cả 6 subnet
+dùng default network ACL do AWS tạo, allow-all hai chiều và không do Terraform
+quản lý. Chuyển từ state cũ phải theo [quy trình hai giai đoạn](nacl-to-sg-migration.md)
+trước khi apply cấu hình cuối; không áp dụng trực tiếp plan xoá custom ACL.
+
+**Chốt script 02/11/2026:** `up.sh`/`down.sh` và `hs_apply` dừng trước thay đổi
+nếu state còn custom NACL hoặc không đọc được state. Hoàn tất migration bằng
+hai cây riêng; không bỏ chốt để chạy script. Phương án WAF Cloudflare đã gỡ, không
+còn flag origin lockdown để bật. ECS Service vẫn bỏ qua task-definition diff để CI
+quản lý; thay cấu hình task cần kiểm tra revision đang được Service sử dụng.
+
+| Security Group | Inbound | Outbound |
+|---|---|---|
+| `alb` | TCP 80/443 từ `0.0.0.0/0` | TCP 80/8080 tới `web` |
+| `web` | TCP 80/8080 từ `alb` | TCP 5432 tới `rds`; TCP 80/443 tới `0.0.0.0/0` |
+| `rds` | TCP 5432 từ `web` | Rỗng; SG stateful cho phép phản hồi |
+| `default` | Rỗng | Rỗng |
+| ECR endpoint (tuỳ chọn) | TCP 443 chỉ từ `web` | Rỗng; phản hồi stateful |
+
+ECR interface endpoints giữ nguyên công tắc và mặc định tắt; không cần bật
+để đổi sang SG. Không có rule SSH hay rule mở dải ephemeral; không còn demo
+chặn IP bằng ACL. Default ACL và default SG là hai resource khác nhau.
 
 **Nguyên tắc chi phí:** NAT Gateway và ALB tính theo giờ và không có bậc free
 tier. Mặc định cả hai đều **tắt**. Bật lên khi làm việc, tắt ngay khi xong.
@@ -34,7 +63,6 @@ không cần plugin.
 | `enable_alb` | Serving stack: ALB + 2 target group + 2 listener + 2 listener rule + 2 ECS service + waiter ACM | **$0.0225/giờ** |
 | `instance_count` | 0 hoặc 1 EC2 container instance | **$0.0132/giờ** |
 | `enable_flow_logs` | VPC Flow Logs (chỉ REJECT) | phí ingest CloudWatch |
-| `enable_deny_demo` | NACL rule 50 DENY `my_ip` | $0 |
 
 RDS bật/tắt bằng AWS CLI, không phải bằng Terraform — `aws rds stop-db-instance`
 giữ nguyên instance và chỉ ngừng tính giờ compute. Storage 20GB vẫn tính
@@ -99,10 +127,8 @@ Tiết kiệm ~4 phút mỗi lần bật.
 ngay khi thấy instance vào `Terminating:Wait`, nên không phải chờ heartbeat và
 apply không bị treo. Xem mục dưới để hiểu vì sao hook này luôn xuất hiện.
 
-**`down.sh` reset luôn `enable_flow_logs` và `enable_deny_demo` về false.** Cái
-đầu để quên thì tốn phí ingest CloudWatch. Cái sau tốn $0 nhưng tệ hơn: lần bật
-sau nó chặn đúng IP của mình ở tầng NACL, và triệu chứng là browser timeout —
-trông y như hạ tầng lỗi.
+**`down.sh` reset `enable_flow_logs` về false** để tránh phí ingest
+CloudWatch khi để quên. Không còn toggle demo chặn IP ở tầng mạng.
 
 Log của mọi lần apply/destroy nằm ở `infra/tf/.local/logs/` (gitignored).
 
@@ -645,7 +671,7 @@ order tham chiếu tới product thì `DELETE` sẽ vướng khoá ngoại.
 | Gọi ALB bằng tên DNS thô trả **503** thay vì 403 | Allowlist Host **chưa có hiệu lực** — default action vẫn forward | Đây là lỗi. Kiểm `aws elbv2 describe-rules` |
 | `terraform apply` treo 30 phút rồi fail ở ACM | Record validation chưa tồn tại | Thêm CNAME vào Cloudflare trước; waiter đã được gate theo `enable_alb` nên chỉ ảnh hưởng khi bật serving stack |
 | State lock treo, `OperationTypeApply` | Một tiến trình apply bị kill giữa đường | Kiểm không còn process terraform nào, đối chiếu thời điểm ghi state cuối trên S3, rồi `terraform force-unlock <ID>` |
-| Browser timeout với MỌI URL, nhưng `status.sh` báo tất cả healthy | `enable_deny_demo = true` — NACL rule 50 đang chặn `my_ip` ở tầng mạng | `status.sh` in cảnh báo này ở đầu bảng. Đặt `enable_deny_demo = false` rồi apply. `down.sh` tự reset |
+| Browser timeout với MỌI URL, nhưng `status.sh` báo tất cả healthy | Cần kiểm DNS, listener, target health, SG và route; default ACL không lọc port | Đối chiếu chuỗi `alb → web → rds` ở đầu tài liệu; nếu vừa di chuyển state, xem [quy trình chuyển ACL sang SG](nacl-to-sg-migration.md) |
 | Browser không mở được ngay sau `up.sh`, curl trả `000` | Record `alb` ở Cloudflare còn trỏ vào ALB của cửa sổ trước — tên DNS của ALB đổi mỗi lần tạo lại | `up.sh` đã so sánh và in giá trị mới cần dán. Sửa đúng một record `alb`, chờ ~1-2 phút |
 | Deploy có downtime ~20–40s | Static host port + 1 instance, đúng như thiết kế | Xem mục đánh đổi trong spec |
 | Không nhận được cảnh báo nào từ Lambda cost-guard qua email | `aws_sns_topic_subscription` (protocol email) đứng ở `PendingConfirmation` cho tới khi có người bấm link xác nhận — bình thường ngay sau khi tạo, không phải lỗi apply | Mở hộp thư `dacvinh2322006@gmail.com`, tìm mail xác nhận từ AWS SNS, bấm link. Chưa xác nhận thì mọi cảnh báo sau này đều rơi vào khoảng không |
@@ -696,7 +722,7 @@ phải bọc ngoặc nhọn: `$ACCT:role` bị zsh hiểu `:r` là modifier và 
 | ~~`seeder_image_tag` ghim tay~~ **ĐÃ XONG 2026-08-24** | — | Cả 4 image đã cùng tag `2941d316…` và `seeder_image_tag` đã bỏ ghim. Task seeder chạy exit 0 với image lấy từ `image_tag`, xác nhận biến hoạt động đúng |
 | **IAM user `hushstore-ops` không có MFA** | Account mới cố ý dùng IAM user thay vì SSO, vì bật Identity Center buộc vào Organization và làm **hết hạn credit** (AWS Support xác nhận 2026-08-23) | Đo 2026-08-24: `AdministratorAccess` gắn trực tiếp, **0 MFA device**, **1 access key dài hạn** tạo 02:09 UTC. Đây là lỗ hổng lớn nhất còn lại của account. **Bật MFA sửa được ngay và KHÔNG ảnh hưởng credit** — chỉ Organization/Identity Center mới ảnh hưởng. Ghi chú: user `athena232` ở dòng này trước đây thuộc account CŨ `667836586836`, đã bị dọn cùng account |
 | **Account dùng chung, 2 người có Admin** | Account chia với bạn trong nhóm | Đo 2026-08-24: 4 IAM user — `hushstore-ops` (Admin, không MFA), `DBT` (Admin, **có MFA**), `Nhincc` và `ThinhDB` (chỉ `IAMUserChangePassword`). Nhóm không kiểm soát ba user kia, nên bán kính thiệt hại của **account** lớn hơn bán kính của **hạ tầng** |
-| **Default security group của VPC chưa bị khoá** | Chưa để ý tới; phát hiện khi chạy lại kiểm thử 2026-08-24 | AWS tạo một SG `default` cho mỗi VPC, không cho xoá, mặc định cho phép mọi traffic từ chính nó (gồm 22). Hiện **0 ENI** dùng nên chưa có bề mặt thật. Bịt bằng `aws_default_security_group` với ingress/egress **rỗng** — một resource, $0 |
+| **Default security group — ghi nhận cũ 2026-08-24** | Khi đo cũ, SG chưa bị khoá và có **0 ENI** dùng | Cấu hình hiện tại có `aws_default_security_group` với ingress/egress **rỗng**. Revision tài liệu này không đo lại AWS; xác minh rule thật sau apply |
 | **3 package NuGet có CVE mức High** | Đã quyết định để sau khi xong hạ tầng | `AutoMapper` 16.0.0→16.1.1 · `Microsoft.OpenApi` 2.4.1→2.7.5 · `System.Security.Cryptography.Xml` 9.0.0→9.0.18 (Infrastructure) và 10.0.0→10.0.10 (Service) — **hai project đang lệch version, nên hợp nhất luôn khi vá**. Là 3 package chứ không phải 4; con số 4 trước đây đếm theo dòng cảnh báo. Cả 3 là DoS qua đệ quy không kiểm soát, CVSS 7.5, đánh giá không tới được trong codebase này |
 
 ## Chi phí

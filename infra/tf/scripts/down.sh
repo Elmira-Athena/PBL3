@@ -26,6 +26,7 @@ case "${1:-}" in -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0
 T_ALL=$SECONDS
 hs_tf_check
 hs_sso_check
+hs_nacl_migration_check
 
 WINDOW="$(hs_window_seconds)"
 
@@ -81,16 +82,10 @@ stop_watcher
 
 hs_head "BƯỚC 3/5 — NAT Gateway + EIP"
 hs_tfvar_set enable_nat false
-# Reset luôn hai toggle demo. enable_flow_logs tính phí ingest CloudWatch nếu để
-# quên. enable_deny_demo thì $0 nhưng tệ hơn: lần bật sau nó chặn đúng IP của
-# mình ở tầng NACL, và triệu chứng là browser timeout — trông y như hạ tầng lỗi.
+# Reset flow logs để không tính phí ingest CloudWatch khi để quên.
 if [ "$(hs_tfvar_get enable_flow_logs)" = "true" ]; then
   hs_tfvar_set enable_flow_logs false
   hs_info "tắt luôn flow logs (tính phí ingest CloudWatch)"
-fi
-if [ "$(hs_tfvar_get enable_deny_demo)" = "true" ]; then
-  hs_tfvar_set enable_deny_demo false
-  hs_info "tắt luôn NACL deny demo (để lần bật sau không tự chặn IP của mình)"
 fi
 hs_apply "xoá NAT + EIP"
 

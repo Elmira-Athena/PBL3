@@ -5,6 +5,7 @@ resource "aws_lb" "this" {
   name               = "${var.project}-alb"
   load_balancer_type = "application"
   internal           = false
+  ip_address_type    = "ipv4"
   security_groups    = [var.alb_sg_id]
   subnets            = var.public_subnet_ids
 
@@ -24,13 +25,13 @@ resource "aws_lb" "this" {
   #
   # LƯU Ý — nó KHÔNG chống giả mạo X-Forwarded-For: ALB APPEND IP client vào
   # cuối chuỗi XFF chứ không thay thế chuỗi client gửi, nên giá trị client tự
-  # chèn vẫn tới được container (nằm ở BÊN TRÁI). Thứ thật sự chặn giả mạo là
-  # phía ASP.NET: ForwardedHeadersMiddleware đọc XFF từ PHẢI sang, và
+  # chèn vẫn tới được container (nằm ở BÊN TRÁI). ASP.NET đọc từ PHẢI sang, và
   # ForwardedHeadersOptions.ForwardLimit đang để mặc định = 1
   # (src/API/Program.cs chỉ set ForwardedHeaders + KnownNetworks/KnownProxies
-  # .Clear()), nên nó chỉ lấy đúng 1 entry phải nhất — entry do ALB thêm, tức
-  # IP client thật. Code nào đọc XFF phải lấy phần tử CUỐI, tuyệt đối không lấy
-  # phần tử đầu.
+  # .Clear()), nên chỉ lấy entry phải nhất do ALB thêm: IP kết nối trực tiếp
+  # tới ALB, tức Cloudflare edge khi DNS proxied, KHÔNG phải IP người dùng.
+  # Không dùng XFF/CF-Connecting-IP do client tự gửi làm danh tính đáng tin
+  # nếu chưa kiểm soát và xác thực toàn bộ chuỗi proxy.
   drop_invalid_header_fields = true
 
   tags = { Name = "${var.project}-alb" }
@@ -38,7 +39,8 @@ resource "aws_lb" "this" {
 
 # ─── TARGET GROUPS ───────────────────────────────────────────────
 # target_type = instance vì task dùng bridge network mode với static host
-# port. ECS service tự đăng ký/rút instance khỏi target group.
+# port (cổng host 80/8080 thuộc container `waf` — sidecar WAF đứng trước web/api,
+# xem modules/ecs/taskdef.tf). ECS service tự đăng ký/rút instance khỏi target group.
 resource "aws_lb_target_group" "web" {
   count = var.enable_alb ? 1 : 0
 
@@ -142,21 +144,15 @@ resource "aws_lb_listener" "https" {
   ssl_policy = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 
   # ALLOWLIST HOST HEADER — default action là 403, KHÔNG forward.
-  # Chỉ 2 rule host-based bên dưới mới được vào target group. Nếu default action
-  # forward sang tg-web thì bất kỳ ai biết tên DNS thô của ALB
-  # (<project>-alb-*.ap-southeast-1.elb.amazonaws.com) đều vào được origin,
-  # bỏ qua hoàn toàn Cloudflare (WAF, rate limit, che IP gốc).
+  # Chỉ 2 rule bên dưới mới được vào target group. Host allowlist chỉ chặn
+  # Host lạ: người gọi trực tiếp vẫn giả được Host hợp lệ.
   #
   # HEALTH CHECK KHÔNG BỊ ẢNH HƯỞNG (câu hỏi đầu tiên ai đọc cũng sẽ có): ALB
   # gọi health check THẲNG tới target theo IP:port của instance, không đi qua
   # listener và không qua listener rule, nên nó không mang Host header nào cần
   # match và không bao giờ nhận 403 này.
   #
-  # Test trước khi cắt DNS sang Cloudflare: gọi ALB DNS thô giờ trả 403, phải
-  # giả Host header —
-  #   curl --resolve hushstore.io.vn:443:<IP-ALB> https://hushstore.io.vn/
-  # (cách này cert vẫn valid). Hoặc: curl -k -H "Host: hushstore.io.vn"
-  # https://<alb-dns>/ — ALB match rule theo Host header, không theo SNI.
+  # --resolve với Host hợp lệ vẫn tới được origin.
   default_action {
     type = "fixed-response"
 
@@ -168,7 +164,7 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# Host-based routing: api.hushstore.io.vn -> container API port 8080.
+# Host-based routing: api.hushstore.io.vn -> cổng host 8080 (container waf của task api).
 # Nhờ rule này nginx trong image web KHÔNG cần block proxy_pass nào.
 resource "aws_lb_listener_rule" "api" {
   count = var.enable_alb ? 1 : 0

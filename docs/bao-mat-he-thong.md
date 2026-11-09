@@ -1,4 +1,6 @@
-# Bảo mật hệ thống HushStore — bảy lớp phòng thủ
+# Bảo mật hệ thống HushStore — sáu nhóm phòng thủ
+
+**WAF 08/11/2026:** phương án Cloudflare WAF đã được gỡ (xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md)) và **thay bằng WAF mã nguồn mở tự vận hành: ModSecurity + OWASP CRS 4 chạy sidecar trong task của `api` và của `web`**. Hiện trạng đúng sự thật: **mã đã xong và đã đo ở máy local (Docker, $0), CHƯA apply lên AWS, CHƯA đo trên EC2.** Mọi con số RAM đều từ Docker arm64 trên máy cá nhân. Xem mục [WAF sidecar](#waf-sidecar-modsecurity--owasp-crs--đã-có-mã-chưa-chạy-trên-aws). Giữ DNS/proxy hiện có và migration SG đã apply.
 
 > **Tài liệu này dành cho ai:** thành viên trong nhóm cần **giải thích được** hệ
 > thống phòng thủ khi bảo vệ đồ án, không cần đọc code.
@@ -11,10 +13,16 @@
 >
 > Đọc mục 1, 2 và 6 là đủ để bảo vệ. Mục 3 là chi tiết từng lớp, tra khi cần.
 >
-> ⚠️ **Ngoại lệ:** nếu bạn chưa từng dùng AWS, đọc **hai đoạn đầu của mục 3.1 và
-> 3.2** trước — mục 1 dùng "Network ACL" và "Security Group" như thuật ngữ đã biết,
-> nhưng định nghĩa của chúng lại nằm ở mục 3. Rất ngắn: **NACL lọc theo dải IP, gắn
-> vào subnet, có DENY. Security Group lọc theo danh tính, gắn vào máy, chỉ có ALLOW.**
+> Nếu chưa dùng AWS: SG là bộ lọc stateful theo resource, có thể tham chiếu SG
+> khác; NACL là bộ lọc stateless theo subnet/CIDR. Thiết kế hiện tại dùng default
+> NACL allow-all do AWS tạo, không quản lý ACL bằng Terraform.
+
+**Trạng thái:** nội dung kiến trúc dưới đây mô tả mã sau khi bỏ ba custom NACL.
+Đã apply migration prod ngày 02/11/2026, đọc lại AWS để xác minh association/SG;
+chưa kiểm thử runtime ứng dụng. WAF sidecar mới có mã và số đo local, chưa apply lên AWS. Xem
+[biên bản apply](bien-ban-apply-sg-2026-11-02.md). Báo cáo 12 kịch bản cũ vẫn là
+hồ sơ của cấu hình tại thời điểm đo; [migration guide](nacl-to-sg-migration.md)
+mô tả cách tái thực hiện và đo lại.
 
 ---
 
@@ -36,7 +44,7 @@ làm được.
 
 Ví dụ cụ thể trong hệ thống này: container API cần ghi ảnh sản phẩm lên S3. Nên
 **role** của nó (*role* = một hồ sơ quyền do AWS cấp cho container, thay cho việc
-nhét mật khẩu vào code — xem Lớp 5 bên dưới) có `s3:PutObject` — và **không có** quyền nào với RDS, dù nó nói
+nhét mật khẩu vào code — xem Lớp 4 bên dưới) có `s3:PutObject` — và **không có** quyền nào với RDS, dù nó nói
 chuyện với database suốt ngày. Vì nó nói chuyện với database qua **kết nối
 PostgreSQL trên port 5432**, không qua **API của AWS**. Hai đường hoàn toàn khác nhau, và
 gộp chúng lại là chỗ nhiều người mất điểm.
@@ -48,266 +56,108 @@ gộp chúng lại là chỗ nhiều người mất điểm.
 Cách hiểu sai: "nhiều lớp cho chắc". Cách hiểu đúng: **mỗi lớp phải chặn được
 thứ mà lớp khác không chặn được.** Ba lớp giống nhau là một lớp, chỉ tốn công.
 
-Trong hệ thống này, ba lớp mạng đầu tiên **không** trùng nhau:
+Trong hệ thống này, các biện pháp có vai trò khác nhau:
 
-| Lớp | Làm được điều lớp kia không làm được |
+| Biện pháp | Vai trò |
 |---|---|
-| Network ACL | **DENY được** một IP cụ thể. Security Group không có khái niệm DENY |
-| Security Group | **Tham chiếu được SG khác** làm nguồn ("chỉ nhận từ ALB", không cần biết IP ALB là gì). NACL chỉ hiểu CIDR |
-| Kiến trúc mạng | Không có **đường đi** nào tồn tại. Rule là "cấm đi"; không có route là "không có đường" |
+| Security Group | Tham chiếu SG để diễn tả ALB → web → RDS, kiểm cả nguồn và đích của kết nối mới |
+| ALB | Terminate TLS, kiểm Host header, định tuyến tới đúng dịch vụ |
+| Kiến trúc mạng | EC2 không IP public, DB subnet không có default route ra Internet |
+| IAM, bí mật và ứng dụng | Giới hạn API AWS, quyền đọc mật khẩu và dữ liệu theo người dùng |
 
-Lớp thứ ba mạnh nhất và cũng khó hiểu nhất: nó không chặn ai cả, nó làm cho việc
-tấn công **không có nghĩa**. Không thể gõ sai mật khẩu vào một cánh cửa không tồn tại.
+Default NACL vẫn gắn với sáu subnet nhưng cho phép mọi traffic hai chiều. Nó
+không được tính là lớp phòng thủ chủ động. Bỏ custom ACL làm mất khả năng deny
+IP/CIDR ở subnet và lớp dự phòng khi SG bị cấu hình sai; đổi lại giảm công việc
+quản lý CIDR, thứ tự rule và chiều trả lời của bộ lọc stateless.
 
 ---
 
 ## 2. Sơ đồ luồng request
 
-### 2.1. Bảy lớp, nhìn tĩnh
+### 2.1. Sáu nhóm biện pháp, nhìn tĩnh
 
 ```mermaid
 flowchart TB
-    A["🌐 Request từ Internet"]
-
-    subgraph L1["Lớp 1 — Network ACL (stateless, có DENY)"]
-        L1a["nacl-public: chỉ 80, 443 vào<br/>rule 50 DENY được 1 IP cụ thể"]
-        L1b["nacl-app: 3 rule DENY<br/>90 DENY 22 · 95 DENY 5432 · 115 DENY 8080"]
-        L1c["nacl-db: CHỈ 5432 từ app CIDR"]
-    end
-
-    subgraph L2["Lớp 2 — Security Group (stateful, chỉ allow)"]
-        L2a["sg-alb: 80/443 ← internet<br/>egress CHỈ tới sg-web"]
-        L2b["sg-web: 80/8080 ← CHỈ sg-alb<br/>KHÔNG có rule 22"]
-        L2c["sg-rds: 5432 ← CHỈ sg-web<br/>egress RỖNG"]
-    end
-
-    subgraph L3["Lớp 3 — Application Load Balancer"]
-        L3a["TLS 1.2+ terminate bằng cert ACM"]
-        L3b["Allowlist Host header<br/>2 tên miền, mọi tên khác → 403"]
-    end
-
-    subgraph L4["Lớp 4 — Kiến trúc mạng"]
-        L4a["EC2 (máy chủ chạy container) KHÔNG có IP public"]
-        L4b["Subnet db KHÔNG có route ra Internet"]
-    end
-
-    subgraph L5["Lớp 5 — IAM"]
-        L5a["10 role tách phạm vi<br/>không role nào có *FullAccess*"]
-        L5b["Deny TƯỜNG MINH: host không đọc được secret"]
-    end
-
-    subgraph L6["Lớp 6 — Bí mật"]
-        L6a["SSM SecureString: kho mật khẩu của AWS<br/>mã hoá bằng KMS (dịch vụ quản lý khoá)"]
-        L6b["Bí mật container đọc được ∩<br/>bí mật máy chủ đọc được = RỖNG"]
-    end
-
-    subgraph L7["Lớp 7 — Ứng dụng"]
-        L7a["JWT: 4 phép kiểm (chữ ký · hạn dùng<br/>issuer · audience), lệch giờ tối đa 1 phút"]
-        L7b["Rate limit đăng nhập: 5 lần/phút"]
-        L7c["Truy vấn ĐÓNG KHUNG theo userId trong token"]
-        L7d["EF Core tham số hoá → không SQL injection"]
-    end
-
-    DB["🗄️ RDS PostgreSQL 17"]
-
-    A --> L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> DB
-
-    style L1 fill:#ffe6e6
-    style L2 fill:#fff0e6
-    style L3 fill:#fffbe6
-    style L4 fill:#e6ffe6
-    style L5 fill:#e6f7ff
-    style L6 fill:#f0e6ff
-    style L7 fill:#ffe6f7
+    A["Request từ Internet"]
+    L2["1. Security Group<br/>ALB: 80/443 Internet → 80/8080 web<br/>web: 80/8080 ALB → 5432 RDS; 80/443 Internet<br/>RDS: 5432 web; egress rỗng"]
+    L3["2. ALB<br/>TLS 1.2+ và Host allowlist"]
+    L4["3. Kiến trúc mạng<br/>EC2 không IP public; DB không route Internet"]
+    L5["4. IAM<br/>role tách phạm vi; host bị deny đọc secret"]
+    L6["5. Bí mật<br/>SSM SecureString + KMS; phân tách quyền đọc"]
+    L7["6. Ứng dụng<br/>JWT; rate limit; dữ liệu theo user; truy vấn tham số hoá"]
+    A --> L2 --> L3 --> L4 --> L5 --> L6 --> L7
 ```
 
-**Điểm quan trọng của sơ đồ:** nó **không** phải bảy cái cổng giống nhau xếp
-hàng. Mỗi lớp trả lời một câu hỏi khác:
+Đây là các nhóm biện pháp, không phải sáu bước xử lý tuần tự của mỗi gói tin.
+SG trả lời *nguồn/đích nào được mở kết nối*, ALB trả lời *tên miền nào được
+phục vụ*, route quyết định *có đường tới đích không*, IAM giới hạn *API AWS*,
+bí mật giới hạn *ai đọc mật khẩu*, ứng dụng giới hạn *ai đọc dữ liệu nào*.
 
-| Lớp | Câu hỏi nó trả lời |
-|---|---|
-| 1. NACL | Gói tin này có được vào **subnet** này không? |
-| 2. Security Group | Gói tin này có được vào **máy** này không? |
-| 3. ALB | Request này gửi tới **tên miền** nào? Có mã hoá không? |
-| 4. Kiến trúc | Có **tồn tại đường đi** tới đích không? |
-| 5. IAM | Danh tính này được gọi **API AWS** nào? |
-| 6. Bí mật | Ai đọc được **mật khẩu**? |
-| 7. Ứng dụng | Người dùng này được xem **dữ liệu của ai**? |
-
-Vượt được lớp 1–4 chỉ có nghĩa là *chạm được vào ứng dụng*. Lớp 5–7 mới quyết
-định **lấy được gì**.
-
----
-
-### 2.2. Cùng một request, nhìn theo thời gian — từ ngoài vào trong
-
-Sơ đồ trên xếp bảy lớp cạnh nhau như bảy cái hộp. Nhưng một gói tin thật không đi
-qua "bảy lớp": nó đi qua **12 chốt kiểm**, vì mỗi lớp mạng bị hỏi **hai lần** —
-một lần lúc vào subnet, một lần lúc ra khỏi subnet.
-
-Bản vẽ đầy đủ có ở
-[diagrams/hushstore-aws-2026.drawio](diagrams/hushstore-aws-2026.drawio) **trang 2**.
-Bản rút gọn:
+### 2.2. Kết nối từ Internet tới database và đường trả lời
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant C as Client
-    participant NP as nacl-public
-    participant SA as sg-alb
-    participant LB as ALB
-    participant NA as nacl-app
-    participant SW as sg-web
-    participant AP as container api (8080)
-    participant ND as nacl-db
-    participant SR as sg-rds
-    participant DB as RDS PostgreSQL
-
-    Note over C: DNS: hushstore.io.vn → tên DNS của ALB
-    C->>NP: TCP 443 (SYN)
-    Note over NP: IN 100/110 allow 80,443<br/>IN 50 DENY var.my_ip (khi demo)
-    NP->>SA: qua
-    Note over SA: ingress 80,443 ← 0.0.0.0/0
-    SA->>LB: qua
-    Note over LB: handshake TLS bằng cert ACM<br/>ssl_policy chỉ cho TLS 1.2 / 1.3<br/>rồi kiểm Host header: 2 tên miền<br/>mọi Host khác → 403
-    LB->>NP: OUT 100/110 → app tier 80,8080
-    NP->>NA: tới app tier
-    Note over NA: IN 90 DENY 22 · IN 95 DENY 5432<br/>IN 100/110 allow ← public tier<br/>IN 115 DENY 8080 ← 0.0.0.0/0<br/>IN 120 allow 1024-65535 ← mọi nơi
-    NA->>SW: qua
-    Note over SW: ingress 80,8080 ← CHỈ sg-alb<br/>KHÔNG có rule port 22 nào
-    SW->>AP: qua
-    Note over AP: JWT 4 phép kiểm · rate limit 5/phút<br/>truy vấn ĐÓNG KHUNG theo userId trong token
-    AP->>NA: OUT 100 → db tier 5432
-    NA->>SW: EGRESS 5432 → sg-rds
-    SW->>ND: tới db tier
-    Note over ND: IN 100 allow 5432 ← app tier<br/>(rule duy nhất)
-    ND->>SR: qua
-    Note over SR: ingress 5432 ← CHỈ sg-web<br/>egress RỖNG
-    SR->>DB: qua
-
-    DB-->>ND: OUT 100 → app tier 1024-65535
-    ND-->>NA: IN 120 (chỗ rule này BẮT BUỘC phải có)
-    NA-->>NP: OUT 120 → public tier 1024-65535
-    NP-->>C: IN 120 ← 0.0.0.0/0, gói lại vào phiên TLS
+    participant C as Client / Cloudflare
+    participant LB as ALB (sg-alb)
+    participant AP as API trên EC2 (sg-web)
+    participant DB as RDS (sg-rds)
+    Note over C,DB: Sáu subnet dùng default NACL allow-all, AWS quản lý
+    C->>LB: HTTPS 443 (sg-alb ingress từ Internet)
+    Note over LB: TLS bằng ACM; kiểm Host header<br/>HTTP 80 redirect sang HTTPS
+    LB->>AP: TCP 8080 (sg-alb egress → sg-web; sg-web ingress ← sg-alb)
+    Note over AP: Kiểm JWT, rate limit, quyền theo userId<br/>Web dùng chặng tương tự tại port 80
+    AP->>DB: TCP 5432 (sg-web egress → sg-rds; sg-rds ingress ← sg-web)
+    DB-->>AP: Phản hồi trên kết nối đã cho phép
+    AP-->>LB: Phản hồi trên kết nối đã cho phép
+    LB-->>C: Phản hồi HTTPS
 ```
 
-#### Mỗi chốt trả lời một câu hỏi khác nhau
+Mỗi chặng kết nối mới giữa hai SG phải khớp egress ở nguồn và ingress ở đích.
+SG stateful tự cho phép gói phản hồi, nên `sg-rds` egress rỗng vẫn trả dữ liệu
+PostgreSQL được. Không mở inbound ephemeral trên `sg-web`; default NACL đã cho
+qua cả hai chiều. Cùng VPC không tự cấp quyền truy cập giữa các resource:
+kết nối mới đi qua các SG vẫn phải khớp rule phù hợp.
 
-| Chốt | Câu hỏi | Nếu bỏ chốt này thì mất gì |
+| Điểm kiểm soát | Quy tắc | Giới hạn |
 |---|---|---|
-| `nacl-public` IN | Gói tin có được vào **subnet** này? | Mất khả năng **chặn theo IP** — SG chỉ có allow-list, không có deny |
-| `sg-alb` IN | Gói tin có được vào **máy** này? | Không mất nhiều: 80/443 vốn mở cho cả Internet. Giá trị của `sg-alb` nằm ở chiều **egress** |
-| ALB | Request gửi tới **tên miền** nào? Có mã hoá không? | Mất chống Host header injection, và mất luôn TLS |
-| `nacl-app` IN | Gói tin có được vào **subnet app**? | Mất ba rule DENY 22/5432/8080 — tức mất lớp chặn ở tầng **subnet** cho ba port nguy hiểm nhất |
-| `sg-web` IN | Máy **nào** được gọi container? | Mất phép lọc theo **danh tính SG**. NACL chỉ lọc theo CIDR, nên mọi thứ trong public tier sẽ gọi được container |
-| container api | Người dùng này được xem **dữ liệu của ai**? | Mất tất cả. Tám chốt trên chỉ chặn *chạm tới*, chốt này chặn *lấy được* |
-| `nacl-db` IN | Ai được vào **subnet database**? | Còn `sg-rds` chặn — nhưng chỉ theo danh tính SG |
-| `sg-rds` IN | Ai được nói chuyện với **RDS**? | Còn `nacl-db` chặn — nhưng chỉ theo CIDR |
+| `sg-alb` | Inbound 80/443 từ `0.0.0.0/0`; outbound 80/8080 chỉ tới `sg-web` | Cửa public, không deny riêng một IP |
+| `sg-web` | Inbound 80/8080 chỉ từ `sg-alb` | Không có SSH; không mở theo CIDR subnet |
+| `sg-web` outbound | 5432 tới `sg-rds`, 80/443 tới Internet | Đường HTTP/HTTPS hợp lệ có thể bị lợi dụng rút dữ liệu |
+| `sg-rds` | Inbound 5432 chỉ từ `sg-web`; outbound rỗng | Không chặn dữ liệu trả lời trên phiên hợp lệ |
+| Default SG | Ingress/egress rỗng | Resource gắn nhầm vào SG này không tự có quyền mạng |
+| ECR endpoint (tuỳ chọn) | Inbound 443 chỉ từ `sg-web` | Không chấp nhận cả CIDR app subnet |
 
-Hai dòng cuối là chỗ đáng chú ý nhất của cả bảng: `nacl-db` và `sg-rds` **nói cùng
-một điều** (chỉ 5432, chỉ từ app tier), nhưng chúng **không thay thế nhau**, vì
-chúng lọc theo hai tiêu chí khác nhau:
-
-- Bỏ `nacl-db`: ai chiếm được **một máy đang nằm trong `sg-web`** là đi thẳng tới
-  database. Danh tính SG là thứ duy nhất còn lại, và kẻ tấn công đã có nó.
-- Bỏ `sg-rds`: **mọi thứ trong app tier** đều tới được database. CIDR là thứ duy
-  nhất còn lại, và kẻ tấn công đã ở trong CIDR đó.
-
-Đó là ý nghĩa cụ thể của "phòng thủ nhiều lớp": không phải hai cái khoá giống nhau
-trên cùng một cửa, mà hai cái khoá **mở bằng hai loại chìa khác nhau**.
-
-#### Vì sao phải vẽ cả đường về
-
-Bốn mũi tên nét đứt ở cuối sơ đồ không phải cho đủ. Chúng là chỗ khác biệt
-stateful/stateless **thành ra hậu quả cụ thể**:
-
-**Security Group là stateful.** Nó nhớ kết nối nào do bên trong mở ra, nên gói trả
-về tự động được cho qua. Đó là lý do `sg-rds` có **egress rỗng** mà database vẫn
-trả được kết quả — và là lý do đường về trong sơ đồ chỉ ghi tên `nacl-*`, không
-ghi `sg-*`.
-
-**Network ACL là stateless.** Nó không nhớ gì cả. Với NACL, gói trả về là một gói
-**hoàn toàn mới**, phải có rule riêng. Đó là lý do bảng NACL dài gấp đôi bảng SG.
-
-Và đây là hệ quả không tránh được: gói trả về đi tới **một port ngẫu nhiên mà máy
-khách tự chọn** (dải ephemeral 1024–65535). Nên rule cho đường về buộc phải mở cả
-dải đó. **Không thu hẹp được.**
-
-Chính ràng buộc này sinh ra ba rule DENY ở `nacl-app`:
-
-```
-IN 90  DENY 22           ─┐
-IN 95  DENY 5432          ├─ tồn tại VÌ rule 120, không phải "thêm cho chắc"
-IN 115 DENY 8080         ─┘
-IN 120 allow 1024-65535  ←  bắt buộc có, và nó chứa cả 5432 và 8080
-```
-
-Rule 120 phải mở dải 1024–65535 cho toàn Internet để nhận traffic trả về từ NAT
-Gateway. Mà **5432 và 8080 nằm trong dải đó**. Nếu không có ba rule DENY ở số nhỏ
-hơn, rule 120 sẽ vô tình mở PostgreSQL ra Internet **ở tầng NACL**.
-
-Ba rule DENY đó không phải phòng thủ thêm. Chúng **vá đúng cái lỗ mà rule 120 mở
-ra**. Và đó là câu trả lời trực tiếp cho câu hỏi *"đã có Network ACL rồi thì cần
-Security Group làm gì"*: NACL stateless không bao giờ siết được đường về, nên
-`sg-web` với ingress đúng hai port từ đúng một SG là lớp bù cho giới hạn bản chất
-đó.
+Hai sơ đồ `.drawio` đã cập nhật luồng SG này. Báo cáo và log có ghi NACL rule
+50/90/95/115/120 vẫn là hồ sơ thiết kế cũ, không phải kết quả đo cấu hình mới.
 
 ---
 
 ## 3. Từng lớp — chặn gì, và không chặn gì
 
-### Lớp 1 — Network ACL
+### Default NACL — nền mạng allow-all, không tính là lớp chặn
 
-**Bản chất: stateless.** Đây là câu quan trọng nhất của cả tài liệu.
+VPC luôn có NACL. Mã hiện tại bỏ `nacl-public`, `nacl-app`, `nacl-db` cùng rule
+và association custom; sáu subnet dùng default ACL cho phép mọi traffic inbound
+và outbound. Không khai báo `aws_default_network_acl` để nhận quản lý đối tượng
+này. Trước khi migration, phải kiểm tra default ACL thật sự còn allow-all.
 
-*Stateless* nghĩa là NACL **không nhớ** gói tin nào đã đi qua. Máy A gửi request
-ra Internet, phản hồi quay về — với NACL đó là hai gói tin **không liên quan gì
-nhau**, phải có rule riêng cho mỗi chiều.
+SG và route là các cơ chế chính giới hạn kết nối. Không còn rule DENY 22/5432/8080
+ở subnet, không còn `enable_deny_demo`, và KB-08 chặn một IP không còn là bài
+kiểm thử của thiết kế hiện tại. WAF sidecar (ModSecurity) chặn theo **nội dung request**
+chứ không theo IP, nên nó không thay thế demo chặn IP này; và nó chưa chạy trên AWS. Phương án
+Cloudflare đã được [rollback](rollback-cloudflare-waf-2026-11-08.md).
 
-Hệ quả trực tiếp và rất khó chịu: khi máy trong `app` subnet gọi ra Internet
-(pull image từ ECR), phản hồi quay về có **nguồn là `0.0.0.0/0`** và **cổng đích
-là một số ngẫu nhiên trong dải 1024–65535** (gọi là *cổng ephemeral*). Nên
-`nacl-app` **buộc phải** có rule:
+**Lịch sử để đối chiếu:** báo cáo cũ có demo rule 50 deny IP và rule ephemeral
+stateless. Những phép đo đó được giữ nguyên, không tái diễn giải thành bằng
+chứng cho default ACL. Xem [migration guide](nacl-to-sg-migration.md).
 
-```
-inbound 120: allow TCP 1024-65535 ← 0.0.0.0/0
-```
-
-Nhưng `5432` (PostgreSQL) và `8080` (API) **đều nằm trong dải đó**. Rule 120 vô
-tình mở chúng ra cả Internet ở tầng NACL.
-
-Bản sửa: đặt DENY ở **số nhỏ hơn**, vì NACL xét rule **theo thứ tự tăng dần và
-dừng ở rule đầu tiên khớp**:
-
-```
-inbound  90: DENY  TCP 22          ← 0.0.0.0/0    ← chặn SSH
-inbound  95: DENY  TCP 5432        ← 0.0.0.0/0    ← chặn trước rule 120
-inbound 100: allow TCP 80          ← public CIDR
-inbound 110: allow TCP 8080        ← public CIDR  ← chỉ từ ALB subnet
-inbound 115: DENY  TCP 8080        ← 0.0.0.0/0    ← chặn mọi nguồn khác
-inbound 120: allow TCP 1024-65535  ← 0.0.0.0/0    ← return traffic
-```
-
-Thứ tự 110 rồi 115 là một mẫu đáng học: **cho phép hẹp trước, chặn rộng sau.**
-Request từ ALB khớp rule 110 và được vào; mọi request 8080 từ nơi khác đi tiếp
-xuống rule 115 và bị chặn.
-
-**Điều NACL làm được mà SG không làm được:** rule 50 của `nacl-public` là
-`DENY all ← <IP laptop>`. Security Group **không có** cú pháp DENY — nó chỉ là
-danh sách cho phép. Muốn chặn đúng một IP thì **bắt buộc** phải dùng NACL. Đây là
-kịch bản kiểm thử số 8 và là câu trả lời gọn nhất cho *"đã có SG rồi thì NACL để
-làm gì?"*.
-
-**Điều NACL không làm được:** không hiểu "từ Security Group nào". Nó chỉ hiểu dải
-IP. Nên nó không thể diễn tả được "chỉ nhận từ ALB" — đó là việc của lớp 2.
-
-### Lớp 2 — Security Group
+### Lớp 1 — Security Group
 
 **Bản chất: stateful, và chỉ có allow.**
 
 *Stateful* nghĩa là SG **nhớ** kết nối. Cho request đi vào thì phản hồi tự động
 được đi ra, không cần rule. Nên SG không có bài toán cổng ephemeral — nó đơn giản
-hơn NACL rất nhiều, và cũng vì thế **không diễn tả được DENY**.
+hơn khi quản lý chiều phản hồi. SG **chỉ có allow**, không diễn tả được DENY.
 
 Điểm mạnh riêng: **nguồn của một rule có thể là một Security Group khác.**
 
@@ -320,19 +170,22 @@ sg-alb"* — nên khi ALB được dựng lại với IP mới, rule vẫn đún
 gì**. Đây là cách diễn tả *quan hệ tin cậy* thay vì *địa chỉ*, và là lý do rule
 của ta không dùng CIDR ở đâu ngoài chỗ buộc phải mở ra Internet.
 
-Ba SG, và ba điều đáng nói:
+Ba SG ứng dụng, và các giới hạn chính:
 
 | SG | Chi tiết đáng nói |
 |---|---|
 | `sg-alb` | Egress **chỉ** tới `sg-web` port 80 và 8080. ALB bị chiếm cũng không gọi ra Internet được |
 | `sg-web` | **Không có rule port 22 nào.** Không phải "đóng lại" — mà là **chưa từng mở** |
-| `sg-rds` | Egress **RỖNG**. Chiếm được database cũng không có đường đẩy dữ liệu ra ngoài |
+| `sg-rds` | Ingress 5432 chỉ từ `sg-web`; egress **rỗng** ngăn mở kết nối mới, vẫn cho phản hồi |
+| Default SG | Ingress và egress đều rỗng, được quản lý bằng `aws_default_security_group` |
+| SG ECR endpoint (tuỳ chọn) | Ingress 443 chỉ từ `sg-web`; không có rule theo CIDR app |
 
 `sg-rds` egress rỗng là chi tiết hay bị bỏ qua nhất. Đa số người chỉ nghĩ đến
-"ai vào được"; nhưng thiệt hại thật của một vụ rò rỉ nằm ở chiều **đi ra**. RDS
-không cần gọi ra ngoài, nên nó không được phép.
+"ai vào được". RDS không cần tự mở kết nối ra ngoài nên không được cấp egress.
+Tuy nhiên dữ liệu vẫn đi qua phản hồi của kết nối hợp lệ; egress rỗng không chứng
+minh rằng database bị chiếm thì không thể rò rỉ dữ liệu.
 
-### Lớp 3 — Application Load Balancer
+### Lớp 2 — Application Load Balancer
 
 Ba việc bảo mật ALB làm:
 
@@ -469,7 +322,7 @@ gặp trước khi biết nguyên nhân.
 > Hệ quả cụ thể: JWT là không trạng thái, cấp rồi thì không thu lại được. Nên một
 > token bị lộ dùng được **7 ngày**, không phải 15 phút. Thứ duy nhất còn chặn là
 > middleware kiểm cờ `IsActive` với cache 30 giây — nghĩa là cơ chế đó không phải
-> "lớp bổ sung cho chắc" như mô tả ở Lớp 7, mà đang là **lớp phòng thủ chính**
+> "lớp bổ sung cho chắc" như mô tả ở Lớp 6, mà đang là **lớp phòng thủ chính**
 > chống token bị lộ.
 >
 > Việc sửa nằm ở tầng code ứng dụng, đã cố ý hoãn tới sau dự án hạ tầng — hồ sơ ở
@@ -479,15 +332,15 @@ gặp trước khi biết nguyên nhân.
 > gọi `UseHsts()`. Nên không có header `Strict-Transport-Security`, tức trình
 > duyệt không được dặn "từ nay chỉ nói chuyện với tên miền này bằng HTTPS". Rủi ro
 > còn lại là kịch bản request **đầu tiên** đi bằng HTTP và bị chặn giữa đường
-> trước khi redirect 301 kịp xảy ra. Ở đây rủi ro đó nhỏ vì **Cloudflare** đứng
-> trước và đang bật **Full (strict)**, nhưng **hệ thống tự nó** thì chưa có lớp này.
+> trước khi redirect 301 kịp xảy ra. **Full (strict)** kiểm chứng chỉ origin trên
+> chặng HTTPS, không bảo vệ request HTTP đầu tiên của client. WAF không thay HSTS.
 >
 > *(Cloudflare là dịch vụ DNS/CDN **bên ngoài AWS**, đứng trước ALB — nó không phải
-> một trong 7 lớp ở trên. "Full (strict)" là chế độ bắt Cloudflare **luôn nói HTTPS
-> với ALB và kiểm chứng chỉ của ALB**, thay vì nói HTTP ở chặng sau. Ta dùng nó vì
+> một trong sáu nhóm ở trên. "Full (strict)" kiểm chứng chỉ origin ở **chặng HTTPS**; HTTP viewer
+> vẫn cần redirect riêng. Cloudflare DNS/proxy có trước phương án WAF; ta dùng nó vì
 > nó miễn phí và đã có sẵn cho tên miền này.)*
 
-### Lớp 4 — Kiến trúc mạng: phòng thủ mạnh nhất không phải là một rule
+### Lớp 3 — Kiến trúc mạng: phòng thủ mạnh nhất không phải là một rule
 
 Hai quyết định, không phải rule nào, nhưng chặn được nhiều nhất:
 
@@ -498,10 +351,10 @@ rule nào để quên. Máy vẫn tải được phần mềm nhờ **NAT Gatewa
 
 **Subnet database không có route ra Internet.** Route table của nó **không có**
 dòng `0.0.0.0/0`. Nên kể cả khi ai đó cấu hình sai mọi Security Group và mọi
-NACL, gói tin từ RDS vẫn không biết đi đâu. Đây là loại phòng thủ không phụ thuộc
+default NACL, gói tin từ RDS vẫn không có default route Internet. Đây là loại phòng thủ không phụ thuộc
 vào việc con người có cấu hình đúng hay không.
 
-### Lớp 5 — IAM: mười danh tính, và một chữ Deny quan trọng
+### Lớp 4 — IAM: mười danh tính, và một chữ Deny quan trọng
 
 Tách quyền theo **việc**, không theo **máy**. Toàn hệ thống có **10 IAM role**,
 không role nào dùng managed policy `*FullAccess`:
@@ -572,7 +425,7 @@ agent** làm bằng `task-execution` role, không phải role của máy. Nên c
 không làm gì gãy — đúng định nghĩa của least privilege: bỏ quyền mà không mất
 chức năng.
 
-### Lớp 6 — Bí mật
+### Lớp 5 — Bí mật
 
 Không còn credential dài hạn nào trong toàn hệ thống:
 
@@ -593,10 +446,10 @@ mật/tháng).
 parameter của task đó. Nên một task bị chiếm cũng không làm lộ bí mật của task
 kia. Đây là least privilege áp dụng ở tầng *bí mật*, không chỉ tầng *API*.
 
-### Lớp 7 — Ứng dụng: lớp cuối, và cũng là lớp bị tấn công nhiều nhất
+### Lớp 6 — Ứng dụng: lớp cuối, và cũng là lớp bị tấn công nhiều nhất
 
 Bốn lớp mạng đầu chặn được kẻ tấn công **không mời**. Nhưng khách hàng thật cũng
-đi qua đúng bảy lớp đó — nên lớp cuối phải trả lời câu khác: *"người này được xem
+đi qua các lớp đó — nên lớp cuối phải trả lời câu khác: *"người này được xem
 dữ liệu của ai?"*
 
 **JWT — bốn phép kiểm, không phải một.** Nhiều người tưởng xác thực token là
@@ -619,7 +472,7 @@ nhận thêm 5 phút. Ta hạ xuống **1 phút**.
 > token **cùng** thời hạn 7 ngày, nên cơ chế refresh token đang không mang lại lợi
 > ích nào. Đây là một lỗi thật, chưa sửa; hồ sơ ở
 > [ra-soat-ung-dung-multi-task.md](ra-soat-ung-dung-multi-task.md), phân tích đầy
-> đủ ở mục *Chứng chỉ TLS: vòng đời và TTL* của Lớp 3.
+> đủ ở mục *Chứng chỉ TLS: vòng đời và TTL* của Lớp 2.
 
 Và trong JWT **không có** dữ liệu nhạy cảm nào. Payload của JWT chỉ là Base64,
 **ai cũng giải mã được** — nó chống *sửa*, không chống *đọc*.
@@ -688,7 +541,185 @@ chỉ là chuyện thứ tự. ALB terminate TLS rồi chuyển tiếp bằng HT
 `UseHttpsRedirection` sẽ redirect vô hạn. Quan trọng hơn: **IP thật của client
 nằm trong `X-Forwarded-For`** — không đọc header đó thì rate limiter đếm sai, nó
 sẽ thấy mọi request đến từ cùng một IP (của ALB) và chặn oan người dùng thật.
-Header này chỉ được tin trong phạm vi `KnownNetworks` = CIDR của VPC.
+Mã làm đúng như sau (`src/API/Middleware/ProxyHeaders.cs`): **xoá cả `KnownIPNetworks` lẫn
+`KnownProxies`** — tức là middleware đọc `X-Forwarded-*` từ **bất kỳ** peer nào, không giới hạn theo
+CIDR VPC — và đặt `ForwardLimit = 1`, nên chỉ lấy **một** phần tử, phần tử **cuối** của
+`X-Forwarded-For` (phần ALB nối vào), bỏ qua phần client tự khai ở đầu chuỗi. Thứ chặn kẻ lạ tự
+gửi `X-Forwarded-For` giả **không phải** mã này mà là `sg-web`: chỉ cho ALB đi vào (comment
+trong file: "sg-web allows only ALB traffic").
+
+---
+
+### WAF sidecar (ModSecurity + OWASP CRS) — đã có mã, chưa chạy trên AWS
+
+> **Trạng thái trung thực:** mã (image, Terraform, CI, script) đã xong trên nhánh
+> `codex/remove-custom-nacl`; **đo ở máy local bằng Docker**, upstream là nginx giả, không phải
+> `api`/`web` thật. **Chưa `apply` lên AWS, chưa merge `main`, chưa đo trên EC2.** Đừng nói với
+> thầy là "WAF đang chạy trên AWS" cho tới khi cửa sổ đo AWS (xem
+> [`VIEC-CON-LAI.md`](VIEC-CON-LAI.md)) thật sự xảy ra.
+
+**Vì sao có:** giảng viên muốn một WAF mã nguồn mở tự vận hành trên EC2 để học được nhiều hơn
+(Cloudflare WAF đã bị rollback vì lý do đó), và cho phép WAF chạy chung máy với web/api.
+
+**Nó nằm ở đâu — làm "sidecar", tức một container đứng ngay trước app, trong cùng một task:**
+
+```
+Internet → ALB :443 (định tuyến theo Host, mặc định 403)
+   ├─ tg-api (cổng host 8080) → [task api]  waf ──link──▶ api:8080  (api KHÔNG mở cổng host)
+   └─ tg-web (cổng host 80)   → [task web]  waf ──link──▶ web:80    (web KHÔNG mở cổng host)
+```
+
+Nói đơn giản: trước đây ALB gọi thẳng vào `api`/`web`. Giờ ALB chỉ gọi được container `waf`;
+container `waf` kiểm tra request rồi mới chuyển cho app. App **không còn cổng nào trên máy**
+để ai đó gọi vòng qua WAF từ bên ngoài.
+
+**Vì sao sidecar, không phải một service WAF riêng:** `api` và `web` không có health check ở tầng
+container, sức khoẻ của chúng **chỉ** do target group của ALB đo. Nếu ALB trỏ sang một service WAF
+riêng thì (a) deploy hỏng không còn ai thấy, (b) `api` chết làm health check qua WAF đỏ và ECS
+**giết nhầm container WAF** (vô tội) trong khi `api` không bị đụng tới. Làm sidecar thì `api` chết
+nghĩa là cả task (kèm WAF) bị thay — đúng như cũ. Cái giá: hai tiến trình WAF trên một máy, tốn
+RAM gấp đôi, nên `instance_type` mặc định của `envs/prod` là **t3.small** (không còn vừa t3.micro).
+
+**Cấu hình đã chốt:** `MODSEC_RULE_ENGINE=On`, `BLOCKING_PARANOIA=1`, ngưỡng điểm bất thường
+inbound 5 / outbound 4 (mặc định của CRS), `MODSEC_RESP_BODY_ACCESS=Off`, 1 worker nginx. Trần body:
+`api` 8 MB (ảnh tối đa 5 MB cộng phần đệm multipart), `web` 1 MB. Image: `devops/waf/Dockerfile`
+(gốc `owasp/modsecurity-crs:4.30.0-nginx-alpine-202610180210`, ghim tag có ngày), đẩy lên ECR repo
+`hushstore-waf`, dùng chung `image_tag` với `api`/`web`.
+
+#### WAF chặn gì
+
+Request có dấu hiệu tấn công theo luật CRS mức nhạy 1 → trả **403** và ghi một dòng log JSON có
+mã luật + điểm bất thường. Đã chạy thật ở local (30/30 ca của `run.sh` đạt). ⚠️ **Upstream của bộ kiểm thử là `nginx:alpine`
+trả lại header (echo), KHÔNG phải app thật**: nó chứng minh luật CRS và exclusion đúng trên các
+payload mẫu, **không** chứng minh mọi luồng thật của app qua được WAF — vì vậy lần đầu lên AWS phải
+chạy `DetectionOnly` trước (mục [Lần đầu trên AWS](#lần-đầu-trên-aws-bắt-đầu-bằng-detectiononly-không-phải-on)):
+
+| Loại | Ví dụ đã thử | Kết quả |
+|---|---|---|
+| SQL injection | `search=' OR 1=1--`; email đăng nhập `a' OR 1=1--`; SQLi kèm header `Authorization: Bearer <chuỗi ngẫu nhiên>` (không phải JWT thật) | 403 |
+| XSS | `{"comment":"<script>alert(1)</script>"}` | 403 |
+| Path traversal | `/..%2f..%2fetc/passwd` | 403 hoặc 400 |
+| Công cụ quét | User-Agent `sqlmap/1.7` | 403 |
+| Body quá 8 MB (api) | JSON 9 MB | 413 |
+
+Và **không chặn nhầm** các luồng thật: đăng nhập thường và mật khẩu có ký tự đặc biệt, refresh
+token, sửa sản phẩm tiếng Việt, tìm kiếm có dấu, upload ảnh 5 MB, JSON gần 1 MB, health check của ALB
+(Host là IP), file Blazor `_framework/*`, mô tả sản phẩm là HTML có `<img>`/`<a>` (exclusion 1005,
+chỉ trường `description`/`shortDescription` của `POST/PUT /api/products`; `<script>` ở đó vẫn 403), và
+upload ảnh có tên file chứa `'` hoặc `;` (exclusion 1006; API đổi tên thành GUID nên tên gốc không
+được dùng).
+
+#### WAF KHÔNG chặn gì (nói thẳng khi bảo vệ)
+
+| Không chặn | Vì sao |
+|---|---|
+| **IDOR/BOLA** (khách A xem đơn của khách B) | Request trông hoàn toàn hợp lệ; chỉ code kiểm tra ownership mới chặn được |
+| **Lỗi logic nghiệp vụ, race condition** (dùng voucher quá hạn mức, bán vượt tồn) | WAF không hiểu nghiệp vụ; đã có `LoadProbe` và conditional update ở DB |
+| **Brute force / rate limit** | WAF không làm rate limit (chủ đích). Rate limit đăng nhập nằm ở app |
+| **DDoS, bot** | Không có bot management; tầng 3/4 là AWS Shield Standard |
+| **Rò rỉ ở chiều trả lời** (response) | `MODSEC_RESP_BODY_ACCESS=Off` — WAF không đọc body trả về, nên luật outbound của CRS thực tế không có tác dụng với nội dung |
+| **Trường mật khẩu** ở `/api/auth/login|register|change-password`, `/api/customers`, `/api/employees` | **Cố ý không soi** (exclusion ID 1002): để mật khẩu không lọt vào log và không bị chặn nhầm vì ký tự đặc biệt |
+
+#### Bật/tắt chế độ chặn — biến `waf_rule_engine`
+
+Biến Terraform `waf_rule_engine` (`infra/tf/envs/prod/variables.tf`), giá trị `On` (chặn, **mặc
+định**) hoặc `DetectionOnly` (chỉ ghi log, không chặn — công tắc lùi khi chặn nhầm). Không có
+`Off`: tắt hẳn thì mất cả log. ⚠️ Service có `ignore_changes = [task_definition]`, nên đổi biến
+**chỉ có hiệu lực ở lần deploy kế tiếp** (pipeline lấy revision ACTIVE mới nhất làm khuôn), không
+đổi ngay trên task đang chạy.
+
+**Công tắc khẩn cấp nhanh nhất** (đang chặn nhầm người dùng thật): đặt `waf_rule_engine =
+"DetectionOnly"` rồi `terraform apply` — việc này chỉ tạo **revision task definition mới**, chưa đổi
+task đang chạy. Sau đó trỏ service sang revision mới ngay, không chờ pipeline:
+
+```bash
+aws ecs update-service --cluster hushstore --service hushstore-api --task-definition <revision mới>
+aws ecs update-service --cluster hushstore --service hushstore-web --task-definition <revision mới>
+```
+
+(cluster tên `hushstore` = `var.project`; hai service `hushstore-api` / `hushstore-web`; lấy số
+revision từ output của apply hoặc `aws ecs describe-services`.) ECS thay task theo kiểu rolling nên
+vẫn mất vài phút — đây là cách nhanh nhất có sẵn, không phải tức thời.
+
+#### Lần đầu trên AWS: bắt đầu bằng `DetectionOnly`, không phải `On`
+
+Local chỉ đo với upstream giả, nên **chưa ai biết luật CRS có chặn nhầm luồng thật nào của app**.
+Hai ca đã lọt qua bộ kiểm thử rồi mới bị review bắt (mô tả HTML có `<img>`, tên file upload có `'`)
+chính là loại lỗi này. Vì vậy cửa sổ AWS đầu tiên phải đi theo thứ tự:
+
+1. Bật stack với `waf_rule_engine = "DetectionOnly"` (WAF chỉ ghi log, không chặn).
+2. Đi qua tay các luồng thật chính: đăng nhập, xem/sửa sản phẩm (kể cả mô tả HTML), upload ảnh,
+   giỏ hàng, thanh toán, phiếu nhập kho, phiếu xuất kho.
+3. Đọc CloudWatch `/ecs/hushstore-waf`: mọi bản ghi của request hợp lệ là một dương tính giả cần
+   exclusion mới trong `devops/waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf` (hẹp theo path +
+   tham số, kèm ca trong `run.sh`). Thêm exclusion nghĩa là **build lại image và merge** — không sửa
+   được tại chỗ.
+4. Chỉ khi log sạch mới chuyển `waf_rule_engine = "On"` (apply + công tắc ở trên), rồi chạy demo 403.
+
+#### Chạy bộ kiểm thử local (cổng chặn hồi quy của WAF)
+
+```bash
+devops/waf/test/run.sh                              # On: ca hợp lệ phải 200, ca tấn công phải 403
+RULE_ENGINE=DetectionOnly devops/waf/test/run.sh    # chỉ để gom xem luật nào khớp
+WAF_LOG_OUT=/tmp/waf.log devops/waf/test/run.sh     # lưu log hai WAF trước khi dọn stack
+```
+
+Cần `docker compose`, `curl`, `jq`. Thoát `0` khi mọi ca đạt, `1` khi có ca hỏng (in tên ca).
+Sửa `default.conf.template`, file exclusion hay đổi tag image gốc thì chạy lại trước khi commit.
+
+#### Log
+
+Audit log JSON ra stdout → CloudWatch log group `/ecs/hushstore-waf`, hai stream
+`waf-api` và `waf-web` — demo chỉ cần mở một chỗ. Audit log chỉ ghi các phần `AHZ`: A (thông tin
+giao dịch), H (luật nào khớp, điểm bao nhiêu), Z (kết thúc). **Không** có phần B (header của
+request), nên header `Authorization: Bearer …` không có trong log — **trừ khi một luật CRS khớp
+chính header `Authorization`**: khi đó `logdata` của luật chép nguyên giá trị khớp vào phần H. (Ca
+`audit_log_khong_lo_token` chỉ đo trường hợp luật khớp ở tham số khác.) Audit engine `RelevantOnly`
+ghi theo hai điều kiện: request bị luật gắn cờ, **hoặc** status trả về khớp
+`SecAuditLogRelevantStatus` — mặc định của image là `^(?:5|4(?!04))`, tức mọi 4xx **trừ 404** và mọi
+5xx **của app** cũng được ghi (vd. 401 đăng nhập sai, 400 validation, 503 của `/health/ready` lúc DB
+đang khởi động). Bản ghi đó chỉ chứa URI/status, không bí mật. Ước lượng dung lượng CloudWatch phải
+tính cả luồng này, không chỉ request bị chặn.
+
+#### Giới hạn đã biết (đã quyết định, không phải quên)
+
+- **403 của WAF không có header CORS** → trình duyệt báo lỗi mạng chứ không hiện "bị chặn". Blazor
+  chỉ thấy "network error". Muốn thấy 403 thật thì xem trong tab Network hoặc log WAF.
+- **`proxy_read_timeout` là mặc định nginx, 60 giây** (bằng idle timeout mặc định của ALB). Request
+  nào của `api` chạy quá 60 giây sẽ bị cắt ở WAF.
+- **CRS luật 920450 chặn header `Expect`.** Trình duyệt không gửi nó nên người dùng thật không dính;
+  nhưng `curl -F` với file lớn thì có. Script upload bằng curl phải thêm `-H 'Expect:'`.
+- **Upload đồng thời vẫn dùng được làm DoS:** 20 upload 8 MB cùng lúc có thể vượt trần cứng 512 MiB
+  của container `waf` (đo local: 549–594 MiB). Vấn đề này **chưa được giải quyết**.
+- **Số RAM đo trên Docker arm64 (máy Mac), chưa đo trên EC2 amd64.** Trên amd64 giả lập, RAM sau tải
+  còn tăng qua 3 lượt đo — chưa biết là rò rỉ thật hay do giả lập. Phải đo lại trên EC2.
+- **Bộ kiểm thử local dùng upstream giả (echo), không phải app thật.** Dương tính giả với luồng thật
+  chỉ lộ khi chạy `DetectionOnly` trên AWS (xem mục "Lần đầu trên AWS").
+- **`terraform.tfvars` có thể ghi đè `instance_type` về `t3.micro`** (file này không thuộc mã
+  commit). Với 2 sidecar, t3.micro không đủ RAM ⇒ chủ dự án **phải kiểm tfvars** trước khi bật stack.
+- **"App không có cổng host" chỉ nghĩa là không tới được từ ngoài máy.** Container khác trên
+  cùng máy vẫn gọi được IP bridge của app. Trên máy chỉ có container của dự án nên không phá yêu cầu
+  "mọi request của người dùng đi qua WAF".
+
+#### Hai cái bẫy im lặng (đừng đụng khi chưa hiểu)
+
+1. **Bẫy XFF:** WAF phải chuyển **nguyên văn** `X-Forwarded-For` (`$http_x_forwarded_for`),
+   **không bao giờ** dùng `$proxy_add_x_forwarded_for`. App tin đúng một hop
+   (`ProxyHeaders.ForwardLimit = 1`); nối IP của peer (ALB) vào chuỗi (đo: image mặc định làm đúng như vậy) thì `api` đọc phần tử cuối
+   và thấy IP của ALB thay vì IP client; hệ quả **suy ra, chưa đo trên app thật**: mọi người dùng bị
+   coi là cùng một IP và rate limit đăng nhập khoá **tất cả mọi người cùng lúc**. `run.sh` có ca
+   `xff_giu_nguyen` canh điều này (đối chứng âm: evidence local §6).
+2. **Bẫy `containerPort` không `hostPort`:** ở bridge mode, nếu container app khai `containerPort`
+   mà thiếu `hostPort`, ECS gán cho nó một **cổng host động** — tức mở lại đường đi vòng
+   WAF mà ta cố ý đóng. Vì vậy container `api`/`web` **không** khai `portMappings` nào; test Terraform
+   `app_khong_mo_cong_host_de_khong_di_vong_waf` canh điều này.
+
+**Bằng chứng và thiết kế:**
+[đo RAM + soi image](evidence/2026-11-08-waf-ram-spike.md) ·
+[image + bộ kiểm thử local](evidence/2026-11-08-waf-local.md) ·
+[thiết kế](superpowers/specs/2026-11-08-waf-modsecurity-ec2-design.md) ·
+[kế hoạch](superpowers/plans/2026-11-08-waf-modsecurity-ec2.md).
+Kiểm thử trên AWS: **chưa làm**.
 
 ---
 
@@ -696,34 +727,28 @@ Header này chỉ được tin trong phạm vi `KnownNetworks` = CIDR của VPC.
 
 Cột "lớp dự phòng" là chỗ thể hiện *defense in depth*: lớp đầu hỏng thì còn gì.
 
-Mười hai dòng đầu là **12 kịch bản đã chạy thật** — số thứ tự khớp đúng với
+Mười hai mã kịch bản được giữ để đối chiếu với **12 phép đo lịch sử** trong
 [security-validation-report.md](security-validation-report.md), tra bằng chứng
-theo số. Toàn bộ đã được **đo lại ngày 2026-08-24 trên account mới**
-`551897327153` và cho **kết quả y hệt** lần đo trước trên account đã bị xoá —
-tức tính chất bảo mật nằm trong mã Terraform, không nằm trong một lần cấu hình
-may mắn. Ba dòng cuối **chưa** được kiểm bằng máy tấn công, ghi rõ để không nhận
-công không có.
-
-> 🕰️ **Cả 12 kịch bản đo khi database còn là SQL Server, cổng `1433`.** Đợt 7 đổi
-> sang PostgreSQL, cổng `5432`. Cột mô tả bên dưới đã cập nhật theo cấu hình hiện
-> tại, nhưng **phép đo thì chưa chạy lại** — hình dạng rule không đổi (vẫn "chỉ một
-> cổng DB, chỉ từ app tier"), nên kết luận gần như chắc chắn giữ nguyên; chỉ là
-> **chưa có bằng chứng mới**. Kịch bản 3 và 5 là hai kịch bản rẻ nhất để chạy lại.
+theo số. **Các phép đo này chạy** ngày 2026-08-24, khi còn SQL Server port 1433
+và ba custom NACL. Bảng dưới là **kỳ vọng theo cấu hình hiện tại**, không phải
+kết quả runtime đã chạy lại. Sau khi được phép apply, dùng
+[migration guide](nacl-to-sg-migration.md) để kiểm SG, đường phục vụ, DB, egress và
+Flow Logs. Không khẳng định "12/12 đạt" cho cấu hình mới; KB-08 đã nghỉ hưu.
 
 | # | Tấn công | Lớp chặn đầu tiên | Lớp dự phòng |
 |---|---|---|---|
-| 1 | Quét toàn bộ port của ALB | `sg-alb` chỉ mở 80, 443 → 998 port `filtered` | `nacl-public` cũng chỉ allow 80, 443 |
+| 1 | Quét toàn bộ port của ALB | `sg-alb` chỉ mở 80, 443; kỳ vọng port khác bị lọc | Default NACL allow-all không chặn thay |
 | 2 | Gọi thẳng IP riêng của EC2 | **Không có IP public để gọi** → timeout | app subnet không có route ra IGW |
-| 3 | Kết nối trực tiếp vào database | `publicly_accessible=false` → endpoint phân giải ra **IP riêng** | `sg-rds` chỉ nhận từ `sg-web`; `nacl-db` chỉ 5432 từ app CIDR; db subnet không route |
-| 4 | Gọi port ứng dụng `:8080` qua ALB | ALB không có listener 8080 → **timeout**, không phải refused | `nacl-app` rule 115 DENY 8080 từ mọi nguồn khác |
-| 5 | SSH vào mọi hướng | Không có SG rule 22 nào tồn tại; hệ thống có **0 key pair** | `nacl-app` rule 90 DENY 22 |
-| 6 | Dò mật khẩu `/api/auth/login` | Rate limit → req 1-5 nhận 400, **req 6-20 nhận 429** | Identity hash mật khẩu; cờ khoá tài khoản |
+| 3 | Kết nối trực tiếp vào database | `publicly_accessible=false` → endpoint phân giải ra **IP riêng** | `sg-rds` chỉ nhận 5432 từ `sg-web`; db subnet không default route Internet |
+| 4 | Gọi port ứng dụng `:8080` qua ALB | ALB không có listener 8080 → **timeout**, không phải refused | `sg-web` chỉ nhận 80/8080 từ `sg-alb` |
+| 5 | SSH vào mọi hướng | Không có SG rule 22 nào tồn tại; hệ thống có **0 key pair** | SG không có ingress 22; không còn lớp NACL deny dự phòng |
+| 6 | Dò mật khẩu `/api/auth/login` | Kỳ vọng rate limit 5 lần/phút, sau đó HTTP 429; cần đo lại | Identity hash mật khẩu; cờ khoá tài khoản |
 | 7 | Giả `Host: evil.com` | ALB allowlist → 403 (kể cả `www` và DNS thô của ALB) | Cert ACM không khớp tên miền lạ |
-| 8 | (Chứng minh) DENY đúng một IP | `nacl-public` rule 50 — A/B từ **cùng một máy**: đường trực tiếp timeout, đường qua Cloudflare 200. *(Cloudflare ở đây chỉ là đường vòng để đổi IP nguồn: đi thẳng thì gói mang IP của laptop — IP đang bị DENY; đi vòng qua Cloudflare thì gói tới ALB mang IP của Cloudflare, không nằm trong rule DENY. Cùng một máy, hai kết quả — đó chính là điều cần chứng minh.)* | — **SG không làm được việc này** |
-| 9 | (Bằng chứng) Flow Logs có ghi `REJECT` | Khớp cả 3 nhóm: máy tấn công, egress EC2, scanner lạ | — đây là kịch bản *thu bằng chứng*, không phải phòng thủ |
-| 10 | Chiếm được một danh tính, thử với sang phạm vi khác | Ma trận **12 phép thử trên 7 role**; host nhận **explicitDeny** khi đọc secret | `sg-rds` egress rỗng nên không rút dữ liệu ra |
+| 8 | **Lịch sử: DENY đúng một IP bằng NACL** | Đã nghỉ hưu: rule 50 và `enable_deny_demo` bị xoá | Không chạy bài này và không tính đạt trong thiết kế SG hiện tại |
+| 9 | Flow Logs ghi nhận kết nối bị từ chối | Sau triển khai, đối chiếu nguồn/đích/port với rule SG; REJECT tự nó không chỉ ra rule chặn | — cần bằng chứng mới; default ACL không chủ động chặn |
+| 10 | Chiếm được một danh tính, thử với sang phạm vi khác | Host có explicit deny đọc secret; ma trận 12 phép thử trên 7 role là kết quả cũ cần đối chiếu | `sg-rds` egress rỗng ngăn kết nối mới, không ngăn dữ liệu trả lời |
 | 11 | Giả OIDC token để đóng vai CI | JWT tự ký **đủ mọi claim** trust policy đòi vẫn bị `InvalidIdentityToken` — AWS chặn ở bước **xác thực chữ ký**, trước cả khi xét trust policy | trust condition ghim `aud` + `sub` theo repo và branch |
-| 12 | Chiếm được role CI, thử bật hạ tầng tốn tiền | 4 phép thử `allowed`, **7 phép thử `implicitDeny`** — gồm `autoscaling:SetDesiredCapacity`, `rds:StartDBInstance`, `s3:GetObject` trên tfstate | không có `terraform apply` trong workflow nào |
+| 12 | Chiếm được role CI, thử bật hạ tầng tốn tiền | Kỳ vọng các quyền ngoài phạm vi bị từ chối — gồm `autoscaling:SetDesiredCapacity`, `rds:StartDBInstance`, `s3:GetObject` trên tfstate | không có `terraform apply` trong workflow nào |
 | — | SQL injection qua form | EF Core tham số hoá; không có `FromSqlRaw` nối chuỗi trong dự án | *(chưa kiểm bằng `sqlmap` — đây là lập luận từ mã nguồn, không phải kết quả đo)* |
 | — | XSS qua nội dung người dùng | Blazor escape output theo mặc định | *(chưa kiểm)* |
 | — | CSRF | API dùng JWT trong header `Authorization`, không dùng cookie → không có bề mặt CSRF cổ điển | *(chưa kiểm)* |
@@ -732,7 +757,7 @@ Ba dòng cuối là chỗ trung thực đáng giữ: chúng **có lập luận p
 **không có bằng chứng đo được**. Nếu bị hỏi, trả lời đúng như vậy — mạnh hơn là
 nói "đã chặn".
 
-Kết quả đo thật của cả 12 kịch bản, kèm nguyên lệnh và nguyên output:
+Kết quả đo lịch sử của cả 12 kịch bản, kèm nguyên lệnh và nguyên output:
 [security-validation-report.md](security-validation-report.md).
 
 ---
@@ -743,10 +768,10 @@ Nói thẳng phần này khi bảo vệ sẽ được điểm cao hơn là vờ 
 
 | Không chặn được | Vì sao, và cần gì để chặn |
 |---|---|
-| **Tấn công tầng ứng dụng (XSS, CSRF, SQLi ở tầng HTTP)** | Không có WAF. ALB lọc theo Host, không đọc nội dung request. Cần AWS WAF (~$5–10/tháng). Hiện phòng thủ nằm ở tầng ứng dụng: EF tham số hoá, Blazor tự escape output |
+| **Tấn công tầng ứng dụng (XSS, CSRF, SQLi ở tầng HTTP)** | WAF sidecar ModSecurity + CRS **đã có mã và đo local, chưa chạy trên AWS** — khi chạy sẽ chặn payload SQLi/XSS phổ biến bằng 403 (mức nhạy 1). Nó **không** thay EF tham số hoá, validation, Blazor escape output; CSRF và logic nghiệp vụ nó không thấy. Xem [mục WAF](#waf-sidecar-modsecurity--owasp-crs--đã-có-mã-chưa-chạy-trên-aws) |
 | **DDoS quy mô lớn** | Chỉ có AWS Shield Standard (bật sẵn, miễn phí), chặn tầng 3/4. Chặn tầng 7 cần Shield Advanced ($3.000/tháng) hoặc Cloudflare |
 | **Rò rỉ dữ liệu qua egress hợp lệ** | `sg-web` được mở 443 ra Internet để pull ECR. Kẻ chiếm được container có thể dùng chính đường đó đẩy dữ liệu ra. Lọc theo tên miền cần AWS Network Firewall (~$300/tháng) |
-| **Kẻ tấn công đã có credential hợp lệ của user** | Bảy lớp đều cho họ vào. Chặn được bằng MFA — chưa có |
+| **Kẻ tấn công đã có credential hợp lệ của user** | Các lớp mạng đều có thể cho họ vào. Chặn được bằng MFA — chưa có |
 | **Hành vi bất thường sau khi đã vào** | Không có GuardDuty, không có alarm nào. Không ai được thông báo |
 | **Điều tra sau sự cố quá 90 ngày** | Chưa tạo CloudTrail trail. Chỉ có Event History mặc định (90 ngày, chỉ management event) |
 | **Lỗ hổng trong thư viện phụ thuộc** | ECR có `scan_on_push`, nhưng CI **không** fail khi phát hiện. Còn **3 package mức High chưa vá** — xem mục 5.1 bên dưới để biết tên và số hiệu advisory |
@@ -809,23 +834,24 @@ chứng an toàn giả" mà tài liệu này nhắc nhiều lần.
 
 Phần đáng đọc nhất trước khi bảo vệ.
 
-**"Đã có Security Group rồi, NACL để làm gì?"**
+**"Bỏ custom NACL thì firewall còn ở đâu?"**
 
-Ba lý do, nêu được lý do thứ nhất là đủ:
+SG stateful là bộ lọc mạng chính: ALB chỉ gửi 80/8080 tới web, web chỉ nhận từ
+ALB, RDS chỉ nhận 5432 từ web. EC2 vẫn không có IP public và DB vẫn không có
+route Internet. Default ACL của AWS vẫn tồn tại và cho phép hai chiều; Terraform
+không quản lý nó. Default SG lại rỗng cả hai chiều — đừng nhầm hai đối tượng.
 
-1. **SG không có DENY.** Muốn chặn đúng một IP thì bắt buộc dùng NACL. Kịch bản 8
-   chứng minh: bật rule 50 lên thì laptop mất truy cập, máy khác vẫn vào bình thường.
-2. **NACL bảo vệ ở tầng subnet**, có hiệu lực cả với resource không gắn được SG —
-   ví dụ NAT Gateway.
-3. **Hai lớp độc lập** nghĩa là cấu hình sai một lớp không mở toang hệ thống.
+**"Đánh đổi khi bỏ NACL là gì?"**
 
-**"Vì sao `nacl-app` phải mở dải 1024–65535? Nghe rất rộng."**
+Mất deny IP/CIDR ở subnet và một lớp bảo vệ nếu SG sai. Không thể dùng SG để tái
+hiện rule 50 deny riêng một IP. KB-08 là hồ sơ cũ, không còn bước demo. Quyết định
+này giảm số rule stateless cần quản lý; không biến SG thành bộ lọc có deny.
 
-Vì NACL **stateless**: phản hồi của request đi ra là một gói tin mới, cổng đích
-ngẫu nhiên trong dải đó. Không mở thì máy không tải được image từ ECR. Đã bù bằng
-**DENY 5432 ở rule 95 và DENY 8080 ở rule 115** — số nhỏ hơn nên được xét trước.
-Và Security Group ở lớp trong vẫn chỉ nhận đúng 2 port từ đúng 1 nguồn. **Đây
-chính là ví dụ vì sao cần cả hai lớp.**
+**"Vì sao không mở 1024–65535 nữa?"**
+
+SG theo dõi kết nối nên cho phép chiều phản hồi tự động, kể cả khi RDS egress
+rỗng. Default NACL allow-all cũng cho qua phản hồi. Cổng tạm vẫn tồn tại trong
+TCP, nhưng không cần một rule SG inbound mở cả dải để nhận response.
 
 **"Không có SSH thì làm sao vào máy sửa lỗi?"**
 
@@ -890,10 +916,13 @@ suất, và đã ghi ở Phần V của tài liệu thiết kế.
 
 **"Đã kiểm thử thật chưa, hay chỉ đọc cấu hình?"**
 
-Đã chạy thật 12 kịch bản từ laptop, có output lệnh và log CloudWatch làm bằng
-chứng trong `docs/evidence/acc-551897327153/`. Ngoài ra hạ tầng có **106 test tự động**
-(`terraform test`) khoá lại từng khẳng định — ví dụ có một test sẽ **đỏ** nếu ai
-đó thêm rule port 22 vào bất kỳ Security Group nào.
+Đã có 12 kịch bản runtime của **thiết kế cũ** trong
+`docs/evidence/acc-551897327153/`. Bản bỏ custom NACL đã apply ngày 02/11; bằng
+chứng mới xác minh cấu hình/association, chưa chạy lại các kịch bản traffic.
+Bộ `terraform test` kiểm bất biến trong mã (quan hệ SG, port, egress, không custom
+ACL); test plan không chứng minh association hay rule đang chạy trên AWS. Kết quả
+check local và kết quả đo sau triển khai phải được ghi tách biệt, có thời gian và
+bằng chứng mới; không sửa log cũ để tạo cảm giác đã xác nhận cấu hình mới.
 
 ---
 
@@ -902,7 +931,8 @@ chứng trong `docs/evidence/acc-551897327153/`. Ngoài ra hạ tầng có **106
 | Cần biết | Đọc ở đâu |
 |---|---|
 | Kiến thức nền mạng (CIDR, port, stateful/stateless, NAT, TLS) | [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md) Phần I |
-| Bảng rule NACL đầy đủ, giải thích từng số | Phần III mục "Network ACL" |
+| SG hiện tại, default ACL và đánh đổi | [thiet-ke-he-thong-aws.md](thiet-ke-he-thong-aws.md), Phần III |
+| Migration, rollback và kiểm tra sau triển khai | [nacl-to-sg-migration.md](nacl-to-sg-migration.md) |
 | Linux: boot, quyền file, container, vì sao không SSH | Phần III mục "Linux" |
 | Kết quả 12 kịch bản tấn công, có số và log | [security-validation-report.md](security-validation-report.md) |
 | Toàn bộ giới hạn đã biết | Phần V |

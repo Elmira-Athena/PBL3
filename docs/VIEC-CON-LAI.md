@@ -1,10 +1,28 @@
 # Việc còn lại — từ đây đến hết dự án
 
+**Cập nhật 02/11/2026:** migration NACL prod đã apply xong, SG/association được
+đọc lại và xác minh; serving stack vẫn tắt. Phương án Cloudflare WAF đã được gỡ ngày 08/11/2026 và thay bằng WAF sidecar ModSecurity + CRS trên EC2: **mã đã xong, đo local, chưa apply/chưa chạy trên AWS** (mục 5F).
+Xem [biên bản mới](bien-ban-apply-sg-2026-11-02.md); các số đo ngày 26/10 bên dưới
+vẫn là bản ghi tại thời điểm đó.
+
+**WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn ([phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md)); WAF thay thế là **sidecar ModSecurity + CRS** — mã xong trên nhánh `codex/remove-custom-nacl`, đo local ($0), **chưa apply lên AWS, chưa merge `main`**. Việc còn lại ở mục 5F. Giữ DNS/proxy hiện có và migration SG đã apply.
+
 > **Viết cho một agent không có ngữ cảnh gì.** File này tự chứa. Đọc hết trước khi
 > gõ dòng lệnh đầu tiên.
 >
 > **Đo ngày 2026-10-26.** Mọi con số dưới đây đo bằng lệnh thật tại thời điểm đó,
 > không lấy từ trí nhớ hay từ tài liệu khác.
+
+> **Ghi chú revision mạng (2026-10-26, sửa code/tài liệu local; chưa đo lại AWS):**
+> Bỏ 3 custom NACL, dùng default ACL allow-all do AWS quản lý cho cả 6 subnet.
+> SG giữ chuỗi Internet TCP 80/443 → ALB → web TCP 80/8080 → RDS TCP 5432;
+> web outbound TCP 80/443 được giữ, default SG rỗng. ECR endpoints tuỳ chọn
+> chỉ nhận TCP 443 từ SG web; không bật endpoint hay thêm tài nguyên tính phí.
+> Không còn yêu cầu `my_ip` / `enable_deny_demo` hoặc demo chặn IP bằng ACL
+> trong revision hiện tại. Bẫy số 3 ở mục 7 là bản ghi cũ, không phải hướng dẫn
+> thực hiện nữa. Dùng [quy trình migration hai giai đoạn](nacl-to-sg-migration.md)
+> trước khi apply từ state cũ. Các số đo và trạng thái nhánh dưới đây được giữ
+> nguyên tại thời điểm đo, không chứng minh revision này đã chạy trên AWS.
 
 ---
 
@@ -311,6 +329,35 @@ Sửa khi tiện, nhưng **mục 1 và 2 nguy hiểm** vì tin vào chúng sẽ 
 | 11 | *"một `InitialCreatePostgres` duy nhất"* | **2 migration** (thêm `AddRateLimitCounters`) |
 | 12 | `terraform.tfvars:67-77`: *"rate limiter đếm trong RAM"* | 4/6 policy đã ở DB từ `866015e` |
 
+### 5F. WAF sidecar ModSecurity + CRS — còn lại để đưa lên AWS
+
+Mã đã xong và đo ở local (Docker arm64, $0): xem [`bao-mat-he-thong.md`](bao-mat-he-thong.md) mục "WAF sidecar",
+[thiết kế](superpowers/specs/2026-11-08-waf-modsecurity-ec2-design.md),
+[đo RAM](evidence/2026-11-08-waf-ram-spike.md), [bộ kiểm thử local](evidence/2026-11-08-waf-local.md).
+**Mọi bước dưới đây cần chủ dự án duyệt — không bước nào được tự chạy.** Đúng thứ tự:
+
+| # | Việc | Ghi chú |
+|---|---|---|
+| F1 | **Apply hẹp** (`terraform plan -target`) chỉ gồm repo ECR `hushstore-waf` (+ lifecycle policy) và policy IAM cho CI đẩy vào repo đó | $0, không chạm RDS/ALB/NAT/EC2. **Đưa plan cho chủ dự án xem trước**; plan có resource nào khác ⇒ dừng. Log group `/ecs/hushstore-waf` để `up.sh` tạo |
+| F2 | **Merge vào `main`** | CI build đủ 5 image cùng một SHA (stack tắt thì job deploy tự bỏ qua). CI chỉ push được ECR từ `main` |
+| F3 | Chủ dự án **đặt `image_tag`** trong `terraform.tfvars` = SHA của lần build đó | `up.sh` **dừng** nếu image `waf` ở tag đó chưa có trên ECR (thay vì để ECS kẹt ở bước pull) |
+| F4 | **Kiểm `instance_type` trong `terraform.tfvars`** | Default của `envs/prod` là `t3.small`, nhưng tfvars có thể ghi đè về `t3.micro`. Với 2 sidecar WAF, `t3.micro` không đủ RAM (tổng `memoryReservation` 992 MiB vượt ~900 MiB (ước) ECS đăng ký được) |
+| F5 | **Cửa sổ AWS**: bật stack bằng `up.sh` và đo (5 phép đo ngay dưới bảng) | Cần duyệt riêng. **Bắt đầu bằng `waf_rule_engine = "DetectionOnly"`, KHÔNG phải `On`**: bộ kiểm thử local chỉ chạy với upstream giả (echo), chưa bao giờ với app thật. Đi tay các luồng thật (đăng nhập, xem/sửa sản phẩm kể cả mô tả HTML, upload ảnh, giỏ hàng, thanh toán, phiếu nhập/xuất kho), đọc `/ecs/hushstore-waf`, mỗi dương tính giả ⇒ thêm exclusion (build lại image + merge), rồi mới chuyển `On` (apply + `aws ecs update-service --cluster hushstore --service hushstore-api\|hushstore-web --task-definition <revision mới>`) và chạy demo 403 |
+| F6 | `down.sh`, rồi **xác minh đã tắt bằng AWS API** (`status.sh`: ALB=0, NAT=0, EC2=0) | Đừng chỉ tin exit code |
+
+Năm phép đo của F5:
+1. Health check của 2 target group xanh.
+2. Demo 403: payload SQLi/XSS qua domain thật → 403, và một dòng JSON có mã luật trong CloudWatch `/ecs/hushstore-waf`.
+3. Test đăng nhập từ **2 IP khác nhau**: không khoá lẫn nhau (bằng chứng không dính bẫy XFF).
+4. Xem log WAF trên CloudWatch (hai stream `waf-api`, `waf-web`).
+5. **Đo RAM trên EC2 amd64** — số hiện tại chỉ từ Docker arm64; trên amd64 giả lập RAM còn tăng qua 3 lượt.
+
+**Giới hạn đã biết của WAF (đã quyết định, ghi để khỏi tưởng là sót):** 403 của WAF không có header
+CORS nên Blazor chỉ thấy lỗi mạng; `proxy_read_timeout` = 60 giây mặc định; CRS 920450 chặn header
+`Expect` (trình duyệt không gửi); 20 upload 8 MB đồng thời có thể vượt trần cứng 512 MiB của container
+`waf` (DoS qua upload chưa giải quyết); trường mật khẩu cố ý không được CRS soi ở các đường auth/user;
+audit log chỉ phần `AHZ`. Chi tiết ở mục WAF của `bao-mat-he-thong.md`.
+
 ---
 
 ## 6. Thứ tự đề nghị
@@ -360,11 +407,12 @@ bash infra/tf/scripts/down.sh       # rồi status.sh XÁC MINH: ALB=0 NAT=0 EC2
    ở `12b5b8b` bằng `providers lock -platform=linux_amd64 -platform=darwin_arm64`.
    **Nếu lại chạy `init` trên macOS rồi hoàn nguyên lock mà không xoá cache, nó tái
    diễn.** Lock giờ có 3 hash/provider — giữ nguyên, đừng hoàn nguyên.
-3. **`my_ip` trong tfvars lệch** với IP hiện tại. **Không** chặn truy cập (nó chỉ
+3. **[Bản ghi cũ; hết áp dụng ở revision mạng hiện tại] `my_ip` trong tfvars lệch** với IP hiện tại. **Không** chặn truy cập (nó chỉ
    dùng ở `modules/network/nacl.tf:109`, rule DENY demo, mà `enable_deny_demo=false`).
-   Nhưng **phải cập nhật trước khi diễn lại kịch bản 8**, nếu không rule DENY chặn
+   Khi đo cũ, **phải cập nhật trước khi diễn lại kịch bản 8**, nếu không rule DENY chặn
    nhầm IP người khác và test "đạt" **GIẢ**.
    ```bash
+   # Lệnh của bản ghi cũ, không chạy theo revision hiện tại:
    curl -s https://checkip.amazonaws.com    # rồi sửa my_ip = "<ip>/32"
    ```
 4. **`image_tag` trong tfvars có thể cũ hơn ECR.** `up.sh` cảnh báo nhưng **không tự

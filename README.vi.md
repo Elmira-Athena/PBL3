@@ -1,5 +1,9 @@
 # HushStore
 
+**Đã apply AWS ngày 02/11/2026:** sáu subnet dùng default NACL; xóa ba custom ACL và 20 rule, xác minh chính sách SG. Giữ serving stack tắt. **Đã gỡ mã Cloudflare WAF ngày 08/11/2026; chưa triển khai WAF thay thế.** Xem [biên bản triển khai](docs/bien-ban-apply-sg-2026-11-02.md).
+
+**Rollback WAF (08/11/2026):** gỡ cấu hình Cloudflare WAF/origin lockdown chưa apply; giữ DNS/proxy và migration SG đã apply. WAF mã nguồn mở trên EC2 để đợt sau. Xem [phạm vi rollback](docs/rollback-cloudflare-waf-2026-11-08.md).
+
 **Hạ tầng AWS dạng production cho một nền tảng thương mại điện tử .NET 10 — dựng bằng Terraform, deploy bằng GitHub Actions không có credential dài hạn nào, và được chứng minh bằng test cùng bằng chứng đã ghi lại, chứ không bằng lời khẳng định.**
 
 🇬🇧 English version: **[README.md](README.md)** · Toàn bộ tài liệu thiết kế trong [`docs/`](docs/) viết bằng tiếng Việt.
@@ -11,9 +15,9 @@
 | **Ứng dụng** | ASP.NET Core 10 Web API · Blazor WebAssembly · PostgreSQL 17 · EF Core |
 | **Hạ tầng** | Terraform (8 module, ~6.300 dòng HCL) trên AWS `ap-southeast-1` |
 | **Compute** | ECS EC2 launch type · 4 container image · one-off task cho migrate & seed |
-| **Mạng** | VPC 3 tier × 2 AZ, mỗi tier một Network ACL riêng, app tier không có public IP |
+| **Mạng** | VPC 3 tier × 2 AZ, tham chiếu SG kiểm soát giữa các tier, app tier không có public IP |
 | **CI/CD** | GitHub Actions + OIDC — **không tồn tại AWS access key nào** |
-| **Kiểm chứng** | 109 assertion `terraform test` trong 12 file · 12 kịch bản bảo mật có output thô |
+| **Kiểm chứng** | Test module Terraform · kịch bản bảo mật lịch sử có output thô |
 | **Kiểm soát chi phí** | Mọi resource tính tiền đều sau một công tắc · Lambda tự tắt hằng đêm · đồng hồ chi phí trong `status.sh` |
 
 > **Về giá trị đã che.** README này dùng `<AWS_ACCOUNT_ID>`, `<YOUR_IP>` và `<ALERT_EMAIL>` ở những chỗ working tree đang giữ giá trị thật. `terraform.tfvars` bị git-ignore có chủ ý; chỉ `*.tfvars.example` được commit.
@@ -26,7 +30,7 @@ Phần lớn đồ án chứng minh được rằng hạ tầng *dựng lên đ�
 
 Ba điều đi ra từ câu hỏi đó, và đó là những phần đáng dành thời gian:
 
-1. **Tính chất bảo mật nằm trong mã, không nằm trong một lần bấm console may mắn.** Toàn bộ hạ tầng đã bị destroy trên một account AWS (132 resource) rồi dựng lại từ chính mã Terraform đó trên một account trắng. Cả 12 kịch bản bảo mật cho kết quả y hệt — xem [`docs/security-validation-report.md`](docs/security-validation-report.md) và output thô ở [`docs/evidence/`](docs/evidence/).
+1. **Tính chất bảo mật nằm trong mã, không nằm trong một lần bấm console may mắn.** Toàn bộ hạ tầng đã bị destroy trên một account AWS (132 resource) rồi dựng lại từ chính mã Terraform đó trên một account trắng. Trên cấu hình lịch sử đó, cả 12 kịch bản bảo mật cho kết quả y hệt — xem [`docs/security-validation-report.md`](docs/security-validation-report.md) và output thô ở [`docs/evidence/`](docs/evidence/).
 2. **Chi phí là ràng buộc thiết kế, không phải ghi chú cuối trang.** NAT Gateway và ALB không có bậc free tier nào và tính tiền theo giờ. Mọi resource loại đó đều nằm sau một công tắc mặc định *tắt*, và một Lambda thi hành lại mặc định đó mỗi đêm phòng khi có người quên.
 3. **Mọi khẳng định đều có điều kiện kèm theo.** Chỗ nào đã đo thì README ghi rõ đo ngày nào, trên cấu hình nào. Chỗ nào **chưa** đo thì nói thẳng là chưa — xem [Giới hạn đã biết](#giới-hạn-đã-biết). `terraform apply` xanh không phải bằng chứng hệ thống chạy được, và repo này không coi nó là bằng chứng.
 
@@ -40,7 +44,7 @@ Ba điều đi ra từ câu hỏi đó, và đó là những phần đáng dành
                    Cloudflare DNS (proxied, Full strict)
                             │
     ┌───────────────────────▼────────────────────────────────────────────┐
-    │  VPC 10.20.0.0/16 — 3 tier × 2 AZ, mỗi tier một Network ACL riêng  │
+    │  VPC 10.20.0.0/16 — 3 tier × 2 AZ, lọc qua SG có state             │
     │                                                                    │
     │  public tier   ALB (ACM cert, 80→443 redirect)                     │
     │                └─ allowlist Host header; Host lạ → 403              │
@@ -63,6 +67,10 @@ Ba điều đi ra từ câu hỏi đó, và đó là những phần đáng dành
 | ALB | 80, 443 ← `0.0.0.0/0` | chỉ tới `sg-web` cổng 80 và 8080 |
 | app | 80, 8080 ← **chỉ từ `sg-alb`** | 5432 → `sg-rds`; 80/443 → internet (ECR, SSM) |
 | db  | 5432 ← **chỉ từ `sg-web`** | **rỗng** |
+| ECR endpoint (tuỳ chọn) | 443 ← **chỉ từ `sg-web`** | **rỗng** |
+| Default SG của VPC | **rỗng** | **rỗng** |
+
+Security Group thực thi chính sách lưu lượng. Các subnet dùng default network ACL allow-all do AWS tạo; Terraform không quản lý rule của ACL này. SG có state nên tự cho phép traffic trả về, không cần rule cổng ephemeral. Stack đang tồn tại phải làm theo [quy trình chuyển từ ACL sang SG theo giai đoạn](docs/nacl-to-sg-migration.md) trước khi xoá custom ACL.
 
 **Không có SSH.** Hệ thống không có key pair nào và không có security group rule nào mở cổng 22. Truy cập quản trị đi qua **SSM Session Manager** (vào host) và **ECS Exec** (vào trong container). Đã kiểm chứng bằng cách quét ALB từ một máy bên ngoài — xem [`docs/evidence/`](docs/evidence/).
 
@@ -77,7 +85,7 @@ infra/tf/
 ├── bootstrap/              S3 state backend, có versioning + mã hoá (lớp con-gà-quả-trứng)
 ├── envs/prod/              root module — ghép 8 module bên dưới
 ├── modules/
-│   ├── network/            VPC, 3×2 subnet, route table, NACL, flow log, ECR endpoint
+│   ├── network/            VPC, 3×2 subnet, route table, flow log, ECR endpoint
 │   ├── security/           security group — chính ma trận ở trên
 │   ├── storage/            4 × ECR repo, S3 assets, S3 ALB logs, S3 artifacts
 │   ├── data/               RDS PostgreSQL 17, subnet group, SSM parameter
@@ -88,7 +96,7 @@ infra/tf/
 └── scripts/                up.sh · down.sh · status.sh · nuke.sh · wait-for-capacity.sh
 ```
 
-**Kiểm thử.** `terraform test` chạy **109 khối `run` trong 12 file test**, không cần credential AWS và không đụng tới state. Các assertion mã hoá thẳng bất biến bảo mật — NACL là stateless nên chiều về phải mở tường minh, không security group nào được mở cổng 22, IAM policy phải giữ least-privilege. Chạy bằng:
+**Kiểm thử.** Plan trong `terraform test` của từng module kiểm tra đúng nguồn, đích, cổng và số rule SG, công tắc endpoint, default SG rỗng và IAM least-privilege. Test network, security và ALB dùng mock provider; các module khác dùng AWS provider và có thể cần credential để đọc data source. Test module không đọc state của stack đã deploy. Chạy bằng:
 
 ```bash
 for m in infra/tf/modules/*/; do terraform -chdir="$m" init -backend=false && terraform -chdir="$m" test; done
@@ -164,8 +172,8 @@ aws ecs execute-command --cluster hushstore --task <arn> --container api \
 
 | Cái gì | Ở đâu | Trạng thái |
 |---|---|---|
-| 12 kịch bản bảo mật (quét cổng, kết nối thẳng DB, SSH, blast radius IAM, giả mạo OIDC, rate limit, allowlist Host, NACL, flow log, cost guard) | [`docs/security-validation-report.md`](docs/security-validation-report.md), output thô ở [`docs/evidence/`](docs/evidence/) | 12/12 đạt, đo ngày 2026-08-24 — xem lưu ý bên dưới |
-| Assertion cho module Terraform | [`infra/tf/modules/*/tests/`](infra/tf/) | 109 khối `run`, chạy trong CI ở mọi PR |
+| 12 kịch bản bảo mật lịch sử (quét cổng, kết nối thẳng DB, SSH, blast radius IAM, giả mạo OIDC, rate limit, allowlist Host, NACL, flow log, cost guard) | [`docs/security-validation-report.md`](docs/security-validation-report.md), output thô ở [`docs/evidence/`](docs/evidence/) | 12/12 đạt trên cấu hình cũ, đo ngày 2026-08-24 — xem lưu ý bên dưới |
+| Assertion cho module Terraform | [`infra/tf/modules/*/tests/`](infra/tf/) | Plan module chạy trong CI ở mọi PR; test SG bằng mock kiểm tra chính sách hiện tại |
 | Tính đúng đắn của ứng dụng dưới tải | [`tools/LoadProbe/`](tools/LoadProbe/), [`docs/evidence/loadprobe/`](docs/evidence/loadprobe/) | 9/9 bất biến giữ được ở cả 1 lẫn 2 instance |
 | Khả năng dựng lại từ đầu | [`docs/security-validation-report.md`](docs/security-validation-report.md) | Destroy 132 resource rồi dựng lại trên account trắng; kết quả y hệt |
 
@@ -177,7 +185,7 @@ aws ecs execute-command --cluster hushstore --task <arn> --container api \
 
 Nói thẳng, vì người review DevOps kiểu gì cũng tìm ra, và vì phần lập luận đằng sau còn đáng đọc hơn một danh sách trông sạch sẽ.
 
-- **12 kịch bản bảo mật được đo trên SQL Server cổng 1433**, trước khi đợt chuyển sang PostgreSQL 17 đổi nó thành 5432 và thêm NAT Gateway thứ hai cùng Multi-AZ. *Hình dạng* của mọi rule không đổi ("đúng một cổng DB, chỉ từ app tier"), nên kết luận gần như chắc chắn giữ nguyên — nhưng *gần như chắc chắn* không phải *đã đo*, và repo này không làm tròn lên.
+- **12 kịch bản bảo mật được đo trên SQL Server cổng 1433**, trước khi đợt chuyển sang PostgreSQL 17 đổi nó thành 5432 và thêm NAT Gateway thứ hai cùng Multi-AZ. Custom ACL theo tier và demo chặn IP sau đó đã được thay bằng tham chiếu SG. Kết quả lịch sử này không xác nhận chính sách hiện tại; stack đã deploy cần làm theo [quy trình chuyển đổi và kiểm tra thật](docs/nacl-to-sg-migration.md).
 - **Đơn giá RDS (`$0.098`) là số đo trên SQL Server**, giữ lại như một cận trên. PostgreSQL Multi-AZ niêm yết \$0.051. Chưa sửa cho tới khi có hoá đơn thật xác nhận.
 - **Mặc định chỉ một instance ứng dụng.** Chạy hai cái đòi bộ đếm rate limit phải dùng chung giữa các task trước; `terraform validate` chặn việc nâng `max_instance_count` mà không đặt kèm `rate_limiter_is_distributed`, nên trạng thái không an toàn đó không biểu diễn được. Bộ đếm dùng chung sau đó đã được cài và đo — xem [`docs/evidence/2026-09-06-rate-limit-dung-chung.md`](docs/evidence/2026-09-06-rate-limit-dung-chung.md).
 - **Chưa có bộ test tự động cho mã ứng dụng.** `tools/LoadProbe/` phủ các bất biến về tương tranh; unit test thông thường thì chưa có. Đây là thiếu sót thật, không phải đánh đổi có cân nhắc.

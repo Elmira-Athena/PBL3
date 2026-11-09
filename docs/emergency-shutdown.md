@@ -1,10 +1,22 @@
 # Tắt khẩn cấp — dừng mọi khoản tính phí theo giờ
 
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
+
 Dùng file này khi bạn cần dừng chi phí AWS mà **không có ai hướng dẫn**: phiên làm
 việc bị ngắt giữa lúc triển khai, bạn không rõ hạ tầng đang ở trạng thái nào, hoặc
 bạn chỉ muốn tắt đi và tính sau.
 
 Đọc mục **"Cách 1"** là đủ. Mọi thứ khác là giải thích.
+
+**Revision mạng hiện tại:** giữ nguyên default network ACL allow-all do AWS
+quản lý trên cả 6 subnet. Không cần xoá hay sửa ACL để tắt chi phí. Quyền mạng
+được giới hạn bằng SG: Internet TCP 80/443 → ALB → web TCP 80/8080 → RDS TCP
+5432; web chỉ nhận từ SG ALB, RDS chỉ nhận từ SG web. Web giữ outbound TCP
+80/443; default SG rỗng hai chiều. ECR endpoints là tuỳ chọn tính phí, inbound
+TCP 443 chỉ từ SG web. Không bật endpoint chỉ để chuyển cấu hình mạng.
+
+Nếu state còn custom ACL cũ, đọc [quy trình migration hai giai đoạn](nacl-to-sg-migration.md)
+trước lần apply tiếp theo. Các lệnh tắt dưới đây không thay thế quy trình đó.
 
 ---
 
@@ -20,7 +32,7 @@ này đốt tiền khi bật:
 | **Elastic IP chưa gắn vào đâu** | ~$0.005/giờ | ~$3.6 |
 
 EC2 `t3.micro`, EBS 30GB, RDS `db.t3.micro` + 20GB storage đều trong free tier.
-ECS cluster, Auto Scaling Group, Security Group, NACL, VPC, subnet, ECR (dưới
+ECS cluster, Auto Scaling Group, Security Group, default ACL, VPC, subnet, ECR (dưới
 500MB), S3 (gần như rỗng), SSM Parameter Store, CloudWatch log: **$0**.
 
 Elastic IP dễ bị bỏ sót: nó chỉ tính phí **khi KHÔNG gắn vào gì**. Xoá NAT Gateway

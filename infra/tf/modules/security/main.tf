@@ -186,3 +186,17 @@ resource "aws_vpc_security_group_egress_rule" "all" {
 
   tags = { Name = "${var.project}-out-${each.key}" }
 }
+
+# Endpoint SG thuộc network; đặt rule ở đây để nguồn là đúng sg-web mà không
+# tạo dependency ngược từ network tới security. SG có state nên không cần
+# egress cho response và không cần rule ephemeral.
+resource "aws_vpc_security_group_ingress_rule" "vpce_443" {
+  count = var.enable_ecr_endpoints ? 1 : 0
+
+  security_group_id            = var.vpce_sg_id
+  description                  = "HTTPS tu app tier toi ECR endpoint"
+  referenced_security_group_id = aws_security_group.web.id
+  ip_protocol                  = "tcp"
+  from_port                    = 443
+  to_port                      = 443
+}

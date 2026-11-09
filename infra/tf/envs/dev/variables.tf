@@ -52,20 +52,9 @@ variable "azs" {
   }
 }
 
-variable "my_ip" {
-  description = "IP công cộng của máy tấn công (laptop), dạng CIDR /32. Lấy bằng: curl -s https://checkip.amazonaws.com"
-  type        = string
-
-  validation {
-    condition     = can(cidrhost(var.my_ip, 0)) && endswith(var.my_ip, "/32")
-    error_message = "my_ip phải là CIDR /32, ví dụ 203.0.113.45/32."
-  }
-}
-
 # ─── CIDR — KHÔNG ĐƯỢC CHỒNG PROD ────────────────────────────────
 # Prod dùng 10.20.0.0/16. Dev dùng 10.30.0.0/16 với ĐÚNG cùng cách chia
-# offset (x.x.0/1.0 public, x.x.10/11.0 app, x.x.20/21.0 db), nên mọi rule
-# NACL sinh ra từ cidrsubnet() giữ nguyên hình dạng, chỉ đổi octet thứ hai.
+# offset (x.x.0/1.0 public, x.x.10/11.0 app, x.x.20/21.0 db).
 # Hai dải không chồng nhau là điều kiện để sau này peer được hai VPC (ví dụ
 # khi muốn một bastion dùng chung) mà không phải dựng lại.
 variable "vpc_cidr" {
@@ -129,12 +118,6 @@ variable "enable_alb" {
 
 variable "enable_flow_logs" {
   description = "Bật VPC Flow Logs (chỉ REJECT) cho báo cáo bảo mật"
-  type        = bool
-  default     = false
-}
-
-variable "enable_deny_demo" {
-  description = "Bật NACL rule 50 DENY my_ip — kịch bản kiểm thử số 8"
   type        = bool
   default     = false
 }
@@ -242,4 +225,17 @@ variable "stop_cron" {
   description = "Giờ chạy cost guard, theo giờ Việt Nam"
   type        = string
   default     = "cron(0 0 * * ? *)"
+}
+
+# Bắt buộc phải khai ở đây: envs/dev/main.tf là symlink sang ../prod/main.tf,
+# và main.tf đọc var.waf_rule_engine. Giữ khớp với envs/prod/variables.tf.
+variable "waf_rule_engine" {
+  description = "Chế độ ModSecurity của 2 sidecar WAF: On (chặn) hoặc DetectionOnly (chỉ ghi log) — công tắc lùi khi chặn nhầm"
+  type        = string
+  default     = "On"
+
+  validation {
+    condition     = contains(["On", "DetectionOnly"], var.waf_rule_engine)
+    error_message = "waf_rule_engine chỉ được On hoặc DetectionOnly."
+  }
 }

@@ -115,8 +115,10 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
-# tfvars chứa my_ip và có thể chứa giá trị nhạy cảm — chỉ commit file mẫu
+# tfvars/plan có thể chứa secret origin hoặc mật khẩu — chỉ commit file mẫu
 *.tfvars
+*.tfvars.json
+*.tfplan
 !*.tfvars.example
 
 # SDD scratch workspace (khong commit)

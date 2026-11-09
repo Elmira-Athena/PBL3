@@ -5,9 +5,6 @@
 # đây chỉ tồn tại trên máy này. Thứ gì phải bền qua một lần clone thì đặt
 # default trong variables.tf — file được commit.
 
-# IP công cộng của laptop. Kiểm bằng: curl -s https://checkip.amazonaws.com
-my_ip = "203.0.113.45/32"
-
 # Cùng major version với prod. Dev chạy version khác thì nó không còn là nơi
 # thử migration trước khi đụng prod nữa — mà đó là lý do duy nhất nó tồn tại.
 db_engine_version = "17"

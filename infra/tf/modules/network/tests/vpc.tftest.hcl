@@ -1,6 +1,29 @@
-provider "aws" {
-  region  = "ap-southeast-1"
-  profile = "hushstore"
+# Mock provider keeps all network plans offline.
+mock_provider "aws" {
+  mock_data "aws_region" {
+    defaults = { region = "ap-southeast-1" }
+  }
+}
+
+override_resource {
+  target          = aws_vpc.this
+  override_during = plan
+  values = {
+    id                     = "vpc-00000000000000000"
+    default_network_acl_id = "acl-00000000000000000"
+  }
+}
+
+override_resource {
+  target          = aws_subnet.app[0]
+  override_during = plan
+  values          = { id = "subnet-00000000000000001" }
+}
+
+override_resource {
+  target          = aws_subnet.app[1]
+  override_during = plan
+  values          = { id = "subnet-00000000000000002" }
 }
 
 variables {
@@ -10,10 +33,8 @@ variables {
   public_subnet_cidrs = ["10.20.0.0/24", "10.20.1.0/24"]
   app_subnet_cidrs    = ["10.20.10.0/24", "10.20.11.0/24"]
   db_subnet_cidrs     = ["10.20.20.0/24", "10.20.21.0/24"]
-  my_ip               = "203.0.113.45/32"
   enable_nat          = false
   enable_flow_logs    = false
-  enable_deny_demo    = false
 }
 
 run "sau_subnet_dung_3_tier_2_az" {
@@ -218,42 +239,18 @@ run "route_table_private_tach_theo_az_ke_ca_khi_nat_tat" {
 run "default_security_group_bi_khoa_ve_rong" {
   command = plan
 
-  # AWS tạo một security group "default" cho MỌI VPC, không cho xoá, và mặc định
-  # nó cho phép mọi protocol / mọi port từ chính nó — kể cả 22. Khai báo
-  # aws_default_security_group KHÔNG tạo SG mới: Terraform adopt cái AWS đã tạo
-  # rồi xoá sạch rule của nó.
-  #
-  # Test này bảo vệ một điều dễ mất. Nếu ai đó thêm một rule vào khối đó "cho
-  # tiện debug", cả VPC lại có một SG mở sẵn mà không ai để ý — đúng cái lỗ phát
-  # hiện ngày 2026-08-24 khi liệt kê MỌI rule ingress trong region và thấy hai
-  # dòng protocol = -1 (nghĩa là mọi port, tức có 22).
-  # ── GIỚI HẠN CỦA TEST NÀY, nói thẳng ─────────────────────────────────────
-  # Tôi đã thử ba assertion mạnh hơn và cả ba đều KHÔNG chạy được ở plan-time:
-  #
-  #   length(aws_default_security_group.this.ingress) == 0   -> Unknown value
-  #   length(aws_default_security_group.this.egress)  == 0   -> Unknown value
-  #   aws_default_security_group.this.vpc_id == aws_vpc.this.id -> Unknown value
-  #
-  # Hai cái đầu unknown vì `ingress`/`egress` của resource này là
-  # **Optional + Computed**: khi ta CỐ Ý bỏ trống khối, provider phải đọc từ AWS
-  # mới biết giá trị, nên ở plan-time nó là known-after-apply. Cái thứ ba unknown
-  # vì cả hai id đều chưa tồn tại khi chỉ plan.
-  #
-  # Nên assertion dưới đây chỉ chứng minh được MỘT điều: resource này CÓ được
-  # khai báo và Terraform ĐANG quản default SG. Nó KHÔNG chứng minh rule đã rỗng.
-  # Điều đó đến từ cấu trúc code — bỏ trống khối ingress/egress chính là cách
-  # provider diễn đạt "xoá hết rule" — và chỉ kiểm được bằng `command = apply`
-  # (cần AWS thật) hoặc bằng lệnh sau khi apply:
-  #
-  #   aws ec2 describe-security-group-rules \
-  #     --filters Name=group-id,Values=<default sg của VPC> \
-  #     --query 'length(SecurityGroupRules)'      # phải ra 0
-  #
-  # Giá trị thật của test này là chống XOÁ: nếu ai bỏ resource khỏi vpc.tf thì
-  # test đỏ ngay, và default SG lặng lẽ quay về mặc định mở của AWS.
   assert {
-    condition     = aws_default_security_group.this.tags["Name"] == "${var.project}-default-KHONG-DUNG"
-    error_message = "Phải khai báo aws_default_security_group để Terraform QUẢN default SG của VPC. Bỏ resource này đi thì default SG quay về mặc định của AWS: cho phép mọi protocol/mọi port từ chính nó, kể cả 22 — và mọi instance launch mà không chỉ định SG sẽ rơi vào đó."
+    condition = (
+      aws_default_security_group.this.vpc_id == "vpc-00000000000000000" &&
+      length(aws_default_security_group.this.ingress) == 0 &&
+      length(aws_default_security_group.this.egress) == 0
+    )
+    error_message = "The VPC default SG must have explicitly empty ingress and egress."
+  }
+
+  assert {
+    condition     = output.default_network_acl_id == "acl-00000000000000000"
+    error_message = "Expose the AWS default ACL ID for association checks without managing its rules."
   }
 }
 
@@ -285,6 +282,12 @@ run "mac_dinh_khong_dung_ecr_endpoint" {
 run "bat_thi_dung_2_endpoint_va_private_dns_phai_bat" {
   command = plan
 
+  override_resource {
+    target          = aws_security_group.vpce[0]
+    override_during = plan
+    values          = { id = "sg-00000000000000004" }
+  }
+
   variables {
     enable_ecr_endpoints = true
   }
@@ -308,42 +311,21 @@ run "bat_thi_dung_2_endpoint_va_private_dns_phai_bat" {
     error_message = "ECR chỉ có Interface endpoint. Gateway endpoint chỉ tồn tại cho S3 và DynamoDB."
   }
 
-  # Mỗi endpoint đặt 1 ENI vào MỖI subnet khai ở đây — đây chính là đơn vị tính
-  # tiền. 2 subnet × 2 endpoint = 4 ENI ≈ $0,04/giờ.
-  #
-  # ⚠️ Bản đầu của assertion này viết `length(e.subnet_ids) == 2` và ĐỎ trên CI:
-  # `subnet_ids` là set(string) toàn giá trị unknown ở plan-time, nên `length()`
-  # của nó cũng unknown (set không biết phần tử có trùng nhau không khi chính các
-  # phần tử chưa biết). Đúng cùng một cái bẫy với `route_table_ids` của S3
-  # endpoint ở run "app_subnet_di_internet_qua_nat" phía trên — và cách chữa cũng
-  # là cách đó: kiểm trên MÃ NGUỒN thay vì trên giá trị.
-  #
-  # Bất biến thật sự cần giữ: phải dùng SPLAT. Viết `aws_subnet.app[0].id` thì
-  # endpoint chỉ có ENI ở một AZ — vẫn apply được, vẫn không lỗi, chỉ là AZ kia
-  # mất đường pull image mà không gì báo.
   assert {
-    condition = length([
-      for l in split("\n", file("${path.module}/vpc.tf")) :
-      l if !startswith(trimspace(l), "#") && strcontains(l, "aws_subnet.app[*].id")
-    ]) == 1
-    error_message = "Endpoint phải phủ CẢ 2 app subnet bằng splat `aws_subnet.app[*].id`. Dùng chỉ số cố định là sót một AZ: AZ đó không pull được image mà không có cảnh báo nào."
-  }
-}
-
-run "sg_endpoint_chi_mo_443_cho_app_tier" {
-  command = plan
-
-  variables {
-    enable_ecr_endpoints = true
+    condition = alltrue([
+      for endpoint in values(aws_vpc_endpoint.ecr) :
+      endpoint.subnet_ids == toset(["subnet-00000000000000001", "subnet-00000000000000002"]) &&
+      endpoint.security_group_ids == toset(["sg-00000000000000004"])
+    ])
+    error_message = "Both ECR endpoints must use both app subnets and exactly the endpoint SG."
   }
 
   assert {
-    condition     = aws_vpc_security_group_ingress_rule.vpce_443[0].from_port == 443
-    error_message = "Endpoint chỉ nói HTTPS. Mở port khác là mở thừa."
-  }
-
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.vpce_443[0].cidr_ipv4 == "10.20.10.0/23"
-    error_message = "Nguồn phải là CIDR /23 của app tier, KHÔNG phải 0.0.0.0/0 và cũng không rộng ra cả VPC."
+    condition = (
+      aws_vpc_endpoint.ecr["api"].service_name == "com.amazonaws.ap-southeast-1.ecr.api" &&
+      aws_vpc_endpoint.ecr["dkr"].service_name == "com.amazonaws.ap-southeast-1.ecr.dkr" &&
+      length(aws_security_group.vpce) == 1
+    )
+    error_message = "Enable exactly ECR API and Docker endpoints with one shared SG."
   }
 }

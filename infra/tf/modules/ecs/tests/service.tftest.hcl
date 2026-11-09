@@ -26,6 +26,8 @@ variables {
   ecr_api_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api"
   ecr_web_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web"
   ecr_migrator_url          = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-migrator"
+  ecr_waf_url               = "000000000000.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-waf"
+  vpc_cidr                  = "10.0.0.0/16"
   image_tag                 = "0123456789abcdef0123456789abcdef01234567"
   assets_bucket_name        = "hushstore-public-assets"
   allowed_origins           = "https://hushstore.io.vn"
@@ -124,19 +126,19 @@ run "service_gan_dung_target_group_va_container" {
   assert {
     condition = alltrue([
       one(aws_ecs_service.api[0].load_balancer).target_group_arn == var.tg_api_arn,
-      one(aws_ecs_service.api[0].load_balancer).container_name == "api",
+      one(aws_ecs_service.api[0].load_balancer).container_name == "waf",
       one(aws_ecs_service.api[0].load_balancer).container_port == 8080,
     ])
-    error_message = "Service api phải gắn ĐÚNG MỘT target group: tg-api, container tên 'api', port 8080."
+    error_message = "Service api phải gắn ĐÚNG MỘT target group: tg-api, container 'waf' (sidecar trước api), cổng container 8080. Gắn thẳng container 'api' là ALB đi vòng WAF."
   }
 
   assert {
     condition = alltrue([
       one(aws_ecs_service.web[0].load_balancer).target_group_arn == var.tg_web_arn,
-      one(aws_ecs_service.web[0].load_balancer).container_name == "web",
-      one(aws_ecs_service.web[0].load_balancer).container_port == 80,
+      one(aws_ecs_service.web[0].load_balancer).container_name == "waf",
+      one(aws_ecs_service.web[0].load_balancer).container_port == 8080,
     ])
-    error_message = "Service web phải gắn ĐÚNG MỘT target group: tg-web, container tên 'web', port 80."
+    error_message = "Service web phải gắn ĐÚNG MỘT target group: tg-web, container 'waf' (sidecar trước web), cổng container 8080. Gắn thẳng container 'web' là ALB đi vòng WAF."
   }
 
   # Bắt đúng lỗi tráo target group: nếu ai đó gán tg_web cho service api thì

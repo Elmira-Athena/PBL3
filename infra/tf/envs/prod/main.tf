@@ -22,11 +22,9 @@ module "network" {
   public_subnet_cidrs = var.public_subnet_cidrs
   app_subnet_cidrs    = var.app_subnet_cidrs
   db_subnet_cidrs     = var.db_subnet_cidrs
-  my_ip               = var.my_ip
   enable_nat          = var.enable_nat
   nat_gateway_count   = var.nat_gateway_count
   enable_flow_logs    = var.enable_flow_logs
-  enable_deny_demo    = var.enable_deny_demo
 
   # Công tắc TÍNH TIỀN, không được enable_nat che chắn. Xem lý do ở
   # modules/network/vpc.tf, khối "ECR INTERFACE ENDPOINTS".
@@ -38,6 +36,9 @@ module "security" {
 
   project = local.name
   vpc_id  = module.network.vpc_id
+
+  enable_ecr_endpoints = var.enable_ecr_endpoints
+  vpce_sg_id           = module.network.vpce_sg_id
 }
 
 module "storage" {
@@ -92,6 +93,12 @@ module "ecs" {
   image_tag          = var.image_tag
   assets_bucket_name = module.storage.assets_bucket_name
   allowed_origins    = "https://${var.web_domain}"
+
+  # Sidecar WAF trước api/web (modules/ecs/taskdef.tf). vpc_cidr là dải WAF tin
+  # X-Forwarded-For từ đó (ALB nằm trong VPC).
+  ecr_waf_url     = module.storage.ecr_waf_url
+  vpc_cidr        = var.vpc_cidr
+  waf_rule_engine = var.waf_rule_engine
 
   # Service bi enable_alb gate cung voi ALB/TG/listener: ECS CreateService fail
   # neu target group chua gan vao load balancer nao. Khi enable_alb = false thi
@@ -174,6 +181,7 @@ module "cicd" {
     module.storage.ecr_web_arn,
     module.storage.ecr_migrator_arn,
     module.storage.ecr_seeder_arn,
+    module.storage.ecr_waf_arn,
   ]
 
   cluster_arn             = module.ecs.cluster_arn

@@ -28,11 +28,6 @@ variable "db_subnet_cidrs" {
   type        = list(string)
 }
 
-variable "my_ip" {
-  description = "IP laptop dạng /32, dùng cho NACL deny rule demo"
-  type        = string
-}
-
 variable "enable_nat" {
   description = "Tạo NAT Gateway. $0,059/giờ MỖI cái + $0,045/GB — chỉ bật khi cần egress (pull ECR, SSM)"
   type        = bool
@@ -60,12 +55,6 @@ variable "flow_log_retention_days" {
   description = "Số ngày giữ Flow Logs trong CloudWatch"
   type        = number
   default     = 1
-}
-
-variable "enable_deny_demo" {
-  description = "Bật NACL rule 50 DENY toàn bộ traffic từ my_ip — dùng cho kịch bản kiểm thử số 8"
-  type        = bool
-  default     = false
 }
 
 variable "enable_ecr_endpoints" {

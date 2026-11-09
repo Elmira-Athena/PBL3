@@ -24,17 +24,17 @@ output "db_subnet_ids" {
 }
 
 output "public_subnet_cidrs" {
-  description = "CIDR của public tier — dùng làm source trong NACL app"
+  description = "CIDR của các public subnet — chứa ALB và NAT Gateway"
   value       = aws_subnet.public[*].cidr_block
 }
 
 output "app_subnet_cidrs" {
-  description = "CIDR của app tier — dùng làm source trong NACL db"
+  description = "CIDR của các app subnet — chứa ECS container instance"
   value       = aws_subnet.app[*].cidr_block
 }
 
 output "db_subnet_cidrs" {
-  description = "CIDR của db tier — dùng làm destination trong NACL app"
+  description = "CIDR của các db subnet — chứa RDS"
   value       = aws_subnet.db[*].cidr_block
 }
 
@@ -58,36 +58,6 @@ output "private_route_table_ids" {
   value       = aws_route_table.private[*].id
 }
 
-output "nacl_public_id" {
-  description = "ID của NACL public tier"
-  value       = aws_network_acl.public.id
-}
-
-output "nacl_app_id" {
-  description = "ID của NACL app tier"
-  value       = aws_network_acl.app.id
-}
-
-output "nacl_db_id" {
-  description = "ID của NACL db tier"
-  value       = aws_network_acl.db.id
-}
-
-output "public_tier_cidr" {
-  description = "CIDR /23 gộp của public tier — dùng trong rule NACL"
-  value       = local.public_tier_cidr
-}
-
-output "app_tier_cidr" {
-  description = "CIDR /23 gộp của app tier"
-  value       = local.app_tier_cidr
-}
-
-output "db_tier_cidr" {
-  description = "CIDR /23 gộp của db tier"
-  value       = local.db_tier_cidr
-}
-
 output "ecr_endpoint_ids" {
   description = "ID của 2 interface endpoint ECR. Rỗng khi enable_ecr_endpoints = false"
   value       = { for k, v in aws_vpc_endpoint.ecr : k => v.id }
@@ -101,4 +71,9 @@ output "ecr_endpoint_count" {
 output "vpce_sg_id" {
   description = "ID Security Group của interface endpoint. Rỗng khi enable_ecr_endpoints = false"
   value       = var.enable_ecr_endpoints ? aws_security_group.vpce[0].id : ""
+}
+
+output "default_network_acl_id" {
+  description = "ID của default network ACL do AWS tạo; Terraform không quản lý ACL hoặc rule của nó"
+  value       = aws_vpc.this.default_network_acl_id
 }

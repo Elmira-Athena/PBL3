@@ -1,6 +1,8 @@
 # Đọc code Terraform của dự án này — cho người chưa đọc Terraform bao giờ
 
-`infra/tf/` có **89 file, khoảng 12.800 dòng**. Đọc từ đầu tới cuối thì không ai
+**Rollback WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn; chưa triển khai WAF thay thế. Giữ DNS/proxy hiện có và migration SG đã apply. Xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md).
+
+`infra/tf/` chia thành module và môi trường. Đọc từ đầu tới cuối thì không ai
 đọc nổi, và cũng không cần. Tài liệu này giúp bạn ba việc:
 
 1. **Hiểu đủ cú pháp** để tự đọc được bất kỳ file `.tf` nào trong dự án (§2).
@@ -10,6 +12,12 @@
 > **Bạn không cần biết AWS hay Terraform trước.** Gặp từ lạ như *subnet*, *NAT*,
 > *security group* thì tra **§11 — Từ điển**. Mọi ví dụ trong tài liệu đều chép
 > từ code thật của dự án, kèm đường dẫn file để bạn mở ra đối chiếu.
+
+**Thiết kế hiện tại trong mã:** không có custom NACL. Sáu subnet dùng default ACL
+allow-all do AWS tạo, không được Terraform nhận quản lý. Mạng được giới hạn bằng
+SG và route; default SG vẫn được quản lý với ingress/egress rỗng. Migration prod
+đã apply và kiểm tra cấu hình ngày 02/11/2026; chưa đo runtime ứng dụng hoặc apply
+WAF. Xem [biên bản](bien-ban-apply-sg-2026-11-02.md) và [migration guide](nacl-to-sg-migration.md).
 
 **Đọc theo lượng thời gian bạn có:**
 
@@ -291,28 +299,30 @@ resource "aws_nat_gateway" "this" {
 #### `for_each` — tạo một bản cho mỗi phần tử của bảng
 
 ```hcl
-# modules/network/nacl.tf
-resource "aws_network_acl_rule" "public_ingress" {
-  for_each = { for r in local.public_ingress : tostring(r.no) => r }
+# modules/security/main.tf
+resource "aws_vpc_security_group_ingress_rule" "all" {
+  for_each = local.ingress_rules
 
-  network_acl_id = aws_network_acl.public.id
-  rule_number    = each.value.no        # each.value = phần tử đang xét
-  protocol       = each.value.proto
-  rule_action    = each.value.action
-  cidr_block     = each.value.cidr
-  from_port      = each.value.from
-  to_port        = each.value.to
-  egress         = false
+  security_group_id            = each.value.sg_id
+  description                  = each.value.description
+  ip_protocol                  = "tcp"
+  from_port                    = each.value.from_port
+  to_port                      = each.value.to_port
+  cidr_ipv4                    = each.value.cidr_ipv4
+  referenced_security_group_id = each.value.source_sg
+
+  tags = { Name = "${var.project}-in-${each.key}" }
 }
 ```
 
-`local.public_ingress` là danh sách 3 rule (số 100, 110, 120), nên khối này tạo **3**
-rule NACL. `each.key` là khoá (`"100"`), `each.value` là cả object của rule đó.
+`local.ingress_rules` là map của 5 rule ứng dụng: `alb-http`, `alb-https`,
+`web-http`, `web-api`, `rds-postgres`. Khối này tạo một resource cho mỗi khoá.
+`each.key` là tên cố định, `each.value` là object chứa port, nguồn và SG đích.
+Rule ECR endpoint tuỳ chọn được khai báo riêng, chỉ cho 443 từ `sg-web`.
 
-**Vì sao không dùng `count`?** Với `count`, rule được đánh số theo vị trí 0, 1, 2. Chèn
-một rule vào giữa thì mọi rule phía sau bị lệch vị trí, Terraform tưởng chúng đã đổi
-và tạo lại hết. Với `for_each`, mỗi rule gắn với khoá cố định là số rule, nên chèn
-thêm không ảnh hưởng ai. Dự án dùng `for_each` cho 4 ECR repo và mọi rule NACL, SG.
+**Vì sao không dùng `count`?** Với `count`, resource được đánh số theo vị trí
+0, 1, 2; chèn phần tử có thể làm đổi địa chỉ resource phía sau. Với `for_each`,
+mỗi resource gắn với khoá ổn định. Dự án dùng mẫu này cho rule SG và repo ECR.
 
 #### `lifecycle` — đổi cách Terraform xử lý thay đổi
 
@@ -425,7 +435,7 @@ output của hai module kia, `data` tự động được tạo **sau** hai modu
 
 | File | Chứa |
 |---|---|
-| `main.tf`, hoặc tên theo chủ đề (`vpc.tf`, `nacl.tf`, `s3.tf`, `iam.tf`…) | các khối `resource` — **phần chính** |
+| `main.tf`, hoặc tên theo chủ đề (`vpc.tf`, `s3.tf`, `iam.tf`…) | các khối `resource` — **phần chính** |
 | `variables.tf` | đầu vào của module, kèm `default` |
 | `outputs.tf` | đầu ra để module khác dùng |
 | `versions.tf` | yêu cầu phiên bản provider |
@@ -439,8 +449,8 @@ Cột cuối là cột nên dùng nhất: **mở file nào trước**.
 
 | Module | Tạo gì | Dòng (không tính test) | Mở file này trước |
 |---|---|---|---|
-| [`network`](../infra/tf/modules/network/) | VPC, 6 subnet (3 tầng × 2 AZ), Internet Gateway, 0–2 NAT, 4 route table, **3 Network ACL**, S3 endpoint, ECR endpoint tuỳ chọn, Flow Logs tuỳ chọn | 759 | [`nacl.tf`](../infra/tf/modules/network/nacl.tf) — 178 dòng, phần kỹ thuật đáng giá nhất cả đồ án |
-| [`security`](../infra/tf/modules/security/) | 3 Security Group: `alb`, `web`, `rds` | 247 | [`main.tf`](../infra/tf/modules/security/main.tf) — cả module chỉ một file chính |
+| [`network`](../infra/tf/modules/network/) | VPC, 6 subnet (3 tầng × 2 AZ), Internet Gateway, 0–2 NAT, 4 route table, default SG rỗng, S3 endpoint, SG và endpoint ECR tuỳ chọn, Flow Logs tuỳ chọn; không tạo custom NACL | — | [`vpc.tf`](../infra/tf/modules/network/vpc.tf) — subnet, route, default SG và endpoint |
+| [`security`](../infra/tf/modules/security/) | 3 SG ứng dụng (`alb`, `web`, `rds`) và rule 443 từ web tới SG ECR endpoint khi bật | — | [`main.tf`](../infra/tf/modules/security/main.tf) — cả module chỉ một file chính |
 | [`storage`](../infra/tf/modules/storage/) | 4 ECR repo (`api`, `web`, `migrator`, `seeder`), 3 S3 bucket + policy/lifecycle/CORS | 392 | [`s3.tf`](../infra/tf/modules/storage/s3.tf) |
 | [`data`](../infra/tf/modules/data/) | RDS PostgreSQL 17, subnet group, read replica tuỳ chọn, mật khẩu ngẫu nhiên, 4 tham số SSM | 498 | [`main.tf`](../infra/tf/modules/data/main.tf) |
 | [`ecs`](../infra/tf/modules/ecs/) | cluster, Auto Scaling Group, launch template, 4 task definition, 2 service, **5 IAM role** | 1380 | [`iam.tf`](../infra/tf/modules/ecs/iam.tf) — có chữ `Deny` tường minh, xem §5 |
@@ -453,7 +463,7 @@ Hình dung hệ thống từ ngoài vào trong:
 ```
  Người dùng ──► ALB (public subnet) ──► container trên EC2 (app subnet) ──► RDS (db subnet)
                  │ module alb                │ module ecs                     │ module data
-                 └────── tất cả nằm trong VPC + subnet + NACL của module network ──────┘
+                 └────── tất cả nằm trong VPC + subnet + route của module network ──────┘
                          và được canh cổng bởi 3 security group của module security
  Image container lấy từ ECR, file ảnh để ở S3            ← module storage
  GitHub Actions deploy bằng IAM role                      ← module cicd
@@ -480,21 +490,19 @@ Hình dung hệ thống từ ngoài vào trong:
 **Nếu chỉ có 1 tiếng**, đọc đúng ba file này. Chúng chứa phần lớn thứ đáng trình bày
 trước hội đồng:
 
-1. [`modules/network/nacl.tf`](../infra/tf/modules/network/nacl.tf) — Network ACL.
-   Đọc khối `locals` ở đầu file: 6 danh sách rule, mỗi rule một dòng. Chú ý comment
-   giải thích **vì sao rule 90/95/115 (DENY) phải có số nhỏ hơn rule 120 (ALLOW)**:
-   NACL xét rule từ số nhỏ tới số lớn và dừng ở rule khớp đầu tiên. Rule 120 phải mở
-   cả dải cổng 1024–65535 để nhận phản hồi, mà 5432 (cổng PostgreSQL) và 8080 nằm
-   trong dải đó. Rule 95 chặn 5432 **trước**, nên rule 120 không vô tình mở cổng DB.
-2. [`modules/security/main.tf`](../infra/tf/modules/security/main.tf) — 3 Security
-   Group. Chú ý: chỉ `alb` nhận traffic từ internet (`0.0.0.0/0`). `web` chỉ nhận từ
-   **security group** `alb`, và `rds` chỉ nhận từ **security group** `web` — chúng gọi
-   nhau bằng ID của security group (`source_sg = aws_security_group.alb.id`), không
-   bằng dải IP.
+1. [`modules/network/vpc.tf`](../infra/tf/modules/network/vpc.tf) — VPC, subnet,
+   route và default SG rỗng. Default NACL của AWS không có resource Terraform:
+   tất cả subnet dùng ACL allow-all, cần kiểm tra thực tế trước migration.
+2. [`modules/security/main.tf`](../infra/tf/modules/security/main.tf) — các SG và
+   rule là chính sách mạng hiện tại. ALB ingress 80/443 từ Internet, egress 80/8080
+   tới web; web ingress chỉ từ ALB, egress 5432 tới RDS và 80/443 ra Internet;
+   RDS ingress 5432 từ web, egress rỗng. Rule endpoint 443 cũng ở đây để tham chiếu
+   `sg-web` mà không làm module `network` phụ thuộc ngược vào `security`.
 3. [`modules/ecs/iam.tf`](../infra/tf/modules/ecs/iam.tf) — 5 IAM role. Tìm chữ
-   `effect = "Deny"`: máy EC2 bị **cấm tường minh** đọc secret của dự án, và comment
-   giải thích vì sao phải liệt kê đủ **bốn** action (`GetParameter`, `GetParameters`,
-   `GetParameterHistory`, `GetParametersByPath`) chứ không phải ba.
+   `effect = "Deny"`: máy EC2 bị cấm đọc secret của dự án. Phân biệt IAM explicit
+   deny với SG chỉ có allow; IAM không được dùng thay rule kết nối PostgreSQL.
+   Comment giải thích vì sao phải liệt kê đủ bốn action `GetParameter`,
+   `GetParameters`, `GetParameterHistory`, `GetParametersByPath` thay vì ba.
 
 ---
 
@@ -615,7 +623,7 @@ là vậy.
 
 ## 7. Đọc file test (`.tftest.hcl`)
 
-Mỗi module có thư mục `tests/`. Cả dự án có **12 file test, 109 khối `run`**. Test
+Mỗi module có thư mục `tests/`. Số file và khối `run` thay đổi khi thêm/bỏ ca kiểm. Test
 giúp bạn đọc code nhanh hơn, vì mỗi `error_message` là một câu tiếng Việt nói thẳng
 **điều code phải đảm bảo**.
 
@@ -803,14 +811,21 @@ terraform plan                     # in ra SẼ đổi gì. Không đổi gì th
 terraform output                   # 28 giá trị: DNS của ALB, endpoint RDS, URL ECR…
 
 # Chạy test của một module — chỉ plan, không tạo resource, $0
-cd ../../modules/network && terraform init && terraform test
+(cd ../../modules/network && terraform init && terraform test)
 
-# Xem sổ state
-terraform state list | grep nacl
-terraform state show 'module.network.aws_network_acl.app'
+# Xem sổ state: ở stack đã migration không còn custom ACL/rule/association
+terraform state list | rg 'aws_(network_acl|network_acl_rule|network_acl_association)\.'
+# rg không in dòng nào (exit 1) là kỳ vọng; đây chưa chứng minh association thật.
+terraform state show 'module.network.aws_default_security_group.this'
 ```
 
-> Sau khi `apply` xong, chạy lại `terraform plan` mà nó in **"No changes"** là một phép
+Các test cần giữ: không có custom/default ACL resource trong cấu hình; tập rule
+SG đúng nguồn/đích và port; default SG rỗng; ECR endpoint chỉ nhận 443 từ web SG.
+Test plan không đo AWS. Sau migration còn phải đọc ACL association thật và rule
+SG, thử ALB/health check, API → DB, egress và kiểm nguồn REJECT của Flow Logs theo
+[nacl-to-sg-migration.md](nacl-to-sg-migration.md). Không chạy lại demo deny IP.
+
+> Sau khi `apply` được phép và hoàn thành, chạy lại `terraform plan` mà nó in **"No changes"** là một phép
 > kiểm quan trọng: code và thực tế đã khớp nhau. Nếu plan vẫn thấy thay đổi, nghĩa là
 > có ai đó (hoặc cái gì đó) đã sửa trên AWS mà không qua Terraform — gọi là **drift**.
 
@@ -832,8 +847,8 @@ Xếp theo thứ tự gói tin đi từ người dùng vào database.
 | **EIP** (Elastic IP) | Địa chỉ IP công khai cố định. Mỗi NAT cần một cái. | `aws_eip` |
 | **Route table** | Bảng chỉ đường: "đi tới địa chỉ X thì qua cửa Y". Dự án có 4: public, private-a, private-b, db. | `aws_route_table`, `aws_route` |
 | **VPC Endpoint** | Đường tắt từ VPC tới dịch vụ AWS (S3, ECR) mà không phải đi qua internet/NAT. | `aws_vpc_endpoint` |
-| **NACL** (Network ACL) | Tường lửa ở **cấp subnet**. **Không nhớ** kết nối (*stateless*): chiều đi và chiều về phải mở riêng. Rule có số thứ tự, xét từ nhỏ tới lớn, dừng ở rule khớp đầu tiên. Có cả ALLOW lẫn DENY. | `aws_network_acl`, `aws_network_acl_rule` |
-| **Cổng ephemeral** | Cổng ngẫu nhiên (1024–65535) mà máy dùng để **nhận phản hồi**. Vì NACL không nhớ kết nối, phải mở dải này cho chiều về. | rule 120/130 trong `nacl.tf` |
+| **NACL** (Network ACL) | Tường lửa stateless cấp subnet. Thiết kế hiện tại dùng default allow-all do AWS tạo; không dùng để chặn traffic. | Không có resource ACL trong Terraform hiện tại |
+| **Cổng ephemeral** | Cổng tạm phía client nhận phản hồi. SG stateful cho phép response; không cần rule inbound mở cả dải. | Không có rule ephemeral riêng |
 | **Security Group (SG)** | Tường lửa ở **cấp từng máy**. **Có nhớ** kết nối (*stateful*): cho vào thì tự cho phản hồi đi ra. Chỉ có ALLOW. Có thể cho phép theo "đến từ SG khác" thay vì theo IP. | `aws_security_group` |
 | **ALB** | Bộ cân bằng tải, cửa ngõ duy nhất người dùng gọi vào. Chia request cho các container phía sau. | `aws_lb` |
 | **Target group** | Nhóm đích mà ALB chuyển request tới (ở đây: nhóm web và nhóm api). | `aws_lb_target_group` |
@@ -879,9 +894,9 @@ AI giải thích code Terraform rất tốt, **miễn là bạn đưa đúng fil
 
 ```
 Tôi là người mới, chưa đọc Terraform bao giờ. Giải thích càng dễ hiểu càng tốt.
-Đính kèm: nacl.tf, variables.tf, nacl.tftest.hcl.
-Hãy dịch khối `app_ingress` sang tiếng Việt, mỗi rule một câu, rồi giải thích
-vì sao rule 95 phải có số nhỏ hơn rule 120. Chỗ nào bạn đoán chứ không đọc
+Đính kèm: modules/security/main.tf, variables.tf, tests/sg.tftest.hcl.
+Hãy dịch `ingress_rules` và `egress_rules` sang tiếng Việt, mỗi rule một câu,
+rồi giải thích vì sao RDS egress rỗng mà vẫn trả lời được API. Chỗ nào bạn đoán chứ không đọc
 thấy trong file thì nói rõ là đoán.
 ```
 

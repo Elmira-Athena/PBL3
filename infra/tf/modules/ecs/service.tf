@@ -76,10 +76,12 @@ resource "aws_ecs_service" "web" {
     rollback = true
   }
 
+  # Gắn vào sidecar `waf`, không phải container `web`: ALB phải đi qua WAF.
+  # container_port là cổng CONTAINER của waf (8080), cổng host do taskdef.tf map.
   load_balancer {
     target_group_arn = var.tg_web_arn
-    container_name   = "web"
-    container_port   = 80
+    container_name   = "waf"
+    container_port   = 8080
   }
 
   # nginx serve static file, sẵn sàng trong khoảng 1 giây. 60s là 45s (cửa sổ
@@ -149,16 +151,18 @@ resource "aws_ecs_service" "api" {
     rollback = true
   }
 
+  # Gắn vào sidecar `waf`, không phải container `api`: ALB phải đi qua WAF.
+  # container_port là cổng CONTAINER của waf (8080), cổng host do taskdef.tf map.
   load_balancer {
     target_group_arn = var.tg_api_arn
-    container_name   = "api"
+    container_name   = "waf"
     container_port   = 8080
   }
 
   # 120s, gấp hơn hai lần cửa sổ 45s. Lý do API cần nhiều hơn web: health check
   # của nó là /health/ready, mà endpoint đó có AddDbContextCheck nên nó MỞ KẾT
-  # NỐI TỚI RDS. Cộng dồn: .NET cold start trên t3.micro, cộng lần kết nối đầu
-  # tới một RDS vừa được start (SQL Server Express khởi động chậm). 45s là quá
+  # NỐI TỚI RDS. Cộng dồn: .NET cold start trên instance nhỏ, cộng lần kết nối đầu
+  # tới một RDS vừa được start (khởi động chậm). 45s là quá
   # sát — task đang boot đúng cách vẫn có thể bị giết.
   health_check_grace_period_seconds = 120
 

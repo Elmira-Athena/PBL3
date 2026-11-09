@@ -51,10 +51,14 @@ Ba lý do:
 | | Cũ (thư mục này) | Mới (`infra/tf/`) |
 |---|---|---|
 | Cách dựng | Bash + AWS CLI imperative, state trong `resources.env` | Terraform, state trên S3 có versioning |
-| Network ACL | Không có (dùng default allow-all) | 3 NACL theo tier, rule tối thiểu |
+| Network ACL | Dùng default allow-all | Dùng default allow-all do AWS tạo, không quản lý bằng Terraform; tham chiếu SG thực thi chính sách giữa các tier |
 | Load balancer | Không có, nginx nghe thẳng public IP của EC2 | ALB + ACM, 2 target group route theo Host |
 | Vị trí EC2 | Public subnet, có public IP | Private subnet, không public IP |
 | Truy cập admin | SSH port 22 + file `.pem` | SSM Session Manager + ECS Exec, không port 22 |
 | Chạy ứng dụng | `docker compose` trên host + nginx cài trên host | ECS EC2 launch type, 2 container từ ECR |
 | Migration DB | `MigrateAsync()` lúc app khởi động | One-off ECS task chạy EF Core migration bundle, là gate của pipeline |
 | Credential của app | Static IAM access key trong `.env` | ECS task role, credential tạm thời |
+
+Stack Terraform từng dùng 3 custom ACL theo tier. Cấu hình hiện tại đã bỏ
+chúng và demo chặn IP; hướng dẫn [chuyển đổi theo giai đoạn](../../docs/nacl-to-sg-migration.md)
+áp dụng cho stack đang tồn tại. Script CLI cũ không phải công cụ chuyển đổi.

@@ -65,7 +65,11 @@ HS_DB="${HS_PROJECT}-db-tf"
 HS_RATE_ALB=0.0252        # APS1, không phải $0.0225 của us-east-1
 HS_RATE_NAT=0.0590        # APS1, không phải $0.045 của us-east-1
 HS_RATE_EIP_IDLE=0.005
-HS_RATE_EC2=0.0132        # t3.micro APS1
+# t3.small APS1 (đổi từ t3.micro $0,0132 khi thêm WAF sidecar). Nguồn: AWS Price
+# List API (aws pricing get-products, AmazonEC2, ap-southeast-1, Linux, Shared,
+# NA, capacitystatus=Used, OnDemand), tra ngày 2026-11-08, publicationDate
+# 2026-11-07 → $0,0264/giờ. Là giá niêm yết, chưa đối chiếu hoá đơn.
+HS_RATE_EC2=0.0264
 # Interface VPC Endpoint tính theo ENI-giờ, KHÔNG theo endpoint. Mỗi endpoint
 # đặt 1 ENI vào MỖI subnet được khai, nên 2 endpoint ECR × 2 app subnet = 4 ENI
 # ≈ $0,04/giờ. Đây là con số NIÊM YẾT ($0,01/ENI-giờ ở APS1), chưa phải số đo —
@@ -202,6 +206,17 @@ hs_sso_check() {
     || hs_die "SSO session hết hạn. Chạy: aws sso login --profile ${HS_PROFILE}"
 }
 
+# Cây cuối đã bỏ custom NACL; apply thẳng có thể xoá rule trước khi tháo subnet.
+hs_nacl_migration_check() {
+  local resources
+  if ! resources="$(terraform -chdir="$HS_TF_DIR" state list)"; then
+    hs_die "không đọc được Terraform state để kiểm tra NACL; dừng trước mọi thay đổi. Xem docs/nacl-to-sg-migration.md"
+  fi
+  if [[ "$resources" =~ (^|[.])aws_network_acl[.] ]]; then
+    hs_die "state vẫn còn custom NACL (kể cả migration dở dang); không được apply cấu hình cuối. Hoàn tất hai mốc trong docs/nacl-to-sg-migration.md trước khi chạy up.sh/down.sh"
+  fi
+}
+
 # hs_apply "<nhãn>" — chạy terraform apply, in tiến độ trực tiếp, trả exit code
 # THẬT của terraform. Không pipe. Log đầy đủ nằm ở $HS_LAST_LOG.
 # Có thay đổi nào đang chờ trên module.data (tức RDS) không?
@@ -236,6 +251,7 @@ hs_data_has_pending() {
 }
 
 hs_apply() {
+  hs_nacl_migration_check
   label="$1"
   mkdir -p "$HS_LOCAL_DIR/logs"
   HS_LAST_LOG="${HS_LOCAL_DIR}/logs/apply-$(date +%Y%m%d-%H%M%S).log"
@@ -342,6 +358,32 @@ hs_image_tag_check() {
   want="$(hs_tfvar_get image_tag || true)"
   [ -n "$want" ] || return 0
 
+  # Image waf phải có ở ĐÚNG tag này: task definition của api/web chạy sidecar
+  # waf từ ${HS_PROJECT}-waf:${image_tag}, thiếu image thì ECS kẹt ở bước pull và
+  # service không bao giờ lên. Chặn ở đây rẻ hơn nhiều so với chờ ~10 phút rồi mới
+  # thấy task STOPPED. Chỉ hai lỗi "chắc chắn là thiếu" mới dừng up.sh; lỗi khác
+  # (hết phiên SSO, mạng) thì không chứng minh được image thiếu nên chỉ cảnh báo,
+  # đúng tinh thần của guard "newest" bên dưới. Phải gán qua `if !` — nếu gọi trần
+  # thì set -e giết up.sh trước khi hs_die kịp in thông điệp.
+  local waf_repo waf_out
+  waf_repo="${HS_PROJECT}-waf"
+  if ! waf_out="$(aws ecr describe-images --repository-name "$waf_repo" \
+                    --image-ids "imageTag=${want}" "${AWSQ[@]}" 2>&1)"; then
+    case "$waf_out" in
+      *RepositoryNotFoundException*)
+        hs_die "Chưa có repo ECR '${waf_repo}' — sidecar WAF của api/web không có image để pull.
+  Chạy terraform apply (module ecr) để tạo repo, rồi để CI build image waf và trỏ
+  image_tag trong tfvars vào SHA của lần build đó." ;;
+      *ImageNotFoundException*)
+        hs_die "Thiếu image waf ở tag '${want}' trên ECR (${waf_repo}) — ECS sẽ kẹt ở bước pull.
+  Trỏ image_tag trong tfvars vào SHA của lần build sau thay đổi WAF
+  (image waf được CI build cùng api/web), rồi chạy lại up.sh." ;;
+      *)
+        hs_warn "Không kiểm được image waf (${waf_repo}:${want}) — bỏ qua guard này:"
+        hs_warn "    ${waf_out%%$'\n'*}" ;;
+    esac
+  fi
+
   # Tag mới nhất theo thời điểm push, không theo thứ tự chữ cái — git SHA không
   # có thứ tự thời gian nào cả.
   newest="$(aws ecr describe-images --repository-name "${HS_PROJECT}-api"               "${AWSQ[@]}" 2>/dev/null             | jq -r '[.imageDetails[] | select(.imageTags != null)]
@@ -384,8 +426,11 @@ hs_running_image_check() {
             "${AWSQT[@]}" 2>/dev/null || true)"
     case "$td" in ''|None|null) continue ;; esac
 
+    # Chọn container THEO TÊN (api/web = service bỏ tiền tố dự án): từ khi có
+    # sidecar waf, containerDefinitions[0] không còn là app. Cùng khuôn JMESPath
+    # với deploy.yml.
     img="$(aws ecs describe-task-definition --task-definition "$td" \
-             --query 'taskDefinition.containerDefinitions[0].image' \
+             --query "taskDefinition.containerDefinitions[?name==\`${svc#"${HS_PROJECT}-"}\`].image | [0]" \
              "${AWSQT[@]}" 2>/dev/null || true)"
     case "$img" in ''|None|null) continue ;; esac
 

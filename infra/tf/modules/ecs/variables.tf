@@ -74,7 +74,7 @@ variable "max_instance_count" {
 
   validation {
     condition     = var.max_instance_count >= 1 && var.max_instance_count <= 2
-    error_message = "max_instance_count chỉ được 1 hoặc 2 — t3.micro 1GB RAM và ngân sách của dự án không đỡ nổi hơn."
+    error_message = "max_instance_count chỉ được 1 hoặc 2 — instance nhỏ (1–2GB RAM) và ngân sách của dự án không đỡ nổi hơn."
   }
 
   validation {
@@ -101,7 +101,7 @@ variable "instance_count" {
 }
 
 variable "instance_type" {
-  description = "Instance type. t3.micro chỉ 1GB RAM (đã bù bằng 2GB swap). Account này KHÔNG có free tier 12 tháng nên giờ instance trả bằng credit/thẻ — xem credit_specification ở cluster.tf"
+  description = "Instance type. Mặc định của MODULE là t3.micro (chỉ 1GB RAM, đã bù bằng 2GB swap; không đủ chỗ cho 2 sidecar WAF — envs/prod đặt t3.small). Account này KHÔNG có free tier 12 tháng nên giờ instance trả bằng credit/thẻ — xem credit_specification ở cluster.tf"
   type        = string
   default     = "t3.micro"
 }
@@ -134,7 +134,7 @@ variable "ecr_migrator_url" {
 }
 
 variable "image_tag" {
-  description = "Tag của cả 3 image — LUÔN là git SHA đầy đủ, không bao giờ dùng latest"
+  description = "Tag của image api/web/migrator/waf — LUÔN là git SHA đầy đủ, không bao giờ dùng latest"
   type        = string
 
   validation {
@@ -160,7 +160,7 @@ variable "api_memory_hard" {
 }
 
 variable "api_memory_reservation" {
-  description = "RAM (MiB) đặt trước cho container API. Dùng soft limit để không bị OOM-kill sớm trên t3.micro"
+  description = "RAM (MiB) đặt trước cho container API. Dùng soft limit để không bị OOM-kill sớm trên instance nhỏ"
   type        = number
   default     = 384
 }
@@ -239,4 +239,40 @@ variable "db_name" {
 variable "db_username" {
   description = "User đăng nhập SQL Server cho task seeder"
   type        = string
+}
+
+# ─── WAF SIDECAR (ModSecurity + CRS) ─────────────────────────────
+variable "ecr_waf_url" {
+  description = "URL repository ECR của image WAF — dùng chung image_tag với api/web"
+  type        = string
+}
+
+variable "vpc_cidr" {
+  description = "CIDR của VPC — WAF tin X-Forwarded-For chỉ khi kết nối tới từ dải này (set_real_ip_from; một CIDR duy nhất)"
+  type        = string
+}
+
+variable "waf_rule_engine" {
+  description = "Chế độ ModSecurity: On (chặn) hoặc DetectionOnly (chỉ ghi log). Công tắc lùi khi chặn nhầm"
+  type        = string
+  default     = "On"
+
+  validation {
+    condition     = contains(["On", "DetectionOnly"], var.waf_rule_engine)
+    error_message = "waf_rule_engine chỉ được On hoặc DetectionOnly. Off tắt hẳn WAF mà không để lại log nào — muốn lùi thì dùng DetectionOnly để vẫn thấy rule nào khớp."
+  }
+}
+
+# Số đo ở docs/evidence/2026-11-08-waf-ram-spike.md §0: idle ~50 MiB, đỉnh ~178 MiB
+# ở tải theo kế hoạch, 549-594 MiB khi 20 upload 8 MB đồng thời.
+variable "waf_memory_reservation" {
+  description = "RAM (MiB) đặt trước cho MỖI container waf (soft limit)"
+  type        = number
+  default     = 128
+}
+
+variable "waf_memory_hard" {
+  description = "Giới hạn cứng RAM (MiB) của MỖI container waf"
+  type        = number
+  default     = 512
 }

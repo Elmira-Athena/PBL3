@@ -27,16 +27,6 @@ variable "azs" {
   }
 }
 
-variable "my_ip" {
-  description = "IP công cộng của máy tấn công (laptop), dạng CIDR /32. Lấy bằng: curl -s https://checkip.amazonaws.com"
-  type        = string
-
-  validation {
-    condition     = can(cidrhost(var.my_ip, 0)) && endswith(var.my_ip, "/32")
-    error_message = "my_ip phải là CIDR /32, ví dụ 203.0.113.45/32."
-  }
-}
-
 variable "vpc_cidr" {
   description = "CIDR của VPC — 10.20.0.0/16, KHÔNG trùng 10.0.0.0/16 của stack cũ"
   type        = string
@@ -93,12 +83,6 @@ variable "enable_alb" {
 
 variable "enable_flow_logs" {
   description = "Bật VPC Flow Logs (chỉ REJECT) cho báo cáo bảo mật"
-  type        = bool
-  default     = false
-}
-
-variable "enable_deny_demo" {
-  description = "Bật NACL rule 50 DENY my_ip — kịch bản kiểm thử số 8"
   type        = bool
   default     = false
 }
@@ -164,13 +148,24 @@ variable "rate_limiter_is_distributed" {
 }
 
 variable "instance_type" {
-  description = "Instance type của container instance. t3.micro free tier, 1GB RAM"
+  description = "Instance type của container instance. t3.small (2GB RAM): thêm 2 sidecar WAF thì tổng memoryReservation (992 MiB) vượt ~900 MiB (ước) mà ECS đăng ký trên t3.micro — phép cộng ở docs/evidence/2026-11-08-waf-ram-spike.md §5"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
+}
+
+variable "waf_rule_engine" {
+  description = "Chế độ ModSecurity của 2 sidecar WAF: On (chặn) hoặc DetectionOnly (chỉ ghi log) — công tắc lùi khi chặn nhầm"
+  type        = string
+  default     = "On"
+
+  validation {
+    condition     = contains(["On", "DetectionOnly"], var.waf_rule_engine)
+    error_message = "waf_rule_engine chỉ được On hoặc DetectionOnly."
+  }
 }
 
 variable "image_tag" {
-  description = "Git SHA của 3 image trên ECR. Lấy bằng: git rev-parse HEAD"
+  description = "Git SHA của các image trên ECR (api, web, migrator, seeder, waf — cùng một commit). Lấy bằng: git rev-parse HEAD"
   type        = string
 }
 
