@@ -1,11 +1,11 @@
 # Việc còn lại — từ đây đến hết dự án
 
 **Cập nhật 02/11/2026:** migration NACL prod đã apply xong, SG/association được
-đọc lại và xác minh; serving stack vẫn tắt. Phương án Cloudflare WAF đã được gỡ ngày 08/11/2026 và thay bằng WAF sidecar ModSecurity + CRS trên EC2: **mã đã xong, đo local, chưa apply/chưa chạy trên AWS** (mục 5F).
+đọc lại và xác minh; serving stack vẫn tắt. Phương án Cloudflare WAF đã được gỡ ngày 08/11/2026 và thay bằng WAF sidecar ModSecurity + CRS trên EC2: **đã merge `main` và đã chạy thật trên AWS ngày 09/11/2026** (chặn 403, XFF đúng — [bằng chứng](evidence/acc-551897327153/2026-11-09/waf-cua-so-aws.md)); còn lại ở mục 5F.
 Xem [biên bản mới](bien-ban-apply-sg-2026-11-02.md); các số đo ngày 26/10 bên dưới
 vẫn là bản ghi tại thời điểm đó.
 
-**WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn ([phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md)); WAF thay thế là **sidecar ModSecurity + CRS** — mã xong trên nhánh `codex/remove-custom-nacl`, đo local ($0), **chưa apply lên AWS, chưa merge `main`**. Việc còn lại ở mục 5F. Giữ DNS/proxy hiện có và migration SG đã apply.
+**WAF 08/11/2026:** đã gỡ phương án Cloudflare WAF và origin lockdown khỏi mã nguồn ([phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md)); WAF thay thế là **sidecar ModSecurity + CRS** — đã merge `main` (PR #43, #44) và **đã đo trên AWS ngày 09/11/2026** ([bằng chứng](evidence/acc-551897327153/2026-11-09/waf-cua-so-aws.md)). Việc còn lại ở mục 5F. Giữ DNS/proxy hiện có và migration SG đã apply.
 
 > **Viết cho một agent không có ngữ cảnh gì.** File này tự chứa. Đọc hết trước khi
 > gõ dòng lệnh đầu tiên.
@@ -94,7 +94,7 @@ curl -s -o /dev/null -w "%{http_code}\n" https://hushstore.io.vn
 
 ## 3. 🔴 CHẶN — làm trước mọi thứ khác
 
-### B1. CI đang đỏ — cổng NuGet chặn 13 advisory
+### B1. ✅ ĐÃ XONG 09/11/2026 (`2a7a74a`, PR #43) — CI đỏ vì cổng NuGet chặn 13 advisory
 
 `dotnet build` **sạch** (`0 Error(s)`). Thứ chặn là
 `devops/scripts/check-vulnerable-packages.sh`.
@@ -329,12 +329,16 @@ Sửa khi tiện, nhưng **mục 1 và 2 nguy hiểm** vì tin vào chúng sẽ 
 | 11 | *"một `InitialCreatePostgres` duy nhất"* | **2 migration** (thêm `AddRateLimitCounters`) |
 | 12 | `terraform.tfvars:67-77`: *"rate limiter đếm trong RAM"* | 4/6 policy đã ở DB từ `866015e` |
 
-### 5F. WAF sidecar ModSecurity + CRS — còn lại để đưa lên AWS
+### 5F. WAF sidecar ModSecurity + CRS — F1–F6 ĐÃ XONG ngày 09/11/2026
 
 Mã đã xong và đo ở local (Docker arm64, $0): xem [`bao-mat-he-thong.md`](bao-mat-he-thong.md) mục "WAF sidecar",
 [thiết kế](superpowers/specs/2026-11-08-waf-modsecurity-ec2-design.md),
 [đo RAM](evidence/2026-11-08-waf-ram-spike.md), [bộ kiểm thử local](evidence/2026-11-08-waf-local.md).
-**Mọi bước dưới đây cần chủ dự án duyệt — không bước nào được tự chạy.** Đúng thứ tự:
+✅ **F1–F6 đã chạy ngày 09/11/2026** (PR #43, #44; image `4046bc0`; cửa sổ AWS $0.064) — kết quả ở
+[`evidence/acc-551897327153/2026-11-09/waf-cua-so-aws.md`](evidence/acc-551897327153/2026-11-09/waf-cua-so-aws.md). Bảng dưới giữ làm quy trình cho lần sau.
+**Còn lại (chưa đo):** đi tay trên **trình duyệt** các luồng GHI (sửa sản phẩm có HTML, upload ảnh,
+giỏ hàng, checkout, phiếu nhập/xuất) qua WAF ở `On` — cần sửa CNAME `alb` trên Cloudflare trước; và đo
+RAM WAF **dưới tải** trên EC2. Mọi bước cần chủ dự án duyệt. Đúng thứ tự:
 
 | # | Việc | Ghi chú |
 |---|---|---|

@@ -1,6 +1,6 @@
 # Bảo mật hệ thống HushStore — sáu nhóm phòng thủ
 
-**WAF 08/11/2026:** phương án Cloudflare WAF đã được gỡ (xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md)) và **thay bằng WAF mã nguồn mở tự vận hành: ModSecurity + OWASP CRS 4 chạy sidecar trong task của `api` và của `web`**. Hiện trạng đúng sự thật: **mã đã xong và đã đo ở máy local (Docker, $0), CHƯA apply lên AWS, CHƯA đo trên EC2.** Mọi con số RAM đều từ Docker arm64 trên máy cá nhân. Xem mục [WAF sidecar](#waf-sidecar-modsecurity--owasp-crs--đã-có-mã-chưa-chạy-trên-aws). Giữ DNS/proxy hiện có và migration SG đã apply.
+**WAF 08/11/2026:** phương án Cloudflare WAF đã được gỡ (xem [phạm vi và giới hạn rollback](rollback-cloudflare-waf-2026-11-08.md)) và **thay bằng WAF mã nguồn mở tự vận hành: ModSecurity + OWASP CRS 4 chạy sidecar trong task của `api` và của `web`**. Hiện trạng đúng sự thật: **đã merge `main` và đã chạy trên AWS thật ngày 09/11/2026** — SQLi/XSS/sqlmap bị 403, luồng thật không bị chặn nhầm, XFF đúng, RAM thật đo được ([bằng chứng](evidence/acc-551897327153/2026-11-09/waf-cua-so-aws.md)). Luồng GHI chưa đi tay trên trình duyệt. Xem mục [WAF sidecar](#waf-sidecar-modsecurity--owasp-crs--đã-có-mã-chưa-chạy-trên-aws). Giữ DNS/proxy hiện có và migration SG đã apply.
 
 > **Tài liệu này dành cho ai:** thành viên trong nhóm cần **giải thích được** hệ
 > thống phòng thủ khi bảo vệ đồ án, không cần đọc code.
@@ -19,7 +19,7 @@
 
 **Trạng thái:** nội dung kiến trúc dưới đây mô tả mã sau khi bỏ ba custom NACL.
 Đã apply migration prod ngày 02/11/2026, đọc lại AWS để xác minh association/SG;
-chưa kiểm thử runtime ứng dụng. WAF sidecar mới có mã và số đo local, chưa apply lên AWS. Xem
+chưa kiểm thử runtime ứng dụng. WAF sidecar đã chạy trên AWS ngày 09/11/2026 ([bằng chứng](evidence/acc-551897327153/2026-11-09/waf-cua-so-aws.md)). Xem
 [biên bản apply](bien-ban-apply-sg-2026-11-02.md). Báo cáo 12 kịch bản cũ vẫn là
 hồ sơ của cấu hình tại thời điểm đo; [migration guide](nacl-to-sg-migration.md)
 mô tả cách tái thực hiện và đo lại.
@@ -554,9 +554,10 @@ trong file: "sg-web allows only ALB traffic").
 
 > **Trạng thái trung thực:** mã (image, Terraform, CI, script) đã xong trên nhánh
 > `codex/remove-custom-nacl`; **đo ở máy local bằng Docker**, upstream là nginx giả, không phải
-> `api`/`web` thật. **Chưa `apply` lên AWS, chưa merge `main`, chưa đo trên EC2.** Đừng nói với
-> thầy là "WAF đang chạy trên AWS" cho tới khi cửa sổ đo AWS (xem
-> [`VIEC-CON-LAI.md`](VIEC-CON-LAI.md)) thật sự xảy ra.
+> `api`/`web` thật. **Cập nhật 09/11/2026: đã merge `main` và đã đo trên AWS thật** — xem
+> [`evidence/acc-551897327153/2026-11-09/waf-cua-so-aws.md`](evidence/acc-551897327153/2026-11-09/waf-cua-so-aws.md): 403 khi `On`, 0 chặn nhầm ở các luồng đọc + đăng nhập,
+> XFF đúng (2 IP không khoá lẫn nhau), RAM WAF 40–63 MiB lúc rảnh. Luồng GHI (sửa sản phẩm,
+> upload, checkout) mới chỉ được phủ bởi `run.sh` với upstream giả.
 
 **Vì sao có:** giảng viên muốn một WAF mã nguồn mở tự vận hành trên EC2 để học được nhiều hơn
 (Cloudflare WAF đã bị rollback vì lý do đó), và cho phép WAF chạy chung máy với web/api.
