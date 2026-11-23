@@ -1,0 +1,467 @@
+### WAF-04: task definition đang chạy — app không có cổng host, chỉ waf giữ cổng
+
+$ aws ecs describe-task-definition --task-definition hushstore-api:5 --query 'taskDefinition.containerDefinitions[].{name:name,image:image,portMappings:portMappings,links:links,dependsOn:dependsOn,memory:memory,memoryReservation:memoryReservation,env:environment}'
+[
+    {
+        "name": "api",
+        "image": "551897327153.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api:4046bc0b949a477d8e0b07642bf43ccc661abc17",
+        "portMappings": [],
+        "links": null,
+        "dependsOn": null,
+        "memory": 512,
+        "memoryReservation": 384,
+        "env": [
+            {
+                "name": "AwsSettings__Region",
+                "value": "ap-southeast-1"
+            },
+            {
+                "name": "AllowedOrigins",
+                "value": "https://hushstore.io.vn"
+            },
+            {
+                "name": "ASPNETCORE_ENVIRONMENT",
+                "value": "Production"
+            },
+            {
+                "name": "AwsSettings__BucketName",
+                "value": "hushstore-public-assets-551897327153"
+            },
+            {
+                "name": "ASPNETCORE_URLS",
+                "value": "http://+:8080"
+            }
+        ]
+    },
+    {
+        "name": "waf",
+        "image": "551897327153.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-waf:4046bc0b949a477d8e0b07642bf43ccc661abc17",
+        "portMappings": [
+            {
+                "containerPort": 8080,
+                "hostPort": 8080,
+                "protocol": "tcp"
+            }
+        ],
+        "links": [
+            "api"
+        ],
+        "dependsOn": [
+            {
+                "containerName": "api",
+                "condition": "START"
+            }
+        ],
+        "memory": 512,
+        "memoryReservation": 128,
+        "env": [
+            {
+                "name": "MODSEC_REQ_BODY_NOFILES_LIMIT",
+                "value": "1048576"
+            },
+            {
+                "name": "PORT",
+                "value": "8080"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG_FORMAT",
+                "value": "JSON"
+            },
+            {
+                "name": "MODSEC_ARGUMENTS_LIMIT",
+                "value": "20000"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG_PARTS",
+                "value": "AHZ"
+            },
+            {
+                "name": "MODSEC_REQ_BODY_LIMIT",
+                "value": "8388608"
+            },
+            {
+                "name": "BACKEND",
+                "value": "http://api:8080"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG",
+                "value": "/dev/stdout"
+            },
+            {
+                "name": "CLIENT_MAX_BODY_SIZE",
+                "value": "8m"
+            },
+            {
+                "name": "BLOCKING_PARANOIA",
+                "value": "1"
+            },
+            {
+                "name": "MODSEC_RESP_BODY_ACCESS",
+                "value": "Off"
+            },
+            {
+                "name": "ANOMALY_OUTBOUND",
+                "value": "4"
+            },
+            {
+                "name": "SET_REAL_IP_FROM",
+                "value": "10.20.0.0/16"
+            },
+            {
+                "name": "ANOMALY_INBOUND",
+                "value": "5"
+            },
+            {
+                "name": "MODSEC_RULE_ENGINE",
+                "value": "DetectionOnly"
+            },
+            {
+                "name": "NGINX_WORKER_PROCESSES",
+                "value": "1"
+            },
+            {
+                "name": "MODSEC_AUDIT_ENGINE",
+                "value": "RelevantOnly"
+            }
+        ]
+    }
+]
+
+$ aws ecs describe-task-definition --task-definition hushstore-web:5 --query 'taskDefinition.containerDefinitions[].{name:name,image:image,portMappings:portMappings,links:links,dependsOn:dependsOn,memory:memory,memoryReservation:memoryReservation,env:environment}'
+[
+    {
+        "name": "web",
+        "image": "551897327153.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web:4046bc0b949a477d8e0b07642bf43ccc661abc17",
+        "portMappings": [],
+        "links": null,
+        "dependsOn": null,
+        "memory": 192,
+        "memoryReservation": 96,
+        "env": []
+    },
+    {
+        "name": "waf",
+        "image": "551897327153.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-waf:4046bc0b949a477d8e0b07642bf43ccc661abc17",
+        "portMappings": [
+            {
+                "containerPort": 8080,
+                "hostPort": 80,
+                "protocol": "tcp"
+            }
+        ],
+        "links": [
+            "web"
+        ],
+        "dependsOn": [
+            {
+                "containerName": "web",
+                "condition": "START"
+            }
+        ],
+        "memory": 512,
+        "memoryReservation": 128,
+        "env": [
+            {
+                "name": "MODSEC_REQ_BODY_NOFILES_LIMIT",
+                "value": "131072"
+            },
+            {
+                "name": "PORT",
+                "value": "8080"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG_FORMAT",
+                "value": "JSON"
+            },
+            {
+                "name": "MODSEC_ARGUMENTS_LIMIT",
+                "value": "1000"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG_PARTS",
+                "value": "AHZ"
+            },
+            {
+                "name": "MODSEC_REQ_BODY_LIMIT",
+                "value": "1048576"
+            },
+            {
+                "name": "BACKEND",
+                "value": "http://web:80"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG",
+                "value": "/dev/stdout"
+            },
+            {
+                "name": "CLIENT_MAX_BODY_SIZE",
+                "value": "1m"
+            },
+            {
+                "name": "BLOCKING_PARANOIA",
+                "value": "1"
+            },
+            {
+                "name": "MODSEC_RESP_BODY_ACCESS",
+                "value": "Off"
+            },
+            {
+                "name": "ANOMALY_OUTBOUND",
+                "value": "4"
+            },
+            {
+                "name": "SET_REAL_IP_FROM",
+                "value": "10.20.0.0/16"
+            },
+            {
+                "name": "ANOMALY_INBOUND",
+                "value": "5"
+            },
+            {
+                "name": "MODSEC_RULE_ENGINE",
+                "value": "DetectionOnly"
+            },
+            {
+                "name": "NGINX_WORKER_PROCESSES",
+                "value": "1"
+            },
+            {
+                "name": "MODSEC_AUDIT_ENGINE",
+                "value": "RelevantOnly"
+            }
+        ]
+    }
+]
+
+$ aws ecs describe-task-definition --task-definition hushstore-api:6 --query 'taskDefinition.containerDefinitions[].{name:name,image:image,portMappings:portMappings,links:links,dependsOn:dependsOn,memory:memory,memoryReservation:memoryReservation,env:environment}'
+[
+    {
+        "name": "api",
+        "image": "551897327153.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-api:4046bc0b949a477d8e0b07642bf43ccc661abc17",
+        "portMappings": [],
+        "links": null,
+        "dependsOn": null,
+        "memory": 512,
+        "memoryReservation": 384,
+        "env": [
+            {
+                "name": "AwsSettings__Region",
+                "value": "ap-southeast-1"
+            },
+            {
+                "name": "AllowedOrigins",
+                "value": "https://hushstore.io.vn"
+            },
+            {
+                "name": "ASPNETCORE_ENVIRONMENT",
+                "value": "Production"
+            },
+            {
+                "name": "AwsSettings__BucketName",
+                "value": "hushstore-public-assets-551897327153"
+            },
+            {
+                "name": "ASPNETCORE_URLS",
+                "value": "http://+:8080"
+            }
+        ]
+    },
+    {
+        "name": "waf",
+        "image": "551897327153.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-waf:4046bc0b949a477d8e0b07642bf43ccc661abc17",
+        "portMappings": [
+            {
+                "containerPort": 8080,
+                "hostPort": 8080,
+                "protocol": "tcp"
+            }
+        ],
+        "links": [
+            "api"
+        ],
+        "dependsOn": [
+            {
+                "containerName": "api",
+                "condition": "START"
+            }
+        ],
+        "memory": 512,
+        "memoryReservation": 128,
+        "env": [
+            {
+                "name": "MODSEC_REQ_BODY_NOFILES_LIMIT",
+                "value": "1048576"
+            },
+            {
+                "name": "PORT",
+                "value": "8080"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG_FORMAT",
+                "value": "JSON"
+            },
+            {
+                "name": "MODSEC_ARGUMENTS_LIMIT",
+                "value": "20000"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG_PARTS",
+                "value": "AHZ"
+            },
+            {
+                "name": "MODSEC_REQ_BODY_LIMIT",
+                "value": "8388608"
+            },
+            {
+                "name": "BACKEND",
+                "value": "http://api:8080"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG",
+                "value": "/dev/stdout"
+            },
+            {
+                "name": "CLIENT_MAX_BODY_SIZE",
+                "value": "8m"
+            },
+            {
+                "name": "BLOCKING_PARANOIA",
+                "value": "1"
+            },
+            {
+                "name": "MODSEC_RESP_BODY_ACCESS",
+                "value": "Off"
+            },
+            {
+                "name": "ANOMALY_OUTBOUND",
+                "value": "4"
+            },
+            {
+                "name": "SET_REAL_IP_FROM",
+                "value": "10.20.0.0/16"
+            },
+            {
+                "name": "ANOMALY_INBOUND",
+                "value": "5"
+            },
+            {
+                "name": "MODSEC_RULE_ENGINE",
+                "value": "On"
+            },
+            {
+                "name": "NGINX_WORKER_PROCESSES",
+                "value": "1"
+            },
+            {
+                "name": "MODSEC_AUDIT_ENGINE",
+                "value": "RelevantOnly"
+            }
+        ]
+    }
+]
+
+$ aws ecs describe-task-definition --task-definition hushstore-web:6 --query 'taskDefinition.containerDefinitions[].{name:name,image:image,portMappings:portMappings,links:links,dependsOn:dependsOn,memory:memory,memoryReservation:memoryReservation,env:environment}'
+[
+    {
+        "name": "web",
+        "image": "551897327153.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-web:4046bc0b949a477d8e0b07642bf43ccc661abc17",
+        "portMappings": [],
+        "links": null,
+        "dependsOn": null,
+        "memory": 192,
+        "memoryReservation": 96,
+        "env": []
+    },
+    {
+        "name": "waf",
+        "image": "551897327153.dkr.ecr.ap-southeast-1.amazonaws.com/hushstore-waf:4046bc0b949a477d8e0b07642bf43ccc661abc17",
+        "portMappings": [
+            {
+                "containerPort": 8080,
+                "hostPort": 80,
+                "protocol": "tcp"
+            }
+        ],
+        "links": [
+            "web"
+        ],
+        "dependsOn": [
+            {
+                "containerName": "web",
+                "condition": "START"
+            }
+        ],
+        "memory": 512,
+        "memoryReservation": 128,
+        "env": [
+            {
+                "name": "MODSEC_REQ_BODY_NOFILES_LIMIT",
+                "value": "131072"
+            },
+            {
+                "name": "PORT",
+                "value": "8080"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG_FORMAT",
+                "value": "JSON"
+            },
+            {
+                "name": "MODSEC_ARGUMENTS_LIMIT",
+                "value": "1000"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG_PARTS",
+                "value": "AHZ"
+            },
+            {
+                "name": "MODSEC_REQ_BODY_LIMIT",
+                "value": "1048576"
+            },
+            {
+                "name": "BACKEND",
+                "value": "http://web:80"
+            },
+            {
+                "name": "MODSEC_AUDIT_LOG",
+                "value": "/dev/stdout"
+            },
+            {
+                "name": "CLIENT_MAX_BODY_SIZE",
+                "value": "1m"
+            },
+            {
+                "name": "BLOCKING_PARANOIA",
+                "value": "1"
+            },
+            {
+                "name": "MODSEC_RESP_BODY_ACCESS",
+                "value": "Off"
+            },
+            {
+                "name": "ANOMALY_OUTBOUND",
+                "value": "4"
+            },
+            {
+                "name": "SET_REAL_IP_FROM",
+                "value": "10.20.0.0/16"
+            },
+            {
+                "name": "ANOMALY_INBOUND",
+                "value": "5"
+            },
+            {
+                "name": "MODSEC_RULE_ENGINE",
+                "value": "On"
+            },
+            {
+                "name": "NGINX_WORKER_PROCESSES",
+                "value": "1"
+            },
+            {
+                "name": "MODSEC_AUDIT_ENGINE",
+                "value": "RelevantOnly"
+            }
+        ]
+    }
+]

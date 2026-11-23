@@ -81,3 +81,21 @@ RDS `hushstore-db-tf` **stopped** (15:41:13) · replica 0.
 Tag `4046bc0`: `hushstore-waf` **0 finding** (tag `90f20b2` trước khi vá: 13 CRITICAL / 30 HIGH,
 toàn bộ gói Alpine của image gốc). Các image khác có từ trước, ngoài phạm vi WAF: web 1 CRITICAL;
 api, migrator 10 HIGH; seeder 6 HIGH.
+
+## 8. Bằng chứng gốc (log và lệnh nguyên văn)
+
+| File | Nội dung |
+|---|---|
+| [`waf-01-cloudwatch-log-goc.txt`](waf-01-cloudwatch-log-goc.txt) | **Toàn bộ** log CloudWatch `/ecs/hushstore-waf` (stream `waf-api/*`, `waf-web/*`) trong cửa sổ 15:14→15:42: audit log JSON của ModSecurity + access log nginx, nguyên văn. Lọc `t9=` để thấy các request tấn công. Log group chỉ giữ 3 ngày nên đã xuất ra đây |
+| [`waf-02-probe.sh`](waf-02-probe.sh) | Script lệnh tấn công + luồng thật đã chạy (mật khẩu admin chuyển sang biến `ADMIN_PASSWORD`) |
+| [`waf-02-lenh-tan-cong-va-ket-qua.txt`](waf-02-lenh-tan-cong-va-ket-qua.txt) | Payload và output terminal của 2 lần chạy: `DetectionOnly` (15:21) và `On` (15:29) |
+| [`waf-03-xff-rate-limit-va-ram.txt`](waf-03-xff-rate-limit-va-ram.txt) | Lệnh SSM và output nguyên văn: rate limit từ IP NAT, `docker stats`, `free -m`; lệnh và kết quả từ máy đo |
+| [`waf-04-task-definition.txt`](waf-04-task-definition.txt) | `describe-task-definition` của `api:5/6`, `web:5/6`: `portMappings`, `links`, `dependsOn`, RAM, env của WAF |
+| [`waf-05-bat-tat-va-xac-minh.txt`](waf-05-bat-tat-va-xac-minh.txt) | Log `up.sh`, plan/apply chuyển `On`, log `down.sh`, và lệnh AWS API xác minh đã tắt |
+| [`waf-audit-sqli-403.json`](waf-audit-sqli-403.json) | Bản rút gọn của một dòng audit log (ca SQLi bị 403) để trình bày |
+
+Tìm nhanh trong log gốc:
+```bash
+grep 't9=sqli' waf-01-cloudwatch-log-goc.txt        # audit + access log của 2 lần chạy: 200 (DetectionOnly) rồi 403 (On)
+grep -o '"ruleId":"[0-9]*"' waf-01-cloudwatch-log-goc.txt | sort | uniq -c
+```

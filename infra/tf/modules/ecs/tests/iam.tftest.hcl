@@ -54,10 +54,12 @@ run "task_app_role_chi_duoc_s3_tren_dung_bucket_anh" {
       for s in jsondecode(data.aws_iam_policy_document.task_app.json).Statement :
       alltrue([
         for a in flatten([s.Action]) :
-        startswith(a, "s3:") || startswith(a, "ssmmessages:")
+        startswith(a, "s3:") ||
+        startswith(a, "ssmmessages:") ||
+        contains(["ssm:GetParametersByPath", "ssm:PutParameter", "kms:Decrypt", "kms:Encrypt"], a)
       ])
     ])
-    error_message = "Task role của app chỉ được có action s3:* và ssmmessages:* — không rds, không ecr, không ssm:GetParameter."
+    error_message = "Task role của app chỉ được phép s3:*, ssmmessages:*, ssm:GetParametersByPath, ssm:PutParameter, kms:Decrypt, kms:Encrypt — không rds, không ecr, không ssm:GetParameter/DescribeParameters."
   }
 
   assert {
@@ -71,9 +73,91 @@ run "task_app_role_chi_duoc_s3_tren_dung_bucket_anh" {
   assert {
     condition = alltrue([
       for s in jsondecode(data.aws_iam_policy_document.task_app.json).Statement :
-      !contains(flatten([try(s.Resource, [])]), "*") || alltrue([for a in flatten([s.Action]) : startswith(a, "ssmmessages:")])
+      !contains(flatten([try(s.Resource, [])]), "*") ||
+      alltrue([for a in flatten([s.Action]) : startswith(a, "ssmmessages:")]) ||
+      (
+        alltrue([for a in flatten([s.Action]) : startswith(a, "kms:")]) &&
+        try(s.Condition.StringEquals["kms:ViaService"], null) != null
+      )
     ])
-    error_message = "Chỉ ssmmessages (ECS Exec) được dùng Resource = *; quyền S3 phải giới hạn theo ARN."
+    error_message = "Chỉ ssmmessages (ECS Exec) hoặc kms:* có điều kiện kms:ViaService được dùng Resource = *; quyền S3 và SSM phải giới hạn theo ARN."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(data.aws_iam_policy_document.task_app.json).Statement :
+      anytrue([for a in flatten([s.Action]) : startswith(a, "ssm:")])
+    ])
+    error_message = "Task role của app phải có statement SSM cho DataProtection key ring."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(data.aws_iam_policy_document.task_app.json).Statement :
+      !anytrue([for a in flatten([s.Action]) : startswith(a, "ssm:")]) || (
+        alltrue([
+          for r in flatten([try(s.Resource, [])]) :
+          startswith(r, "arn:aws:ssm:ap-southeast-1:") &&
+          !strcontains(r, "//") &&
+          (
+            endswith(r, ":parameter/${var.project}/prod/dataprotection") ||
+            endswith(r, ":parameter/${var.project}/prod/dataprotection/*")
+          )
+        ]) &&
+        anytrue([for r in flatten([try(s.Resource, [])]) : endswith(r, ":parameter/${var.project}/prod/dataprotection")]) &&
+        anytrue([for r in flatten([try(s.Resource, [])]) : endswith(r, ":parameter/${var.project}/prod/dataprotection/*")])
+      )
+    ])
+    error_message = "Quyền SSM của task_app phải giới hạn ĐÚNG 2 ARN của prefix dataprotection (path gốc và /*), không chứa //, và không được chạm connection-string/jwt-secret/db-password."
+  }
+}
+
+run "dataprotection_ssm_prefix_rong_bi_tu_choi" {
+  command = plan
+
+  variables {
+    dataprotection_ssm_prefix = "/hushstore/prod/"
+  }
+
+  expect_failures = [var.dataprotection_ssm_prefix]
+}
+
+run "ssm_replica_connection_string_arn_sai_dinh_dang_bi_tu_choi" {
+  command = plan
+
+  variables {
+    ssm_replica_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/db-password"
+  }
+
+  expect_failures = [var.ssm_replica_connection_string_arn]
+}
+
+run "task_execution_role_khi_bat_read_replica_doc_dung_3_parameter" {
+  command = plan
+
+  variables {
+    ssm_replica_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string-readonly"
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(data.aws_iam_policy_document.task_execution_extra.json).Statement :
+      !anytrue([for a in flatten([s.Action]) : startswith(a, "ssm:")]) ||
+      toset(flatten([try(s.Resource, [])])) == toset([
+        var.ssm_connection_string_arn,
+        var.ssm_jwt_secret_arn,
+        var.ssm_replica_connection_string_arn,
+      ])
+    ])
+    error_message = "Khi bật Read Replica, statement đọc SSM của task execution role phải chứa ĐÚNG 3 ARN (connection-string, jwt-secret, connection-string-readonly)."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(data.aws_iam_policy_document.task_execution_extra.json).Statement :
+      !contains(flatten([try(s.Resource, [])]), var.ssm_db_password_arn)
+    ])
+    error_message = "Task execution role tuyệt đối không được đọc db-password kể cả khi bật Read Replica."
   }
 }
 

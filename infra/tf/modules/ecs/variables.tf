@@ -276,3 +276,26 @@ variable "waf_memory_hard" {
   type        = number
   default     = 512
 }
+
+# ─── DATA PROTECTION & READ REPLICA ──────────────────────────────
+variable "dataprotection_ssm_prefix" {
+  description = "Prefix SSM Parameter Store cho DataProtection key ring (vd: /hushstore/prod/dataprotection/). Để rỗng dùng mặc định /<project>/prod/dataprotection/. Bắt buộc kết thúc bằng /dataprotection/ để không mở quyền đọc secret khác."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.dataprotection_ssm_prefix == "" || can(regex("^/[a-z0-9-]+/[a-z0-9-]+/dataprotection/$", var.dataprotection_ssm_prefix))
+    error_message = "dataprotection_ssm_prefix phải rỗng hoặc có dạng /<project>/<env>/dataprotection/ — tuyệt đối không dùng prefix rộng như /hushstore/prod/ vì sẽ mở quyền cho task_app đọc connection-string, jwt-secret và db-password."
+  }
+}
+
+variable "ssm_replica_connection_string_arn" {
+  description = "ARN parameter chứa connection string chỉ-đọc của Read Replica. Rỗng khi enable_read_replica = false"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.ssm_replica_connection_string_arn == "" || can(regex("^arn:aws:ssm:[a-z0-9-]+:[0-9]{12}:parameter/.+/connection-string-readonly$", var.ssm_replica_connection_string_arn))
+    error_message = "ssm_replica_connection_string_arn phải rỗng hoặc là ARN SSM hợp lệ kết thúc bằng /connection-string-readonly."
+  }
+}

@@ -80,4 +80,8 @@ COPY Infrastructure/db/seed_product_data.sql ./02-seed_product_data.sql
 COPY src/Infrastructure/seed-entrypoint.sh   /usr/local/bin/seed
 RUN chmod +x /usr/local/bin/seed
 
+# Chạy bằng user không có quyền root (script chỉ đọc /seed và CA cert chmod 644).
+RUN useradd -m seeder && chown -R seeder:seeder /seed
+USER seeder
+
 ENTRYPOINT ["/usr/local/bin/seed"]

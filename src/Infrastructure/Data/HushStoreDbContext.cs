@@ -15,6 +15,10 @@ namespace PBL3.Infrastructure.Data
         {
         }
 
+        protected HushStoreDbContext(DbContextOptions options) : base(options)
+        {
+        }
+
         // Product
         public DbSet<Manufacturer> Manufacturers { get; set; }
         public DbSet<Category> Categories { get; set; }

@@ -88,6 +88,9 @@ locals {
     { name = "MODSEC_AUDIT_LOG_PARTS", value = "AHZ" },
   ]
 
+  dataprotection_ssm_prefix        = var.dataprotection_ssm_prefix != "" ? var.dataprotection_ssm_prefix : "/${var.project}/prod/dataprotection/"
+  dataprotection_ssm_path_no_slash = trim(local.dataprotection_ssm_prefix, "/")
+
   # Secret dùng khối `secrets` với valueFrom, KHÔNG dùng `environment`.
   # Giá trị trong `environment` hiện nguyên văn trong output của
   # `aws ecs describe-task-definition` — ai có quyền đọc task definition là
@@ -102,6 +105,19 @@ locals {
       valueFrom = var.ssm_jwt_secret_arn
     },
   ]
+
+  # Container `api` nhận thêm ConnectionStrings__ReadOnlyConnection CHỈ KHI
+  # Read Replica được bật (ssm_replica_connection_string_arn khác rỗng).
+  # Container `migrator` chỉ dùng app_secrets (luôn chạy trên primary).
+  api_secrets = concat(
+    local.app_secrets,
+    var.ssm_replica_connection_string_arn != "" ? [
+      {
+        name      = "ConnectionStrings__ReadOnlyConnection"
+        valueFrom = var.ssm_replica_connection_string_arn
+      }
+    ] : [],
+  )
 }
 
 # ─── TASK DEFINITION: API ────────────────────────────────────────
@@ -164,9 +180,10 @@ resource "aws_ecs_task_definition" "api" {
         { name = "AllowedOrigins", value = var.allowed_origins },
         { name = "AwsSettings__BucketName", value = var.assets_bucket_name },
         { name = "AwsSettings__Region", value = local.aws_region },
+        { name = "DataProtection__SsmPrefix", value = local.dataprotection_ssm_prefix },
       ]
 
-      secrets = local.app_secrets
+      secrets = local.api_secrets
 
       linuxParameters = {
         # initProcessEnabled bắt buộc để ECS Exec vào được container.

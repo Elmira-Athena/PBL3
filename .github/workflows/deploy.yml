@@ -244,6 +244,7 @@ jobs:
             --idempotent \
             --project src/Infrastructure/Infrastructure.csproj \
             --startup-project src/API/API.csproj \
+            --context HushStoreDbContext \
             --configuration Release \
             -o "migrate-${GITHUB_SHA}.sql"
           wc -l "migrate-${GITHUB_SHA}.sql"

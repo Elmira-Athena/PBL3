@@ -22,10 +22,10 @@ dotnet run --project src/Client/Client.csproj
 docker-compose up -d postgres
 
 # Create a new EF Core migration
-dotnet ef migrations add <MigrationName> --project src/Infrastructure --startup-project src/API
+dotnet ef migrations add <MigrationName> --project src/Infrastructure --startup-project src/API --context HushStoreDbContext
 
 # Apply pending migrations
-dotnet ef database update --project src/Infrastructure --startup-project src/API
+dotnet ef database update --project src/Infrastructure --startup-project src/API --context HushStoreDbContext
 ```
 
 There are no automated tests in this project yet.

@@ -1,0 +1,169 @@
+### WAF-05: bật/tắt stack và xác minh tắt bằng AWS API
+
+== bash infra/tf/scripts/up.sh (15:14 → 15:20, +07)
+! ECR có image mới hơn tag đang dùng:
+!     tfvars image_tag : 4046bc0b949a477d8e0b07642bf43ccc661abc17
+!     mới nhất trên ECR: 90f20b2e764c6567f6ef83dfada1ca9fe4892293
+!   Nếu muốn chạy bản mới nhất thì sửa tfvars TRƯỚC khi bật tiếp:
+!     sed -i '' 's|^image_tag = .*|image_tag = "90f20b2e764c6567f6ef83dfada1ca9fe4892293"|' infra/tf/envs/prod/terraform.tfvars
+BƯỚC 1/6 — RDS
+────────────────────────────────────────────────────────────
+✓ đã phát lệnh start — chạy tiếp trong lúc nó lên, chưa chờ ở đây
+BƯỚC 2/6 — NAT Gateway + ALB
+  0s                                                                        
+  5s                                                                        
+  10s  module.ecs.aws_ecs_task_definition.api: Creation complete after 0s [id=h
+  15s  module.alb.aws_lb_target_group.api[0]: Creation complete after 1s [id=ar
+  21s  module.alb.aws_lb.this[0]: Still creating... [00m10s elapsed]        
+  26s  module.network.aws_nat_gateway.this[1]: Still creating... [00m10s elapse
+  31s  module.alb.aws_lb.this[0]: Still creating... [00m20s elapsed]        
+  36s  module.network.aws_nat_gateway.this[1]: Still creating... [00m20s elapse
+  41s  module.alb.aws_lb.this[0]: Still creating... [00m30s elapsed]        
+  46s  module.network.aws_nat_gateway.this[0]: Still creating... [00m30s elapse
+  51s  module.alb.aws_lb.this[0]: Still creating... [00m40s elapsed]        
+  56s  module.network.aws_nat_gateway.this[1]: Still creating... [00m40s elapse
+  0h 01m  module.network.aws_nat_gateway.this[0]: Still creating... [00m50s elapse
+  0h 01m  module.network.aws_nat_gateway.this[1]: Still creating... [01m00s elapse
+  0h 01m  module.network.aws_nat_gateway.this[1]: Still creating... [01m10s elapse
+  0h 01m  module.network.aws_nat_gateway.this[0]: Still creating... [01m20s elapse
+  0h 01m  module.network.aws_nat_gateway.this[0]: Still creating... [01m30s elapse
+  0h 01m  module.network.aws_nat_gateway.this[1]: Still creating... [01m40s elapse
+  0h 01m  module.network.aws_nat_gateway.this[0]: Creation complete after 1m45s [i
+  0h 02m  module.alb.aws_lb.this[0]: Still creating... [01m50s elapsed]     
+  0h 02m  module.alb.aws_lb.this[0]: Still creating... [02m00s elapsed]     
+  0h 02m  module.alb.aws_lb.this[0]: Still creating... [02m10s elapsed]     
+  0h 02m  module.alb.aws_lb_listener_rule.api[0]: Creation complete after 0s [id=a
+  0h 02m  module.ecs.aws_ecs_service.web[0]: Still creating... [02m10s elapsed]
+✓ tạo NAT + ALB + target group + service — 0h 02m  Apply complete! Resources: 20 added, 1 changed, 4 destroyed.
+BƯỚC 3/6 — cửa chặn: RDS phải available
+  1s  RDS available  (thường 5-10m, bước lâu nhất)                 
+  12s  RDS available  (thường 5-10m, bước lâu nhất)                
+  22s  RDS available  (thường 5-10m, bước lâu nhất)                
+  33s  RDS available  (thường 5-10m, bước lâu nhất)                
+✓ RDS available — 44s
+BƯỚC 4/6 — EC2 container instance
+  10s                                                                       
+  15s  module.ecs.aws_autoscaling_group.this: Modifying... [id=hushstore-asg]
+  20s  module.ecs.aws_autoscaling_group.this: Modifying... [id=hushstore-asg]
+  25s  module.ecs.aws_autoscaling_group.this: Still modifying... [id=hushstore-
+✓ bật 1 instance — 30s  Apply complete! Resources: 0 added, 3 changed, 0 destroyed.
+BƯỚC 5/6 — cửa chặn: instance phải đăng ký vào ECS cluster
+Cluster : hushstore
+Region  : ap-southeast-1   Profile: hushstore
+Timeout : 420s   Chờ đủ : 1 instance
+chưa có instance nào — chờ 10s (còn 420s)
+chưa có instance nào — chờ 10s (còn 409s)
+chưa có instance nào — chờ 10s (còn 399s)
+chưa có instance nào — chờ 10s (còn 388s)
+Đã đăng ký 1/1 instance. Chi tiết:
+-----------------------------------------------------------------------
+|                     DescribeContainerInstances                      |
++-------+-------+-----------------------+-------+---------+-----------+
+| agent |  cpu  |       instance        |  mem  | status  |  version  |
+|  True |  2048 |  i-0986ec3e5c260db59  |  1913 |  ACTIVE |  1.108.2  |
+OK — cluster có capacity dùng được.
+BƯỚC 6/6 — target group phải healthy
+  1s  cả tg-api và tg-web healthy  (thường 1-3m sau khi task lên)    
+  12s  cả tg-api và tg-web healthy  (thường 1-3m sau khi task lên)   
+  23s  cả tg-api và tg-web healthy  (thường 1-3m sau khi task lên)   
+  34s  cả tg-api và tg-web healthy  (thường 1-3m sau khi task lên)   
+  45s  cả tg-api và tg-web healthy  (thường 1-3m sau khi task lên)   
+  56s  cả tg-api và tg-web healthy  (thường 1-3m sau khi task lên)   
+  0h 01m  cả tg-api và tg-web healthy  (thường 1-3m sau khi task lên)
+✓ cả tg-api và tg-web healthy — 0h 01m
+DNS
+  ALB hiện tại      : hushstore-alb-999297110.ap-southeast-1.elb.amazonaws.com
+  alb.hushstore.io.vn đang trỏ : hushstore-alb-1075742626.ap-southeast-1.elb.amazonaws.com
+! PHẢI SỬA CLOUDFLARE TRƯỚC KHI MỞ BROWSER
+     Sửa record  CNAME  alb   →   hushstore-alb-999297110.ap-southeast-1.elb.amazonaws.com
+     Proxy status: DNS only (mây xám). Hai record @ và api không phải chạm.
+     Sau khi sửa, DNS lan trong ~1-2 phút.
+KIỂM TRA CUỐI
+! https://hushstore.io.vn/ → 530
+! https://api.hushstore.io.vn/health/ready → 530
+XONG — tổng 0h 06m
+  Website     : https://hushstore.io.vn/
+  API         : https://api.hushstore.io.vn/
+  Đăng nhập   : <tài khoản admin demo — đã che>
+  Theo dõi    : bash infra/tf/scripts/status.sh -w
+  Tắt khi xong: bash infra/tf/scripts/down.sh  (2×NAT + ALB = $0.1432/giờ, chưa tính EC2 và RDS)
+
+== terraform plan/apply chuyển DetectionOnly → On (15:27)
+  # module.ecs.aws_ecs_task_definition.api must be replaced
+                          ~ value = "DetectionOnly" -> "On"
+  # module.ecs.aws_ecs_task_definition.web must be replaced
+                          ~ value = "DetectionOnly" -> "On"
+Plan: 2 to add, 0 to change, 2 to destroy.
+Apply complete! Resources: 2 added, 0 changed, 2 destroyed.
+$ aws ecs update-service --cluster hushstore --service hushstore-api --task-definition hushstore-api:6
+$ aws ecs update-service --cluster hushstore --service hushstore-web --task-definition hushstore-web:6
+$ aws ecs wait services-stable … → stable 15:29:30; tg-api healthy, tg-web healthy
+
+== bash infra/tf/scripts/down.sh (15:30 → 15:35)
+BƯỚC 1/5 — ECS service + ALB + target group
+────────────────────────────────────────────────────────────
+  0s                                                                        
+  5s                                                                        
+  10s                                                                       
+  15s  module.alb.aws_lb.this[0]: Destroying... [id=arn:aws:elasticloadbalancin
+  20s  module.alb.aws_lb.this[0]: Destroying... [id=arn:aws:elasticloadbalancin
+  25s  module.ecs.aws_ecs_service.web[0]: Still destroying... [id=arn:aws:ecs:a
+  30s  module.ecs.aws_ecs_service.web[0]: Still destroying... [id=arn:aws:ecs:a
+  35s  module.ecs.aws_ecs_service.api[0]: Still destroying... [id=arn:aws:ecs:a
+  40s  module.ecs.aws_ecs_service.api[0]: Still destroying... [id=arn:aws:ecs:a
+  45s  module.ecs.aws_ecs_service.web[0]: Still destroying... [id=arn:aws:ecs:a
+  51s  module.ecs.aws_ecs_service.web[0]: Still destroying... [id=arn:aws:ecs:a
+  56s  module.ecs.aws_ecs_service.api[0]: Still destroying... [id=arn:aws:ecs:a
+  0h 01m  module.ecs.aws_ecs_service.api[0]: Still destroying... [id=arn:aws:ecs:a
+  0h 01m  module.ecs.aws_ecs_service.web[0]: Still destroying... [id=arn:aws:ecs:a
+  0h 02m  module.ecs.aws_ecs_service.api[0]: Still destroying... [id=arn:aws:ecs:a
+  0h 02m  module.ecs.aws_ecs_service.web[0]: Still destroying... [id=arn:aws:ecs:a
+✓ xoá serving stack (service drain ~2m30s) — 0h 02m  Apply complete! Resources: 0 added, 0 changed, 10 destroyed.
+BƯỚC 2/5 — EC2 instance về 0
+· watcher lifecycle hook đang chạy nền (pid 16750)
+  10s  module.ecs.aws_autoscaling_group.this: Modifying... [id=hushstore-asg]
+✓ hạ ASG về 0 — 15s  Apply complete! Resources: 0 added, 1 changed, 0 destroyed.
+  0s  instance biến mất thật  (thường ~1m sau khi hook được giải phóng)
+  11s  instance biến mất thật  (thường ~1m sau khi hook được giải phóng)
+  22s  instance biến mất thật  (thường ~1m sau khi hook được giải phóng)
+✓ instance biến mất thật — 33s
+BƯỚC 3/5 — NAT Gateway + EIP
+  10s  module.network.aws_route.private_nat[1]: Destroying... [id=r-rtb-0897c15
+  15s  module.network.aws_nat_gateway.this[0]: Destroying... [id=nat-0de0f1c0a0
+  20s  module.network.aws_nat_gateway.this[0]: Destroying... [id=nat-0de0f1c0a0
+  25s  module.network.aws_nat_gateway.this[0]: Still destroying... [id=nat-0de0
+  30s  module.network.aws_nat_gateway.this[0]: Still destroying... [id=nat-0de0
+  35s  module.network.aws_nat_gateway.this[1]: Still destroying... [id=nat-0936
+  40s  module.network.aws_nat_gateway.this[1]: Still destroying... [id=nat-0936
+  45s  module.network.aws_nat_gateway.this[0]: Still destroying... [id=nat-0de0
+  50s  module.network.aws_nat_gateway.this[0]: Still destroying... [id=nat-0de0
+  55s  module.network.aws_nat_gateway.this[1]: Still destroying... [id=nat-0936
+  0h 01m  module.network.aws_nat_gateway.this[0]: Still destroying... [id=nat-0de0
+  0h 01m  module.network.aws_nat_gateway.this[1]: Still destroying... [id=nat-0936
+  0h 01m  module.network.aws_nat_gateway.this[1]: Destruction complete after 1m1s
+✓ xoá NAT + EIP — 0h 01m  Apply complete! Resources: 0 added, 0 changed, 6 destroyed.
+BƯỚC 4/5 — RDS
+✓ đã phát lệnh stop (mất ~5m để về stopped, không cần chờ)
+BƯỚC 5/5 — kiểm chứng bằng AWS API, không tin terraform
+  Load balancer          0
+  NAT Gateway            0
+  Elastic IP             0
+  EC2 đang sống       0
+  VPC Flow Log           0
+  RDS                    stopping
+✓ terraform plan: No changes — state khớp thực tế
+XONG — tổng 0h 05m
+  Cửa sổ    : 0h 15m kể từ up.sh gần nhất (không phải thời gian tính tiền)
+  Đã tốn    : $0.0640 — cộng theo TUỔI THẬT của từng resource còn sống lúc down.sh bắt đầu
+    Multi-AZ BẬT: RDS thật ~$0.057/giờ (instance ×2 + storage ×2), tức DƯỚI $0.098 ở trên.
+    $0.098 là số đo trên sqlserver-ex, giữ lại làm CẬN TRÊN — xem lib.sh.
+    Giá niêm yết, trừ vào credit trả trước. Số chính xác hơn: chạy status.sh TRƯỚC down.sh.
+✓ Không còn resource nào tính theo giờ. Còn lại: S3, ECR, snapshot, ACM cert — tất cả $0 hoặc xấp xỉ.
+
+== Xác minh bằng AWS API (2026-11-09 15:57 +07)
+ALB:        0
+NAT active: 0
+EIP:        0
+EC2 live:   0
+ECS svc:    0
+RDS:        hushstore-db-tf stopped 

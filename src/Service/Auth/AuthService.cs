@@ -61,14 +61,7 @@ namespace PBL3.Service.Auth
                 return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
             }
 
-            // 2. Kiểm tra IsActive (Tài khoản bị vô hiệu hóa bởi Admin) — thực hiện trước khi check password để tối ưu hiệu năng
-            if (!user.IsActive)
-            {
-                var reason = !string.IsNullOrEmpty(user.LockReason) ? user.LockReason : "Vui lòng liên hệ quản trị viên.";
-                return ApiResult<TokenResponse>.Fail($"Tài khoản đã bị khóa. Lý do: {reason}");
-            }
-
-            // 3. Kiểm tra tài khoản bị khóa (Lockout do brute-force)
+            // 2. Kiểm tra tài khoản bị khóa (Lockout do brute-force)
             // LƯU Ý BẢO MẬT: Ngăn chặn tự động dò quét mật khẩu từ các công cụ tấn công bên ngoài bằng cách tạm khóa IP/tài khoản
             if (await _userManager.IsLockedOutAsync(user))
             {
@@ -76,13 +69,20 @@ namespace PBL3.Service.Auth
                     "Tài khoản đã bị tạm khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau.");
             }
 
-            // 4. Kiểm tra mật khẩu
+            // 3. Kiểm tra mật khẩu trước khi kiểm tra IsActive để tránh lộ trạng thái khóa / lý do khóa cho người chưa xác thực
             var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
             if (!passwordValid)
             {
                 // Tăng số lần đăng nhập sai (Lockout counter) trong cấu hình của Identity framework
                 await _userManager.AccessFailedAsync(user);
                 return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
+            }
+
+            // 4. Kiểm tra IsActive (Tài khoản bị vô hiệu hóa bởi Admin)
+            if (!user.IsActive)
+            {
+                var reason = !string.IsNullOrEmpty(user.LockReason) ? user.LockReason : "Vui lòng liên hệ quản trị viên.";
+                return ApiResult<TokenResponse>.Fail($"Tài khoản đã bị khóa. Lý do: {reason}");
             }
 
             // 5. Reset lockout counter khi đăng nhập đúng
@@ -364,12 +364,24 @@ namespace PBL3.Service.Auth
                 return ApiResult<bool>.Fail("Không tìm thấy người dùng.");
             }
 
+            if (!user.IsActive)
+            {
+                var reason = !string.IsNullOrEmpty(user.LockReason) ? user.LockReason : "Vui lòng liên hệ quản trị viên.";
+                return ApiResult<bool>.Fail($"Tài khoản của bạn đã bị khóa. Lý do: {reason}");
+            }
+
             var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
             if (!result.Succeeded)
             {
-                var error = result.Errors.FirstOrDefault()?.Description ?? "Đổi mật khẩu thất bại.";
                 return ApiResult<bool>.Fail("Mật khẩu hiện tại không đúng hoặc mật khẩu mới không hợp lệ.");
             }
+
+            // Thu hồi Refresh Token hiện hành sau khi đổi mật khẩu thành công.
+            await _context.Users
+                .Where(u => u.Id == user.Id)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(u => u.RefreshToken, (string?)null)
+                    .SetProperty(u => u.RefreshTokenExpiryTime, (DateTime?)null));
 
             return ApiResult<bool>.Ok(true, "Đổi mật khẩu thành công.");
         }

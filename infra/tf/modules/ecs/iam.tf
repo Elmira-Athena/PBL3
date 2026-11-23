@@ -97,7 +97,7 @@ resource "aws_iam_instance_profile" "instance" {
 # ─── ROLE 2: TASK EXECUTION (ECS agent dùng lúc khởi task) ───────
 resource "aws_iam_role" "task_execution" {
   name               = "${var.project}-task-execution-role"
-  description        = "ECS agent: pull ECR, ghi CloudWatch Logs, doc 2 SSM parameter"
+  description        = "ECS agent: pull ECR, ghi CloudWatch Logs, doc SSM secret cua app"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }
 
@@ -111,17 +111,19 @@ resource "aws_iam_role_policy_attachment" "task_execution_managed" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Liệt kê ĐÚNG 2 ARN parameter, không dùng wildcard toàn Parameter Store.
+# Liệt kê ĐÚNG 2 ARN mặc định (+1 ARN readonly khi bật Read Replica), không dùng
+# wildcard toàn Parameter Store và không bao gồm db-password.
 data "aws_iam_policy_document" "task_execution_extra" {
   statement {
-    sid     = "ReadOnlyTheTwoSecretsWeNeed"
+    sid     = "ReadOnlyTheAppSecretsWeNeed"
     effect  = "Allow"
     actions = ["ssm:GetParameters"]
 
-    resources = [
+    resources = compact([
       var.ssm_connection_string_arn,
       var.ssm_jwt_secret_arn,
-    ]
+      var.ssm_replica_connection_string_arn,
+    ])
   }
 
   statement {
@@ -140,6 +142,8 @@ data "aws_iam_policy_document" "task_execution_extra" {
 }
 
 data "aws_region" "current" {}
+
+data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role_policy" "task_execution_extra" {
   name   = "${var.project}-task-execution-read-secrets"
@@ -179,11 +183,48 @@ data "aws_iam_policy_document" "task_app" {
 
     resources = ["*"]
   }
+
+  # DataProtection key ring trên SSM prefix hẹp (/hushstore/prod/dataprotection/*).
+  # GetParametersByPath đòi cả ARN path gốc lẫn ARN /*, và tuyệt đối không
+  # dùng wildcard rộng hơn (sẽ lộ connection-string/jwt-secret/db-password).
+  statement {
+    sid    = "DataProtectionKeyRing"
+    effect = "Allow"
+
+    actions = [
+      "ssm:GetParametersByPath",
+      "ssm:PutParameter",
+    ]
+
+    resources = [
+      "arn:aws:ssm:${local.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.dataprotection_ssm_path_no_slash}",
+      "arn:aws:ssm:${local.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${local.dataprotection_ssm_path_no_slash}/*",
+    ]
+  }
+
+  # Mã hoá và giải mã SecureString key ring qua khoá mặc định của SSM.
+  statement {
+    sid    = "DataProtectionKmsViaSsm"
+    effect = "Allow"
+
+    actions = [
+      "kms:Decrypt",
+      "kms:Encrypt",
+    ]
+
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${local.aws_region}.amazonaws.com"]
+    }
+  }
 }
 
 resource "aws_iam_role" "task_app" {
   name               = "${var.project}-task-app-role"
-  description        = "Container API: CHI upload/doc anh S3 + ECS Exec"
+  description        = "Container API: S3 + ECS Exec + DataProtection SSM"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }
 

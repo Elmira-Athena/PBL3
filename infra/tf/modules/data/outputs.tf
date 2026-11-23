@@ -62,6 +62,6 @@ output "rds_replica_identifier" {
 }
 
 output "ssm_replica_connection_string_arn" {
-  description = "ARN parameter chứa connection string chỉ-đọc. Rỗng khi tắt. CHƯA có task definition nào tiêu thụ nó"
+  description = "ARN parameter chứa connection string chỉ-đọc. Rỗng khi tắt; khi bật được module.ecs inject vào ConnectionStrings__ReadOnlyConnection"
   value       = var.enable_read_replica ? aws_ssm_parameter.replica_connection_string[0].arn : ""
 }

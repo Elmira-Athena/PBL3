@@ -26,6 +26,7 @@ RUN dotnet publish src/Client/Client.csproj -c Release -o /app/publish --no-rest
 FROM nginx:alpine AS runtime
 
 COPY src/Client/nginx.conf /etc/nginx/conf.d/default.conf
+COPY src/Client/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
 
 EXPOSE 80
