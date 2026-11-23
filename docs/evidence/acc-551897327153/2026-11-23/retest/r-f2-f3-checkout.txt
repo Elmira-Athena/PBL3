@@ -1,0 +1,7 @@
+# R-F2/F3 checkout qua WAF + ShippingFee do client gửi — 2026-11-23 18:35:58 +07
+== admin mở khoá test A
+{"success":true,"message":"Mở khóa tài khoản thành công.","data":true} [200]
+== A thêm địa chỉ
+{"success":true,"message":"Thêm địa chỉ thành công.","data":2}
+== checkout BuyNow variant 52 qty 1, body có shippingFee = -11989000 (server phải bỏ qua)
+{"success":false,"message":"Sản phẩm có mã 52 hiện đã hết hàng hoặc không đủ số lượng (Khả dụng: 0).","data":null} [400]

@@ -1,0 +1,14 @@
+# R-REG hồi quy WAF/ALB sau deploy 351d9eb — 2026-11-23 18:40:06 +07
+baseline /api/products                   ALB=200 CF=200
+health/ready                             ALB=200 CF=200
+SQLi ' OR 1=1--                          ALB=403 CF=403
+SQLi pg_sleep                            ALB=403 CF=403
+XSS <script>                             ALB=403 CF=403
+traversal                                ALB=403 CF=403
+Log4Shell                                ALB=403 CF=403
+UA sqlmap                                ALB=403 CF=403
+checkout RCE in note (phải 403)          403
+useradd name on /api/reviews (phải 403)  403
+web / (CF)                               200
+Host evil.com (ALB)                      403
+swagger                                  404
