@@ -1,0 +1,43 @@
+# P1-03 health bodies + sensitive paths — 2026-11-23 17:25:45 +07
+== api/health
+{"status":"healthy","timestamp":"2026-11-23T10:25:45.4001632Z"}
+== api/health/live
+Healthy
+== api/health/ready
+Healthy
+== index.html framework refs
+href="/"
+href="images/favicon2.png"
+href="https://fonts.googleapis.com"
+href="https://fonts.gstatic.com"
+href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap"
+href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+href="https://fonts.googleapis.com/css?family=Material+Icons|Material+Icons+Outlined|Material+Icons+Two+Tone|Material+Icons+Round|Material+Icons+Sharp"
+href="_content/MudBlazor/MudBlazor.min.css"
+href="_framework/dotnet.u5k9wb78gh.js"
+href="css/app.css"
+href="css/storefront.css"
+href="."
+src="_content/MudBlazor/MudBlazor.min.js"
+src="_framework/blazor.webassembly.66stpp682q.js"
+web /robots.txt                      200 text/plain; charset=utf-8 6265
+web /sitemap.xml                     200 text/html 3589
+web /.git/config                     403 text/html 146
+web /.env                            403 text/html 146
+web /appsettings.Development.json    200 text/html 3589
+web /appsettings.Production.json     200 text/html 3589
+web /_framework/Client.pdb           403 text/html 146
+web /_framework/blazor.boot.json     404 text/html 146
+web /web.config                      403 text/html 146
+web /server-status                   200 text/html 3589
+web /nginx_status                    200 text/html 3589
+api /.git/config                                  403 text/html
+api /.env                                         403 text/html
+api /appsettings.json                             404 
+api /appsettings.Development.json                 404 
+api /api/admin/diagnostics/dataprotection-verify  405 
+api /metrics                                      404 
+api /server-status                                404 
+api /api/admin/users                              404 
+api /hangfire                                     404 
+api /elmah.axd                                    404 

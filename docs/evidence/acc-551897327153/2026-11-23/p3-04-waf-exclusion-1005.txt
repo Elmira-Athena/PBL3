@@ -1,0 +1,11 @@
+# P3-04 WAF exclusion 1005 abuse — PUT /api/products/999999 (nonexistent => no DB write) — 2026-11-23 17:39:04 +07
+legit html                 404 {"success":false,"message":"Không tìm thấy sản phẩm yêu cầu.","data":null}
+script tag                 403 <html> <head><title>403 Forbidden</title></head> <body> <center><h1>403 Forbidden</h1><
+img onerror                403 <html> <head><title>403 Forbidden</title></head> <body> <center><h1>403 Forbidden</h1><
+svg onload                 403 <html> <head><title>403 Forbidden</title></head> <body> <center><h1>403 Forbidden</h1><
+a javascript:              403 <html> <head><title>403 Forbidden</title></head> <body> <center><h1>403 Forbidden</h1><
+style expression           403 <html> <head><title>403 Forbidden</title></head> <body> <center><h1>403 Forbidden</h1><
+iframe srcdoc              403 <html> <head><title>403 Forbidden</title></head> <body> <center><h1>403 Forbidden</h1><
+details ontoggle           403 <html> <head><title>403 Forbidden</title></head> <body> <center><h1>403 Forbidden</h1><
+entity-encoded onerror     403 <html> <head><title>403 Forbidden</title></head> <body> <center><h1>403 Forbidden</h1><
+form action                404 {"success":false,"message":"Không tìm thấy sản phẩm yêu cầu.","data":null}

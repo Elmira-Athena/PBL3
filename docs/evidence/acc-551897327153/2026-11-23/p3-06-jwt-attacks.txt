@@ -1,0 +1,14 @@
+# P3-06 JWT attacks — user endpoint GET /api/cart, Admin/Employee endpoint GET /api/customers — 2026-11-23 17:33:48 +07
+valid                        cart=200 customers(admin)=403
+alg_none                     cart=401 customers(admin)=401
+alg_None_case                cart=401 customers(admin)=401
+role_admin_keep_sig          cart=401 customers(admin)=401
+weak_secret                  cart=401 customers(admin)=401
+weak_HushStore               cart=401 customers(admin)=401
+weak_changeme                cart=401 customers(admin)=401
+weak_your-256-bit-secret     cart=401 customers(admin)=401
+weak_hushstore-secret-key    cart=401 customers(admin)=401
+expired_keep_sig             cart=401 customers(admin)=401
+sig_stripped                 cart=401 customers(admin)=401
+no_token                     cart=401 customers(admin)=401
+real_admin_token             customers(admin)=200

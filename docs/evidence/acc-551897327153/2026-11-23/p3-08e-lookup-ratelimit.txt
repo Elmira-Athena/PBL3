@@ -1,0 +1,5 @@
+# P3-08e anonymous lookup endpoints rate limit (LookupRateLimit 10/60s) — 2026-11-23 17:39:17 +07
+== ALB direct POST /api/service-tickets/intake x13
+200 200 200 200 200 200 200 200 200 200 429 429 429 
+== via Cloudflare x15
+200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 

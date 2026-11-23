@@ -1,0 +1,6 @@
+# P3-12b forged GitHub OIDC token (KB11) — 2026-11-23 17:39:44 +07
+deploy   aws: [ERROR]: An error occurred (InvalidIdentityToken) when calling the AssumeRoleWithWebIdentity operation: Couldn't retrieve verification key from your identity provider,  please reference AssumeRoleWithWebIdentity documentation for requirements
+plan     aws: [ERROR]: An error occurred (InvalidIdentityToken) when calling the AssumeRoleWithWebIdentity operation: Couldn't retrieve verification key from your identity provider,  please reference AssumeRoleWithWebIdentity documentation for requirements
+== trust policy conditions
+[{"StringEquals":{"token.actions.githubusercontent.com:aud":"sts.amazonaws.com","token.actions.githubusercontent.com:sub":"repo:Elmira-Athena/PBL3:ref:refs/heads/main"}}]
+[{"StringEquals":{"token.actions.githubusercontent.com:sub":["repo:Elmira-Athena/PBL3:pull_request","repo:Elmira-Athena/PBL3:ref:refs/heads/main"],"token.actions.githubusercontent.com:aud":"sts.amazonaws.com"}}]

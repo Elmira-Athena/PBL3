@@ -191,7 +191,8 @@ done
 hs_head "XONG — tổng $(hs_hms $((SECONDS - T_ALL)))"
 echo "  Website     : https://${WEB_DOMAIN}/"
 echo "  API         : https://api.${WEB_DOMAIN}/"
-echo "  Đăng nhập   : admin@hushstore.com / Admin@123"
+echo "  Đăng nhập   : admin@hushstore.com (mật khẩu seed nằm trong repo PUBLIC — DB mới thì"
+echo "                ĐỔI NGAY qua PUT /api/auth/change-password; pentest 2026-11-23 F1)"
 echo
 echo "  Theo dõi    : bash infra/tf/scripts/status.sh -w"
 # 🚨 CON SỐ NÀY TỪNG ĐƯỢC IN CỨNG LÀ "$0.0675/giờ" VÀ SAI HAI LẦN CÙNG LÚC:

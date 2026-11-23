@@ -130,6 +130,11 @@ expect json_gan_1mb 200 "$(code -H 'Expect:' "${J[@]}" --data-binary @"$TMP/1mb.
 jq -nc '{serialNumbers: [range(1; 5001) | "SN-\(. | tostring | ("000000" + .)[-6:])"]}' > "$TMP/serials.json"
 expect json_nhieu_serial 200 "$(code "${J[@]}" --data-binary @"$TMP/serials.json" "$API/api/import-receipts")"
 
+# Body checkout đúng như Blazor gửi (camelCase). Tên trường `userAddressId` chứa "useradd" ⇒ CRS
+# 932260 (Unix command) từng chặn MỌI đơn online — pentest 2026-11-23 F2, exclusion 1007.
+CHECKOUT='{"userAddressId":12,"voucherCodes":["GIAM10"],"paymentMethod":1,"note":"Giao giờ hành chính","isBuyNow":true,"buyNowVariantId":52}'
+expect checkout_thuong 200 "$(code "${J[@]}" --data-binary "$CHECKOUT" "$API/api/orders/checkout")"
+
 # Trình duyệt mã hoá UTF-8 thành %XX; --data-urlencode làm đúng như vậy.
 expect tim_kiem 200 "$(code -G --data-urlencode 'search=card đồ hoạ rtx' -d pageSize=20 "$API/api/products")"
 
@@ -164,6 +169,11 @@ expect img_ngoai_pham_vi_1005 "403 403" "$(code -X PUT "${J[@]}" --data-binary \
   "$(jq -nc --arg d "<img src=\"$S3IMG\">" '{name:$d,manufacturerId:1,categoryId:1}')" "$API/api/products/1") \
 $(code "${J[@]}" --data-binary "$(jq -nc --arg d "<img src=\"$S3IMG\">" '{comment:$d}')" "$API/api/reviews")"
 expect scanner 403 "$(code -A 'sqlmap/1.7' "$API/")"
+# Exclusion 1007 chỉ gỡ 932260 khỏi TÊN trường userAddressId ở checkout: giá trị vẫn bị soi,
+# và cùng tên trường ở path khác vẫn bị 932260 bắt.
+expect checkout_rce_trong_note 403 "$(code "${J[@]}" --data-binary \
+  '{"userAddressId":12,"paymentMethod":1,"note":";cat /etc/passwd"}' "$API/api/orders/checkout")"
+expect useradd_ngoai_pham_vi_1007 403 "$(code "${J[@]}" --data-binary '{"userAddressId":12}' "$API/api/reviews")"
 
 # Audit log JSON của ca sqli phải có trên stdout của waf-api, chứa rule 942xxx.
 if audit_has '(.request.uri | test("search=%27")) and any(.messages[]?; .details.ruleId | startswith("942"))'

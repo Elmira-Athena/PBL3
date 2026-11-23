@@ -147,7 +147,7 @@ namespace PBL3.Service.Orders
             // Đảm bảo số tiền giảm giá không vượt quá tổng giá trị đơn hàng trước ship
             totalDiscount = Math.Min(totalDiscount, subTotal);
 
-            decimal totalAmount = subTotal + request.ShippingFee - totalDiscount;
+            decimal totalAmount = subTotal + CheckoutRequest.StandardShippingFee - totalDiscount;
 
             // ── BƯỚC 4: TẠO ĐƠN HÀNG (Chạy trong Transaction đảm bảo tính toàn vẹn) ──
             try
@@ -175,7 +175,7 @@ namespace PBL3.Service.Orders
                         OrderDate = DateTime.UtcNow,
                         Status = orderStatus,
                         SubTotal = subTotal,
-                        ShippingFee = request.ShippingFee,
+                        ShippingFee = CheckoutRequest.StandardShippingFee,
                         DiscountAmount = totalDiscount,
                         TotalAmount = totalAmount,
                         ShipName = address.ReceiverName,
@@ -386,7 +386,7 @@ namespace PBL3.Service.Orders
                 subTotal += variant.Price * item.Quantity;
             }
 
-            decimal shippingFee = 30000; // Hardcoded or calculated
+            decimal shippingFee = CheckoutRequest.StandardShippingFee;
 
             // 2. Apply Vouchers
             var placeOrderVariantIds = request.Items.Select(i => i.VariantId).Distinct().ToList();

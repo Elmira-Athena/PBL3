@@ -21,6 +21,12 @@ var cases = new ProbeCase[]
     new("direct ALB HTTP scheme", null, "198.51.100.10", "198.51.100.10", Proto: "http", Scheme: "http"),
     new("missing forwarded scheme retains HTTP", null, "198.51.100.10", "198.51.100.10", Proto: null, Scheme: "http"),
     new("missing proxy headers retain bridge IP and HTTP", null, null, bridge, Proto: null, Scheme: "http"),
+    // Pentest 2026-11-23 F4: qua Cloudflare, hop cuối là IP edge (đổi theo từng request) ⇒ rate
+    // limit theo IP vô hiệu. Hop cuối thuộc dải Cloudflare thì entry trước nó (do CF ghi) là client.
+    new("via Cloudflare edge IPv4 uses client before edge", null, "203.0.113.7, 172.70.142.76", "203.0.113.7"),
+    new("via Cloudflare edge IPv6 uses client before edge", null, "203.0.113.7, 2606:4700:10::1", "203.0.113.7"),
+    new("via Cloudflare consumes at most one extra hop", null, "192.0.2.250, 203.0.113.7, 162.158.1.1", "203.0.113.7"),
+    new("direct ALB with forged Cloudflare hop is ignored", null, "203.0.113.7, 172.70.142.76, 198.51.100.10", "198.51.100.10"),
 };
 
 var failures = new List<string>();

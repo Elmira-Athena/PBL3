@@ -1,0 +1,26 @@
+# P3-07 Login rate limit vs XFF / Cloudflare (KB06, KB03 matrix #3) — 2026-11-23 17:28:10 +07
+== A) ALB direct, no XFF (control)
+400 400 400 400 400 429 429 429 
+== B) ALB direct, spoofed random XFF each request
+429 429 429 429 429 429 429 429 
+== C) via Cloudflare (same client IP)
+400 400 400 400 400 400 400 400 400 400 400 400 
+== C2) via Cloudflare, 30 more attempts
+  27 400
+   3 429
+distinct client IPs seen by WAF for login: 15
+  <PENTESTER_IP> 20
+  104.22.222.27 5
+  172.70.208.157 4
+  104.22.224.34 4
+  172.71.124.159 3
+  162.158.189.196 2
+  162.158.88.126 2
+  162.158.108.121 1
+  172.69.165.68 1
+  104.23.175.201 1
+  172.69.176.170 1
+  104.22.66.254 1
+  172.71.82.75 1
+  162.158.170.109 1
+  172.70.142.76 1

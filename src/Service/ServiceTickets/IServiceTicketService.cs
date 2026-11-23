@@ -27,7 +27,7 @@ namespace PBL3.Service.ServiceTickets
             DateTime? fromDate, DateTime? toDate, int pageNumber, int pageSize, string? sortBy, bool sortDescending);
         Task<(List<ServiceTicketListDto> Items, int TotalCount)> GetMyTicketsAsync(
             Guid userId, string? keyword, byte? status, int pageNumber, int pageSize, string? sortBy, bool sortDescending);
-        Task<List<ServiceTicketStatusHistoryDto>> GetTicketHistoryAsync(int ticketId);
+        Task<List<ServiceTicketStatusHistoryDto>> GetTicketHistoryAsync(int ticketId, Guid? currentUserId = null, bool isCustomer = false);
         Task<List<SerialRepairHistoryDto>> GetSerialRepairHistoryAsync(string serialNumber);
     }
 }

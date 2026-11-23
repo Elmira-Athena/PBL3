@@ -1,0 +1,55 @@
+# P3-05 File upload (Customer A token) — 2026-11-23 17:35:34 +07
+== customer -> folder=products
+{"success":false,"message":"Bạn không có quyền tải ảnh lên thư mục này.","data":null} [403]
+== customer -> folder=banners
+{"success":false,"message":"Bạn không có quyền tải ảnh lên thư mục này.","data":null} [403]
+== customer -> folder=../../secret
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+ [403]
+== customer -> folder=avatars%2F..%2Fproducts
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+ [403]
+== .html as image/png (name evil.png)
+{"success":false,"message":"Nội dung file không phải định dạng ảnh hợp lệ (JPEG, PNG, WebP hoặc GIF).","data":null} [400]
+== .svg image/svg+xml
+{"success":false,"message":"Chỉ chấp nhận file ảnh định dạng JPEG, PNG, WebP hoặc GIF.","data":null} [400]
+== .html real ext
+{"success":false,"message":"Chỉ chấp nhận file ảnh định dạng JPEG, PNG, WebP hoặc GIF.","data":null} [400]
+== polyglot PNG header + script
+{"success":true,"message":"Upload ảnh thành công.","data":{"url":"https://hushstore-public-assets-551897327153.s3.ap-southeast-1.amazonaws.com/avatars/3b675c8a-2581-4470-a7cd-cf5c4308d271.png"}} [200]
+== filename traversal ../../x.png (valid PNG)
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+ [403]
+== valid PNG -> avatars (control)
+{"success":true,"message":"Upload ảnh thành công.","data":{"url":"https://hushstore-public-assets-551897327153.s3.ap-southeast-1.amazonaws.com/avatars/c9469741-355b-4e16-82d3-de6f99d7cf47.png"}} [200]
+== polyglot as served by S3
+HTTP/1.1 200 OK
+Server: AmazonS3
+Content-Type: image/png
+== anonymous ListObjects on public-assets
+403
+== anonymous list hushstore-artifacts: 403
+== anonymous list hushstore-alb-logs: 403
+== anonymous list hushstore-tfstate: 403
+== tfstate anonymous GET of known key
+403
+== upload rate limit: 22 requests folder=invalidxyz (ALB direct)
+400 400 400 400 400 400 400 400 400 400 400 400 400 429 429 429 429 429 429 429 429 429 

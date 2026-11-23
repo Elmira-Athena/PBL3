@@ -413,8 +413,11 @@ tầng Service, auth, hay rate limiting.
 Container `waf` đứng trước `api` và `web` trong cùng task; app **không còn cổng host**. Cổng chặn
 hồi quy: `devops/waf/test/run.sh` (sửa `devops/waf/` thì chạy lại, thoát `0`). Hai bẫy im lặng:
 (1) **XFF** — WAF phải chuyển `$http_x_forwarded_for`, **không bao giờ** `$proxy_add_x_forwarded_for`
-(app tin đúng một hop, `ForwardLimit = 1`; nối IP của peer/ALB vào thì app đọc sai IP client — hệ
-quả rate limit khoá mọi người cùng lúc là suy ra, chưa đo); (2) **bridge mode** — `containerPort` mà thiếu `hostPort` là cổng host *động*, tức cửa sau đi
+(app tin hop do ALB ghi, và thêm ĐÚNG một hop nữa chỉ khi hop đó là edge Cloudflare —
+`ForwardLimit = 2` + `KnownIPNetworks` = Docker bridge + dải Cloudflare, `ProxyHeaders.cs`; nối IP
+của peer vào thì app đọc sai IP client). Trước 2026-11-23 là `ForwardLimit = 1` ⇒ qua Cloudflare
+mọi rate limit theo IP vô hiệu (pentest F4, đo: 39/42 lần login lọt). Đổi `ProxyHeaders` thì chạy
+`tools/ProxyHeadersProbe`; (2) **bridge mode** — `containerPort` mà thiếu `hostPort` là cổng host *động*, tức cửa sau đi
 vòng WAF; container app không được khai `portMappings`. Đo trên EC2 t3.small: WAF 40–63 MiB lúc
 rảnh (chưa đo dưới tải); XFF đã chứng minh bằng 2 IP thật không khoá lẫn nhau. `run.sh` dùng upstream
 **giả** (echo) ⇒ thêm exclusion mới thì bật `waf_rule_engine = "DetectionOnly"` trước, đọc

@@ -1,0 +1,288 @@
+# P1-02 HTTP headers — 2026-11-23 17:25:23 +07
+=== CF  hushstore.io.vn/
+HTTP/2 200 
+content-type: text/html
+server: cloudflare
+last-modified: Mon, 23 Nov 2026 09:29:19 GMT
+vary: accept-encoding
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cache-control: no-store, no-cache, must-revalidate
+cf-cache-status: DYNAMIC
+
+=== ALB hushstore.io.vn/
+HTTP/2 200 
+content-type: text/html
+content-length: 3589
+server: nginx
+last-modified: Mon, 23 Nov 2026 09:29:19 GMT
+etag: "6b04076f-e05"
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cache-control: no-store, no-cache, must-revalidate
+accept-ranges: bytes
+
+=== CF  hushstore.io.vn/index.html
+HTTP/2 200 
+content-type: text/html
+server: cloudflare
+last-modified: Mon, 23 Nov 2026 09:29:19 GMT
+vary: accept-encoding
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cache-control: no-store, no-cache, must-revalidate
+cf-cache-status: DYNAMIC
+
+=== ALB hushstore.io.vn/index.html
+HTTP/2 200 
+content-type: text/html
+content-length: 3589
+server: nginx
+last-modified: Mon, 23 Nov 2026 09:29:19 GMT
+etag: "6b04076f-e05"
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cache-control: no-store, no-cache, must-revalidate
+accept-ranges: bytes
+
+=== CF  hushstore.io.vn/appsettings.json
+HTTP/2 200 
+content-type: application/json
+server: cloudflare
+last-modified: Mon, 23 Nov 2026 09:29:08 GMT
+etag: W/"6b040764-45"
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cache-control: no-cache, must-revalidate
+cf-cache-status: DYNAMIC
+vary: accept-encoding
+
+=== ALB hushstore.io.vn/appsettings.json
+HTTP/2 200 
+content-type: application/json
+content-length: 49
+server: nginx
+last-modified: Mon, 23 Nov 2026 09:28:52 GMT
+etag: "6b040754-31"
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cache-control: no-cache, must-revalidate
+accept-ranges: bytes
+
+=== CF  hushstore.io.vn/_framework/blazor.webassembly.js
+HTTP/2 404 
+content-type: text/html
+server: cloudflare
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cache-control: max-age=14400
+cf-cache-status: MISS
+
+=== ALB hushstore.io.vn/_framework/blazor.webassembly.js
+HTTP/2 404 
+content-type: text/html
+content-length: 146
+server: nginx
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+
+=== CF  hushstore.io.vn/healthz
+HTTP/2 200 
+content-type: text/plain
+content-length: 3
+server: cloudflare
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cf-cache-status: DYNAMIC
+
+=== ALB hushstore.io.vn/healthz
+HTTP/2 200 
+content-type: text/plain
+content-length: 3
+server: nginx
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+
+=== CF  hushstore.io.vn/nonexistent-xyz
+HTTP/2 200 
+content-type: text/html
+server: cloudflare
+last-modified: Mon, 23 Nov 2026 09:29:19 GMT
+vary: accept-encoding
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cache-control: no-store, no-cache, must-revalidate
+cf-cache-status: DYNAMIC
+
+=== ALB hushstore.io.vn/nonexistent-xyz
+HTTP/2 200 
+content-type: text/html
+content-length: 3589
+server: nginx
+last-modified: Mon, 23 Nov 2026 09:29:19 GMT
+etag: "6b04076f-e05"
+strict-transport-security: max-age=86400
+x-frame-options: DENY
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.hushstore.io.vn https://api-dev.hushstore.io.vn; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+cache-control: no-store, no-cache, must-revalidate
+accept-ranges: bytes
+
+=== ALB api/health
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+server: nginx
+strict-transport-security: max-age=86400
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; frame-ancestors 'none'
+
+=== ALB api/health/live
+HTTP/2 200 
+content-type: text/plain
+server: nginx
+cache-control: no-store, no-cache
+expires: Thu, 01 Jan 1970 00:00:00 GMT
+pragma: no-cache
+strict-transport-security: max-age=86400
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; frame-ancestors 'none'
+
+=== ALB api/health/ready
+HTTP/2 200 
+content-type: text/plain
+server: nginx
+cache-control: no-store, no-cache
+expires: Thu, 01 Jan 1970 00:00:00 GMT
+pragma: no-cache
+strict-transport-security: max-age=86400
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; frame-ancestors 'none'
+
+=== ALB api/api/products
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+server: nginx
+strict-transport-security: max-age=86400
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; frame-ancestors 'none'
+
+=== ALB api/swagger
+HTTP/2 404 
+content-length: 0
+server: nginx
+strict-transport-security: max-age=86400
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; frame-ancestors 'none'
+
+=== ALB api/swagger/v1/swagger.json
+HTTP/2 404 
+content-length: 0
+server: nginx
+strict-transport-security: max-age=86400
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; frame-ancestors 'none'
+
+=== ALB api/openapi/v1.json
+HTTP/2 404 
+content-length: 0
+server: nginx
+strict-transport-security: max-age=86400
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; frame-ancestors 'none'
+
+=== ALB api/api/nonexistent
+HTTP/2 404 
+content-length: 0
+server: nginx
+strict-transport-security: max-age=86400
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; frame-ancestors 'none'
+
+=== CF api /api/products
+HTTP/2 200 
+content-type: application/json; charset=utf-8
+server: cloudflare
+strict-transport-security: max-age=86400
+x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; frame-ancestors 'none'
+cf-cache-status: DYNAMIC
+
+=== appsettings.json body
+{
+  "ApiBaseUrl": "https://api.hushstore.io.vn"
+}
+=== dev.hushstore.io.vn
+530

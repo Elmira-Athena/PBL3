@@ -1,0 +1,30 @@
+# P3-11 ECR scan_on_push results for running tag 940877b105017092be843ed475248a01bad62e36 — 2026-11-23 17:38:19 +07
+hushstore-api        {"s":"COMPLETE","c":{}}
+hushstore-web        {"s":"COMPLETE","c":{"HIGH":5,"MEDIUM":1,"CRITICAL":1}}
+hushstore-waf        {"s":"COMPLETE","c":{"HIGH":1,"MEDIUM":3,"CRITICAL":5}}
+hushstore-migrator   {"s":"COMPLETE","c":{}}
+hushstore-seeder     {"s":"COMPLETE","c":{"HIGH":12,"MEDIUM":16,"LOW":4}}
+== CRITICAL/HIGH names (api, web, waf)
+  web  HIGH	CVE-2026-107496	openssl
+  web  HIGH	CVE-2026-86144	libxml2
+  web  HIGH	CVE-2026-95691	openssl
+  web  HIGH	CVE-2026-88823	openssl
+  web  HIGH	CVE-2026-95692	openssl
+  web  CRITICAL	CVE-2026-4738	zlib
+  waf  HIGH	CVE-2026-118899	nginx
+  waf  CRITICAL	CVE-2026-123007	nginx
+  waf  CRITICAL	CVE-2026-113425	nginx
+  waf  CRITICAL	CVE-2026-123633	nginx
+  waf  CRITICAL	CVE-2026-123634	nginx
+  waf  CRITICAL	CVE-2026-121810	nginx
+== Dockerfile USER lines
+src/API/Dockerfile                         
+src/Client/Dockerfile                      FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build FROM nginx:alpine AS runtime 
+devops/waf/Dockerfile                      FROM owasp/modsecurity-crs:4.30.0-nginx-alpine-202610180210 USER root USER nginx 
+src/Infrastructure/Dockerfile.migrator     FROM --platform=linux/amd64 mcr.microsoft.com/dotnet/sdk:10.0 AS build FROM --platform=linux/amd64 mcr.microsoft.com/dotnet/runtime-deps:10.0 AS runtime USER appuser 
+src/Infrastructure/Dockerfile.seeder       FROM --platform=linux/amd64 debian:12-slim USER seeder 
+== task def readonlyRootFilesystem/privileged/user
+None	web	None	None	None
+None	waf	None	None	None
+None	api	None	None	None
+None	waf	None	None	None

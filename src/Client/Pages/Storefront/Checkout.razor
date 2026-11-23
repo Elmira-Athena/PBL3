@@ -260,7 +260,7 @@
     private List<AppliedVoucherInfo> _appliedVouchers = new();
 
     private decimal SubTotal => _cartData.TotalAmount;
-    private decimal ShippingFee => 30000;
+    private decimal ShippingFee => CheckoutRequest.StandardShippingFee;
     private decimal DiscountAmount => _appliedVouchers.Sum(v => v.DiscountAmount);
     private decimal Total => SubTotal + ShippingFee - DiscountAmount;
     private bool CanPlaceOrder => _selectedAddressId > 0;
@@ -375,8 +375,7 @@
                 PaymentMethod = (byte)_selectedPaymentMethod,
                 VoucherCodes = _appliedVouchers.Any()
                     ? _appliedVouchers.Select(v => v.Code).ToList()
-                    : null,
-                ShippingFee = ShippingFee
+                    : null
             };
             
             var result = await OrderClientService.CheckoutAsync(request);
