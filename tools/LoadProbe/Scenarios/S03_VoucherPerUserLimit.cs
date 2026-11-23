@@ -89,7 +89,6 @@ public sealed class S03_VoucherPerUserLimit : ScenarioBase
                 BuyNowVariantId = Fixture.VariantId,
                 BuyNowQuantity = 1,
                 PaymentMethod = 0,
-                ShippingFee = 0,
                 VoucherCodes = new List<string> { VoucherCodeAsTyped },
                 Note = "LoadProbe S03"
             }, _customer.Token));

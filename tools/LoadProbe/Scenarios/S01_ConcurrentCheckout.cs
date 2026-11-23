@@ -41,7 +41,6 @@ public sealed class S01_ConcurrentCheckout : ScenarioBase
                 BuyNowVariantId = Fixture.VariantId,
                 BuyNowQuantity = 1,
                 PaymentMethod = 0,
-                ShippingFee = 0,
                 Note = "LoadProbe S01"
             }, customer.Token);
         });
