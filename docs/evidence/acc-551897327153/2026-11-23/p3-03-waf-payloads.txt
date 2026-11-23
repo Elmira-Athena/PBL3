@@ -1,0 +1,50 @@
+# P3-03 WAF payloads — 2026-11-23 17:27:04 +07
+baseline search                                  ALB=200 CF=200
+SQLi ' OR 1=1--                                  ALB=403 CF=403
+SQLi UNION SELECT                                ALB=403 CF=403
+SQLi time-based pg_sleep                         ALB=403 CF=403
+XSS <script>                                     ALB=403 CF=403
+XSS img onerror                                  ALB=403 CF=403
+Path traversal ../../etc/passwd                  ALB=403 CF=403
+Encoded traversal %2e%2e                         ALB=400 CF=400
+Log4Shell jndi                                   ALB=403 CF=403
+RCE ;cat /etc/passwd                             ALB=403 CF=403
+UA sqlmap                                        ALB=403 CF=403
+UA nikto                                         ALB=403 CF=403
+curl: (3) URL using bad/illegal format or missing URL
+curl: (3) URL using bad/illegal format or missing URL
+SQLi in JSON body login                          ALB=000 CF=000
+-- web host
+web XSS query                                    ALB=403
+web traversal                                    ALB=403
+-- WAF 403 response sample (CORS headers?)
+HTTP/2 403 
+date: Mon, 23 Nov 2026 10:27:10 GMT
+content-type: text/html
+content-length: 146
+server: nginx
+
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+-- JSON body tests (POST /api/auth/login)
+{"email":"nobody@example.com","password":"wrong"}                           400 {"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null}
+{"email":"a@a.vn' OR '1'='1","password":"x"}                                403 <html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+{"email":"a@a.vn","password":"x\" UNION SELECT 1--"}                        400 {"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null}
+{"email":"<script>alert(1)</script>@a.vn","password":"x"}                   403 <html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>

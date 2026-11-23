@@ -1,0 +1,35 @@
+# P1-01 DNS recon — 2026-11-23 17:24:54 +07
+## hushstore.io.vn A
+172.67.150.201
+104.21.0.90
+## hushstore.io.vn AAAA
+2606:4700:3035::ac43:96c9
+2606:4700:3031::6815:5a
+## hushstore.io.vn CNAME
+## hushstore.io.vn TXT
+## api.hushstore.io.vn A
+104.21.0.90
+172.67.150.201
+## api.hushstore.io.vn AAAA
+2606:4700:3035::ac43:96c9
+2606:4700:3031::6815:5a
+## api.hushstore.io.vn CNAME
+## api.hushstore.io.vn TXT
+## www.hushstore.io.vn A
+## www.hushstore.io.vn AAAA
+## www.hushstore.io.vn CNAME
+## www.hushstore.io.vn TXT
+## dev.hushstore.io.vn A
+172.67.150.201
+104.21.0.90
+## dev.hushstore.io.vn AAAA
+2606:4700:3035::ac43:96c9
+2606:4700:3031::6815:5a
+## dev.hushstore.io.vn CNAME
+## dev.hushstore.io.vn TXT
+## NS
+harlee.ns.cloudflare.com.
+coby.ns.cloudflare.com.
+## ALB origin
+175.41.180.13
+47.129.19.11

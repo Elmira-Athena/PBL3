@@ -1385,11 +1385,16 @@ namespace PBL3.Service.ServiceTickets
             return (dtos, totalCount);
         }
 
-        public async Task<List<ServiceTicketStatusHistoryDto>> GetTicketHistoryAsync(int ticketId)
+        public async Task<List<ServiceTicketStatusHistoryDto>> GetTicketHistoryAsync(int ticketId, Guid? currentUserId = null, bool isCustomer = false)
         {
             var ticket = await _ticketRepository.GetByIdWithDetailsAsync(ticketId);
             if (ticket == null)
                 return new List<ServiceTicketStatusHistoryDto>();
+
+            // Cùng chốt IDOR với GetTicketByIdAsync — thiếu nó thì Customer đọc được lịch sử
+            // (kèm Note) phiếu của người khác (pentest 2026-11-23 F6).
+            if (isCustomer && (!ticket.CustomerId.HasValue || ticket.CustomerId != currentUserId))
+                throw new UnauthorizedAccessException("Phiếu này không thuộc về bạn.");
 
             return ticket.StatusHistory
                 .OrderByDescending(h => h.ChangedAt)

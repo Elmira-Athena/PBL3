@@ -1,0 +1,17 @@
+# P3-08d User enumeration via Identity lockout + timing (via Cloudflare) — 2026-11-23 17:35:01 +07
+== pentest-b-1123@example.com
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.610467s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.502035s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.373976s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.518237s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.473238s
+{"success":false,"message":"Tài khoản đã bị tạm khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau.","data":null} [400] 0.473753s
+{"success":false,"message":"Tài khoản đã bị tạm khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau.","data":null} [400] 0.339073s
+== pentest-nonexistent-9999@example.com
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.304017s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.327143s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.312617s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.311874s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.312120s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.351779s
+{"success":false,"message":"Tài khoản hoặc mật khẩu không đúng.","data":null} [400] 0.326958s

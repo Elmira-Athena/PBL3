@@ -102,6 +102,9 @@ namespace PBL3.API.Filters
 
             if (!decision.Allowed)
             {
+                // Ghi khoá phân vùng (policy:IP) để kiểm được IP nào đang bị đếm — từng có lỗi
+                // im lặng (pentest 2026-11-23 F4) mà không log nào cho thấy.
+                _logger.LogWarning("Rate limit chặn {PartitionKey}.", partitionKey);
                 if (decision.RetryAfterSeconds > 0)
                 {
                     context.HttpContext.Response.Headers.RetryAfter =
@@ -129,8 +132,8 @@ namespace PBL3.API.Filters
         /// luôn chạy sau middleware nên điều đó được bảo đảm.
         /// </summary>
         /// <remarks>
-        /// Middleware proxy giữ ForwardLimit = 1, chỉ đọc phần tử XFF do ALB thêm.
-        /// Không tự đọc header ở đây.
+        /// Middleware proxy (ProxyHeaders) đọc phần tử XFF do ALB thêm, và thêm đúng một phần tử
+        /// nữa khi phần tử đó là edge Cloudflare. Không tự đọc header ở đây.
         /// </remarks>
         private static string GetClientIp(HttpContext context)
             => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";

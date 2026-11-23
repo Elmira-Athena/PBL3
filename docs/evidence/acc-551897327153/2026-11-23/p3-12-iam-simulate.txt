@@ -1,0 +1,46 @@
+# P3-12 IAM simulate (KB10/KB12) — 2026-11-23 17:37:14 +07
+== host role vs SSM secrets
+  hushstore-container-instance-role  ssm:GetParameter	explicitDeny
+  hushstore-container-instance-role  ssm:GetParameters	explicitDeny
+  hushstore-container-instance-role  ssm:GetParametersByPath	explicitDeny
+  hushstore-container-instance-role  ssm:GetParameterHistory	explicitDeny
+  hushstore-container-instance-role  ssm:GetParameter	explicitDeny
+  hushstore-container-instance-role  ssm:GetParameters	explicitDeny
+  hushstore-container-instance-role  ssm:GetParametersByPath	explicitDeny
+  hushstore-container-instance-role  ssm:GetParameterHistory	explicitDeny
+  hushstore-container-instance-role  ssm:GetParameter	explicitDeny
+  hushstore-container-instance-role  ssm:GetParameters	explicitDeny
+  hushstore-container-instance-role  ssm:GetParametersByPath	explicitDeny
+  hushstore-container-instance-role  ssm:GetParameterHistory	explicitDeny
+== task-app role
+  hushstore-task-app-role  ssm:GetParameter	implicitDeny
+  hushstore-task-app-role  ssm:GetParameter	implicitDeny
+  hushstore-task-app-role  ssm:PutParameter	allowed
+  hushstore-task-app-role  ssm:DeleteParameter	implicitDeny
+  hushstore-task-app-role  s3:PutObject	allowed
+  hushstore-task-app-role  s3:GetObject	allowed
+  hushstore-task-app-role  s3:DeleteObject	allowed
+  hushstore-task-app-role  s3:GetObject	implicitDeny
+  hushstore-task-app-role  s3:ListBucket	implicitDeny
+  hushstore-task-app-role  sts:AssumeRole	implicitDeny
+  hushstore-task-app-role  iam:PassRole	implicitDeny
+  hushstore-task-app-role  ecs:RunTask	implicitDeny
+  hushstore-task-app-role  ec2:DescribeInstances	implicitDeny
+  hushstore-task-app-role  rds:DescribeDBInstances	implicitDeny
+== deploy role
+  hushstore-github-actions-deploy-role  iam:PassRole	implicitDeny
+  hushstore-github-actions-deploy-role  iam:PassRole	implicitDeny
+  hushstore-github-actions-deploy-role  iam:PassRole	implicitDeny
+  hushstore-github-actions-deploy-role  autoscaling:SetDesiredCapacity	implicitDeny
+  hushstore-github-actions-deploy-role  rds:StartDBInstance	implicitDeny
+  hushstore-github-actions-deploy-role  iam:CreateUser	implicitDeny
+  hushstore-github-actions-deploy-role  ssm:GetParameter	implicitDeny
+== plan role
+  hushstore-github-actions-plan-role  s3:GetObject	explicitDeny
+  hushstore-github-actions-plan-role  ssm:GetParameter	explicitDeny
+  hushstore-github-actions-plan-role  kms:Decrypt	explicitDeny
+  hushstore-github-actions-plan-role  sts:AssumeRole	explicitDeny
+  hushstore-github-actions-plan-role  logs:GetLogEvents	explicitDeny
+== task-execution vs seeder secrets
+  hushstore-task-execution-role  ssm:GetParameters	implicitDeny
+  hushstore-task-execution-seeder-role  ssm:GetParameters	implicitDeny

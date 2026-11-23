@@ -694,8 +694,12 @@ namespace PBL3.API.Controllers.Admin
         {
             try
             {
-                var history = await _service.GetTicketHistoryAsync(id);
+                var history = await _service.GetTicketHistoryAsync(id, GetCurrentUserId(), IsCustomer);
                 return ApiResult<List<ServiceTicketStatusHistoryDto>>.Ok(history);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return ApiResult<List<ServiceTicketStatusHistoryDto>>.Fail(ex.Message);
             }
             // Deadlock (1205) LÀ sinh được ở đường đọc: một SELECT hoàn toàn có thể bị
             // SQL Server chọn làm nạn nhân. Đây là chỗ tiền đề cũ ("GET không sinh được")

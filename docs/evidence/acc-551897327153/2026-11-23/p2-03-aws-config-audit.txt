@@ -1,0 +1,213 @@
+# P2-03 AWS config audit (read-only) — 2026-11-23 17:36:21 +07
+VPC=vpc-0b84a98c407cd4136
+== Security groups
+[
+    {
+        "n": "hushstore-sg-vpce",
+        "id": "sg-046a19e5e928b70de",
+        "in": [
+            {
+                "p": "443-443",
+                "src": ",sg-039c1a381b23280bf"
+            }
+        ],
+        "out": []
+    },
+    {
+        "n": "default",
+        "id": "sg-0554e1f7ac63016d0",
+        "in": [],
+        "out": []
+    },
+    {
+        "n": "hushstore-alb-sg-d7d22561d6d4f7bdaa7fc840df",
+        "id": "sg-047fde57ffa848f75",
+        "in": [
+            {
+                "p": "80-80",
+                "src": "0.0.0.0/0,"
+            },
+            {
+                "p": "443-443",
+                "src": "0.0.0.0/0,"
+            }
+        ],
+        "out": [
+            {
+                "p": "80-80",
+                "dst": ",sg-039c1a381b23280bf"
+            },
+            {
+                "p": "8080-8080",
+                "dst": ",sg-039c1a381b23280bf"
+            }
+        ]
+    },
+    {
+        "n": "hushstore-rds-sg-70d65704ee4eab7b2b8cc63989",
+        "id": "sg-055eeb2fff782b18d",
+        "in": [
+            {
+                "p": "5432-5432",
+                "src": ",sg-039c1a381b23280bf"
+            }
+        ],
+        "out": []
+    },
+    {
+        "n": "hushstore-web-sg-c506528e03235748ee5f9df3db",
+        "id": "sg-039c1a381b23280bf",
+        "in": [
+            {
+                "p": "80-80",
+                "src": ",sg-047fde57ffa848f75"
+            },
+            {
+                "p": "8080-8080",
+                "src": ",sg-047fde57ffa848f75"
+            }
+        ],
+        "out": [
+            {
+                "p": "80-80",
+                "dst": "0.0.0.0/0,"
+            },
+            {
+                "p": "5432-5432",
+                "dst": ",sg-055eeb2fff782b18d"
+            },
+            {
+                "p": "443-443",
+                "dst": "0.0.0.0/0,"
+            }
+        ]
+    }
+]
+== NACLs
+[
+    {
+        "id": "acl-0aef9c02b0752addf",
+        "default": true,
+        "subnets": 6,
+        "entries": [
+            {
+                "n": 100,
+                "eg": true,
+                "a": "allow",
+                "c": "0.0.0.0/0"
+            },
+            {
+                "n": 32767,
+                "eg": true,
+                "a": "deny",
+                "c": "0.0.0.0/0"
+            },
+            {
+                "n": 100,
+                "eg": false,
+                "a": "allow",
+                "c": "0.0.0.0/0"
+            },
+            {
+                "n": 32767,
+                "eg": false,
+                "a": "deny",
+                "c": "0.0.0.0/0"
+            }
+        ]
+    }
+]
+== EC2 IMDS / public IP
+[
+    {
+        "id": "i-0c2e00645b62a8d14",
+        "tokens": "required",
+        "hop": 1,
+        "pub": null,
+        "sg": [
+            "hushstore-web-sg-c506528e03235748ee5f9df3db"
+        ],
+        "profile": "arn:aws:iam::551897327153:instance-profile/hushstore-container-instance-profile"
+    },
+    {
+        "id": "i-0c1361cb849fea071",
+        "tokens": "required",
+        "hop": 1,
+        "pub": null,
+        "sg": [
+            "hushstore-web-sg-c506528e03235748ee5f9df3db"
+        ],
+        "profile": "arn:aws:iam::551897327153:instance-profile/hushstore-container-instance-profile"
+    }
+]
+== RDS
+[
+    {
+        "id": "hushstore-db-tf",
+        "pub": false,
+        "enc": true,
+        "maz": true,
+        "bkp": 7,
+        "sg": [
+            "sg-055eeb2fff782b18d"
+        ],
+        "pg": [
+            "default.postgres17"
+        ],
+        "deletion": false,
+        "iamauth": false
+    },
+    {
+        "id": "hushstore-db-tf-replica",
+        "pub": false,
+        "enc": true,
+        "maz": false,
+        "bkp": 0,
+        "sg": [
+            "sg-055eeb2fff782b18d"
+        ],
+        "pg": [
+            "default.postgres17"
+        ],
+        "deletion": false,
+        "iamauth": false
+    }
+]
+== param default.postgres17 rds.force_ssl
+log_connections	None
+rds.force_ssl	1
+== ECR repos
+-------------------------------------------------------
+|                DescribeRepositories                 |
++--------+------------+----------------------+--------+
+|   enc  |    mut     |          n           | scan   |
++--------+------------+----------------------+--------+
+|  AES256|  IMMUTABLE |  hushstore-seeder    |  True  |
+|  AES256|  IMMUTABLE |  hushstore-waf       |  True  |
+|  AES256|  IMMUTABLE |  hushstore-api       |  True  |
+|  AES256|  IMMUTABLE |  hushstore-web       |  True  |
+|  AES256|  IMMUTABLE |  hushstore-migrator  |  True  |
++--------+------------+----------------------+--------+
+policy hushstore-seeder       
+aws: [ERROR]: An error occurred (RepositoryPolicyNotFoundException) when calling the GetRepositoryPolicy operation: Rep
+policy hushstore-waf          
+aws: [ERROR]: An error occurred (RepositoryPolicyNotFoundException) when calling the GetRepositoryPolicy operation: Rep
+policy hushstore-api          
+aws: [ERROR]: An error occurred (RepositoryPolicyNotFoundException) when calling the GetRepositoryPolicy operation: Rep
+policy hushstore-web          
+aws: [ERROR]: An error occurred (RepositoryPolicyNotFoundException) when calling the GetRepositoryPolicy operation: Rep
+policy hushstore-migrator     
+aws: [ERROR]: An error occurred (RepositoryPolicyNotFoundException) when calling the GetRepositoryPolicy operation: Rep
+== S3 BPA / policy status
+hushstore-alb-logs-551897327153            BPA=True,True,True,True public=False enc=AES256 ver=None
+hushstore-artifacts-551897327153           BPA=True,True,True,True public=
+aws: [ERROR]: An error occurred (NoSuch enc=AES256 ver=None
+hushstore-public-assets-551897327153       BPA=True,False,True,False public=True enc=AES256 ver=None
+hushstore-tfstate-551897327153             BPA=True,True,True,True public=
+aws: [ERROR]: An error occurred (NoSuch enc=AES256 ver=Enabled
+== VPC endpoints
+com.amazonaws.ap-southeast-1.s3 Gateway [{'Effect': 'Allow', 'Principal': '*', 'Action': '*', 'Resource': '*'}]
+com.amazonaws.ap-southeast-1.ecr.dkr Interface [{'Action': '*', 'Effect': 'Allow', 'Principal': '*', 'Resource': '*'}]
+com.amazonaws.ap-southeast-1.ecr.api Interface [{'Action': '*', 'Effect': 'Allow', 'Principal': '*', 'Resource': '*'}]
+== Flow logs
+/vpc/hushstore/flowlogs	fl-0b65d5adcfb862f76	vpc-0b84a98c407cd4136	ACTIVE

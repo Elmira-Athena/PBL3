@@ -17,6 +17,10 @@ namespace PBL3.Service.Auth
 {
     public class AuthService : IAuthService
     {
+        // Một câu cho mọi nhánh thất bại trước khi xác thực: sai email, sai mật khẩu, đang Lockout.
+        private const string LoginFailedMessage =
+            "Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.";
+
         private readonly UserManager<AppUser> _userManager;
         private readonly IConfiguration _configuration;
         private readonly HushStoreDbContext _context;
@@ -56,17 +60,14 @@ namespace PBL3.Service.Auth
             // 1. Tìm User theo Email
             // LƯU Ý NGHIỆP VỤ: Email đóng vai trò định danh duy nhất trong hệ thống cho tài khoản AppUser
             var user = await _userManager.FindByEmailAsync(request.Email);
-            if (user == null)
-            {
-                return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
-            }
 
-            // 2. Kiểm tra tài khoản bị khóa (Lockout do brute-force)
-            // LƯU Ý BẢO MẬT: Ngăn chặn tự động dò quét mật khẩu từ các công cụ tấn công bên ngoài bằng cách tạm khóa IP/tài khoản
-            if (await _userManager.IsLockedOutAsync(user))
+            // 2. Không có user hoặc đang bị Lockout (brute-force): trả CÙNG câu và tốn CÙNG một
+            // lần băm như nhánh sai mật khẩu. Câu riêng cho Lockout + nhánh không băm từng cho
+            // người lạ dò được email nào tồn tại (pentest 2026-11-23 F7: 0.34–0.61s vs 0.31s).
+            if (user == null || await _userManager.IsLockedOutAsync(user))
             {
-                return ApiResult<TokenResponse>.Fail(
-                    "Tài khoản đã bị tạm khóa do đăng nhập sai quá nhiều lần. Vui lòng thử lại sau.");
+                _userManager.PasswordHasher.HashPassword(user ?? new AppUser(), request.Password);
+                return ApiResult<TokenResponse>.Fail(LoginFailedMessage);
             }
 
             // 3. Kiểm tra mật khẩu trước khi kiểm tra IsActive để tránh lộ trạng thái khóa / lý do khóa cho người chưa xác thực
@@ -75,7 +76,7 @@ namespace PBL3.Service.Auth
             {
                 // Tăng số lần đăng nhập sai (Lockout counter) trong cấu hình của Identity framework
                 await _userManager.AccessFailedAsync(user);
-                return ApiResult<TokenResponse>.Fail("Tài khoản hoặc mật khẩu không đúng.");
+                return ApiResult<TokenResponse>.Fail(LoginFailedMessage);
             }
 
             // 4. Kiểm tra IsActive (Tài khoản bị vô hiệu hóa bởi Admin)

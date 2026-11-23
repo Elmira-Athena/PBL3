@@ -5,7 +5,7 @@
 # để đối chiếu nếu tag bị đẩy đè:
 #   sha256:873ce68a658d2e3b61484a8a24d215f7d15456e7ce5aec5e7114bf000d743365
 # Nguồn: docs/evidence/2026-11-08-waf-ram-spike.md §1.
-FROM owasp/modsecurity-crs:4.30.0-nginx-alpine-202610180210
+FROM owasp/modsecurity-crs:4.30.0-nginx-alpine-202611190211
 
 # Vá CVE của gói Alpine trong image gốc. ECR scan 2026-11-09 trên image chưa vá: 13 CRITICAL /
 # 30 HIGH, TẤT CẢ ở gói hệ điều hành (curl, perl, zlib, brotli, expat, musl, libx11), không

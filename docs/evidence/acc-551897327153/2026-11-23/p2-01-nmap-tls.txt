@@ -1,0 +1,78 @@
+# P2-01 nmap ALB origin (KB01) — 2026-11-23 17:26:16 +07
+Starting Nmap 7.991 ( https://nmap.org ) at 2026-11-23 17:26 +0700
+Nmap scan report for ec2-175-41-180-13.ap-southeast-1.compute.amazonaws.com (175.41.180.13)
+Host is up (0.042s latency).
+
+PORT      STATE    SERVICE
+22/tcp    filtered ssh
+80/tcp    open     http
+443/tcp   open     https
+1433/tcp  filtered ms-sql-s
+3389/tcp  filtered ms-wbt-server
+5432/tcp  filtered postgresql
+8080/tcp  filtered http-proxy
+8443/tcp  filtered https-alt
+9000/tcp  filtered cslistener
+32768/tcp filtered filenet-tms
+40000/tcp filtered safetynetp
+50000/tcp filtered ibm-db2
+61000/tcp filtered unknown
+
+Nmap scan report for ec2-47-129-19-11.ap-southeast-1.compute.amazonaws.com (47.129.19.11)
+Host is up (0.045s latency).
+
+PORT      STATE    SERVICE
+22/tcp    filtered ssh
+80/tcp    open     http
+443/tcp   open     https
+1433/tcp  filtered ms-sql-s
+3389/tcp  filtered ms-wbt-server
+5432/tcp  filtered postgresql
+8080/tcp  filtered http-proxy
+8443/tcp  filtered https-alt
+9000/tcp  filtered cslistener
+32768/tcp filtered filenet-tms
+40000/tcp filtered safetynetp
+50000/tcp filtered ibm-db2
+61000/tcp filtered unknown
+
+Nmap done: 2 IP addresses (2 hosts up) scanned in 3.58 seconds
+
+# TLS ciphers (ALB, SNI api.hushstore.io.vn)
+Starting Nmap 7.991 ( https://nmap.org ) at 2026-11-23 17:26 +0700
+Nmap scan report for 13.180.41.175.in-addr.arpa (175.41.180.13)
+Host is up (0.040s latency).
+
+PORT    STATE SERVICE
+443/tcp open  https
+| ssl-enum-ciphers: 
+|   TLSv1.2: 
+|     ciphers: 
+|       TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
+|       TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 (ecdh_x25519) - A
+|     compressors: 
+|       NULL
+|     cipher preference: server
+|   TLSv1.3: 
+|     ciphers: 
+|       TLS_AKE_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
+|       TLS_AKE_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
+|       TLS_AKE_WITH_CHACHA20_POLY1305_SHA256 (ecdh_x25519) - A
+|     cipher preference: server
+|_  least strength: A
+
+Nmap done: 1 IP address (1 host up) scanned in 2.61 seconds
+# legacy protocol probes
+tls1    C0DE24F701000000:error:0A0000BF:SSL routines:tls_setup_handshake:no protocols available:ssl/statem/statem_lib.c:156: Protocol: TLSv1.3 
+tls1_1  C0DE24F701000000:error:0A0000BF:SSL routines:tls_setup_handshake:no protocols available:ssl/statem/statem_lib.c:156: Protocol: TLSv1.3 
+tls1_2  Protocol: TLSv1.2     Protocol  : TLSv1.2 
+tls1_3  Protocol: TLSv1.3 
+# cert
+subject=CN=hushstore.io.vn
+issuer=C=US, O=Amazon, CN=Amazon RSA 2048 M01
+notBefore=Aug 24 00:00:00 2026 GMT
+notAfter=Mar  9 23:59:59 2027 GMT
+X509v3 Subject Alternative Name: 
+    DNS:hushstore.io.vn, DNS:api.hushstore.io.vn

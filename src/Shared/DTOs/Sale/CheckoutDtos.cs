@@ -16,9 +16,10 @@ namespace PBL3.Shared.DTOs.Sale
         public byte PaymentMethod { get; set; }
 
         /// <summary>
-        /// Phí vận chuyển (tạm nhận từ Frontend hoặc fix cứng 30.000đ)
+        /// Phí vận chuyển cố định do SERVER áp. Không nhận từ client: trường cũ `ShippingFee` cho
+        /// phép gửi số âm để tự giảm tổng tiền (pentest 2026-11-23 F3). Client chỉ đọc để hiển thị.
         /// </summary>
-        public decimal ShippingFee { get; set; } = 30000;
+        public const decimal StandardShippingFee = 30000m;
 
         [MaxLength(500)]
         public string? Note { get; set; }

@@ -1,0 +1,48 @@
+# P2-02 ALB routing / methods / CORS (KB07) — 2026-11-23 17:26:40 +07
+== HTTP 80 redirect keeps path/query
+301 -> https://api.hushstore.io.vn:443/api/products?x=1&y=2
+== Host: evil.com
+403
+== raw IP no SNI
+403
+== Host: hushstore.io.vn.evil.com
+403
+== Host header with port api.hushstore.io.vn:8080
+200
+== SNI api + Host web (domain fronting)
+200 text/plain
+
+== HTTP methods
+GET       web=200 api=200
+HEAD      web=curl: (18) transfer closed with 3589 bytes remaining to read
+200 api=405
+POST      web=405 api=401
+OPTIONS   web=405 api=405
+PUT       web=403 api=405
+DELETE    web=403 api=405
+PATCH     web=403 api=405
+TRACE     web=405 api=405
+TRACK     web=403 api=403
+CONNECT   web=400 api=400
+PROPFIND  web=403 api=403
+
+== CORS preflight
+-- Origin: https://hushstore.io.vn
+HTTP/2 204 
+access-control-allow-headers: authorization,content-type
+access-control-allow-methods: POST
+access-control-allow-origin: https://hushstore.io.vn
+-- Origin: https://evil.com
+HTTP/2 204 
+-- Origin: https://hushstore.io.vn.evil.com
+HTTP/2 204 
+-- Origin: https://evilhushstore.io.vn
+HTTP/2 204 
+-- Origin: null
+HTTP/2 204 
+-- Origin: http://hushstore.io.vn
+HTTP/2 204 
+-- Origin: https://api-dev.hushstore.io.vn
+HTTP/2 204 
+-- simple GET Origin evil
+HTTP/2 200 
