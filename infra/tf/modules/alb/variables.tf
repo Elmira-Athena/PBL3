@@ -54,3 +54,9 @@ variable "enable_alb" {
   type        = bool
   default     = false
 }
+
+variable "alarm_sns_topic_arns" {
+  description = "SNS topic nhận CloudWatch alarm an ninh (spike 5xx/4xx). Rỗng = alarm vẫn tạo nhưng không gửi đi (vẫn thấy trên console). Thường truyền module.costguard.sns_topic_arn."
+  type        = list(string)
+  default     = []
+}

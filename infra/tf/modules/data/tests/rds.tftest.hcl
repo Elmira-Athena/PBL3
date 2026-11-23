@@ -342,3 +342,32 @@ run "bat_replica_thi_dung_len_dung_mot_cai_va_co_chuoi_chi_doc" {
     error_message = "Chuỗi chỉ-đọc phải nội suy aws_db_instance.replica[0].address. Không thấy dòng nào ⇒ nó đang trỏ vào primary và replica là tiền bỏ đi."
   }
 }
+
+# Pentest 2026-11-23 F-breach: có SSM param cho mật khẩu role DML-only; mặc định cờ tắt.
+run "co_ssm_app_db_password_va_mac_dinh_dung_master" {
+  command = plan
+
+  assert {
+    condition     = aws_ssm_parameter.app_db_password.name == "/hushstore-tftest/prod/app-db-password"
+    error_message = "Phải có SSM param app-db-password cho role DML-only."
+  }
+  assert {
+    condition     = var.use_dml_db_role == false
+    error_message = "use_dml_db_role phải mặc định false để apply không đổi hành vi."
+  }
+  assert {
+    condition     = local.db_conn_user == var.db_username
+    error_message = "Khi cờ tắt, connection string phải dùng master user (migrator cần DDL, API chưa đổi)."
+  }
+}
+
+run "bat_co_thi_connection_dung_role_dml" {
+  command = plan
+  variables {
+    use_dml_db_role = true
+  }
+  assert {
+    condition     = local.db_conn_user == "hushstore_app"
+    error_message = "Bật cờ thì connection string phải dùng role hushstore_app."
+  }
+}

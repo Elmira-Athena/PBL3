@@ -105,6 +105,12 @@ variable "enable_read_replica" {
   default     = false
 }
 
+variable "use_dml_db_role" {
+  description = "API dùng role DML-only thay master DB user (pentest F-breach). Mặc định false; chỉ bật SAU khi đã tạo role + grant trong DB và validate ở cửa sổ live — xem docs/runbook-dml-db-role.md."
+  type        = bool
+  default     = false
+}
+
 variable "alert_email" {
   description = "Email nhận cảnh báo chi phí từ AWS Budgets. Phải bấm xác nhận trong mail AWS gửi mới nhận được cảnh báo"
   type        = string

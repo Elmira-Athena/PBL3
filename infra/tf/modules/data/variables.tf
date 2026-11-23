@@ -72,3 +72,9 @@ variable "replica_instance_class" {
   type        = string
   default     = "db.t4g.micro"
 }
+
+variable "use_dml_db_role" {
+  description = "true = API runtime kết nối RDS bằng role DML-only (hushstore_app) thay master (pentest F-breach). Mặc định false để apply không đổi hành vi; chỉ bật SAU khi đã tạo role + grant trong DB và validate ở cửa sổ live (xem docs/runbook-dml-db-role.md)."
+  type        = bool
+  default     = false
+}
