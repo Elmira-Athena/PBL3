@@ -1,0 +1,20 @@
+# P3-13 ALB access logs trên S3 + log group — 2026-11-23 18:49:30 +07
+== object hôm nay
+== log group giữ bao lâu
+3	/ecs/hushstore-api
+3	/ecs/hushstore-migrator
+3	/ecs/hushstore-seeder
+3	/ecs/hushstore-waf
+3	/ecs/hushstore-web
+1	/vpc/hushstore/flowlogs
+== CloudWatch metric alarm bảo mật (kỳ vọng: KHÔNG có)
+0
+== ALB access log bật?
+access_logs.s3.enabled	true
+access_logs.s3.bucket	hushstore-alb-logs-551897327153
+access_logs.s3.prefix	hushstore
+== mọi prefix trong bucket alb-logs
+2026-11-23 18:35:08        423 hushstore/AWSLogs/551897327153/elasticloadbalancing/ap-southeast-1/2026/11/23/551897327153_elasticloadbalancing_ap-southeast-1_app.hushstore-alb.08d847102b2224e4_20261123T1135Z_47.129.19.11_2tr57b1h.log.gz
+2026-11-23 18:40:08       4587 hushstore/AWSLogs/551897327153/elasticloadbalancing/ap-southeast-1/2026/11/23/551897327153_elasticloadbalancing_ap-southeast-1_app.hushstore-alb.08d847102b2224e4_20261123T1140Z_175.41.180.13_69fgtfjl.log.gz
+2026-11-23 18:40:08        364 hushstore/AWSLogs/551897327153/elasticloadbalancing/ap-southeast-1/2026/11/23/551897327153_elasticloadbalancing_ap-southeast-1_app.hushstore-alb.08d847102b2224e4_20261123T1140Z_47.129.19.11_331goun7.log.gz
+2026-11-23 18:45:08       2765 hushstore/AWSLogs/551897327153/elasticloadbalancing/ap-southeast-1/2026/11/23/551897327153_elasticloadbalancing_ap-southeast-1_app.hushstore-alb.08d847102b2224e4_20261123T1145Z_175.41.180.13_60871qqo.log.gz

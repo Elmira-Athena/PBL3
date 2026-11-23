@@ -1,0 +1,18 @@
+# P3-04c Dò body lỗi (lộ stack trace / SQL error?) + exclusion 1006 — 2026-11-23 18:48:29 +07
+== gửi JSON hỏng cú pháp
+<html>
+<head><title>400 Bad Request</title></head>
+<body>
+<center><h1>400 Bad Request</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+ [400]
+== sai kiểu dữ liệu (userAddressId là chuỗi)
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"request":["The request field is required."],"$.userAddressId":["The JSON value could not be converted to System.Int32. Path: $.userAddressId | LineNumber: 0 | BytePo
+== id sản phẩm tràn kiểu int
+ [404]
+== path /api/products/abc (sai route constraint)
+ [404]
+== exclusion 1006: upload tên file có ký tự ' ; = (phải không bị 920120 chặn)
+{"success":false,"message":"Chỉ chấp nhận file ảnh định dạng JPEG, PNG, WebP hoặc GIF.","data":null} [400]

@@ -1,0 +1,32 @@
+# GĐ4.1 Assumed Breach — RCE giả định trong container `api` (qua ECS Exec) — 2026-11-23 18:50
+
+Task hushstore-api 552633770f, container api, enableExecuteCommand=true. Mọi AccessKey/Secret/Token đã lọc bỏ.
+
+## Môi trường container
+- Tiến trình app chạy bằng `appuser` (pid 1 = docker-init cũng appuser). KHÔNG phải root.
+  (ECS Exec session chạy bằng root — đó là cơ chế của Exec, không phản ánh user của app.)
+- Công cụ sẵn có: openssl, bash, dotnet. KHÔNG có curl/wget/python3/psql ⇒ hạn chế công cụ
+  exfil tay, nhưng `dotnet` và bash /dev/tcp vẫn đủ để kết nối mạng.
+
+## Secret inject qua ECS `secrets` (đọc được nếu RCE) — CHỈ ghi độ dài, không ghi giá trị
+- ConnectionStrings__DefaultConnection  present=yes len=302
+- ConnectionStrings__ReadOnlyConnection present=yes len=310
+- JwtSettings__SecretKey                present=yes len=64
+⇒ Kẻ có RCE đọc trọn connection string (master user) và JWT secret từ `env`. Đây là blast radius
+  cố hữu của ECS `secrets` (inject vào env) — chấp nhận được, nhưng xác nhận cần siết:
+
+## IMDS & Task metadata
+- IMDSv2 token PUT tới 169.254.169.254: TCP mở nhưng token KHÔNG lấy được (hop_limit=1 chặn) ✅
+- ECS Task credentials endpoint 169.254.170.2: reachable=yes. Role = task_app
+  (blast radius đo bằng iam simulate ở p3-12: task_app KHÔNG đọc được secret SSM, KHÔNG assume
+  role khác; chỉ r/w bucket public-assets + SSM dataprotection/*).
+
+## Lateral / exfil
+- RDS 5432: **mở** từ container (api cần DB). Với connection string đọc từ env, kẻ RCE kết nối RDS
+  bằng **master user** → đọc/ghi/DROP toàn DB (giới hạn §2.4 #2 — ghi nhận lại, mức High).
+- Egress 443 ra Internet (1.1.1.1): **mở** (sg-web outbound 80/443 → 0.0.0.0/0, §2.4 #4) ⇒
+  có thể đẩy dữ liệu ra ngoài qua NAT. Mức Medium.
+
+## Kết luận
+Chốt đứng vững: IMDSv2 hop_limit=1 chặn instance role; task_app bị giới hạn đúng (không chạm secret
+/ role khác). Chốt cần siết: API dùng master DB user (nên tách role DML-only), outbound 443 mở rộng.

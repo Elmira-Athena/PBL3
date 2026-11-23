@@ -1,0 +1,5 @@
+# P2-05 Rate limit Register (3/3600s) & Refresh (10/60s) qua ALB direct — 2026-11-23 18:49:14 +07
+== Register x5 (payload lỗi validation để không tạo user; đếm 400 vs 429)
+400 400 400 429 429 
+== Refresh x12 (refresh token rác; đếm 400/401 vs 429)
+400 400 400 400 400 400 400 400 400 400 429 429 

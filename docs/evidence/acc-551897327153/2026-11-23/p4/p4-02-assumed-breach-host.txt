@@ -1,0 +1,14 @@
+# GĐ4.2 Assumed Breach — EC2 host bị chiếm (SSM Session Manager) — 2026-11-23
+
+## Explicit Deny đọc secret SSM trên host — đã chứng minh bằng iam simulate (p3-12)
+container-instance-role → ssm:GetParameter / GetParameters / GetParametersByPath /
+GetParameterHistory trên arn:aws:ssm:*:*:parameter/hushstore/* = **explicitDeny** (cả 4, mọi key:
+db-password, connection-string, jwt-secret). Đây là nguồn thẩm quyền; một `aws ssm get-parameter
+--with-decryption` chạy trên host sẽ trả AccessDenied đúng như simulate.
+
+## Giới hạn đã biết của ECS bridge mode (không phải lỗ hổng mới, ghi nhận)
+Root trên EC2 host có thể `docker inspect` / đọc /proc/<pid>/environ của container đang chạy →
+thấy connection string + JWT secret đã giải mã (GĐ4.1 xác nhận các biến này nằm trong env container).
+Vì vậy phòng tuyến thật cho đường host là: hạn chế ai start được SSM Session Manager (IAM chặt + MFA),
+CloudTrail cho ssm:StartSession. Explicit Deny chỉ chặn đọc SSM Parameter Store TRỰC TIẾP, không chặn
+đọc env của tiến trình đã nhận secret.
