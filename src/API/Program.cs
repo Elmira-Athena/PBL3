@@ -59,6 +59,9 @@ using PBL3.Infrastructure.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Tắt header "Server: Kestrel" để giảm lộ thông tin công nghệ máy chủ.
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+
 // Add services to the container.
 
 builder.Services.AddControllers(options =>
@@ -158,6 +161,9 @@ builder.Services.AddScoped<ICacheService, CacheService>();
 //
 // AmazonS3Client bên dưới trong chính file này đã làm đúng khuôn từ trước; đường DataProtection
 // bỏ sót đúng bước ấy.
+var dataProtectionBuilder = builder.Services.AddDataProtection()
+    .SetApplicationName("HushStore");
+
 var dataProtectionSsmPrefix = builder.Configuration["DataProtection:SsmPrefix"];
 if (!string.IsNullOrWhiteSpace(dataProtectionSsmPrefix))
 {
@@ -169,9 +175,7 @@ if (!string.IsNullOrWhiteSpace(dataProtectionSsmPrefix))
     builder.Services.AddSingleton<IAmazonSimpleSystemsManagement>(_ =>
         new AmazonSimpleSystemsManagementClient(RegionEndpoint.GetBySystemName(ssmRegion)));
 
-    builder.Services.AddDataProtection()
-        .SetApplicationName("HushStore")
-        .PersistKeysToAWSSystemsManager(dataProtectionSsmPrefix);
+    dataProtectionBuilder.PersistKeysToAWSSystemsManager(dataProtectionSsmPrefix);
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -217,10 +221,16 @@ builder.Services.AddOpenApi();
 builder.Services.AddSwaggerGen();
 
 // Add DbContext
+var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+var readOnlyConnection = builder.Configuration.GetConnectionString("ReadOnlyConnection");
+var effectiveReadOnlyConnection = string.IsNullOrWhiteSpace(readOnlyConnection)
+    ? defaultConnection
+    : readOnlyConnection;
+
 builder.Services.AddDbContext<HushStoreDbContext>(options =>
 {
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
+        defaultConnection,
         npgsql => npgsql.EnableRetryOnFailure(
             // Đợt 1 mục 4.1. Điều kiện cần đã đủ: 18 call-site transaction đều đi qua
             // IUnitOfWork.ExecuteInTransactionAsync, tức qua CreateExecutionStrategy().
@@ -248,6 +258,21 @@ builder.Services.AddDbContext<HushStoreDbContext>(options =>
             errorCodesToAdd: null));
     // ServiceInvoice intentionally omits the query filter so financial records
     // remain queryable even after the parent ServiceTicket is soft-deleted.
+    options.ConfigureWarnings(w => w.Ignore(
+        Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId
+            .PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning));
+});
+
+// DbContext chỉ-đọc cho Read Replica (fallback sang DefaultConnection khi replica tắt).
+builder.Services.AddDbContext<ReadOnlyHushStoreDbContext>(options =>
+{
+    options.UseNpgsql(
+        effectiveReadOnlyConnection,
+        npgsql => npgsql.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null));
+    options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
     options.ConfigureWarnings(w => w.Ignore(
         Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId
             .PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning));
@@ -659,6 +684,26 @@ else
     app.UseHsts();
 }
 
+// Security Headers cho toàn bộ phản hồi API (kể cả lỗi 4xx/5xx và preflight).
+// Chỉ bật CSP nghiêm ngặt ở Production để không chặn Swagger UI khi chạy Development.
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+        headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()";
+        if (app.Environment.IsProduction())
+        {
+            headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+        }
+        return Task.CompletedTask;
+    });
+    await next();
+});
+
 app.UseCors("AllowClient");
 
 app.UseRateLimiter();
@@ -683,7 +728,8 @@ app.UseAuthentication();
 app.Use(async (context, next) =>
 {
     if (context.User.Identity?.IsAuthenticated == true &&
-        !context.Request.Path.StartsWithSegments("/api/auth"))
+        (!context.Request.Path.StartsWithSegments("/api/auth") ||
+         context.Request.Path.Equals("/api/auth/change-password", StringComparison.OrdinalIgnoreCase)))
     {
         var userIdRaw = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!string.IsNullOrEmpty(userIdRaw) && Guid.TryParse(userIdRaw, out var userId))

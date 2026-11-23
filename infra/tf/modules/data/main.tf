@@ -237,25 +237,17 @@ resource "aws_ssm_parameter" "connection_string" {
 }
 
 # ─── CONNECTION STRING CHỈ ĐỌC — sống/chết cùng replica ──────────
-# ⚠️ HIỆN CHƯA CÓ DÒNG CODE NÀO ĐỌC PARAMETER NÀY, và phải nói thẳng: dựng
-# replica lên là có thêm một instance TÍNH TIỀN mà primary KHÔNG được giảm tải
-# chút nào. Read replica chỉ có ích khi ứng dụng chủ động lái truy vấn đọc sang
-# nó; task definition không khai parameter này trong khối `secrets`, nên hôm nay
-# replica là hạ tầng để ĐO và để trình bày trong báo cáo, không phải để tăng
-# hiệu năng.
-#
-# Việc còn thiếu ở tầng app (chưa làm, cố ý): một DbContext thứ hai trỏ vào
-# chuỗi này cho các truy vấn `AsNoTracking()`. Kèm hai cái bẫy phải biết trước:
+# Khi `enable_read_replica = true`, `module.ecs` gắn parameter này vào container
+# `api` qua `ConnectionStrings__ReadOnlyConnection`, và `ReadOnlyHushStoreDbContext`
+# định tuyến các truy vấn đọc tiêu biểu (`StorefrontService`, `AnalyticsService`)
+# sang replica (khi tắt thì fallback về primary). Hai lưu ý vận hành:
 #   1. Replication là BẤT ĐỒNG BỘ — đọc từ replica có thể thấy dữ liệu cũ. Mọi
-#      đường "ghi rồi đọc lại để map DTO" PHẢI ở primary, nếu không người dùng
-#      lưu xong bấm xem lại và thấy bản cũ.
+#      đường "ghi rồi đọc lại để map DTO" (và tồn kho ảo) PHẢI ở primary.
 #   2. `IsActive`/role/quyền TUYỆT ĐỐI không đọc từ replica — cùng lý lẽ với
 #      luật "không cache trạng thái phân quyền" ở CLAUDE.md: hướng nguy hiểm là
 #      hướng MỞ KHOÁ, và độ trễ replica làm nó xảy ra thật.
 #
-# Vì sao vẫn tạo parameter: không có nó, cách duy nhất để dùng endpoint replica
-# là chép tay một chuỗi CÓ MẬT KHẨU từ `terraform output` vào chỗ khác — đúng
-# thứ mà SecureString sinh ra để tránh. Parameter Standard: $0.
+# Parameter Standard: $0.
 resource "aws_ssm_parameter" "replica_connection_string" {
   count = var.enable_read_replica ? 1 : 0
 

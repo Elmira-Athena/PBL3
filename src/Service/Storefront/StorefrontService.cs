@@ -8,13 +8,13 @@ namespace PBL3.Service.Storefront
 {
     public class StorefrontService : IStorefrontService
     {
-        private readonly HushStoreDbContext _context;
+        private readonly ReadOnlyHushStoreDbContext _context;
         private readonly IProductReviewRepository _reviewRepo;
         private readonly IProductSerialRepository _serialRepo;
         private readonly IOrderRepository _orderRepo;
 
         public StorefrontService(
-            HushStoreDbContext context,
+            ReadOnlyHushStoreDbContext context,
             IProductReviewRepository reviewRepo,
             IProductSerialRepository serialRepo,
             IOrderRepository orderRepo)

@@ -34,6 +34,7 @@ và [quy trình migration](nacl-to-sg-migration.md).
 | Bản sửa và kiểm tra trước apply, giữ làm lịch sử | [kiem-tra-truoc-apply-2026-11-02.md](kiem-tra-truoc-apply-2026-11-02.md) | mốc trước triển khai |
 | Kết quả apply AWS, bằng chứng association/SG và phần WAF còn chờ | [bien-ban-apply-sg-2026-11-02.md](bien-ban-apply-sg-2026-11-02.md) | biên bản AWS ngày 02/11 |
 | Biết hệ thống **chặn được tấn công gì**, và vì sao | [bao-mat-he-thong.md](bao-mat-he-thong.md) | tham khảo |
+| Lập kế hoạch & thực hiện **pentest hạ tầng & ứng dụng** | [kich-ban-pentest.md](kich-ban-pentest.md) | 5 giai đoạn + checklist thực thi |
 | Hiểu **CI/CD** từ con số không | [cicd-cho-nguoi-moi.md](cicd-cho-nguoi-moi.md) | 399 dòng |
 | Biết **code Terraform nằm ở đâu**, đọc theo thứ tự nào — kèm cú pháp cho người chưa đọc Terraform bao giờ | [doc-code-terraform.md](doc-code-terraform.md) | tham khảo |
 | Xem **bằng chứng lịch sử**, trước khi bỏ custom NACL | [security-validation-report.md](security-validation-report.md) | 668 dòng |

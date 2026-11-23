@@ -67,8 +67,10 @@ module "ecs" {
   assets_bucket_arn    = module.storage.assets_bucket_arn
   artifacts_bucket_arn = module.storage.artifacts_bucket_arn
 
-  ssm_connection_string_arn = module.data.ssm_connection_string_arn
-  ssm_jwt_secret_arn        = module.data.ssm_jwt_secret_arn
+  ssm_connection_string_arn         = module.data.ssm_connection_string_arn
+  ssm_jwt_secret_arn                = module.data.ssm_jwt_secret_arn
+  ssm_replica_connection_string_arn = module.data.ssm_replica_connection_string_arn
+  dataprotection_ssm_prefix         = "${module.data.ssm_path_prefix}/dataprotection/"
 
   app_subnet_ids = module.network.app_subnet_ids
   web_sg_id      = module.security.web_sg_id

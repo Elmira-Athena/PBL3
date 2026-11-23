@@ -37,13 +37,14 @@ R=(--resolve "api.hushstore.io.vn:443:$IP" --resolve "hushstore.io.vn:443:$IP")
 # c URL… → chỉ in mã HTTP trả về (200, 403…), bỏ phần thân phản hồi.
 c() { curl -s -o /dev/null -w "%{http_code}" "${R[@]}" "$@"; }
 API=https://api.hushstore.io.vn
+WEB=https://hushstore.io.vn
 
 # ── NHÓM 1: LUỒNG THẬT — phải đi qua WAF bình thường (không bị chặn nhầm) ────
 # Trang chủ Blazor (đi qua container waf của task web).
-echo "web /             $(c https://hushstore.io.vn/)"
+echo "web /             $(c $WEB/)"
 # File khởi động Blazor. Ra 404 là do app (.NET 10 không còn file này), không
 # phải WAF — log WAF không ghi rule nào cho request này.
-echo "web boot.json     $(c https://hushstore.io.vn/_framework/blazor.boot.json)"
+echo "web boot.json     $(c $WEB/_framework/blazor.boot.json)"
 # Đúng đường ALB health check dùng; endpoint này mở kết nối tới DB.
 echo "api health/ready  $(c $API/health/ready)"
 # Danh sách sản phẩm có phân trang.
@@ -67,9 +68,25 @@ echo "login             $([ -n "$TOK" ] && echo "OK (token ${#TOK} ký tự)" ||
 echo "admin orders      $(c -H "Authorization: Bearer $TOK" "$API/api/orders?pageNumber=1&pageSize=5")"
 
 # ── NHÓM 2: TẤN CÔNG — DetectionOnly: 200 + ghi log; On: 403 ────────────────
+# --- Lớp API (waf-api) ---
 # SQL injection kinh điển: search=' OR 1=1--  → CRS 942100 (libinjection).
-echo "SQLi              $(c "$API/api/products?search=%27%20OR%201%3D1--&t9=sqli")"
+echo "api SQLi          $(c "$API/api/products?search=%27%20OR%201%3D1--&t9=sqli")"
 # XSS: search=<script>alert(1)</script>  → CRS 941100/941110/941160/941390.
-echo "XSS               $(c "$API/api/products?search=%3Cscript%3Ealert(1)%3C%2Fscript%3E&t9=xss")"
+echo "api XSS           $(c "$API/api/products?search=%3Cscript%3Ealert(1)%3C%2Fscript%3E&t9=xss")"
 # Công cụ quét lỗ hổng tự nhận diện qua User-Agent: sqlmap → CRS 913100.
-echo "scanner UA        $(c -A 'sqlmap/1.7' "$API/api/products?t9=scanner")"
+echo "api scanner UA    $(c -A 'sqlmap/1.7' "$API/api/products?t9=scanner")"
+
+# --- Lớp Web (waf-web) ---
+# Method bị cấm ở Web (exclusion 1001 chỉ nới PUT/PATCH/DELETE cho /api/) → CRS 911100.
+echo "web PUT /         $(c -X PUT "$WEB/?t9=web-method")"
+# Đuôi file cấm trong /_framework/ (exclusion 1004 chỉ mở .dll/.dat) → CRS 920440.
+echo "web .config       $(c "$WEB/_framework/web.config?t9=web-ext-config")"
+echo "web .bak          $(c "$WEB/_framework/x.bak?t9=web-ext-bak")"
+# Đuôi .dll nằm ngoài /_framework/ (không thuộc phạm vi 1004) → CRS 920440.
+echo "web .dll ngoài    $(c "$WEB/static/App.dll?t9=web-ext-dll")"
+# Path Traversal / LFI qua query string → CRS 930100/930110.
+echo "web LFI/traversal $(c "$WEB/?file=../../etc/passwd&t9=web-lfi")"
+# XSS qua query string trên Web → CRS 941100/941110/941160/941390.
+echo "web XSS           $(c "$WEB/?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E&t9=web-xss")"
+# Scanner User-Agent trên Web → CRS 913100.
+echo "web scanner UA    $(c -A 'sqlmap/1.7' "$WEB/?t9=web-scanner")"

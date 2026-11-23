@@ -8,10 +8,10 @@ namespace PBL3.Service.Analytics
 {
     public class AnalyticsService : IAnalyticsService
     {
-        private readonly HushStoreDbContext _context;
+        private readonly ReadOnlyHushStoreDbContext _context;
         private readonly ILogger<AnalyticsService> _logger;
 
-        public AnalyticsService(HushStoreDbContext context, ILogger<AnalyticsService> logger)
+        public AnalyticsService(ReadOnlyHushStoreDbContext context, ILogger<AnalyticsService> logger)
         {
             _context = context;
             _logger = logger;

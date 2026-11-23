@@ -417,3 +417,65 @@ run "bo_ba_so_tat_em_phai_thoa_bat_dang_thuc" {
     error_message = "Container web không khai stopTimeout ⇒ ECS lấy mặc định 30 giây, và nginx bị giết giữa lúc đang trả file .wasm lớn cho client chậm."
   }
 }
+
+run "api_nhan_dataprotection_ssm_prefix_va_khong_nhan_replica_khi_tat" {
+  command = plan
+
+  assert {
+    condition = length([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) : c
+      if c.name == "api" &&
+      length([
+        for e in c.environment : e
+        if e.name == "DataProtection__SsmPrefix" && e.value == "/${var.project}/prod/dataprotection/"
+      ]) == 1
+    ]) == 1
+    error_message = "Container api phải nhận biến DataProtection__SsmPrefix = /<project>/prod/dataprotection/ cùng lúc với quyền IAM."
+  }
+
+  assert {
+    condition = length([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) : c
+      if c.name == "api" &&
+      toset([for s in c.secrets : s.name]) == toset([
+        "ConnectionStrings__DefaultConnection",
+        "JwtSettings__SecretKey",
+      ])
+    ]) == 1
+    error_message = "Khi ssm_replica_connection_string_arn rỗng, container api chỉ được nhận đúng 2 secret và không được có ConnectionStrings__ReadOnlyConnection."
+  }
+}
+
+run "api_nhan_readonly_secret_khi_bat_read_replica_nhung_migrator_van_2_secret" {
+  command = plan
+
+  variables {
+    ssm_replica_connection_string_arn = "arn:aws:ssm:ap-southeast-1:000000000000:parameter/hushstore/prod/connection-string-readonly"
+  }
+
+  assert {
+    condition = length([
+      for c in jsondecode(aws_ecs_task_definition.api.container_definitions) : c
+      if c.name == "api" &&
+      toset([for s in c.secrets : s.name]) == toset([
+        "ConnectionStrings__DefaultConnection",
+        "JwtSettings__SecretKey",
+        "ConnectionStrings__ReadOnlyConnection",
+      ]) &&
+      length([
+        for s in c.secrets : s
+        if s.name == "ConnectionStrings__ReadOnlyConnection" && s.valueFrom == var.ssm_replica_connection_string_arn
+      ]) == 1
+    ]) == 1
+    error_message = "Khi bật Read Replica, container api phải nhận thêm secret ConnectionStrings__ReadOnlyConnection trỏ đúng ARN readonly."
+  }
+
+  assert {
+    condition = length([
+      for c in jsondecode(aws_ecs_task_definition.migrator.container_definitions) : c
+      if length(c.secrets) == 2 &&
+      !contains([for s in c.secrets : s.name], "ConnectionStrings__ReadOnlyConnection")
+    ]) == 1
+    error_message = "Task migrator chỉ chạy trên primary — không được nhận ConnectionStrings__ReadOnlyConnection kể cả khi bật Read Replica."
+  }
+}

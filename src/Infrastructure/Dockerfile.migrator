@@ -39,6 +39,7 @@ COPY src/API/ src/API/
 RUN dotnet ef migrations bundle \
         --project src/Infrastructure/Infrastructure.csproj \
         --startup-project src/API/API.csproj \
+        --context HushStoreDbContext \
         --configuration Release \
         --self-contained -r linux-x64 \
         --force \
@@ -68,6 +69,10 @@ RUN chmod 644 /usr/local/share/ca-certificates/rds-ap-southeast-1.crt \
 
 COPY --from=build /app/efbundle .
 RUN chmod +x ./efbundle
+
+# Chạy bằng user không có quyền root (khớp với Dockerfile của API).
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
 
 # efbundle chạy lại entry point của API để dựng DbContext, nên nó đọc cấu hình
 # theo đúng cơ chế của app: biến môi trường ConnectionStrings__DefaultConnection.
