@@ -1,0 +1,10 @@
+# R2-F6 IDOR lịch sử phiếu dịch vụ — 2026-11-26 21:43:25 +07
+== admin tạo phiếu trên serial PT1126-SN-001 (CustomerId lấy từ đơn của B) ==
+create HTTP 200
+ticketId=1  customerId=None
+== B (CHỦ phiếu) đọc lịch sử — kỳ vọng 200 có dữ liệu ==
+{"success":true,"message":"Thao tác thành công.","data":[{"id":1,"fromStatus":0,"fromStatusLabel":"Đã tiếp nhận","toStatus":0,"toStatusLabel":"Đã tiếp nhận","changedAt":"2026-11-26T14:43:26.176663Z","note":"Tiếp nhận sả
+== A (KHÔNG phải chủ) đọc lịch sử — kỳ vọng bị chặn (F6) ==
+{"success":false,"message":"Phiếu này không thuộc về bạn.","data":null} [200]
+== A đọc chi tiết phiếu — cũng phải bị chặn ==
+{"success":false,"message":"Phiếu này không thuộc về bạn.","data":null} [200]

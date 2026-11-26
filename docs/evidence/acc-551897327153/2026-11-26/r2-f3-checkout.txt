@@ -1,0 +1,10 @@
+# R2-F3 + write-flow checkout (Customer B) — 2026-11-26 21:41:58 +07
+== B thêm địa chỉ ==
+{"success":true,"message":"Thêm địa chỉ thành công.","data":3} [200]
+addressId=3
+== B checkout variant 52 qty 1, shippingFee=-11989000 (server phải bỏ qua) ==
+checkout HTTP 200
+{"success":true,"message":"Đặt hàng thành công!","data":{"orderId":1,"orderCode":"ORD-20261126-001000","totalAmount":12020000.00,"status":0,"paymentMethod":0,"paymentUrl":null}}
+orderId=1
+== đọc lại đơn ==
+{'orderCode': 'ORD-20261126-001000', 'subTotal': 11990000.0, 'shippingFee': 30000.0, 'discountAmount': 0.0, 'totalAmount': 12020000.0, 'status': 0}

@@ -1,0 +1,9 @@
+# CLEANUP 1126 — 2026-11-26 21:44:35 +07
+== khôi phục mô tả sản phẩm 49 ==
+HTTP 200
+== xoá ảnh test trên S3 ==
+delete: s3://hushstore-public-assets-551897327153/products/1ecc63d4-e71c-47cc-bb4d-851e3cd51579.png
+== deactivate 2 tài khoản test ==
+  a(154fe642-0703-4586-882a-b2f93fa1914e) HTTP 200
+  b(cc655d9b-1e50-4c7d-a4d9-c93bc735654b) HTTP 400
+(ghi chú: supplier#1, import#1, order#1, ticket#1, 2 serial PT1126 mang nhãn PENTEST — DB demo, không có API xoá hàng loạt; để lại có nhãn)
