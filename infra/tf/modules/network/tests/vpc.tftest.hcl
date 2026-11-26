@@ -234,6 +234,17 @@ run "route_table_private_tach_theo_az_ke_ca_khi_nat_tat" {
     ]) == 1
     error_message = "S3 gateway endpoint phải phủ MỌI private route table bằng splat `aws_route_table.private[*].id`. Dùng chỉ số cố định là sót AZ và âm thầm tính $0,045/GB cho traffic S3."
   }
+
+  # Góp ý giảng viên (pentest 2026-11-23): tầng DB isolated chỉ nên có route LOCAL.
+  # `aws_route_table.db.id` chỉ được xuất hiện ĐÚNG MỘT LẦN trong vpc.tf — ở association
+  # subnet→rt-db — KHÔNG trong route_table_ids của S3 endpoint. RDS không cần S3.
+  assert {
+    condition = length([
+      for l in split("\n", file("${path.module}/vpc.tf")) :
+      l if !startswith(trimspace(l), "#") && strcontains(l, "aws_route_table.db.id")
+    ]) == 1
+    error_message = "rt-db chỉ được tham chiếu 1 lần (association). Gỡ aws_route_table.db.id khỏi S3 endpoint — tầng DB phải chỉ có route local."
+  }
 }
 
 run "default_security_group_bi_khoa_ve_rong" {
