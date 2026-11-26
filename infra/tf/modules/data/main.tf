@@ -29,6 +29,26 @@ resource "random_password" "jwt" {
   special = false
 }
 
+# Mật khẩu cho PostgreSQL role DML-only (hushstore_app) mà API runtime dùng thay master
+# (pentest 2026-11-23 §2.4#2 / F-breach). Luôn sinh để có sẵn trong SSM, nhưng connection string
+# chỉ chuyển sang role này khi var.use_dml_db_role = true (xem locals bên dưới).
+resource "random_password" "app_db" {
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_+[]{}<>:?"
+  min_upper        = 2
+  min_lower        = 2
+  min_numeric      = 2
+  min_special      = 2
+}
+
+locals {
+  app_db_role = "hushstore_app"
+  # Master (var.db_username) giữ cho migrator (cần DDL). API dùng role DML-only khi bật cờ.
+  db_conn_user = var.use_dml_db_role ? local.app_db_role : var.db_username
+  db_conn_pass = var.use_dml_db_role ? random_password.app_db.result : random_password.db.result
+}
+
 # ─── DB SUBNET GROUP ─────────────────────────────────────────────
 resource "aws_db_subnet_group" "this" {
   name        = "${var.project}-db-subnet-group"
@@ -224,8 +244,8 @@ resource "aws_ssm_parameter" "connection_string" {
     "Host=${aws_db_instance.this.address};",
     "Port=5432;",
     "Database=${var.db_name};",
-    "Username=${var.db_username};",
-    "Password=${random_password.db.result};",
+    "Username=${local.db_conn_user};",
+    "Password=${local.db_conn_pass};",
     "SSL Mode=VerifyFull;",
     "Root Certificate=/usr/local/share/ca-certificates/rds-ap-southeast-1.crt;",
     "Maximum Pool Size=30;",
@@ -263,8 +283,8 @@ resource "aws_ssm_parameter" "replica_connection_string" {
     "Host=${aws_db_instance.replica[0].address};",
     "Port=5432;",
     "Database=${var.db_name};",
-    "Username=${var.db_username};",
-    "Password=${random_password.db.result};",
+    "Username=${local.db_conn_user};",
+    "Password=${local.db_conn_pass};",
     "SSL Mode=VerifyFull;",
     "Root Certificate=/usr/local/share/ca-certificates/rds-ap-southeast-1.crt;",
     "Maximum Pool Size=10;",
@@ -276,6 +296,15 @@ resource "aws_ssm_parameter" "replica_connection_string" {
     Name      = "${var.project}-connection-string-readonly"
     Lifecycle = "ephemeral-demo-window-only"
   }
+}
+
+resource "aws_ssm_parameter" "app_db_password" {
+  name        = "${local.ssm_prefix}/app-db-password"
+  description = "Mat khau role DML-only hushstore_app (pentest F-breach). Dung de tao role trong DB; API chi dung khi use_dml_db_role=true."
+  type        = "SecureString"
+  value       = random_password.app_db.result
+
+  tags = { Name = "${var.project}-app-db-password" }
 }
 
 resource "aws_ssm_parameter" "jwt_secret" {

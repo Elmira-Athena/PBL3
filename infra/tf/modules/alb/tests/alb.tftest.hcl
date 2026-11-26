@@ -360,3 +360,36 @@ run "alb_off_keeps_serving_resources_absent" {
     error_message = "No ALB serving resources or ACM waiter may exist while enable_alb is false."
   }
 }
+
+# Pentest 2026-11-23 §2.4#1 / F5: phải có CloudWatch alarm an ninh (spike 5xx/4xx).
+run "co_cloudwatch_alarm_an_ninh_khi_bat_alb" {
+  command = plan
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.target_5xx) == 1
+    error_message = "Phải có alarm cho HTTPCode_Target_5XX_Count khi ALB bật."
+  }
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.target_4xx_spike) == 1
+    error_message = "Phải có alarm cho spike 4xx (WAF 403 / brute-force / scan)."
+  }
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.elb_5xx) == 1
+    error_message = "Phải có alarm cho HTTPCode_ELB_5XX_Count (ALB tự lỗi)."
+  }
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.target_4xx_spike[0].alarm_actions == toset(var.alarm_sns_topic_arns)
+    error_message = "alarm_actions phải nối tới SNS topic truyền vào."
+  }
+}
+
+run "khong_co_alarm_khi_tat_alb" {
+  command = plan
+  variables {
+    enable_alb = false
+  }
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.target_5xx) == 0
+    error_message = "Tắt ALB thì không tạo alarm (ALB/metric không tồn tại)."
+  }
+}

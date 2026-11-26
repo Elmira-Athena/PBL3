@@ -25,6 +25,11 @@ RUN dotnet publish src/Client/Client.csproj -c Release -o /app/publish --no-rest
 # ─── Stage 2: nginx serve static ─────────────────────────────────
 FROM nginx:alpine AS runtime
 
+# Vá CVE base image (pentest 2026-11-23 F5: ECR scan thấy zlib CRITICAL + openssl/libxml2 HIGH
+# trên nginx:alpine). `apk upgrade` kéo gói đã vá trong repo alpine của chính tag này mà không
+# đổi tag nginx — build lại (CI mỗi lần push) tự nhận bản vá mới nhất.
+RUN apk --no-cache upgrade
+
 COPY src/Client/nginx.conf /etc/nginx/conf.d/default.conf
 COPY src/Client/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html

@@ -61,50 +61,56 @@ resource "aws_security_group" "rds" {
 # đó là cách bảo đảm "không có rule nào mở port 22" ở phạm vi cả module.
 locals {
   ingress_rules = {
-    # sg-alb là SG DUY NHẤT được nhận traffic từ CIDR công cộng.
+    # sg-alb CHỈ nhận từ dải IP Cloudflare (managed prefix list), không mở 0.0.0.0/0.
+    # Pentest 2026-11-23 F8: trước đây mở toàn Internet nên gọi thẳng ALB bỏ qua Cloudflare.
     "alb-http" = {
-      sg_id       = aws_security_group.alb.id
-      description = "HTTP tu internet, se bi redirect sang HTTPS o listener"
-      from_port   = 80
-      to_port     = 80
-      cidr_ipv4   = "0.0.0.0/0"
-      source_sg   = null
+      sg_id          = aws_security_group.alb.id
+      description    = "HTTP tu Cloudflare edge, redirect sang HTTPS o listener"
+      from_port      = 80
+      to_port        = 80
+      cidr_ipv4      = null
+      prefix_list_id = aws_ec2_managed_prefix_list.cloudflare.id
+      source_sg      = null
     }
     "alb-https" = {
-      sg_id       = aws_security_group.alb.id
-      description = "HTTPS tu internet"
-      from_port   = 443
-      to_port     = 443
-      cidr_ipv4   = "0.0.0.0/0"
-      source_sg   = null
+      sg_id          = aws_security_group.alb.id
+      description    = "HTTPS tu Cloudflare edge"
+      from_port      = 443
+      to_port        = 443
+      cidr_ipv4      = null
+      prefix_list_id = aws_ec2_managed_prefix_list.cloudflare.id
+      source_sg      = null
     }
 
     # sg-web: chỉ nhận từ sg-alb. KHÔNG có rule port 22.
     "web-http" = {
-      sg_id       = aws_security_group.web.id
-      description = "nginx container serve Blazor WASM, chi tu ALB"
-      from_port   = 80
-      to_port     = 80
-      cidr_ipv4   = null
-      source_sg   = aws_security_group.alb.id
+      sg_id          = aws_security_group.web.id
+      description    = "nginx container serve Blazor WASM, chi tu ALB"
+      from_port      = 80
+      to_port        = 80
+      cidr_ipv4      = null
+      prefix_list_id = null
+      source_sg      = aws_security_group.alb.id
     }
     "web-api" = {
-      sg_id       = aws_security_group.web.id
-      description = "API container, chi tu ALB"
-      from_port   = 8080
-      to_port     = 8080
-      cidr_ipv4   = null
-      source_sg   = aws_security_group.alb.id
+      sg_id          = aws_security_group.web.id
+      description    = "API container, chi tu ALB"
+      from_port      = 8080
+      to_port        = 8080
+      cidr_ipv4      = null
+      prefix_list_id = null
+      source_sg      = aws_security_group.alb.id
     }
 
     # sg-rds: đúng 1 rule.
     "rds-postgres" = {
-      sg_id       = aws_security_group.rds.id
-      description = "PostgreSQL, chi tu container instance"
-      from_port   = 5432
-      to_port     = 5432
-      cidr_ipv4   = null
-      source_sg   = aws_security_group.web.id
+      sg_id          = aws_security_group.rds.id
+      description    = "PostgreSQL, chi tu container instance"
+      from_port      = 5432
+      to_port        = 5432
+      cidr_ipv4      = null
+      prefix_list_id = null
+      source_sg      = aws_security_group.web.id
     }
   }
 
@@ -168,6 +174,7 @@ resource "aws_vpc_security_group_ingress_rule" "all" {
   from_port                    = each.value.from_port
   to_port                      = each.value.to_port
   cidr_ipv4                    = each.value.cidr_ipv4
+  prefix_list_id               = each.value.prefix_list_id
   referenced_security_group_id = each.value.source_sg
 
   tags = { Name = "${var.project}-in-${each.key}" }

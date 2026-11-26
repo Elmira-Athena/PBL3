@@ -58,6 +58,7 @@ module "data" {
 
   enable_multi_az     = var.enable_multi_az
   enable_read_replica = var.enable_read_replica
+  use_dml_db_role     = var.use_dml_db_role
 }
 
 module "ecs" {
@@ -131,6 +132,10 @@ module "alb" {
   web_domain        = var.web_domain
   api_domain        = var.api_domain
   enable_alb        = var.enable_alb
+
+  # Alarm an ninh (spike 5xx/4xx) gửi về cùng SNS của costguard. costguard không phụ thuộc alb
+  # nên tham chiếu xuôi này không tạo vòng. Pentest 2026-11-23 §2.4#1.
+  alarm_sns_topic_arns = [module.costguard.sns_topic_arn]
 }
 
 # Budgets dựng sớm hơn thứ tự plan (Phase 3) theo yêu cầu: bịt rủi ro "quên tắt

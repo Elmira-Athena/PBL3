@@ -215,12 +215,11 @@ resource "aws_vpc_endpoint" "s3" {
   service_name      = "com.amazonaws.${data.aws_region.current.region}.s3"
   vpc_endpoint_type = "Gateway"
 
-  # Phải phủ MỌI private route table. Sót một cái thì subnet của nó đi S3 vòng
+  # Phải phủ MỌI private (app) route table. Sót một cái thì subnet của nó đi S3 vòng
   # qua NAT: vẫn chạy, không lỗi, chỉ âm thầm tính $0,045/GB.
-  route_table_ids = concat(
-    aws_route_table.private[*].id,
-    [aws_route_table.db.id],
-  )
+  # KHÔNG gắn tầng DB: góp ý giảng viên — subnet DB isolated chỉ nên có route LOCAL,
+  # RDS không gọi S3. (app tier tự chạy migrator/seeder đọc/ghi S3, không phải db tier.)
+  route_table_ids = aws_route_table.private[*].id
 
   tags = { Name = "${var.project}-s3-endpoint" }
 }

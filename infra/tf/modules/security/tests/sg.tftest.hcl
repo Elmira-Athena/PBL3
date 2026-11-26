@@ -31,8 +31,8 @@ run "exact_ingress_chain" {
   assert {
     condition = length(aws_vpc_security_group_ingress_rule.all) == 5 && alltrue([
       for key, expected in {
-        alb-http     = { group = "sg-00000000000000001", port = 80, cidr = "0.0.0.0/0", source = null }
-        alb-https    = { group = "sg-00000000000000001", port = 443, cidr = "0.0.0.0/0", source = null }
+        alb-http     = { group = "sg-00000000000000001", port = 80, cidr = null, source = null }
+        alb-https    = { group = "sg-00000000000000001", port = 443, cidr = null, source = null }
         web-http     = { group = "sg-00000000000000002", port = 80, cidr = null, source = "sg-00000000000000001" }
         web-api      = { group = "sg-00000000000000002", port = 8080, cidr = null, source = "sg-00000000000000001" }
         rds-postgres = { group = "sg-00000000000000003", port = 5432, cidr = null, source = "sg-00000000000000002" }
@@ -55,6 +55,18 @@ run "exact_ingress_chain" {
       (rule.security_group_id == "sg-00000000000000001" || rule.cidr_ipv4 == null)
     ])
     error_message = "No SSH, public database/app ingress, or explicit ephemeral return-traffic ranges are allowed."
+  }
+
+  # Pentest 2026-11-23 F8: không ingress nào còn mở 0.0.0.0/0 (alb chuyển sang prefix list Cloudflare).
+  assert {
+    condition     = alltrue([for rule in values(aws_vpc_security_group_ingress_rule.all) : rule.cidr_ipv4 != "0.0.0.0/0"])
+    error_message = "Không ingress rule nào được mở 0.0.0.0/0 (F8 — sg-alb dùng prefix list Cloudflare)."
+  }
+
+  # Prefix list Cloudflare: IPv4, 15 dải công bố.
+  assert {
+    condition     = aws_ec2_managed_prefix_list.cloudflare.address_family == "IPv4" && length(aws_ec2_managed_prefix_list.cloudflare.entry) == 15
+    error_message = "Prefix list Cloudflare phải là IPv4 với 15 dải."
   }
 }
 

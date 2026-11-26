@@ -34,6 +34,7 @@ FROM --platform=linux/amd64 debian:12-slim
 # gian đúng lúc không có thời gian. Ghim luôn cho khỏi phải nghĩ.
 RUN set -eux; \
     apt-get update; \
+    apt-get upgrade -y; \
     apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg; \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
