@@ -1,0 +1,11 @@
+# P3-08f AuthZ: token Customer vs Admin — 2026-11-23 18:48:06 +07
+GET /api/admin/diagnostics/dataprotection-verify         customer=405 admin=405 noauth=405
+GET /api/analytics/overview                              customer=404 admin=404 noauth=404
+GET /api/customers?pageNumber=1&pageSize=1               customer=403 admin=200 noauth=401
+GET /api/employees?pageNumber=1&pageSize=1               customer=403 admin=200 noauth=401
+GET /api/orders?pageNumber=1&pageSize=1                  customer=403 admin=200 noauth=401
+GET /api/inventory?pageNumber=1&pageSize=1               customer=404 admin=404 noauth=404
+GET /api/suppliers?pageNumber=1&pageSize=1               customer=403 admin=200 noauth=401
+== POST diagnostics bằng Customer (mode protect) — phải 403, không 405
+customer POST=403
+admin POST=200

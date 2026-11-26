@@ -1,0 +1,9 @@
+# R2 write-flow qua WAF (admin) — 2026-11-26 21:43:56 +07
+== lấy nguyên trạng sản phẩm 49 để PUT đủ trường ==
+{"id": 49, "name": "PC V\u0103n Ph\u00f2ng Doanh Nghi\u1ec7p", "manufacturerId": 21, "categoryId": 200, "status": 1}
+== sửa sản phẩm với mô tả HTML hợp lệ (exclusion 1005 cho qua) ==
+{"success":true,"message":"Cập nhật sản phẩm thành công.","data":{"id":49,"name":"PC Văn Phòng Doanh Nghiệp","slug":"pc-van-phong-doanh-nghiep","s
+== sửa sản phẩm với <script> trong mô tả — WAF phải chặn 403 ==
+HTTP 403
+== upload ảnh PNG vào folder products (admin) — qua WAF 1006 ==
+{"success":true,"message":"Upload ảnh thành công.","data":{"url":"https://hushstore-public-assets-551897327153.s3.ap-southeast-1.amazonaws.com/products/1ecc63d4-e71c-47cc-bb4d-851e3cd51579.png"}} [200]

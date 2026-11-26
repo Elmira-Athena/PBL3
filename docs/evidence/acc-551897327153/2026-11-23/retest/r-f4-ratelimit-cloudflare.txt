@@ -1,0 +1,9 @@
+# R-F4 login rate limit qua Cloudflare sau bản vá (351d9eb) — 2026-11-23 18:32:59 +07
+== via Cloudflare x7
+400 400 400 400 400 400 429 
+== ALB direct x1 (cùng client, phải chung bộ đếm)
+429
+== log API 'Rate limit chặn' (IP pentester đã che)
+   2 Rate limit chặn LoginRateLimit:<PENTESTER_IP>.
+== lần đo 2, 18:34:31: via Cloudflare x8
+400(0.66) 400(0.50) 400(0.42) 400(0.46) 400(0.39) 429(0.24) 429(0.33) 429(0.32) 

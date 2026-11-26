@@ -1,0 +1,17 @@
+# R-F7 dò tài khoản qua Lockout/thời gian sau bản vá — 2026-11-23 18:36:30 +07
+== cửa sổ 1: B (tồn tại) sai 5 lần → lần 5 kích hoạt Lockout
+B  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.302195s
+B  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.364362s
+B  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.265902s
+B  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.285130s
+B  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.779509s
+== cửa sổ 2: B đang Lockout vs email không tồn tại, xen kẽ
+B  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.260198s
+N  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.314311s
+B  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.358937s
+N  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.405910s
+== cửa sổ 3: xen kẽ
+N  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.258732s
+B  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.270208s
+N  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.302207s
+B  {"success":false,"message":"Email hoặc mật khẩu không đúng. Đăng nhập sai nhiều lần liên tiếp sẽ bị tạm khóa 15 phút.","data":null} [400] 0.347504s

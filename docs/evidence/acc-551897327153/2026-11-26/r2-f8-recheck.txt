@@ -1,0 +1,5 @@
+# Đo lại sau up (image b601104) — 2026-11-26 19:17:18 +07
+== F8 re-verify: Cloudflare vs thẳng ALB ==
+Cloudflare /health: 200
+thẳng ALB /health : onds
+000

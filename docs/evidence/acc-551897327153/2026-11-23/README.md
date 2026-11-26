@@ -4,6 +4,19 @@ Kịch bản: [`docs/kich-ban-pentest.md`](../../../kich-ban-pentest.md). Image 
 CI + Deploy `success`). Task def `hushstore-web:7`, `hushstore-api:7`, WAF `MODSEC_RULE_ENGINE=On`, PL1.
 Pentester IP `<PENTESTER_IP>`. ALB origin `175.41.180.13`, `47.129.19.11`. Mọi token/mật khẩu đã che.
 
+## Đo lại sau bản vá (PR #47, merge `351d9eb`, task def `:8`, 18:32–18:40) — thư mục [`retest/`](retest/)
+
+| # | Trạng thái | Kết quả đo trên AWS |
+|---|---|---|
+| F1 | **Giữ nguyên (chấp nhận)** | Chủ dự án quyết định không đổi mật khẩu admin vì là môi trường đồ án; `up.sh` chỉ nhắc. |
+| F2 | ✅ Đã vá | Checkout body đúng như client đi qua WAF, app trả thông báo nghiệp vụ (400 hết hàng) thay vì 403. RCE trong `note` và `userAddressId` ở `/api/reviews` vẫn 403. |
+| F3 | ✅ Vá trong code, **chưa đo hết vòng** | Trường `ShippingFee` đã gỡ khỏi `CheckoutRequest`; request kèm `shippingFee:-11989000` không làm lỗi binding. DB demo có **0** `ProductSerials` nên không tạo được đơn để đọc `TotalAmount`. |
+| F4 | ✅ Đã vá | Qua Cloudflare: 5×400 rồi 429 (trước: 39/42 lọt); gọi thẳng ALB ngay sau đó cũng 429 (chung bộ đếm). Log API: `Rate limit chặn LoginRateLimit:<PENTESTER_IP>` — IP thật, không phải edge CF hay IP container WAF. |
+| F5 | ✅ WAF đã vá | ECR scan `hushstore-waf`: 5C/1H/3M → **0**. `web` (`nginx:alpine` thả nổi) vẫn 1C/5H, `seeder` 12H — chưa xử lý. |
+| F6 | ✅ Vá trong code, chưa đo runtime | DB không có phiếu dịch vụ nào để thử chéo chủ sở hữu. |
+| F7 | ✅ Đã vá (còn tồn dư nhỏ) | 13/13 lần login sai (tồn tại/đang Lockout/không tồn tại) trả cùng một câu; thời gian chồng lấn 0.26–0.41s. Tồn dư: đúng lần sai thứ 5 (lần kích hoạt Lockout) mất 0.78s. |
+| — | Hồi quy | SQLi/XSS/traversal/Log4Shell/sqlmap vẫn 403 qua ALB và CF; `/api/products`, `/health/ready`, web 200; Host lạ 403; swagger 404. |
+
 ## Findings
 
 | # | Mức | Phát hiện | Bằng chứng | Sửa |

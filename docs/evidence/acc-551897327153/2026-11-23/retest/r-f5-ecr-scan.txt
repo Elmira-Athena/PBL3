@@ -1,0 +1,11 @@
+# R-F5 ECR scan trước/sau — 2026-11-23 18:39:58 +07
+waf       940877b {"s":"COMPLETE","c":{"HIGH":1,"MEDIUM":3,"CRITICAL":5}}
+waf       351d9eb {"s":"COMPLETE","c":{}}
+web       940877b {"s":"COMPLETE","c":{"HIGH":5,"MEDIUM":1,"CRITICAL":1}}
+web       351d9eb {"s":"COMPLETE","c":{"HIGH":5,"MEDIUM":1,"CRITICAL":1}}
+api       940877b {"s":"COMPLETE","c":{}}
+api       351d9eb {"s":"COMPLETE","c":{}}
+seeder    940877b {"s":"COMPLETE","c":{"HIGH":12,"MEDIUM":16,"LOW":4}}
+seeder    351d9eb {"s":"COMPLETE","c":{"HIGH":12,"MEDIUM":16,"LOW":4}}
+migrator  940877b {"s":"COMPLETE","c":{}}
+migrator  351d9eb {"s":"COMPLETE","c":{}}
